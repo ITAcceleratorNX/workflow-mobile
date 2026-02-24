@@ -58,6 +58,8 @@ export function Button({
           { color: fg },
           variant === 'primary' && styles.labelPrimary,
         ]}
+        numberOfLines={2}
+        allowFontScaling
       >
         {title}
       </ThemedText>
@@ -67,19 +69,20 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    height: 48,
-    paddingHorizontal: 12,
-    paddingVertical: 16,
+    minHeight: 48,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'stretch',
   },
   label: {
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 22,
+    textAlign: 'center',
   },
   labelPrimary: {
-    fontWeight: '500',
-    lineHeight: 16,
+    fontWeight: '600',
   },
 });

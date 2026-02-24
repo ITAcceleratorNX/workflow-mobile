@@ -191,7 +191,7 @@ export default function RegisterScreen() {
             <View style={styles.form}>
               <TextInput
                 label="Номер телефона"
-                placeholder="+7 XXX XXX XX XX"
+                placeholder="+7 700 123 45 67"
                 value={formData.phone}
                 onChangeText={handlePhoneChange}
                 keyboardType="phone-pad"
@@ -199,7 +199,7 @@ export default function RegisterScreen() {
               />
               <TextInput
                 label="ФИО"
-                placeholder="Введите полное имя"
+                placeholder="Ахметов Айдос Ерланұлы "
                 value={formData.full_name}
                 onChangeText={(t) =>
                   setFormData((p) => ({ ...p, full_name: t }))
@@ -216,7 +216,7 @@ export default function RegisterScreen() {
                     value: String(o.id),
                     label: o.name,
                   }))}
-                  placeholder="Выберите офис"
+                  placeholder="Выберите офис из списка"
                 />
               </View>
               <View style={styles.field}>
@@ -231,7 +231,7 @@ export default function RegisterScreen() {
                     }))
                   }
                   options={[...REGISTRATION_ROLES]}
-                  placeholder="Выберите роль"
+                  placeholder="Клиент или исполнитель"
                 />
               </View>
               {formData.role === 'executor' && (
@@ -246,7 +246,7 @@ export default function RegisterScreen() {
                       value: String(c.id),
                       label: c.name,
                     }))}
-                    placeholder="Выберите категорию"
+                    placeholder="Категория услуг"
                   />
                 </View>
               )}
@@ -318,7 +318,7 @@ export default function RegisterScreen() {
             <View style={styles.form}>
               <TextInput
                 label="Пароль"
-                placeholder="Минимум 6 символов"
+                placeholder="Не менее 6 символов"
                 value={formData.password}
                 onChangeText={(t) =>
                   setFormData((p) => ({ ...p, password: t }))
@@ -327,7 +327,7 @@ export default function RegisterScreen() {
               />
               <TextInput
                 label="Подтвердите пароль"
-                placeholder="Повторите пароль"
+                placeholder="Введите пароль ещё раз"
                 value={formData.confirm_password}
                 onChangeText={(t) =>
                   setFormData((p) => ({ ...p, confirm_password: t }))

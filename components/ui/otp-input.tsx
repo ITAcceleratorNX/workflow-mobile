@@ -47,7 +47,7 @@ export function OtpInput({
         onChangeText={handleChange}
         keyboardType="number-pad"
         maxLength={length}
-        placeholder="000000"
+        placeholder="6 цифр из SMS"
         placeholderTextColor={textMuted}
         selectTextOnFocus
       />
