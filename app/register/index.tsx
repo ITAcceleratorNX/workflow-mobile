@@ -150,7 +150,7 @@ export default function RegisterScreen() {
 
   const handleSuccessClose = useCallback(() => {
     setSuccessVisible(false);
-    router.replace('/');
+    router.replace('/login');
   }, [router]);
 
   const step1Valid =
@@ -358,7 +358,7 @@ export default function RegisterScreen() {
           <View style={styles.footer}>
             <Button
               title="Вернуться к входу"
-              onPress={() => router.replace('/')}
+              onPress={() => router.replace('/login')}
               variant="secondary"
             />
           </View>
@@ -383,9 +383,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingTop: 32,
-    paddingBottom: 40,
+    paddingVertical: 40,
     gap: 32,
   },
   header: {

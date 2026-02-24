@@ -1,0 +1,54 @@
+import { useAuthStore } from '@/stores/auth-store';
+
+const API_BASE_URL = 'https://workflow-back-zpk4.onrender.com/api';
+
+type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
+interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+interface ApiErrorResponse {
+  details?: Array<{ message?: string }>;
+  message?: string;
+}
+
+export function getApiErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object') {
+    return fallback;
+  }
+
+  const data = payload as ApiErrorResponse;
+  return data.details?.[0]?.message || data.message || fallback;
+}
+
+export async function apiRequest<TResponse>(
+  path: string,
+  options: RequestInit = {},
+): Promise<TResponse> {
+  const token = useAuthStore.getState().token;
+  const headers = new Headers(options.headers);
+  headers.set('Content-Type', 'application/json');
+
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const json = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      useAuthStore.getState().clearAuth();
+    }
+
+    throw new Error(getApiErrorMessage(json, 'Произошла ошибка запроса'));
+  }
+
+  return json as TResponse;
+}
+
+export { API_BASE_URL };

@@ -18,8 +18,13 @@ export {
 export {
   sendVerificationCode,
   verifyCode,
+  loginWithPhone,
+  getCurrentUser,
+  resetPassword,
   type VerificationPurpose,
   type VerificationResult,
+  type LoginResponse,
+  type User,
 } from './auth';
 export {
   REGISTRATION_ROLES,

@@ -1,0 +1,97 @@
+import { API_BASE_URL, apiRequest, getApiErrorMessage } from '@/lib/api';
+import { User } from '@/stores/auth-store';
+
+interface LoginResponse {
+  token: string;
+  role?: string;
+}
+
+export async function loginWithPhone(phone: string, password: string): Promise<LoginResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ phone, password }),
+  });
+
+  const json = await response.json().catch(() => null);
+  if (!response.ok) {
+    const msg = getApiErrorMessage(json, 'Ошибка входа');
+    if (msg === 'Неверный номер телефона или пароль') {
+      throw new Error('Неверный номер телефона или пароль');
+    }
+    throw new Error(msg);
+  }
+
+  return json as LoginResponse;
+}
+
+export async function getCurrentUser(token: string): Promise<User> {
+  const response = await fetch(`${API_BASE_URL}/users/me`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const json = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(getApiErrorMessage(json, 'Не удалось получить данные пользователя'));
+  }
+
+  return json as User;
+}
+
+export async function sendVerificationCode(
+  phone: string,
+  purpose: 'registration' | 'password_reset' = 'registration',
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    await apiRequest('/auth/send-verification-code', {
+      method: 'POST',
+      body: JSON.stringify({ phone, purpose }),
+    });
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Ошибка при отправке SMS',
+    };
+  }
+}
+
+export async function verifyCode(
+  phone: string,
+  code: string,
+  purpose: 'registration' | 'password_reset' = 'registration',
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    await apiRequest('/auth/verify-code', {
+      method: 'POST',
+      body: JSON.stringify({ phone, code, purpose }),
+    });
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Ошибка при проверке кода',
+    };
+  }
+}
+
+export async function resetPassword(
+  phone: string,
+  verificationCode: string,
+  newPassword: string,
+): Promise<void> {
+  await apiRequest('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      phone,
+      verification_code: verificationCode,
+      new_password: newPassword,
+    }),
+  });
+}
