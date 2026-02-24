@@ -1,0 +1,11 @@
+/**
+ * Переиспользуемые UI-компоненты.
+ * Используются на экранах регистрации и других формах.
+ */
+
+export { Button } from './button';
+export { OtpInput } from './otp-input';
+export { Select } from './select';
+export { SuccessModal } from './success-modal';
+export { TextInput } from './text-input';
+export { IconSymbol } from './icon-symbol';
