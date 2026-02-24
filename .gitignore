@@ -1,67 +1,7 @@
-# OSX
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.Spotlight-V100
-.Trashes
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# Xcode
-build/
-*.pbxuser
-!default.pbxuser
-*.mode1v3
-!default.mode1v3
-*.mode2v3
-!default.mode2v3
-*.perspectivev3
-!default.perspectivev3
-xcuserdata
-*.xccheckout
-*.moved-aside
-DerivedData
-*.hmap
-*.ipa
-*.xcuserstate
-**/.xcode.env.local
-ios/*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
-
-# Android/IntelliJ
-.idea/
-.gradle
-local.properties
-*.iml
-*.hprof
-.cxx/
-*.keystore
-!debug.keystore
-
-# node.js
+# dependencies
 node_modules/
-npm-debug.log
-yarn-error.log
-yarn-debug.log
-.pnpm-debug.log*
-
-# fastlane
-**/fastlane/report.xml
-**/fastlane/Preview.html
-**/fastlane/screenshots
-**/fastlane/test_output
-
-# Bundle artifact
-*.jsbundle
-
-# Ruby / CocoaPods
-/ios/Pods/
-/vendor/bundle/
-.bundle/
-
-# Env files
-.env
-.env.*
-!.env.example
 
 # Expo
 .expo/
@@ -69,14 +9,41 @@ dist/
 web-build/
 expo-env.d.ts
 
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
 # Metro
 .metro-health-check*
 
-# Testing
-coverage/
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
 
-# Turborepo
-.turbo/
+# macOS
+.DS_Store
+*.pem
 
-# Typescript
+# IDE
+.idea/
+.vscode/
+
+# env files
+.env
+.env.*
+!.env.example
+
+# typescript
 *.tsbuildinfo
+
+app-example
+
+# generated native folders
+/ios
+/android
