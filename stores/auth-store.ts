@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import type { User } from '@/lib/auth';
 
-interface AuthState {
+export interface AuthState {
   token: string | null;
   role: string | null;
   user: User | null;

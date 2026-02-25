@@ -1,28 +1,30 @@
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { BottomNav } from '@/components/bottom-nav';
+
+const NAV_BAR_HEIGHT = 70;
+const NAV_BAR_MARGIN = 12;
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
+  const contentPaddingBottom = NAV_BAR_HEIGHT + NAV_BAR_MARGIN + insets.bottom;
 
   return (
     <Tabs
+      tabBar={(props: BottomTabBarProps) => <BottomNav {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
+        tabBarShowLabel: false,
+        sceneStyle: { paddingBottom: contentPaddingBottom },
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Главная',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: 'Главная' }} />
+      <Tabs.Screen name="booking" options={{ title: 'Бронь' }} />
+      <Tabs.Screen name="requests" options={{ title: 'Заявки' }} />
+      <Tabs.Screen name="help" options={{ title: 'Сообщение' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Профиль' }} />
     </Tabs>
   );
 }

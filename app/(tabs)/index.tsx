@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useAuthStore } from '@/stores/auth-store';
+import { useAuthStore, type AuthState } from '@/stores/auth-store';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const user = useAuthStore((state) => state.user);
-  const role = useAuthStore((state) => state.role);
-  const clearAuth = useAuthStore((state) => state.clearAuth);
+  const user = useAuthStore((state: AuthState) => state.user);
+  const role = useAuthStore((state: AuthState) => state.role);
+  const clearAuth = useAuthStore((state: AuthState) => state.clearAuth);
   const textMuted = useThemeColor({}, 'textMuted');
   const border = useThemeColor({}, 'border');
 
@@ -26,7 +26,7 @@ export default function HomeScreen() {
         Главная
       </ThemedText>
       <ThemedText style={[styles.subtitle, { opacity: 0.8 }]}>
-        Вы успешно вошли в мобильное приложение.
+        Это страница Главная
       </ThemedText>
       <View style={[styles.card, { borderColor: border }]}>
         <ThemedText style={styles.infoTitle}>Текущий пользователь</ThemedText>
