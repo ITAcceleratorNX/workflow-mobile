@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMotionUsageDescription": "Приложение использует датчики движения для отслеживания активности (сидение/стояние) и health-напоминаний."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +22,10 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.HIGH_SAMPLING_RATE_SENSORS"
+      ]
     },
     "web": {
       "output": "static",

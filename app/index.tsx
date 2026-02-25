@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth-store';
 export default function IndexScreen() {
   const token = useAuthStore((state) => state.token);
   const role = useAuthStore((state) => state.role);
+  const user = useAuthStore((state) => state.user);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -14,10 +15,17 @@ export default function IndexScreen() {
     // Zustand persist загружает данные асинхронно, поэтому нужна небольшая задержка
     const timer = setTimeout(() => {
       setIsReady(true);
-    }, 200);
+      // Debug logging
+      console.log('[Index] Auth state after rehydration:', {
+        hasToken: !!token,
+        role: role,
+        userRole: user?.role,
+        userId: user?.id,
+      });
+    }, 500); // Увеличили время для надежности
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [token, role, user]);
 
   if (!isReady) {
     return (
@@ -27,7 +35,13 @@ export default function IndexScreen() {
     );
   }
 
-  if (token && role) {
+  // Проверяем и token, и role - но role может быть в user.role
+  const effectiveRole = role || user?.role;
+  const hasToken = !!token;
+
+  console.log('[Index] Redirect decision:', { hasToken, effectiveRole });
+
+  if (hasToken && effectiveRole) {
     return <Redirect href="/(tabs)" />;
   }
 
