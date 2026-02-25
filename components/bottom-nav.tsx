@@ -4,13 +4,14 @@ import * as Haptics from 'expo-haptics';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useThemeColor } from '@/hooks/use-theme-color';
+
 const NAV_BAR_HEIGHT = 70;
 const NAV_BAR_RADIUS = 25;
 const NAV_BAR_MARGIN = 12;
 const ACTIVE_COLOR = '#FFFFFF';
 const INACTIVE_COLOR = 'rgba(255, 255, 255, 0.55)';
 const BAR_BACKGROUND = '#F35713';
-const UNDERLAY_BACKGROUND = '#1C1C1E';
 
 const NAV_ITEMS: { key: string; routeName: string; label: string; icon: 'home' | 'grid-on' | 'build' | 'message' | 'person' }[] = [
   { key: 'home', routeName: 'index', label: 'Главная', icon: 'home' },
@@ -22,6 +23,7 @@ const NAV_ITEMS: { key: string; routeName: string; label: string; icon: 'home' |
 
 export function BottomNav({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const underlayBackground = useThemeColor({}, 'background');
   const bottomInset = insets.bottom;
   const barBottom = NAV_BAR_MARGIN + bottomInset;
   const underlayHeight = NAV_BAR_HEIGHT + NAV_BAR_MARGIN + bottomInset;
@@ -42,6 +44,7 @@ export function BottomNav({ state, navigation }: BottomTabBarProps) {
           styles.underlay,
           {
             height: underlayHeight,
+            backgroundColor: underlayBackground,
           },
         ]}
       />
@@ -81,7 +84,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: UNDERLAY_BACKGROUND,
     zIndex: 40,
   },
   bar: {

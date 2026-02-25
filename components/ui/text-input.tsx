@@ -26,6 +26,8 @@ export interface TextInputProps
   value: string;
   onChangeText: (text: string) => void;
   secureTextEntry?: boolean;
+  /** When true, input flexes to fill parent (e.g. in a row). Helps with long text on small screens. */
+  flex?: boolean;
 }
 
 export function TextInput({
@@ -40,6 +42,7 @@ export function TextInput({
   keyboardType = 'default',
   maxLength,
   autoCapitalize = 'none',
+  flex = false,
 }: TextInputProps) {
   const text = useThemeColor({}, 'text');
   const border = useThemeColor({}, 'border');
@@ -49,14 +52,15 @@ export function TextInput({
   const showToggle = isPassword && value.length > 0;
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, flex && styles.wrapperFlex]}>
       {label ? (
         <ThemedText style={[styles.label, { color: text }]}>{label}</ThemedText>
       ) : null}
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, flex && styles.inputRowFlex]}>
         <RNTextInput
           style={[
             styles.input,
+            flex && styles.inputFlex,
             {
               color: text,
               borderColor: border,
@@ -95,6 +99,13 @@ export function TextInput({
 const styles = StyleSheet.create({
   wrapper: {
     gap: 8,
+    minWidth: 0,
+    alignSelf: 'stretch',
+  },
+  wrapperFlex: {
+    flex: 1,
+    minWidth: 0,
+    alignSelf: 'stretch',
   },
   label: {
     fontSize: 16,
@@ -104,6 +115,10 @@ const styles = StyleSheet.create({
   inputRow: {
     position: 'relative',
   },
+  inputRowFlex: {
+    flex: 1,
+    minWidth: 0,
+  },
   input: {
     height: 48,
     paddingHorizontal: 16,
@@ -112,6 +127,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     fontSize: 16,
     lineHeight: 22,
+  },
+  inputFlex: {
+    width: '100%',
   },
   eyeButton: {
     position: 'absolute',

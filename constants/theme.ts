@@ -10,8 +10,10 @@ const tintColorDark = '#fff';
 
 const primaryAccent = '#F35713';
 const borderSecondary = '#212121';
+const borderLight = '#E5E5EA';
 const textMuted = '#6E6E6E';
 const errorColor = '#F35713';
+const successColor = '#22c55e';
 
 export const Colors = {
   light: {
@@ -22,9 +24,10 @@ export const Colors = {
     tabIconDefault: '#687076',
     tabIconSelected: tintColorLight,
     primary: primaryAccent,
-    border: borderSecondary,
+    border: borderLight,
     textMuted,
     error: errorColor,
+    success: successColor,
   },
   dark: {
     text: '#ECEDEE',
@@ -37,6 +40,7 @@ export const Colors = {
     border: borderSecondary,
     textMuted,
     error: errorColor,
+    success: successColor,
   },
 };
 
