@@ -15,11 +15,13 @@ export default function TabLayout() {
   return (
     <Tabs
       tabBar={(props: BottomTabBarProps) => <BottomNav {...props} />}
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false,
-        sceneStyle: { paddingBottom: contentPaddingBottom },
-      }}>
+        sceneStyle: {
+          paddingBottom: route.name === 'help' ? 0 : contentPaddingBottom,
+        },
+      })}>
       <Tabs.Screen name="index" options={{ title: 'Главная' }} />
       <Tabs.Screen name="booking" options={{ title: 'Бронь' }} />
       <Tabs.Screen name="requests" options={{ title: 'Заявки' }} />

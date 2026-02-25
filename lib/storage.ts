@@ -86,3 +86,28 @@ const nativeStorage = {
 };
 
 export const persistStorage = isWeb ? webStorage : nativeStorage;
+
+/** Safe storage for chat messages - works on web and native, always falls back to memory on error. */
+export const chatStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    try {
+      return await (isWeb ? webStorage : nativeStorage).getItem(name);
+    } catch {
+      return memoryStore[name] ?? null;
+    }
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    try {
+      await (isWeb ? webStorage : nativeStorage).setItem(name, value);
+    } catch {
+      memoryStore[name] = value;
+    }
+  },
+  removeItem: async (name: string): Promise<void> => {
+    try {
+      await (isWeb ? webStorage : nativeStorage).removeItem(name);
+    } catch {
+      delete memoryStore[name];
+    }
+  },
+};

@@ -29,6 +29,7 @@ export function BottomNav({ state, navigation }: BottomTabBarProps) {
   const underlayHeight = NAV_BAR_HEIGHT + NAV_BAR_MARGIN + bottomInset;
 
   const currentRouteName = state.routes[state.index]?.name ?? 'index';
+  const isHelpScreen = currentRouteName === 'help';
 
   const handlePress = (routeName: string) => {
     if (Platform.OS === 'ios') {
@@ -36,6 +37,10 @@ export function BottomNav({ state, navigation }: BottomTabBarProps) {
     }
     navigation.navigate(routeName);
   };
+
+  if (isHelpScreen) {
+    return null;
+  }
 
   return (
     <>
