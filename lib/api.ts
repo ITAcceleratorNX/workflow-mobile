@@ -53,6 +53,9 @@ export interface Office {
   name: string;
   city?: string;
   address?: string;
+  photo?: string | null;
+  working_hours_start?: string | null; // "HH:mm:ss"
+  working_hours_end?: string | null;   // "HH:mm:ss"
 }
 
 export interface ServiceCategory {
@@ -76,6 +79,14 @@ export async function getOffices(): Promise<Office[]> {
   if (!result.ok) return [];
   const data = result.data;
   return Array.isArray(data) ? data : [data];
+}
+
+export async function getOfficeById(
+  id: number
+): Promise<{ ok: true; data: Office } | { ok: false; error: string }> {
+  const result = await request<Office>(`/offices/${id}`);
+  if (result.ok) return { ok: true, data: result.data };
+  return { ok: false, error: result.error };
 }
 
 // ==================== Service categories (public) ====================
@@ -168,6 +179,126 @@ export async function controlDevice(
   const result = await request<unknown>('/yandex-smart-home/devices/control', {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+  if (result.ok) return { ok: true };
+  return { ok: false, error: result.error };
+}
+
+// ==================== Meeting Rooms & Bookings ====================
+
+export interface MeetingRoom {
+  id: number;
+  name: string;
+  floor?: number;
+  capacity?: number;
+  office_id?: number | null;
+  office?: Office;
+  status?: 'available' | 'booked';
+  isActive?: boolean;
+  room_type?: string;
+  /** Массив URL фото (приоритет) */
+  photos?: string[];
+  /** Одно фото — если бэкенд отдаёт только photo */
+  photo?: string | null;
+}
+
+export interface MeetingRoomBooking {
+  id: number;
+  meeting_room_id: number;
+  user_id?: number;
+  client_id?: number;
+  start_time: string;
+  end_time: string;
+  status?: string;
+  company_name?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  meeting_room?: MeetingRoom;
+  meetingRoom?: MeetingRoom;
+  office?: Office;
+}
+
+export interface RoomAvailabilitySlot {
+  start_time: string;
+  end_time: string;
+  is_available: boolean;
+  booking_id: number | null;
+  booking_status: string | null;
+}
+
+export interface RoomAvailabilityResponse {
+  room: MeetingRoom;
+  bookings: MeetingRoomBooking[];
+  slots: RoomAvailabilitySlot[];
+}
+
+export async function getMeetingRooms(officeId?: number): Promise<
+  | { ok: true; data: MeetingRoom[] }
+  | { ok: false; error: string }
+> {
+  const path = officeId
+    ? `/meeting-rooms?office_id=${officeId}`
+    : '/meeting-rooms';
+  const result = await request<MeetingRoom[]>(path);
+  if (result.ok) return { ok: true, data: Array.isArray(result.data) ? result.data : [] };
+  return { ok: false, error: result.error };
+}
+
+export async function getRoomDailyAvailability(
+  roomId: number,
+  date: string,
+  slotMinutes?: number
+): Promise<
+  | { ok: true; data: RoomAvailabilityResponse }
+  | { ok: false; error: string }
+> {
+  const params: Record<string, string> = { date };
+  if (slotMinutes != null) params.slot_minutes = String(slotMinutes);
+  const qs = new URLSearchParams(params).toString();
+  const result = await request<RoomAvailabilityResponse>(
+    `/meeting-room-bookings/rooms/${roomId}/availability?${qs}`
+  );
+  if (result.ok) return { ok: true, data: result.data };
+  return { ok: false, error: result.error };
+}
+
+export async function createMeetingRoomBooking(data: {
+  meeting_room_id: number;
+  booking_date: string;
+  start_time: string;
+  end_time: string;
+  company_name?: string | null;
+}): Promise<
+  | { ok: true; data: MeetingRoomBooking }
+  | { ok: false; error: string }
+> {
+  const { booking_date, ...rest } = data;
+  const result = await request<MeetingRoomBooking>('/meeting-room-bookings', {
+    method: 'POST',
+    body: JSON.stringify({ ...rest, date: booking_date }),
+  });
+  if (result.ok) return { ok: true, data: result.data };
+  return { ok: false, error: result.error };
+}
+
+export async function getMyBookings(): Promise<
+  | { ok: true; data: MeetingRoomBooking[] }
+  | { ok: false; error: string }
+> {
+  const result = await request<MeetingRoomBooking[] | MeetingRoomBooking>(
+    '/meeting-room-bookings/my'
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = result.data;
+  const list = Array.isArray(data) ? data : data ? [data] : [];
+  return { ok: true, data: list };
+}
+
+export async function cancelMeetingRoomBooking(
+  id: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/meeting-room-bookings/${id}`, {
+    method: 'DELETE',
   });
   if (result.ok) return { ok: true };
   return { ok: false, error: result.error };

@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useActivityTrackerStore } from '@/stores/activity-tracker-store';
 import { useToast } from '@/context/toast-context';
 import { useActivityTracker } from '@/hooks/use-activity-tracker';
+import { useHealthReminders } from '@/hooks/use-health-reminders';
 import {
   getClientRoomSubscriptions,
   getRoomDevicesForClient,
@@ -79,6 +80,9 @@ export default function ClientDashboardScreen() {
 
   // Activity Tracker Hook (работает с сенсорами)
   const { isTracking, startTracking, stopTracking, requestPermission, isAvailable } = useActivityTracker();
+
+  // Health-напоминания: уведомление "пора встать" при долгом сидении
+  useHealthReminders();
 
   const [activeSection, setActiveSection] = useState<TabType>('home');
   const [loading, setLoading] = useState(false);
@@ -741,6 +745,10 @@ export default function ClientDashboardScreen() {
           />
         </View>
       </Pressable>
+
+      <ThemedText style={[styles.settingsCardSubtitle, { marginTop: 12, opacity: 0.8 }]}>
+        Трекер учитывает время, когда приложение на экране. В фоне учёт приостанавливается.
+      </ThemedText>
     </View>
   );
 

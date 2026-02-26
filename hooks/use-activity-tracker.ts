@@ -1,8 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
 import { Subscription } from 'expo-sensors/build/Pedometer';
 
 import { useActivityTrackerStore } from '@/stores/activity-tracker-store';
+
+const BACKGROUND_RESET_THRESHOLD_MS = 3000; // Не засчитывать паузу в фоне > 3 сек
 
 // Threshold для определения сидя/стоя (в g, где 1g = 9.8 m/s²)
 // Expo Accelerometer возвращает значения в g, не в m/s²
@@ -29,9 +32,32 @@ export function useActivityTracker() {
   const movementBufferRef = useRef<number[]>([]);
   const lastUpdateRef = useRef<number>(Date.now());
   const isTrackingRef = useRef(isTracking);
+  const backgroundedAtRef = useRef<number | null>(null);
 
   // Обновляем ref при изменении isTracking
   isTrackingRef.current = isTracking;
+
+  // Фон: при уходе в background запоминаем время; при возврате — не засчитываем паузу в статистику
+  useEffect(() => {
+    const handleAppState = (nextState: AppStateStatus) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        if (isTrackingRef.current) {
+          backgroundedAtRef.current = Date.now();
+        }
+      } else if (nextState === 'active') {
+        if (backgroundedAtRef.current !== null) {
+          const gap = Date.now() - backgroundedAtRef.current;
+          if (gap >= BACKGROUND_RESET_THRESHOLD_MS) {
+            useActivityTrackerStore.getState().setPostureStartTime(Date.now());
+            lastUpdateRef.current = Date.now();
+          }
+          backgroundedAtRef.current = null;
+        }
+      }
+    };
+    const sub = AppState.addEventListener('change', handleAppState);
+    return () => sub.remove();
+  }, []);
 
   // Проверка доступности акселерометра
   useEffect(() => {
@@ -94,7 +120,14 @@ export function useActivityTracker() {
     }
 
     const now = Date.now();
-    const timeDelta = now - lastUpdateRef.current;
+    let timeDelta = now - lastUpdateRef.current;
+
+    // Долгая пауза (приложение было в фоне — сенсор не присылал данные): не засчитываем
+    if (timeDelta > 15000) {
+      lastUpdateRef.current = now;
+      useActivityTrackerStore.getState().setPostureStartTime(now);
+      timeDelta = 0;
+    }
 
     // Обновляем статистику каждые MOVEMENT_WINDOW мс
     if (timeDelta >= MOVEMENT_WINDOW && movementBufferRef.current.length > 0) {

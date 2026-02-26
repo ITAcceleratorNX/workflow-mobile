@@ -4,6 +4,7 @@ import React from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
+import { useAutoStartWorkingHours } from '@/hooks/use-auto-start-working-hours';
 
 const NAV_BAR_HEIGHT = 70;
 const NAV_BAR_MARGIN = 12;
@@ -11,6 +12,9 @@ const NAV_BAR_MARGIN = 12;
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const contentPaddingBottom = NAV_BAR_HEIGHT + NAV_BAR_MARGIN + insets.bottom;
+
+  // Автовключение трекера в рабочие часы офиса (только для клиента с office_id)
+  useAutoStartWorkingHours();
 
   return (
     <Tabs
