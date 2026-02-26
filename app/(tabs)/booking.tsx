@@ -37,21 +37,32 @@ const CARD_ORANGE = '#E25B21';
 const HEIGHT_OPTIONS = [150, 155, 160, 165, 170, 175, 180, 185, 190, 195, 200];
 
 function getImageUri(photo?: string | null): string | null {
-  if (!photo) return null;
-  if (photo.startsWith('http')) return photo;
+  if (!photo || typeof photo !== 'string' || !photo.trim()) return null;
+  const trimmed = photo.trim();
+  // Data URI (base64) с бэкенда — возвращаем как есть
+  if (trimmed.startsWith('data:')) return trimmed;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
   const base = config.apiBaseUrl.replace(/\/api\/?$/, '');
-  return base + (photo.startsWith('/') ? photo : `/${photo}`);
+  return base + (trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
 }
 
-/** URL первого фото комнаты (photos[0], photo или image_url с бэкенда) */
+/**
+ * URL первого фото комнаты — как в браузере: используем photos[0] или photo как есть.
+ * Если URL относительный — дополняем базой API.
+ */
 function getRoomPhotoUri(room: MeetingRoom | null | undefined): string | null {
   if (!room) return null;
-  const first =
+  const r = room as MeetingRoom & { image_url?: string; photo_url?: string };
+  let raw: unknown =
     room.photos?.[0] ??
     room.photo ??
-    (room as { image_url?: string }).image_url ??
+    r.image_url ??
+    r.photo_url ??
     null;
-  return first ? getImageUri(first) : null;
+  if (raw != null && typeof raw === 'object' && 'url' in (raw as object)) raw = (raw as { url: string }).url;
+  else if (raw != null && typeof raw === 'object' && 'src' in (raw as object)) raw = (raw as { src: string }).src;
+  if (!raw || typeof raw !== 'string' || !String(raw).trim()) return null;
+  return getImageUri(String(raw).trim());
 }
 
 /** URL страницы бронирования в веб-версии (для кнопки «Просмотреть») */
@@ -148,6 +159,8 @@ export default function BookingScreen() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState('');
   const [bookedSlots, setBookedSlots] = useState<Set<string>>(new Set());
+  const [roomImageFailedIds, setRoomImageFailedIds] = useState<Set<number>>(new Set());
+  const [formRoomImageFailed, setFormRoomImageFailed] = useState(false);
 
   const loadOffices = useCallback(async () => {
     setLoadingOffices(true);
@@ -158,13 +171,32 @@ export default function BookingScreen() {
 
   const loadRooms = useCallback(async (officeId: number) => {
     setLoadingRooms(true);
+    setRoomImageFailedIds(new Set());
     const res = await getMeetingRooms(officeId);
     setLoadingRooms(false);
     if (res.ok) {
-      const list = res.data.map((r: MeetingRoom) => ({
-        ...r,
-        photos: Array.isArray(r.photos) ? r.photos : r.photo ? [r.photo] : [],
-      }));
+      const list = res.data.map((r: MeetingRoom & { photos?: string[] | string | { url?: string; src?: string }[] }) => {
+        let photos: string[] = [];
+        if (Array.isArray(r.photos)) {
+          for (const p of r.photos) {
+            if (typeof p === 'string' && p.trim()) photos.push(p.trim());
+            else if (p && typeof p === 'object') {
+              const url = (p as { url?: string }).url ?? (p as { src?: string }).src;
+              if (typeof url === 'string' && url.trim()) photos.push(url.trim());
+            }
+          }
+        } else if (typeof r.photos === 'string') {
+          const s = (r.photos as string).trim();
+          if (s) photos = [s];
+        } else {
+          const rawPhoto = (r as unknown as { photo?: string }).photo;
+          if (rawPhoto && typeof rawPhoto === 'string') {
+            const s = rawPhoto.trim();
+            if (s) photos = [s];
+          }
+        }
+        return { ...r, photos };
+      });
       setRooms(list);
     } else setRooms([]);
   }, []);
@@ -224,6 +256,7 @@ export default function BookingScreen() {
     if (step === 'form') {
       setSelectedRoom(null);
       setSelectedDate(null);
+      setFormRoomImageFailed(false);
       setSelectedTimeSlot(null);
       setCompanyName('');
       setStep('rooms');
@@ -425,6 +458,7 @@ export default function BookingScreen() {
   if (step === 'form' && selectedRoom) {
     const roomPhotoUri = getRoomPhotoUri(selectedRoom);
     const roomPhotoCount = (selectedRoom.photos?.length ?? (selectedRoom.photo ? 1 : 0));
+    const showFormImage = !!roomPhotoUri && !formRoomImageFailed;
     return (
       <LinearGradient colors={ORANGE_GRADIENT} style={styles.gradientFill}>
         <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
@@ -434,8 +468,14 @@ export default function BookingScreen() {
           </Pressable>
           <ScrollView style={styles.scroll} contentContainerStyle={styles.formContent}>
             <View style={styles.roomImageContainer}>
-              {roomPhotoUri ? (
-                <Image source={{ uri: roomPhotoUri }} style={styles.roomImage} contentFit="cover" cachePolicy="disk" />
+              {showFormImage ? (
+                <Image
+                  source={{ uri: roomPhotoUri }}
+                  style={styles.roomImage}
+                  contentFit="cover"
+                  cachePolicy="disk"
+                  onError={() => setFormRoomImageFailed(true)}
+                />
               ) : (
                 <View style={styles.roomImagePlaceholder}>
                   <MaterialIcons name="image" size={48} color="rgba(255,255,255,0.4)" />
@@ -669,6 +709,8 @@ export default function BookingScreen() {
                     {visibleRooms.map((item) => {
                       const photoUri = getRoomPhotoUri(item);
                       const photoCount = item.photos?.length ?? (item.photo ? 1 : 0);
+                      const imageFailed = roomImageFailedIds.has(item.id);
+                      const showImage = !!photoUri && photoUri.length > 0 && !imageFailed;
                       return (
                         <Pressable
                           key={item.id}
@@ -676,8 +718,17 @@ export default function BookingScreen() {
                           onPress={() => handleSelectRoom(item)}
                         >
                           <View style={styles.roomCardImageWrap}>
-                            {photoUri ? (
-                              <Image source={{ uri: photoUri }} style={styles.roomCardImage} contentFit="cover" cachePolicy="disk" />
+                            {showImage ? (
+                              <Image
+                                source={{ uri: photoUri }}
+                                style={styles.roomCardImage}
+                                contentFit="cover"
+                                cachePolicy="disk"
+                                recyclingKey={String(item.id)}
+                                onError={() => {
+                                  setRoomImageFailedIds((prev) => new Set(prev).add(item.id));
+                                }}
+                              />
                             ) : (
                               <View style={styles.roomCardImagePlaceholder}>
                                 <MaterialIcons name="image" size={32} color="rgba(255,255,255,0.4)" />
