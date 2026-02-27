@@ -20,6 +20,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { config } from '@/lib/config';
+import { getImageUri, getPrimaryPhotoUri } from '@/lib/image-uri';
 import {
   type MeetingRoom,
   type MeetingRoomBooking,
@@ -36,33 +37,12 @@ const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
 const CARD_ORANGE = '#E25B21';
 const HEIGHT_OPTIONS = [150, 155, 160, 165, 170, 175, 180, 185, 190, 195, 200];
 
-function getImageUri(photo?: string | null): string | null {
-  if (!photo || typeof photo !== 'string' || !photo.trim()) return null;
-  const trimmed = photo.trim();
-  // Data URI (base64) с бэкенда — возвращаем как есть
-  if (trimmed.startsWith('data:')) return trimmed;
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
-  const base = config.apiBaseUrl.replace(/\/api\/?$/, '');
-  return base + (trimmed.startsWith('/') ? trimmed : `/${trimmed}`);
-}
-
 /**
  * URL первого фото комнаты — как в браузере: используем photos[0] или photo как есть.
  * Если URL относительный — дополняем базой API.
  */
 function getRoomPhotoUri(room: MeetingRoom | null | undefined): string | null {
-  if (!room) return null;
-  const r = room as MeetingRoom & { image_url?: string; photo_url?: string };
-  let raw: unknown =
-    room.photos?.[0] ??
-    room.photo ??
-    r.image_url ??
-    r.photo_url ??
-    null;
-  if (raw != null && typeof raw === 'object' && 'url' in (raw as object)) raw = (raw as { url: string }).url;
-  else if (raw != null && typeof raw === 'object' && 'src' in (raw as object)) raw = (raw as { src: string }).src;
-  if (!raw || typeof raw !== 'string' || !String(raw).trim()) return null;
-  return getImageUri(String(raw).trim());
+  return getPrimaryPhotoUri(room);
 }
 
 /** URL страницы бронирования в веб-версии (для кнопки «Просмотреть») */

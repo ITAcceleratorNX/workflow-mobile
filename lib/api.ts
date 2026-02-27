@@ -26,6 +26,7 @@ async function request<T>(
   try {
     console.log(`[API] ${init.method || 'GET'} ${path}`, { hasToken: !!token });
     const res = await fetch(url, { ...init, headers });
+    if (res.status === 204) return { ok: true, data: undefined as T };
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
@@ -58,9 +59,16 @@ export interface Office {
   working_hours_end?: string | null;   // "HH:mm:ss"
 }
 
+export interface ServiceSubcategory {
+  id: number;
+  name: string;
+  category_id: number;
+}
+
 export interface ServiceCategory {
   id: number;
   name: string;
+  subcategories?: ServiceSubcategory[];
 }
 
 export interface CreateRegistrationRequestBody {
@@ -89,7 +97,7 @@ export async function getOfficeById(
   return { ok: false, error: result.error };
 }
 
-// ==================== Service categories (public) ====================
+// ==================== Service categories ====================
 
 export async function getServiceCategoriesPublic(): Promise<ServiceCategory[]> {
   const result = await request<ServiceCategory[] | ServiceCategory>(
@@ -98,6 +106,96 @@ export async function getServiceCategoriesPublic(): Promise<ServiceCategory[]> {
   if (!result.ok) return [];
   const data = result.data;
   return Array.isArray(data) ? data : [data];
+}
+
+/** Authenticated: categories with subcategories */
+export async function getServiceCategories(): Promise<
+  { ok: true; data: ServiceCategory[] } | { ok: false; error: string }
+> {
+  const result = await request<ServiceCategory[] | ServiceCategory>(
+    '/service-categories'
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = result.data;
+  const list = Array.isArray(data) ? data : data ? [data] : [];
+  return { ok: true, data: list };
+}
+
+export async function createServiceCategory(body: { name: string }): Promise<
+  { ok: true; data: ServiceCategory } | { ok: false; error: string }
+> {
+  const result = await request<ServiceCategory>('/service-categories', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function deleteServiceCategory(id: number): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const result = await request<undefined>(`/service-categories/${id}`, {
+    method: 'DELETE',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+export interface ExecutorInCategory {
+  id: number;
+  specialty: string;
+  department_id?: number;
+  user?: { id: number; full_name: string; phone?: string; role?: string };
+}
+
+export async function getExecutorsByCategory(categoryId: number): Promise<
+  { ok: true; data: ExecutorInCategory[] } | { ok: false; error: string }
+> {
+  const result = await request<ExecutorInCategory[]>(
+    `/service-categories/${categoryId}/executors`
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = result.data;
+  const list = Array.isArray(data) ? data : [];
+  return { ok: true, data: list };
+}
+
+export async function changeCategoryHead(
+  categoryId: number,
+  executorId: number
+): Promise<{ ok: true; data?: { newHead?: { name: string }; processedTasks?: { message?: string } } } | { ok: false; error: string }> {
+  const result = await request<{ newHead?: { name: string }; processedTasks?: { message?: string } }>(
+    `/service-categories/${categoryId}/change-head`,
+    { method: 'POST', body: JSON.stringify({ newHeadUserId: executorId }) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data };
+}
+
+export async function createSubcategory(body: {
+  name: string;
+  category_id: number;
+}): Promise<
+  { ok: true; data: ServiceSubcategory } | { ok: false; error: string }
+> {
+  const result = await request<ServiceSubcategory>(
+    '/service-categories/subcategories',
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function deleteSubcategory(id: number): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const result = await request<undefined>(
+    `/service-categories/subcategories/${id}`,
+    { method: 'DELETE' }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 // ==================== Registration ====================
@@ -111,6 +209,113 @@ export async function createRegistrationRequest(
   });
   if (result.ok) return { ok: true };
   return { ok: false, error: result.error };
+}
+
+// ==================== Registration requests (admin) ====================
+
+export interface RegistrationRequestItem {
+  id: number;
+  phone: string;
+  full_name: string;
+  office: { name: string };
+  role: string;
+  service_category_id?: number;
+  service_category?: { name: string };
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+}
+
+export async function getRegistrationRequests(filters?: {
+  status?: string;
+  office_id?: string;
+  date_from?: string;
+  date_to?: string;
+}): Promise<
+  { ok: true; data: RegistrationRequestItem[] } | { ok: false; error: string }
+> {
+  const params: Record<string, string> = {};
+  if (filters?.status) params.status = filters.status;
+  if (filters?.office_id) params.office_id = filters.office_id;
+  if (filters?.date_from) params.date_from = filters.date_from;
+  if (filters?.date_to) params.date_to = filters.date_to;
+  const qs = Object.keys(params).length ? `?${new URLSearchParams(params).toString()}` : '';
+  const result = await request<{ success?: boolean; data: RegistrationRequestItem[] }>(
+    `/registration-requests${qs}`
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const raw = result.data;
+  const list = Array.isArray((raw as { data?: RegistrationRequestItem[] })?.data)
+    ? (raw as { data: RegistrationRequestItem[] }).data
+    : Array.isArray(raw)
+      ? (raw as RegistrationRequestItem[])
+      : [];
+  return { ok: true, data: list };
+}
+
+export async function approveRegistrationRequest(requestId: number): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const result = await request<unknown>(
+    `/registration-requests/${requestId}/approve`,
+    { method: 'PUT' }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+export async function rejectRegistrationRequest(requestId: number): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const result = await request<unknown>(
+    `/registration-requests/${requestId}/reject`,
+    { method: 'PUT' }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+// ==================== Users (admin-worker) ====================
+
+export interface OfficeUser {
+  id: number;
+  full_name: string;
+  phone: string;
+  role: string;
+  office_id?: number;
+}
+
+export async function getOfficeUsers(officeId: number): Promise<
+  { ok: true; data: OfficeUser[] } | { ok: false; error: string }
+> {
+  const result = await request<OfficeUser[]>(`/users/office/${officeId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = result.data;
+  const list = Array.isArray(data) ? data : [];
+  return { ok: true, data: list };
+}
+
+export async function changeUserPassword(
+  userId: number,
+  newPassword: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/users/${userId}/change-password`, {
+    method: 'PATCH',
+    body: JSON.stringify({ new_password: newPassword }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+export async function updateUserRole(
+  userId: number,
+  role: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ role }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 // ==================== Smart Home ====================

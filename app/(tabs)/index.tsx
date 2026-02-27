@@ -40,6 +40,117 @@ const CARD_ORANGE = '#D94F15';
 const CARD_GREEN = '#1A9A8A';
 const GRAY_600 = '#3A3A3C';
 
+type AdminCardKey = 'categories' | 'users' | 'office' | 'smart-home' | 'statistics';
+
+const ADMIN_MANAGEMENT_CARDS: {
+  key: AdminCardKey;
+  title: string;
+  subtitle: string;
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+}[] = [
+  {
+    key: 'categories',
+    title: 'Категории и подкатегории',
+    subtitle: 'Добавление и удаление категорий',
+    icon: 'category',
+  },
+  {
+    key: 'users',
+    title: 'Пользователи',
+    subtitle: 'Роли и запросы на регистрацию',
+    icon: 'groups',
+  },
+  {
+    key: 'office',
+    title: 'Офис',
+    subtitle: 'Кабинеты, переговорные, адреса',
+    icon: 'business',
+  },
+  {
+    key: 'smart-home',
+    title: 'Умный дом',
+    subtitle: 'Устройства и доступ',
+    icon: 'home-filled',
+  },
+  {
+    key: 'statistics',
+    title: 'Статистика',
+    subtitle: 'Отчёты и аналитика по заявкам',
+    icon: 'insert-chart-outlined',
+  },
+];
+
+function AdminWorkerManagementScreen() {
+  const insets = useSafeAreaInsets();
+  const text = useThemeColor({}, 'text');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const router = useRouter();
+
+  const handleOpen = useCallback(
+    (key: AdminCardKey) => {
+      switch (key) {
+        case 'categories':
+          router.push('/admin-worker/categories');
+          break;
+        case 'users':
+          router.push('/admin-worker/users');
+          break;
+        case 'office':
+          router.push('/admin-worker/office');
+          break;
+        case 'smart-home':
+          router.push('/admin-worker/smart-home');
+          break;
+        case 'statistics':
+        default:
+          router.push('/admin-worker/statistics');
+          break;
+      }
+    },
+    [router],
+  );
+
+  return (
+    <ThemedView style={[styles.adminContainer, { paddingTop: insets.top + 16 }]}>
+      <ScrollView contentContainerStyle={styles.adminContent}>
+        <ThemedText type="title" style={styles.adminTitle}>
+          Управление
+        </ThemedText>
+        <View style={styles.adminGrid}>
+          {ADMIN_MANAGEMENT_CARDS.map((card) => (
+            <Pressable
+              key={card.key}
+              style={styles.adminCard}
+              onPress={() => handleOpen(card.key)}
+            >
+              <View style={styles.adminCardHeader}>
+                <MaterialIcons
+                  name={card.icon}
+                  size={28}
+                  color={PRIMARY_ORANGE}
+                  style={styles.adminIcon}
+                />
+              </View>
+              <ThemedText style={[styles.adminCardTitle, { color: text }]}>
+                {card.title}
+              </ThemedText>
+              <ThemedText style={[styles.adminCardSubtitle, { color: textMuted }]}>
+                {card.subtitle}
+              </ThemedText>
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={PRIMARY_ORANGE}
+                style={styles.adminChevron}
+              />
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+    </ThemedView>
+  );
+}
+
 export default function ClientDashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -50,14 +161,19 @@ export default function ClientDashboardScreen() {
   // Определяем эффективную роль
   const effectiveRole = role || user?.role;
   const isClient = effectiveRole?.toLowerCase() === 'client';
+   const isAdminWorker = effectiveRole?.toLowerCase() === 'admin-worker';
 
-  // Редирект если не клиент
+  // Редирект если не клиент и не admin-worker
   useEffect(() => {
-    if (effectiveRole && !isClient) {
-      console.log('[ClientDashboard] Not a client, redirecting:', effectiveRole);
+    if (effectiveRole && !isClient && !isAdminWorker) {
+      console.log('[ClientDashboard] Unsupported role, redirecting:', effectiveRole);
       router.replace('/login');
     }
-  }, [effectiveRole, isClient, router]);
+  }, [effectiveRole, isClient, isAdminWorker, router]);
+
+  if (isAdminWorker) {
+    return <AdminWorkerManagementScreen />;
+  }
 
   // Activity Tracker Store
   const {
@@ -270,8 +386,11 @@ export default function ClientDashboardScreen() {
                 const capability = updatedDevice.capabilities?.find(
                   (cap) => cap.type === 'devices.capabilities.on_off'
                 );
-                if (capability) {
-                  capability.state = { ...capability.state, value };
+                if (capability && capability.state) {
+                  capability.state = {
+                    instance: capability.state.instance,
+                    value,
+                  };
                 }
                 return updatedDevice;
               }
@@ -865,6 +984,51 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DARK_BG,
+  },
+  adminContainer: {
+    flex: 1,
+    backgroundColor: DARK_BG,
+  },
+  adminContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+  },
+  adminTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 16,
+  },
+  adminGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  adminCard: {
+    width: CARD_WIDTH,
+    borderRadius: 16,
+    padding: 16,
+    backgroundColor: GRAY_600,
+  },
+  adminCardHeader: {
+    marginBottom: 12,
+  },
+  adminIcon: {
+    opacity: 0.9,
+  },
+  adminCardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  adminCardSubtitle: {
+    fontSize: 13,
+    opacity: 0.7,
+  },
+  adminChevron: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
   },
   scrollView: {
     flex: 1,
