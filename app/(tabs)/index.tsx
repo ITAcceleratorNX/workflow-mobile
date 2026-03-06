@@ -50,26 +50,26 @@ const ADMIN_MANAGEMENT_CARDS: {
 }[] = [
   {
     key: 'categories',
-    title: 'Категории и подкатегории',
-    subtitle: 'Добавление и удаление категорий',
+    title: 'Управление категориями',
+    subtitle: 'Категории и подкатегории услуг',
     icon: 'category',
   },
   {
     key: 'users',
-    title: 'Пользователи',
+    title: 'Управление пользователями',
     subtitle: 'Роли и запросы на регистрацию',
     icon: 'groups',
   },
   {
     key: 'office',
-    title: 'Офис',
-    subtitle: 'Кабинеты, переговорные, адреса',
+    title: 'Управление офисом',
+    subtitle: 'Кабинеты, переговорные, локации',
     icon: 'business',
   },
   {
     key: 'smart-home',
     title: 'Умный дом',
-    subtitle: 'Устройства и доступ',
+    subtitle: 'Яндекс.Умный дом: токены и устройства',
     icon: 'home-filled',
   },
   {
@@ -114,7 +114,10 @@ function AdminWorkerManagementScreen() {
     <ThemedView style={[styles.adminContainer, { paddingTop: insets.top + 16 }]}>
       <ScrollView contentContainerStyle={styles.adminContent}>
         <ThemedText type="title" style={styles.adminTitle}>
-          Управление
+          Управление системой
+        </ThemedText>
+        <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
+          Выберите раздел для управления
         </ThemedText>
         <View style={styles.adminGrid}>
           {ADMIN_MANAGEMENT_CARDS.map((card) => (
@@ -997,6 +1000,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  adminDescription: {
+    fontSize: 14,
     marginBottom: 16,
   },
   adminGrid: {

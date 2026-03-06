@@ -18,10 +18,13 @@ import { useToast } from '@/context/toast-context';
 import {
   type ServiceCategory,
   type ServiceSubcategory,
+  type ExecutorInCategory,
   getServiceCategories,
   createServiceCategory,
   deleteServiceCategory,
   getExecutorsByCategory,
+  getAllExecutorsForAdmin,
+  assignExecutorToCategory,
   createSubcategory,
   deleteSubcategory,
 } from '@/lib/api';
@@ -30,7 +33,7 @@ const PRIMARY_ORANGE = '#E25B21';
 const GRAY_600 = '#3A3A3C';
 const DARK_BG = '#1C1C1E';
 
-type TabType = 'categories' | 'subcategories';
+type TabType = 'categories' | 'subcategories' | 'executors';
 
 function useCategories() {
   const [list, setList] = useState<ServiceCategory[]>([]);
@@ -109,6 +112,48 @@ export default function AdminWorkerCategoriesScreen() {
   const [subcategoryError, setSubcategoryError] = useState<string | null>(null);
   const [showSubcategoryDropdown, setShowSubcategoryDropdown] = useState(false);
   const [showCategorySelectDropdown, setShowCategorySelectDropdown] = useState(false);
+
+  // Исполнители: привязать сотрудника к категории (как в браузере)
+  const [allExecutors, setAllExecutors] = useState<ExecutorInCategory[]>([]);
+  const [loadingAllExecutors, setLoadingAllExecutors] = useState(false);
+  const [selectedCategoryForAssign, setSelectedCategoryForAssign] = useState<number | null>(null);
+  const [selectedExecutorForAssign, setSelectedExecutorForAssign] = useState<number | null>(null);
+  const [isAssigningExecutor, setIsAssigningExecutor] = useState(false);
+  const [executorManagementError, setExecutorManagementError] = useState<string | null>(null);
+  const [showCategoryAssignDropdown, setShowCategoryAssignDropdown] = useState(false);
+  const [showExecutorAssignDropdown, setShowExecutorAssignDropdown] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'executors') {
+      setLoadingAllExecutors(true);
+      getAllExecutorsForAdmin().then((res) => {
+        if (res.ok) setAllExecutors(res.data);
+        else setAllExecutors([]);
+        setLoadingAllExecutors(false);
+      });
+    }
+  }, [activeTab]);
+
+  const handleAssignExecutorToCategory = useCallback(async () => {
+    if (selectedCategoryForAssign == null || selectedExecutorForAssign == null) return;
+    setExecutorManagementError(null);
+    setIsAssigningExecutor(true);
+    const result = await assignExecutorToCategory(selectedCategoryForAssign, selectedExecutorForAssign);
+    if (result.ok) {
+      show({
+        title: 'Исполнитель назначен',
+        description: 'Исполнитель успешно привязан к категории',
+        variant: 'success',
+      });
+      setSelectedCategoryForAssign(null);
+      setSelectedExecutorForAssign(null);
+      setShowCategoryAssignDropdown(false);
+      setShowExecutorAssignDropdown(false);
+    } else {
+      setExecutorManagementError(result.error);
+    }
+    setIsAssigningExecutor(false);
+  }, [selectedCategoryForAssign, selectedExecutorForAssign, show]);
 
   const allSubcategories = useMemo(() => {
     return categories.flatMap((cat) =>
@@ -199,6 +244,17 @@ export default function AdminWorkerCategoriesScreen() {
     return categories.find((c) => c.id === selectedCategoryForSub)?.name ?? null;
   }, [selectedCategoryForSub, categories]);
 
+  const selectedCategoryForAssignName = useMemo(() => {
+    if (selectedCategoryForAssign == null) return null;
+    return categories.find((c) => c.id === selectedCategoryForAssign)?.name ?? null;
+  }, [selectedCategoryForAssign, categories]);
+
+  const selectedExecutorForAssignName = useMemo(() => {
+    if (selectedExecutorForAssign == null) return null;
+    const ex = allExecutors.find((e) => e.id === selectedExecutorForAssign);
+    return ex?.user?.full_name ?? null;
+  }, [selectedExecutorForAssign, allExecutors]);
+
   const canDeleteCategory = categoryToDelete != null && !categoriesWithExecutors.has(categoryToDelete);
 
   return (
@@ -228,6 +284,14 @@ export default function AdminWorkerCategoriesScreen() {
         >
           <ThemedText style={[styles.tabText, activeTab === 'subcategories' && styles.tabTextActive]}>
             Подкатегории
+          </ThemedText>
+        </Pressable>
+        <Pressable
+          style={[styles.tab, activeTab === 'executors' && styles.tabActive]}
+          onPress={() => setActiveTab('executors')}
+        >
+          <ThemedText style={[styles.tabText, activeTab === 'executors' && styles.tabTextActive]}>
+            Исполнители
           </ThemedText>
         </Pressable>
       </View>
@@ -462,6 +526,116 @@ export default function AdminWorkerCategoriesScreen() {
               ) : null}
             </View>
           )}
+
+          {activeTab === 'executors' && (
+            <View style={styles.section}>
+              <ThemedText style={[styles.sectionTitle, { color: text }]}>
+                Управление исполнителями
+              </ThemedText>
+              <ThemedText style={[styles.label, { color: textMuted }]}>
+                Назначить исполнителя к категории
+              </ThemedText>
+
+              <View style={styles.infoBox}>
+                <MaterialIcons name="info-outline" size={20} color="#3B82F6" />
+                <ThemedText style={styles.infoBoxText}>
+                  Если в категории нет исполнителей, первый назначенный станет руководителем. Остальные — обычные исполнители.
+                </ThemedText>
+              </View>
+
+              <ThemedText style={[styles.label, { color: textMuted }]}>Категория</ThemedText>
+              <Pressable
+                style={styles.selectTrigger}
+                onPress={() => setShowCategoryAssignDropdown((v) => !v)}
+              >
+                <ThemedText style={[styles.selectTriggerText, { color: selectedCategoryForAssignName ? text : textMuted }]}>
+                  {selectedCategoryForAssignName ?? 'Выберите категорию'}
+                </ThemedText>
+                <MaterialIcons
+                  name={showCategoryAssignDropdown ? 'expand-less' : 'expand-more'}
+                  size={22}
+                  color={textMuted}
+                />
+              </Pressable>
+              {showCategoryAssignDropdown && (
+                <View style={styles.dropdown}>
+                  {categories.map((cat) => (
+                    <Pressable
+                      key={cat.id}
+                      style={[styles.dropdownItem, cat.id === selectedCategoryForAssign && styles.dropdownItemActive]}
+                      onPress={() => {
+                        setSelectedCategoryForAssign(cat.id);
+                        setShowCategoryAssignDropdown(false);
+                      }}
+                    >
+                      <ThemedText style={styles.dropdownItemText}>{cat.name}</ThemedText>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+
+              <ThemedText style={[styles.label, { color: textMuted }]}>Исполнитель</ThemedText>
+              <Pressable
+                style={styles.selectTrigger}
+                onPress={() => setShowExecutorAssignDropdown((v) => !v)}
+              >
+                <ThemedText style={[styles.selectTriggerText, { color: selectedExecutorForAssignName ? text : textMuted }]}>
+                  {loadingAllExecutors ? 'Загрузка...' : selectedExecutorForAssignName ?? 'Выберите исполнителя'}
+                </ThemedText>
+                <MaterialIcons
+                  name={showExecutorAssignDropdown ? 'expand-less' : 'expand-more'}
+                  size={22}
+                  color={textMuted}
+                />
+              </Pressable>
+              {showExecutorAssignDropdown && (
+                <View style={styles.dropdown}>
+                  {allExecutors.length === 0 && !loadingAllExecutors ? (
+                    <ThemedText style={[styles.dropdownItemText, styles.dropdownItemDisabled]}>
+                      Нет доступных исполнителей
+                    </ThemedText>
+                  ) : (
+                    allExecutors.map((ex) => (
+                      <Pressable
+                        key={ex.id}
+                        style={[styles.dropdownItem, ex.id === selectedExecutorForAssign && styles.dropdownItemActive]}
+                        onPress={() => {
+                          setSelectedExecutorForAssign(ex.id);
+                          setShowExecutorAssignDropdown(false);
+                        }}
+                      >
+                        <ThemedText style={styles.dropdownItemText} numberOfLines={1}>
+                          {ex.user?.full_name ?? ''} {ex.specialty ? ` · ${ex.specialty}` : ''}
+                        </ThemedText>
+                      </Pressable>
+                    ))
+                  )}
+                </View>
+              )}
+
+              <Pressable
+                style={[
+                  styles.primaryButton,
+                  styles.primaryButtonFull,
+                  (!selectedCategoryForAssign || !selectedExecutorForAssign || isAssigningExecutor) && styles.buttonDisabled,
+                ]}
+                onPress={handleAssignExecutorToCategory}
+                disabled={!selectedCategoryForAssign || !selectedExecutorForAssign || isAssigningExecutor}
+              >
+                {isAssigningExecutor ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <ThemedText style={styles.primaryButtonText}>Назначить исполнителя</ThemedText>
+                )}
+              </Pressable>
+
+              {executorManagementError ? (
+                <View style={styles.errorInline}>
+                  <ThemedText style={styles.errorInlineText}>{executorManagementError}</ThemedText>
+                </View>
+              ) : null}
+            </View>
+          )}
         </ScrollView>
       )}
     </ThemedView>
@@ -662,6 +836,22 @@ const styles = StyleSheet.create({
   warnText: {
     fontSize: 13,
     color: '#FCD34D',
+    flex: 1,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: 'rgba(59,130,246,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.4)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  infoBoxText: {
+    fontSize: 13,
+    color: '#93C5FD',
     flex: 1,
   },
   errorInline: {

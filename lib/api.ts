@@ -57,6 +57,7 @@ export interface Office {
   photo?: string | null;
   working_hours_start?: string | null; // "HH:mm:ss"
   working_hours_end?: string | null;   // "HH:mm:ss"
+  auto_track_enabled?: boolean;
 }
 
 export interface ServiceSubcategory {
@@ -95,6 +96,66 @@ export async function getOfficeById(
   const result = await request<Office>(`/offices/${id}`);
   if (result.ok) return { ok: true, data: result.data };
   return { ok: false, error: result.error };
+}
+
+export async function getOfficeRooms(officeId: number): Promise<
+  { ok: true; data: MeetingRoom[] } | { ok: false; error: string }
+> {
+  const result = await request<MeetingRoom[]>(`/offices/${officeId}/rooms`);
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = result.data;
+  const list = Array.isArray(data) ? data : [];
+  return { ok: true, data: list };
+}
+
+export async function updateOfficeWorkingHours(
+  officeId: number,
+  body: {
+    working_hours_start: string; // "HH:mm:ss"
+    working_hours_end: string;
+    auto_track_enabled: boolean;
+  }
+): Promise<{ ok: true; data: Office } | { ok: false; error: string }> {
+  const result = await request<Office>(`/offices/${officeId}/working-hours`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function updateOffice(
+  id: number,
+  body: Partial<Pick<Office, 'name' | 'city' | 'address' | 'working_hours_start' | 'working_hours_end' | 'auto_track_enabled'>>
+): Promise<{ ok: true; data: Office } | { ok: false; error: string }> {
+  const result = await request<Office>(`/offices/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function createOffice(body: {
+  name: string;
+  address: string;
+  city: string;
+  working_hours_start?: string;
+  working_hours_end?: string;
+  auto_track_enabled?: boolean;
+}): Promise<{ ok: true; data: Office } | { ok: false; error: string }> {
+  const result = await request<Office>('/offices', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function deleteOffice(id: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<undefined>(`/offices/${id}`, { method: 'DELETE' });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 // ==================== Service categories ====================
@@ -159,6 +220,29 @@ export async function getExecutorsByCategory(categoryId: number): Promise<
   const data = result.data;
   const list = Array.isArray(data) ? data : [];
   return { ok: true, data: list };
+}
+
+/** Список всех исполнителей для админа (назначение к категории) */
+export async function getAllExecutorsForAdmin(): Promise<
+  { ok: true; data: ExecutorInCategory[] } | { ok: false; error: string }
+> {
+  const result = await request<ExecutorInCategory[] | ExecutorInCategory>('/executors/all');
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = result.data;
+  const list = Array.isArray(data) ? data : data ? [data] : [];
+  return { ok: true, data: list };
+}
+
+export async function assignExecutorToCategory(
+  categoryId: number,
+  executorId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(
+    `/service-categories/${categoryId}/assign-executor`,
+    { method: 'POST', body: JSON.stringify({ executorId }) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 export async function changeCategoryHead(
@@ -318,6 +402,40 @@ export async function updateUserRole(
   return { ok: true };
 }
 
+// ==================== Analytics (admin-worker) ====================
+
+export interface AdminWorkerStats {
+  totalRequests: number;
+  statusCounts: {
+    new: number;
+    inWork: number;
+    completed: number;
+    overdue: number;
+  };
+  requestTypeSummary: Record<string, number>;
+}
+
+export async function getAdminWorkerStats(): Promise<
+  { ok: true; data: AdminWorkerStats } | { ok: false; error: string }
+> {
+  const result = await request<AdminWorkerStats>('/analytics/stats/admin-worker');
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = result.data;
+  const normalized: AdminWorkerStats = {
+    totalRequests: typeof data?.totalRequests === 'number' ? data.totalRequests : 0,
+    statusCounts: {
+      new: typeof data?.statusCounts?.new === 'number' ? data.statusCounts.new : 0,
+      inWork: typeof data?.statusCounts?.inWork === 'number' ? data.statusCounts.inWork : 0,
+      completed: typeof data?.statusCounts?.completed === 'number' ? data.statusCounts.completed : 0,
+      overdue: typeof data?.statusCounts?.overdue === 'number' ? data.statusCounts.overdue : 0,
+    },
+    requestTypeSummary: data?.requestTypeSummary && typeof data.requestTypeSummary === 'object'
+      ? data.requestTypeSummary
+      : {},
+  };
+  return { ok: true, data: normalized };
+}
+
 // ==================== Smart Home ====================
 
 export interface YandexDevice {
@@ -349,11 +467,56 @@ export interface ClientRoomSubscription {
   meetingRoom?: {
     id: number;
     name: string;
+    office_id?: number;
     office?: {
       id: number;
       name: string;
     };
   };
+  subscribedClient?: {
+    id: number;
+    full_name: string;
+    phone?: string;
+  };
+}
+
+/** Все подписки (для админа): кто привязан к каким комнатам для управления умным домом */
+export async function getAllClientRoomSubscriptions(): Promise<
+  { ok: true; data: ClientRoomSubscription[] } | { ok: false; error: string }
+> {
+  const result = await request<{ success?: boolean; subscriptions?: ClientRoomSubscription[] }>(
+    '/client-room-subscriptions'
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const raw = result.data;
+  const list = Array.isArray((raw as { subscriptions?: ClientRoomSubscription[] })?.subscriptions)
+    ? (raw as { subscriptions: ClientRoomSubscription[] }).subscriptions
+    : [];
+  return { ok: true, data: list };
+}
+
+export async function createClientRoomSubscription(body: {
+  client_id: number;
+  meeting_room_id: number;
+}): Promise<{ ok: true; data: ClientRoomSubscription } | { ok: false; error: string }> {
+  const result = await request<{ success?: boolean; data?: ClientRoomSubscription }>(
+    '/client-room-subscriptions',
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = (result.data as { data?: ClientRoomSubscription })?.data;
+  if (!data) return { ok: false, error: 'Нет данных в ответе' };
+  return { ok: true, data };
+}
+
+export async function deleteClientRoomSubscription(id: number): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const result = await request<unknown>(`/client-room-subscriptions/${id}`, {
+    method: 'DELETE',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 export async function getClientRoomSubscriptions(client_id: number): Promise<
@@ -387,6 +550,112 @@ export async function controlDevice(
   });
   if (result.ok) return { ok: true };
   return { ok: false, error: result.error };
+}
+
+// ==================== Smart Home (admin-worker / manager) ====================
+
+export interface YandexTokensMeta {
+  id: number;
+  expires_at: string | null;
+  created_at?: string;
+  updated_at?: string;
+  has_tokens: boolean;
+}
+
+export async function getYandexTokens(): Promise<
+  { ok: true; data: YandexTokensMeta } | { ok: false; error: string } | { ok: true; data: null }
+> {
+  const result = await request<YandexTokensMeta>('/yandex-smart-home/tokens');
+  if (!result.ok) {
+    if (result.error?.toLowerCase().includes('not found') || result.error?.toLowerCase().includes('токены не')) {
+      return { ok: true, data: null };
+    }
+    return { ok: false, error: result.error };
+  }
+  return { ok: true, data: result.data ?? null };
+}
+
+export async function refreshYandexTokens(): Promise<
+  { ok: true; data?: { id: number; expires_at: string; updated_at: string } } | { ok: false; error: string }
+> {
+  const result = await request<{ success?: boolean; data?: { id: number; expires_at: string; updated_at: string } }>(
+    '/yandex-smart-home/tokens/refresh',
+    { method: 'POST' }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: (result.data as { data?: { id: number; expires_at: string; updated_at: string } })?.data };
+}
+
+export async function deleteYandexTokens(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>('/yandex-smart-home/tokens', { method: 'DELETE' });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+export async function getYandexDevicesList(): Promise<
+  { ok: true; data: YandexDevice[] } | { ok: false; error: string }
+> {
+  const result = await request<{ success?: boolean; devices?: YandexDevice[] }>(
+    '/yandex-smart-home/devices/list'
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const raw = result.data;
+  const list = Array.isArray((raw as { devices?: YandexDevice[] })?.devices)
+    ? (raw as { devices: YandexDevice[] }).devices
+    : [];
+  return { ok: true, data: list };
+}
+
+export interface RoomDeviceLink {
+  id: number;
+  meeting_room_id: number;
+  device_id: string;
+  device_name: string;
+  device_type?: string | null;
+  meetingRoom?: {
+    id: number;
+    name: string;
+    office_id?: number;
+    office?: { id: number; name: string };
+  };
+}
+
+export async function getAllRoomDevices(): Promise<
+  { ok: true; data: RoomDeviceLink[] } | { ok: false; error: string }
+> {
+  const result = await request<{ success?: boolean; devices?: RoomDeviceLink[] }>(
+    '/yandex-smart-home/room-devices'
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const raw = result.data;
+  const list = Array.isArray((raw as { devices?: RoomDeviceLink[] })?.devices)
+    ? (raw as { devices: RoomDeviceLink[] }).devices
+    : [];
+  return { ok: true, data: list };
+}
+
+export async function createRoomDevice(body: {
+  meeting_room_id: number;
+  device_id: string;
+  device_name: string;
+  device_type?: string;
+}): Promise<{ ok: true; data: RoomDeviceLink } | { ok: false; error: string }> {
+  const result = await request<{ success?: boolean; data?: RoomDeviceLink }>(
+    '/yandex-smart-home/room-devices',
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = (result.data as { data?: RoomDeviceLink })?.data;
+  if (!data) return { ok: false, error: 'Нет данных в ответе' };
+  return { ok: true, data };
+}
+
+export async function deleteRoomDevice(id: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/yandex-smart-home/room-devices/${id}`, {
+    method: 'DELETE',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 // ==================== Meeting Rooms & Bookings ====================
@@ -446,6 +715,54 @@ export async function getMeetingRooms(officeId?: number): Promise<
     : '/meeting-rooms';
   const result = await request<MeetingRoom[]>(path);
   if (result.ok) return { ok: true, data: Array.isArray(result.data) ? result.data : [] };
+  return { ok: false, error: result.error };
+}
+
+export async function createMeetingRoom(body: {
+  name: string;
+  office_id: number;
+  floor?: number;
+  capacity?: number;
+  room_type?: string;
+  description?: string | null;
+}): Promise<
+  { ok: true; data: MeetingRoom } | { ok: false; error: string }
+> {
+  const payload = {
+    name: body.name.trim(),
+    office_id: body.office_id,
+    floor: body.floor ?? 0,
+    capacity: body.capacity ?? 1,
+    ...(body.room_type != null && { room_type: body.room_type }),
+    ...(body.description != null && { description: body.description }),
+  };
+  const result = await request<MeetingRoom>('/meeting-rooms', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (result.ok) return { ok: true, data: result.data! };
+  return { ok: false, error: result.error };
+}
+
+export async function updateMeetingRoom(
+  id: number,
+  body: Partial<Pick<MeetingRoom, 'name' | 'floor' | 'capacity' | 'room_type' | 'description'>>
+): Promise<
+  { ok: true; data: MeetingRoom } | { ok: false; error: string }
+> {
+  const result = await request<MeetingRoom>(`/meeting-rooms/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  if (result.ok) return { ok: true, data: result.data! };
+  return { ok: false, error: result.error };
+}
+
+export async function deleteMeetingRoom(id: number): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const result = await request<undefined>(`/meeting-rooms/${id}`, { method: 'DELETE' });
+  if (result.ok) return { ok: true };
   return { ok: false, error: result.error };
 }
 
