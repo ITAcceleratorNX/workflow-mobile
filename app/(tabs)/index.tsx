@@ -18,6 +18,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuthStore } from '@/stores/auth-store';
 import { useActivityTrackerStore } from '@/stores/activity-tracker-store';
+import { useStepsStore } from '@/stores/steps-store';
 import { useToast } from '@/context/toast-context';
 import { useActivityTracker } from '@/hooks/use-activity-tracker';
 import { useHealthReminders } from '@/hooks/use-health-reminders';
@@ -28,8 +29,9 @@ import {
   type YandexDevice,
   type ClientRoomSubscription,
 } from '@/lib/api';
+import { stepLengthMetersFromHeight, stepsToKm } from '@/lib/steps-utils';
 
-type TabType = 'home' | 'health' | 'settings';
+type TabType = 'home' | 'health' | 'settings' | 'steps';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -76,6 +78,85 @@ const ADMIN_MANAGEMENT_CARDS: {
     key: 'statistics',
     title: 'Статистика',
     subtitle: 'Отчёты и аналитика по заявкам',
+    icon: 'insert-chart-outlined',
+  },
+];
+
+// Главная «Управление» для исполнителя: department-head и manager (как management в workflow-web)
+type ExecutorCardKey =
+  | 'users'
+  | 'statistics'
+  | 'office'
+  | 'categories'
+  | 'subcategories'
+  | 'registration-requests';
+
+const DEPARTMENT_HEAD_MANAGEMENT_CARDS: {
+  key: ExecutorCardKey;
+  title: string;
+  subtitle: string;
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+}[] = [
+  {
+    key: 'statistics',
+    title: 'Аналитика',
+    subtitle: 'SLA, оценки, статистика по заявкам',
+    icon: 'insert-chart-outlined',
+  },
+];
+
+// Manager: как в браузере (мобильная версия) — 3 раздела управления + Аналитика (внутри неё вкладки Статистика и Аналитика)
+const MANAGER_MANAGEMENT_CARDS: {
+  key: ExecutorCardKey;
+  title: string;
+  subtitle: string;
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+}[] = [
+  {
+    key: 'office',
+    title: 'Управление офисами',
+    subtitle: 'Добавление и управление офисами компании',
+    icon: 'business',
+  },
+  {
+    key: 'categories',
+    title: 'Категории услуг',
+    subtitle: 'Категории и подкатегории услуг',
+    icon: 'category',
+  },
+  {
+    key: 'users',
+    title: 'Управление пользователями',
+    subtitle: 'Пользователи и запросы на регистрацию',
+    icon: 'groups',
+  },
+  {
+    key: 'statistics',
+    title: 'Аналитика',
+    subtitle: 'Статистика и аналитика по заявкам',
+    icon: 'insert-chart-outlined',
+  },
+];
+
+// Главная «Мой кабинет» для роли executor (как executor/management в workflow-web)
+type ExecutorCabinetCardKey = 'scan-qr' | 'statistics';
+
+const EXECUTOR_CABINET_CARDS: {
+  key: ExecutorCabinetCardKey;
+  title: string;
+  subtitle: string;
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+}[] = [
+  {
+    key: 'scan-qr',
+    title: 'QR сканер',
+    subtitle: 'Сканирование QR-кодов бронирования',
+    icon: 'qr-code-2',
+  },
+  {
+    key: 'statistics',
+    title: 'Статистика',
+    subtitle: 'Мои показатели и рейтинг',
     icon: 'insert-chart-outlined',
   },
 ];
@@ -154,6 +235,151 @@ function AdminWorkerManagementScreen() {
   );
 }
 
+/** Главная страница «Управление» для исполнителя (department-head, manager) — аналог management в workflow-web */
+function ExecutorManagementScreen({
+  role: executorRole,
+}: {
+  role: 'department-head' | 'manager';
+}) {
+  const insets = useSafeAreaInsets();
+  const text = useThemeColor({}, 'text');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const router = useRouter();
+
+  const cards =
+    executorRole === 'department-head'
+      ? DEPARTMENT_HEAD_MANAGEMENT_CARDS
+      : MANAGER_MANAGEMENT_CARDS;
+
+  const handleOpen = useCallback(
+    (key: ExecutorCardKey) => {
+      // department-head: только Аналитика, свой эндпоинт /analytics/stats/department-head
+      if (executorRole === 'department-head') {
+        if (key === 'statistics') router.push('/department-head/statistics');
+        return;
+      }
+      // manager: офисы, категории (внутри — вкладки категории/подкатегории), пользователи (внутри — управление/регистрации), аналитика
+      switch (key) {
+        case 'office':
+          router.push('/admin-worker/office');
+          break;
+        case 'categories':
+          router.push('/admin-worker/categories');
+          break;
+        case 'users':
+          router.push('/admin-worker/users');
+          break;
+        case 'statistics':
+          router.push('/manager/statistics');
+          break;
+      }
+    },
+    [router, executorRole],
+  );
+
+  return (
+    <ThemedView style={[styles.adminContainer, { paddingTop: insets.top + 16 }]}>
+      <ScrollView contentContainerStyle={styles.adminContent}>
+        <ThemedText type="title" style={styles.adminTitle}>
+          Управление
+        </ThemedText>
+        <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
+          Выберите раздел
+        </ThemedText>
+        <View style={styles.adminGrid}>
+          {cards.map((card) => (
+            <Pressable
+              key={card.key}
+              style={styles.adminCard}
+              onPress={() => handleOpen(card.key)}
+            >
+              <View style={styles.adminCardHeader}>
+                <MaterialIcons
+                  name={card.icon}
+                  size={28}
+                  color={PRIMARY_ORANGE}
+                  style={styles.adminIcon}
+                />
+              </View>
+              <ThemedText style={[styles.adminCardTitle, { color: text }]}>
+                {card.title}
+              </ThemedText>
+              <ThemedText style={[styles.adminCardSubtitle, { color: textMuted }]}>
+                {card.subtitle}
+              </ThemedText>
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={PRIMARY_ORANGE}
+                style={styles.adminChevron}
+              />
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+    </ThemedView>
+  );
+}
+
+/** Главная «Мой кабинет» для роли executor — аналог executor/management в workflow-web */
+function ExecutorCabinetScreen() {
+  const insets = useSafeAreaInsets();
+  const text = useThemeColor({}, 'text');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const router = useRouter();
+
+  const handleOpen = useCallback(
+    (key: ExecutorCabinetCardKey) => {
+      if (key === 'scan-qr') router.push('/executor/scan-qr');
+      else router.push('/executor/statistics');
+    },
+    [router],
+  );
+
+  return (
+    <ThemedView style={[styles.adminContainer, { paddingTop: insets.top + 16 }]}>
+      <ScrollView contentContainerStyle={styles.adminContent}>
+        <ThemedText type="title" style={styles.adminTitle}>
+          Мой кабинет
+        </ThemedText>
+        <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
+          Выберите раздел
+        </ThemedText>
+        <View style={styles.adminGrid}>
+          {EXECUTOR_CABINET_CARDS.map((card) => (
+            <Pressable
+              key={card.key}
+              style={styles.adminCard}
+              onPress={() => handleOpen(card.key)}
+            >
+              <View style={styles.adminCardHeader}>
+                <MaterialIcons
+                  name={card.icon}
+                  size={28}
+                  color={PRIMARY_ORANGE}
+                  style={styles.adminIcon}
+                />
+              </View>
+              <ThemedText style={[styles.adminCardTitle, { color: text }]}>
+                {card.title}
+              </ThemedText>
+              <ThemedText style={[styles.adminCardSubtitle, { color: textMuted }]}>
+                {card.subtitle}
+              </ThemedText>
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={PRIMARY_ORANGE}
+                style={styles.adminChevron}
+              />
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+    </ThemedView>
+  );
+}
+
 export default function ClientDashboardScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -164,19 +390,54 @@ export default function ClientDashboardScreen() {
   // Определяем эффективную роль
   const effectiveRole = role || user?.role;
   const isClient = effectiveRole?.toLowerCase() === 'client';
-   const isAdminWorker = effectiveRole?.toLowerCase() === 'admin-worker';
+  const isAdminWorker = effectiveRole?.toLowerCase() === 'admin-worker';
+  const isDepartmentHead = effectiveRole?.toLowerCase() === 'department-head';
+  const isManager = effectiveRole?.toLowerCase() === 'manager';
+  const isExecutor = effectiveRole?.toLowerCase() === 'executor';
 
-  // Редирект если не клиент и не admin-worker
+  // Редирект если роль не поддерживается на главной (клиент, админ, исполнители)
   useEffect(() => {
-    if (effectiveRole && !isClient && !isAdminWorker) {
+    if (
+      effectiveRole &&
+      !isClient &&
+      !isAdminWorker &&
+      !isDepartmentHead &&
+      !isManager &&
+      !isExecutor
+    ) {
       console.log('[ClientDashboard] Unsupported role, redirecting:', effectiveRole);
       router.replace('/login');
     }
-  }, [effectiveRole, isClient, isAdminWorker, router]);
+  }, [effectiveRole, isClient, isAdminWorker, isDepartmentHead, isManager, isExecutor, router]);
 
   if (isAdminWorker) {
     return <AdminWorkerManagementScreen />;
   }
+
+  if (isExecutor) {
+    return <ExecutorCabinetScreen />;
+  }
+
+  if (isDepartmentHead || isManager) {
+    return (
+      <ExecutorManagementScreen
+        role={isDepartmentHead ? 'department-head' : 'manager'}
+      />
+    );
+  }
+
+  return <ClientDashboardContent />;
+}
+
+/** Контент главной только для роли client. Вынесен в отдельный компонент, чтобы не нарушать правила хуков (одинаковое количество хуков при любом рендере). */
+function ClientDashboardContent() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const role = useAuthStore((state) => state.role);
+  const { show } = useToast();
+  const effectiveRole = role || user?.role;
+  const isClient = effectiveRole?.toLowerCase() === 'client';
 
   // Activity Tracker Store
   const {
@@ -186,6 +447,13 @@ export default function ClientDashboardScreen() {
     setHealthReminders,
     setAutoStartInWorkingHours,
   } = useActivityTrackerStore();
+
+  // Шагомер: данные с устройства (iOS: Motion & Fitness, Android: счётчик шагов)
+  const stepsToday = useStepsStore((s) => s.stepsToday);
+  const stepsGoal = useStepsStore((s) => s.settings.goalSteps);
+  const stepsHeightCm = useStepsStore((s) => s.settings.heightCm);
+  const stepLengthM = stepsHeightCm && stepsHeightCm > 0 ? stepLengthMetersFromHeight(stepsHeightCm) : 0.7;
+  const stepsKmToday = stepsToKm(stepsToday, stepLengthM);
 
   // Логирование изменений статистики
   useEffect(() => {
@@ -472,6 +740,8 @@ export default function ClientDashboardScreen() {
         return 'Health-напоминание';
       case 'settings':
         return 'Настройки трекера';
+      case 'steps':
+        return 'Шаги';
       default:
         return '';
     }
@@ -485,6 +755,8 @@ export default function ClientDashboardScreen() {
         return '';
       case 'settings':
         return 'Настройте параметры отслеживания';
+      case 'steps':
+        return 'Шаги за день, цель и история';
       default:
         return '';
     }
@@ -665,6 +937,28 @@ export default function ClientDashboardScreen() {
               />
             </View>
           </View>
+        </Pressable>
+
+        {/* Шагомер: данные с датчика шагов (iOS: Motion & Fitness, Android: счётчик шагов) */}
+        <Pressable
+          onPress={() => router.push('/steps')}
+          style={[styles.statCard, { backgroundColor: CARD_GREEN }]}
+        >
+          <View style={styles.statCardContent}>
+            <View>
+              <ThemedText style={styles.statCardTitle}>Шаги</ThemedText>
+              <ThemedText style={[styles.statCardSubtitle, { opacity: 0.9 }]}>
+                {stepsGoal ? `Цель ${stepsGoal.toLocaleString('ru-RU')}` : 'Датчик шагов'}
+              </ThemedText>
+            </View>
+            <MaterialIcons name="directions-walk" size={24} color="#FFFFFF" />
+          </View>
+          <ThemedText style={styles.statCardValue}>
+            {stepsToday.toLocaleString('ru-RU')}
+          </ThemedText>
+          <ThemedText style={[styles.statCardSubtitle, { marginTop: 2, opacity: 0.85, fontSize: 11 }]}>
+            ~{stepsKmToday.toFixed(2)} км
+          </ThemedText>
         </Pressable>
 
         {/* Sitting Time Card */}
@@ -868,9 +1162,61 @@ export default function ClientDashboardScreen() {
         </View>
       </Pressable>
 
+      {/* Шагомер — рядом с настройками трекера; данные: датчик шагов устройства */}
+      <Pressable
+        onPress={() => router.push('/steps')}
+        style={[styles.settingsCard, { backgroundColor: CARD_GREEN }]}
+      >
+        <View style={styles.settingsRow}>
+          <View style={styles.settingsTextContainer}>
+            <ThemedText style={styles.settingsCardTitle}>
+              Шагомер
+            </ThemedText>
+            <ThemedText style={styles.settingsCardSubtitle}>
+              Цель, история, уведомления. Данные: датчик шагов (iOS: Motion & Fitness, Android: счётчик шагов)
+            </ThemedText>
+          </View>
+          <MaterialIcons name="chevron-right" size={24} color="#FFFFFF" />
+        </View>
+      </Pressable>
+
       <ThemedText style={[styles.settingsCardSubtitle, { marginTop: 12, opacity: 0.8 }]}>
         Трекер учитывает время, когда приложение на экране. В фоне учёт приостанавливается.
       </ThemedText>
+    </View>
+  );
+
+  // Секция Шаги (4-я вкладка, контент под кнопкой-шагомером)
+  const renderStepsSection = () => (
+    <View style={styles.sectionContent}>
+      <View style={[styles.stepsNumberWrap, { marginTop: 8 }]}>
+        <ThemedText
+          style={[styles.stepsBigValue, { color: '#FFFFFF' }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.35}
+        >
+          {stepsToday.toLocaleString('ru-RU')}
+        </ThemedText>
+      </View>
+      <ThemedText style={styles.stepsBigLabel}>шагов сегодня</ThemedText>
+      {stepsGoal != null && stepsGoal > 0 && (
+        <ThemedText style={styles.stepsGoalLine}>
+          Цель: {stepsGoal.toLocaleString('ru-RU')}
+        </ThemedText>
+      )}
+      <ThemedText style={styles.stepsKmLine}>
+        ≈ {stepsKmToday.toFixed(2)} км
+      </ThemedText>
+      <Pressable
+        onPress={() => router.push('/steps')}
+        style={[styles.stepsDetailButton, { backgroundColor: CARD_GREEN }]}
+      >
+        <ThemedText style={styles.stepsDetailButtonText}>
+          Подробнее: история и настройки
+        </ThemedText>
+        <MaterialIcons name="chevron-right" size={24} color="#FFFFFF" />
+      </Pressable>
     </View>
   );
 
@@ -969,6 +1315,17 @@ export default function ClientDashboardScreen() {
             >
               <MaterialIcons name="settings" size={28} color="#FFFFFF" />
             </Pressable>
+
+            {/* Steps Tab (4-я кнопка, как на скрине) */}
+            <Pressable
+              onPress={() => handleTabPress('steps')}
+              style={[
+                styles.tabButton,
+                { backgroundColor: activeSection === 'steps' ? PRIMARY_ORANGE : GRAY_600 },
+              ]}
+            >
+              <MaterialIcons name="directions-walk" size={28} color="#FFFFFF" />
+            </Pressable>
           </View>
         </View>
 
@@ -977,6 +1334,7 @@ export default function ClientDashboardScreen() {
           {activeSection === 'home' && renderHomeSection()}
           {activeSection === 'health' && renderHealthSection()}
           {activeSection === 'settings' && renderSettingsSection()}
+          {activeSection === 'steps' && renderStepsSection()}
         </View>
       </ScrollView>
     </ThemedView>
@@ -1297,6 +1655,55 @@ const styles = StyleSheet.create({
   intervalButtonText: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  // Steps Section (4-я вкладка)
+  stepsNumberWrap: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    minHeight: 80,
+    overflow: 'visible',
+  },
+  stepsBigValue: {
+    fontSize: 40,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 52,
+  },
+  stepsBigLabel: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  stepsGoalLine: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  stepsKmLine: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  stepsDetailButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 24,
+    gap: 8,
+  },
+  stepsDetailButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
   notClientContainer: {
     flex: 1,

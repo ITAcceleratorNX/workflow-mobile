@@ -436,6 +436,168 @@ export async function getAdminWorkerStats(): Promise<
   return { ok: true, data: normalized };
 }
 
+// ==================== Analytics (department-head) ====================
+
+export interface DepartmentHeadStats {
+  totalRequests: number;
+  statusCounts: {
+    awaitingAssignment: number;
+    new: number;
+    inWork: number;
+    completed: number;
+    overdue: number;
+  };
+  requestTypeSummary: Record<string, number>;
+}
+
+export async function getDepartmentHeadStats(): Promise<
+  { ok: true; data: DepartmentHeadStats } | { ok: false; error: string }
+> {
+  const result = await request<DepartmentHeadStats>('/analytics/stats/department-head');
+  if (!result.ok) return { ok: false, error: result.error };
+  const d = result.data;
+  const sc = d?.statusCounts;
+  const normalized: DepartmentHeadStats = {
+    totalRequests: typeof d?.totalRequests === 'number' ? d.totalRequests : 0,
+    statusCounts: {
+      awaitingAssignment: typeof sc?.awaitingAssignment === 'number' ? sc.awaitingAssignment : 0,
+      new: typeof sc?.new === 'number' ? sc.new : 0,
+      inWork: typeof sc?.inWork === 'number' ? sc.inWork : 0,
+      completed: typeof sc?.completed === 'number' ? sc.completed : 0,
+      overdue: typeof sc?.overdue === 'number' ? sc.overdue : 0,
+    },
+    requestTypeSummary:
+      d?.requestTypeSummary && typeof d.requestTypeSummary === 'object'
+        ? d.requestTypeSummary
+        : {},
+  };
+  return { ok: true, data: normalized };
+}
+
+// ==================== Analytics (manager) ====================
+
+/** Ответ /analytics/stats/manager: по офисам и датам */
+export interface ManagerStatsRawItem {
+  officeId: number;
+  data: Record<
+    string,
+    {
+      totalRequests: number;
+      newRequests: number;
+      inWorkRequests: number;
+      completedRequests: number;
+      overdueRequests: number;
+      normalRequests: number;
+      urgentRequests: number;
+      plannedRequests: number;
+    }
+  >;
+}
+
+/** Агрегированная статистика для отображения (как admin-worker) */
+export interface ManagerStatsAggregated {
+  totalRequests: number;
+  statusCounts: { new: number; inWork: number; completed: number; overdue: number };
+  requestTypeSummary: Record<string, number>;
+}
+
+export async function getManagerStats(): Promise<
+  { ok: true; data: ManagerStatsRawItem[] } | { ok: false; error: string }
+> {
+  const result = await request<ManagerStatsRawItem[]>('/analytics/stats/manager');
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data ?? [] };
+}
+
+/** Аналитика: SLA по времени/категориям/офисам */
+export async function getManagerSLAStats(): Promise<
+  { ok: true; data: Record<string, unknown> } | { ok: false; error: string }
+> {
+  const result = await request<Record<string, unknown>>('/analytics/stats/manager/sla');
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data ?? {} };
+}
+
+/** Аналитика: рейтинги по офисам/категориям/исполнителям */
+export async function getManagerRatingStats(): Promise<
+  { ok: true; data: Record<string, unknown> } | { ok: false; error: string }
+> {
+  const result = await request<Record<string, unknown>>('/analytics/stats/manager/ratings');
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data ?? {} };
+}
+
+/** Аналитика: детальная статистика по категориям/направлениям/исполнителям */
+export async function getManagerDetailedStats(): Promise<
+  { ok: true; data: Record<string, unknown> } | { ok: false; error: string }
+> {
+  const result = await request<Record<string, unknown>>('/analytics/stats/manager/detailed');
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data ?? {} };
+}
+
+/** Агрегирует сырые данные manager в плоскую структуру для UI */
+export function aggregateManagerStats(raw: ManagerStatsRawItem[]): ManagerStatsAggregated {
+  let total = 0,
+    newCount = 0,
+    inWork = 0,
+    completed = 0,
+    overdue = 0,
+    normal = 0,
+    urgent = 0,
+    planned = 0;
+  for (const item of raw ?? []) {
+    const data = item.data ?? {};
+    for (const day of Object.values(data)) {
+      if (!day || typeof day !== 'object') continue;
+      total += Number(day.totalRequests) || 0;
+      newCount += Number(day.newRequests) || 0;
+      inWork += Number(day.inWorkRequests) || 0;
+      completed += Number(day.completedRequests) || 0;
+      overdue += Number(day.overdueRequests) || 0;
+      normal += Number(day.normalRequests) || 0;
+      urgent += Number(day.urgentRequests) || 0;
+      planned += Number(day.plannedRequests) || 0;
+    }
+  }
+  return {
+    totalRequests: total,
+    statusCounts: { new: newCount, inWork, completed, overdue },
+    requestTypeSummary: { normal, urgent, planned },
+  };
+}
+
+// ==================== Analytics (executor) ====================
+
+export interface ExecutorStats {
+  totalRequests: number;
+  overdue: number;
+  inWork: number;
+  completed: number;
+  onTime: number;
+  averageExecutionHours: string;
+  averageRating: string;
+}
+
+export async function getExecutorStats(): Promise<
+  { ok: true; data: ExecutorStats } | { ok: false; error: string }
+> {
+  const result = await request<ExecutorStats>('/analytics/stats/executor');
+  if (!result.ok) return { ok: false, error: result.error };
+  const d = result.data;
+  const normalized: ExecutorStats = {
+    totalRequests: typeof d?.totalRequests === 'number' ? d.totalRequests : 0,
+    overdue: typeof d?.overdue === 'number' ? d.overdue : 0,
+    inWork: typeof d?.inWork === 'number' ? d.inWork : 0,
+    completed: typeof d?.completed === 'number' ? d.completed : 0,
+    onTime: typeof d?.onTime === 'number' ? d.onTime : 0,
+    averageExecutionHours:
+      typeof d?.averageExecutionHours === 'string' ? d.averageExecutionHours : '0.00',
+    averageRating: typeof d?.averageRating === 'string' ? d.averageRating : '0.00',
+  };
+  return { ok: true, data: normalized };
+}
+
 // ==================== Smart Home ====================
 
 export interface YandexDevice {
@@ -821,6 +983,21 @@ export async function cancelMeetingRoomBooking(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await request<unknown>(`/meeting-room-bookings/${id}`, {
     method: 'DELETE',
+  });
+  if (result.ok) return { ok: true };
+  return { ok: false, error: result.error };
+}
+
+/** Синк шагов на сервер для пуш-уведомлений шагомера (50%, почти цель, нет активности) */
+export async function syncStepsToServer(payload: {
+  stepsToday: number;
+  goalSteps: number | null;
+  noActivityIntervalHours: number;
+  stepsNotificationsEnabled: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<{ data: { success: boolean; date: string } }>('/steps/sync', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
   if (result.ok) return { ok: true };
   return { ok: false, error: result.error };

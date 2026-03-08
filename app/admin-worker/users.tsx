@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -69,12 +69,14 @@ function formatRequestDate(iso: string): string {
 export default function AdminWorkerUsersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const { show } = useToast();
   const user = useAuthStore((s) => s.user);
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
 
-  const [activeTab, setActiveTab] = useState<TabType>('requests');
+  const initialTab: TabType = tab === 'management' ? 'management' : 'requests';
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   // ——— Запросы на регистрацию ———
   const [requests, setRequests] = useState<RegistrationRequestItem[]>([]);

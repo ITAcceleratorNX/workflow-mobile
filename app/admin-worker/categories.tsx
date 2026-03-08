@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -85,11 +85,14 @@ function useCategoriesWithExecutors(categoryIds: number[]) {
 export default function AdminWorkerCategoriesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const { show } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
 
-  const [activeTab, setActiveTab] = useState<TabType>('categories');
+  const initialTab: TabType =
+    tab === 'subcategories' ? 'subcategories' : tab === 'executors' ? 'executors' : 'categories';
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   const { categories, loading, error, refetch } = useCategories();
   const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
