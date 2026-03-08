@@ -832,6 +832,7 @@ export interface MeetingRoom {
   status?: 'available' | 'booked';
   isActive?: boolean;
   room_type?: string;
+  description?: string | null;
   /** Массив URL фото (приоритет) */
   photos?: string[];
   /** Одно фото — если бэкенд отдаёт только photo */

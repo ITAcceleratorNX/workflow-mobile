@@ -39,3 +39,25 @@ export function getPrimaryPhotoUri(entity?: WithPhoto | null): string | null {
   return getImageUri(raw.trim());
 }
 
+function mapPhotoArrayToUris(photos: unknown[]): string[] {
+  return photos
+    .map((p) => {
+      let raw: unknown = p;
+      if (raw != null && typeof raw === 'object' && 'url' in (raw as object)) raw = (raw as { url: unknown }).url;
+      else if (raw != null && typeof raw === 'object' && 'src' in (raw as object)) raw = (raw as { src: unknown }).src;
+      return raw != null && typeof raw === 'string' && raw.trim() ? getImageUri(raw.trim()) : null;
+    })
+    .filter((uri): uri is string => uri != null);
+}
+
+/** Все URL фото комнаты (photos[] или [photo]) для карусели */
+export function getRoomPhotoUris(room?: WithPhoto | null): string[] {
+  if (!room) return [];
+  const photos = (room as { photos?: unknown[] }).photos;
+  if (Array.isArray(photos) && photos.length > 0) {
+    return mapPhotoArrayToUris(photos);
+  }
+  const single = getPrimaryPhotoUri(room);
+  return single ? [single] : [];
+}
+

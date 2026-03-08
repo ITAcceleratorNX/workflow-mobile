@@ -19,8 +19,9 @@ import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWindowDimensions } from 'react-native';
 import { config } from '@/lib/config';
-import { getImageUri, getPrimaryPhotoUri } from '@/lib/image-uri';
+import { getImageUri, getPrimaryPhotoUri, getRoomPhotoUris } from '@/lib/image-uri';
 import {
   type MeetingRoom,
   type MeetingRoomBooking,
@@ -108,6 +109,7 @@ function getBookingStatusText(status?: string): string {
 
 export default function BookingScreen() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
   const borderColor = useThemeColor({}, 'border');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -436,9 +438,10 @@ export default function BookingScreen() {
   );
 
   if (step === 'form' && selectedRoom) {
-    const roomPhotoUri = getRoomPhotoUri(selectedRoom);
-    const roomPhotoCount = (selectedRoom.photos?.length ?? (selectedRoom.photo ? 1 : 0));
-    const showFormImage = !!roomPhotoUri && !formRoomImageFailed;
+    const roomPhotoUris = getRoomPhotoUris(selectedRoom);
+    const roomPhotoCount = roomPhotoUris.length;
+    const showFormImages = roomPhotoCount > 0 && !formRoomImageFailed;
+    const formImageWidth = windowWidth - 40;
     return (
       <LinearGradient colors={ORANGE_GRADIENT} style={styles.gradientFill}>
         <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
@@ -448,23 +451,37 @@ export default function BookingScreen() {
           </Pressable>
           <ScrollView style={styles.scroll} contentContainerStyle={styles.formContent}>
             <View style={styles.roomImageContainer}>
-              {showFormImage ? (
-                <Image
-                  source={{ uri: roomPhotoUri }}
-                  style={styles.roomImage}
-                  contentFit="cover"
-                  cachePolicy="disk"
-                  onError={() => setFormRoomImageFailed(true)}
-                />
+              {showFormImages ? (
+                <>
+                  <ScrollView
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    style={StyleSheet.absoluteFill}
+                    contentContainerStyle={[styles.roomFormPhotoScrollContent, { width: formImageWidth * roomPhotoCount }]}
+                  >
+                    {roomPhotoUris.map((uri, i) => (
+                      <View key={i} style={[styles.roomFormPhotoSlide, { width: formImageWidth }]}>
+                        <Image
+                          source={{ uri }}
+                          style={styles.roomImage}
+                          contentFit="cover"
+                          cachePolicy="disk"
+                          onError={() => setFormRoomImageFailed(true)}
+                        />
+                      </View>
+                    ))}
+                  </ScrollView>
+                  {roomPhotoCount > 1 && (
+                    <View style={styles.roomImageBadge}>
+                      <ThemedText style={styles.roomImageBadgeText}>+{roomPhotoCount - 1} фото</ThemedText>
+                    </View>
+                  )}
+                </>
               ) : (
                 <View style={styles.roomImagePlaceholder}>
                   <MaterialIcons name="image" size={48} color="rgba(255,255,255,0.4)" />
                   <ThemedText style={styles.roomImagePlaceholderText}>Фото не загружено</ThemedText>
-                </View>
-              )}
-              {roomPhotoCount > 1 && (
-                <View style={styles.roomImageBadge}>
-                  <ThemedText style={styles.roomImageBadgeText}>+{roomPhotoCount - 1} фото</ThemedText>
                 </View>
               )}
             </View>
@@ -1230,6 +1247,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: 'rgba(255,255,255,0.1)',
     marginBottom: 16,
+  },
+  roomFormPhotoScrollContent: {
+    flexDirection: 'row',
+  },
+  roomFormPhotoSlide: {
+    height: '100%',
+    overflow: 'hidden',
   },
   roomImage: {
     width: '100%',

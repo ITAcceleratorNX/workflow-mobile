@@ -827,6 +827,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239,68,68,0.4)',
   },
   errorText: {
+    fontSize: 14,
     color: '#FCA5A5',
     marginBottom: 12,
   },
@@ -874,11 +875,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     marginBottom: 12,
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#FCA5A5',
-    marginBottom: 8,
   },
   emptyText: {
     textAlign: 'center',
