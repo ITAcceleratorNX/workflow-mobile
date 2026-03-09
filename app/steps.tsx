@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useStepsReminders } from '@/hooks/use-steps-reminders';
+import { formatDateRelative } from '@/lib/dateTimeUtils';
 import {
   calculateStepGoal,
   stepLengthMetersFromHeight,
@@ -58,20 +59,6 @@ export default function StepsScreen() {
     if (settings.heightCm == null || settings.weightKg == null) return;
     recalculateAndSaveGoal();
   }, [settings.heightCm, settings.weightKg, recalculateAndSaveGoal]);
-
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr + 'T12:00:00');
-    const today = new Date();
-    if (dateStr === toDateKey(today)) return 'Сегодня';
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (dateStr === toDateKey(yesterday)) return 'Вчера';
-    return d.toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-      weekday: 'short',
-    });
-  };
 
   if (isLoading) {
     return (
@@ -186,7 +173,7 @@ export default function StepsScreen() {
                     style={[styles.historyRow, { borderColor: border }]}
                   >
                     <ThemedText style={[styles.historyDate, { color: text }]}>
-                      {formatDate(date)}
+                      {formatDateRelative(date)}
                     </ThemedText>
                     <ThemedText style={[styles.historySteps, { color: text }]}>
                       {steps.toLocaleString('ru-RU')} шагов

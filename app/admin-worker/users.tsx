@@ -31,6 +31,7 @@ import {
   getExecutorsByCategory,
   changeCategoryHead,
 } from '@/lib/api';
+import { formatRequestDate } from '@/lib/dateTimeUtils';
 
 const PRIMARY_ORANGE = '#E25B21';
 const GRAY_600 = '#3A3A3C';
@@ -51,20 +52,6 @@ const STATUS_LABELS: Record<string, string> = {
   approved: 'Одобрено',
   rejected: 'Отклонено',
 };
-
-function formatRequestDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    const day = d.getDate().toString().padStart(2, '0');
-    const month = (d.getMonth() + 1).toString().padStart(2, '0');
-    const year = d.getFullYear();
-    const h = d.getHours().toString().padStart(2, '0');
-    const m = d.getMinutes().toString().padStart(2, '0');
-    return `${day}.${month}.${year} ${h}:${m}`;
-  } catch {
-    return iso;
-  }
-}
 
 export default function AdminWorkerUsersScreen() {
   const insets = useSafeAreaInsets();

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { createJSONStorage } from 'zustand/middleware';
 
+import { formatDateForApi } from '@/lib/dateTimeUtils';
 import { persistStorage } from '@/lib/storage';
 import { calculateStepGoal } from '@/lib/steps-utils';
 
@@ -63,10 +64,7 @@ interface StepsState {
   canSendNoActivity: () => boolean;
 }
 
-const todayKey = (): string => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+const todayKey = (): string => formatDateForApi(new Date());
 
 const initialFlags: StepsNotificationFlags = {
   fiftyPercentSentToday: false,

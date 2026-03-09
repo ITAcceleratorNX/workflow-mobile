@@ -42,15 +42,7 @@ export function stepsToKm(steps: number, stepLengthM: number): number {
   return Math.round((meters / 1000) * 100) / 100;
 }
 
-/**
- * Форматирование даты для ключа (YYYY-MM-DD).
- */
-export function toDateKey(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
+export { toDateKey } from '@/lib/dateTimeUtils';
 
 /**
  * Начало календарного дня в локальной таймзоне.

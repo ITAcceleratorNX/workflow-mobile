@@ -18,25 +18,7 @@ import {
   type Notification,
 } from '@/lib/profile-api';
 
-function formatTimeAgo(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMinutes < 1) return 'только что';
-  if (diffMinutes < 60) return `${diffMinutes} мин назад`;
-  if (diffHours < 24) return `${diffHours} ч назад`;
-  if (diffDays < 7) return `${diffDays} дн назад`;
-
-  return date.toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-}
+import { formatTimeAgo } from '@/lib/dateTimeUtils';
 
 const PAGE_SIZE = 10;
 

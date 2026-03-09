@@ -21,6 +21,12 @@ import { useToast } from '@/context/toast-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWindowDimensions } from 'react-native';
 import { config } from '@/lib/config';
+import {
+  formatDateForApi,
+  formatDisplayDateFromIso,
+  formatTimeOnly,
+  getAlmatySlotKey,
+} from '@/lib/dateTimeUtils';
 import { getImageUri, getPrimaryPhotoUri, getRoomPhotoUris } from '@/lib/image-uri';
 import {
   type MeetingRoom,
@@ -69,25 +75,6 @@ type Step = 'offices' | 'rooms' | 'form';
 type BookingTab = 'book' | 'my-bookings';
 type SubTab = 'offices' | 'calculator';
 type MyBookingsFilter = 'active' | 'completed' | 'cancelled';
-
-function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function formatDisplayDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  const day = d.getDate().toString().padStart(2, '0');
-  const month = (d.getMonth() + 1).toString().padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}.${month}.${year}`;
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const h = d.getUTCHours().toString().padStart(2, '0');
-  const m = d.getUTCMinutes().toString().padStart(2, '0');
-  return `${h}:${m}`;
-}
 
 function getBookingStatusText(status?: string): string {
   switch (status) {
@@ -205,7 +192,7 @@ export default function BookingScreen() {
 
   useEffect(() => {
     if (step === 'form' && selectedRoom && selectedDate) {
-      const dateStr = formatDate(selectedDate);
+      const dateStr = formatDateForApi(selectedDate);
       setLoadingAvailability(true);
       getRoomDailyAvailability(selectedRoom.id, dateStr, 60)
         .then((res) => {
@@ -213,16 +200,16 @@ export default function BookingScreen() {
           if (res.ok && res.data.slots) {
             res.data.slots.forEach((slot) => {
               if (!slot.is_available && slot.start_time) {
-                const timePart = slot.start_time.slice(11, 13);
-                booked.add(`${timePart}:00`);
+                const key = getAlmatySlotKey(slot.start_time);
+                if (key) booked.add(key);
               }
             });
           }
           if (res.ok && res.data.bookings) {
             res.data.bookings.forEach((b) => {
               const startStr = typeof b.start_time === 'string' ? b.start_time : (b.start_time as Date).toISOString?.() ?? '';
-              const hour = startStr.slice(11, 13);
-              if (hour) booked.add(`${hour}:00`);
+              const key = getAlmatySlotKey(startStr);
+              if (key) booked.add(key);
             });
           }
           setBookedSlots(booked);
@@ -291,7 +278,7 @@ export default function BookingScreen() {
     const startFormatted = slot.start.includes(':00:00') ? slot.start : `${slot.start}:00`;
     const endFormatted = slot.end.includes(':00:00') ? slot.end : `${slot.end}:00`;
     const now = new Date();
-    const isToday = formatDate(selectedDate) === formatDate(now);
+    const isToday = formatDateForApi(selectedDate) === formatDateForApi(now);
     const [h] = slot.start.split(':');
     const slotDate = new Date(selectedDate);
     slotDate.setHours(parseInt(h, 10), 0, 0, 0);
@@ -306,7 +293,7 @@ export default function BookingScreen() {
     setSubmitting(true);
     const res = await createMeetingRoomBooking({
       meeting_room_id: selectedRoom.id,
-      booking_date: formatDate(selectedDate),
+      booking_date: formatDateForApi(selectedDate),
       start_time: startFormatted,
       end_time: endFormatted,
       company_name: companyName.trim() || null,
@@ -496,8 +483,8 @@ export default function BookingScreen() {
             <ThemedText style={styles.labelWhite}>Дата</ThemedText>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.datesRow}>
             {datesForPicker.map((d) => {
-              const key = formatDate(d);
-              const isSelected = selectedDate ? formatDate(selectedDate) === key : false;
+              const key = formatDateForApi(d);
+              const isSelected = selectedDate ? formatDateForApi(selectedDate) === key : false;
               return (
                 <Pressable
                   key={key}
@@ -888,7 +875,7 @@ export default function BookingScreen() {
                         </View>
                       </View>
                       <ThemedText style={styles.bookingMetaWhite}>
-                        {formatDisplayDate(dateStr)} • {formatTime(startStr)}–{formatTime(endStr)}
+                        {formatDisplayDateFromIso(startStr)} • {formatTimeOnly(startStr)}–{formatTimeOnly(endStr)}
                       </ThemedText>
                       {item.company_name && (
                         <ThemedText style={styles.bookingMetaWhite}>{item.company_name}</ThemedText>
