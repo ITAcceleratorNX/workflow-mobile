@@ -62,7 +62,7 @@ export default function LoginScreen() {
       const role = authData.role ?? 'client';
 
       setAuth(authData.token, role, user);
-      router.replace('/(tabs)');
+      router.replace('/(tabs)/profile');
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : 'Произошла ошибка при входе. Попробуйте позже.'

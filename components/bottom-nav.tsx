@@ -31,6 +31,11 @@ export function BottomNav({ state, navigation }: BottomTabBarProps) {
   const currentRouteName = state.routes[state.index]?.name ?? 'index';
   const isHelpScreen = currentRouteName === 'help';
 
+  const currentTabRoute = state.routes[state.index];
+  const nestedState = currentTabRoute?.state as { routes: { name: string }[]; index: number } | undefined;
+  const nestedRouteName = nestedState?.routes?.[nestedState.index]?.name ?? null;
+  const isCreateRequestScreen = currentTabRoute?.name === 'requests' && nestedRouteName === 'create';
+
   const handlePress = (routeName: string) => {
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -38,7 +43,7 @@ export function BottomNav({ state, navigation }: BottomTabBarProps) {
     navigation.navigate(routeName);
   };
 
-  if (isHelpScreen) {
+  if (isHelpScreen || isCreateRequestScreen) {
     return null;
   }
 

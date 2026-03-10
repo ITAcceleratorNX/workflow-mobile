@@ -1,4 +1,5 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,13 +26,17 @@ export default function TabLayout() {
   return (
     <Tabs
       tabBar={(props: BottomTabBarProps) => <BottomNav {...props} />}
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarShowLabel: false,
-        sceneStyle: {
-          paddingBottom: route.name === 'help' ? 0 : contentPaddingBottom,
-        },
-      })}>
+      screenOptions={({ route }) => {
+        const nestedRoute = getFocusedRouteNameFromRoute(route) ?? route.name;
+        const isCreateRequest = route.name === 'requests' && nestedRoute === 'create';
+        const paddingBottom =
+          route.name === 'help' ? 0 : isCreateRequest ? 0 : contentPaddingBottom;
+        return {
+          headerShown: false,
+          tabBarShowLabel: false,
+          sceneStyle: { paddingBottom },
+        };
+      }}>
       <Tabs.Screen name="index" options={{ title: 'Главная' }} />
       <Tabs.Screen name="booking" options={{ title: 'Бронь' }} />
       <Tabs.Screen name="requests" options={{ title: 'Заявки' }} />

@@ -54,6 +54,8 @@ export interface Office {
   name: string;
   city?: string;
   address?: string;
+  lat?: number | null;
+  lon?: number | null;
   photo?: string | null;
   working_hours_start?: string | null; // "HH:mm:ss"
   working_hours_end?: string | null;   // "HH:mm:ss"
@@ -293,6 +295,452 @@ export async function createRegistrationRequest(
   });
   if (result.ok) return { ok: true };
   return { ok: false, error: result.error };
+}
+
+// ==================== Request groups (заявки) ====================
+
+export interface RequestPhoto {
+  id: number;
+  request_id: number;
+  photo_url: string;
+  type: string;
+  created_at: string;
+}
+
+export interface RequestCategory {
+  id: number;
+  name: string;
+}
+
+export interface SubRequest {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  category_id?: number;
+  category?: RequestCategory;
+  complexity?: string;
+  sla?: string;
+  created_date: string;
+  executor?: { user: { id: number; full_name: string; phone?: string }; RequestExecutor?: { role: string } };
+  executors?: Array<{ user: { id: number; full_name: string; phone?: string }; RequestExecutor?: { role: string } }>;
+  is_long_term?: boolean;
+  ratings?: Array<{ rating: number; comment?: string; comments?: string[] }>;
+  comment?: string;
+  rating?: number;
+  photos?: RequestPhoto[];
+  location?: string;
+}
+
+export interface RequestGroup {
+  id: number;
+  client_id: number;
+  office_id: number;
+  location: string;
+  location_detail: string;
+  date_submitted?: string;
+  status: string;
+  request_type: string;
+  rejection_reason?: string;
+  planned_date?: string;
+  created_date: string;
+  client?: { full_name: string; phone?: string; role?: string };
+  office?: { id: number; name: string; city: string; address?: string };
+  photos?: RequestPhoto[];
+  requests: SubRequest[];
+  is_long_term?: boolean;
+  clientRatings?: Array<{ id: number; rating: number; comment?: string; created_at: string }>;
+}
+
+/** Формы ответа бэкенда по ролям (getAllRequestGroups вызывает разные методы). */
+export type RequestGroupsBackendResponse =
+  | { requests: RequestGroup[]; total: number; totalPages: number; page: number; pageSize: number }
+  | { data: RequestGroup[]; total: number; totalPages: number; page: number; pageSize: number }
+  | { myRequests: RequestGroup[]; otherRequests: RequestGroup[]; total?: number; page?: number; pageSize?: number }
+  | { assignedRequests: RequestGroup[]; completedRequests: RequestGroup[]; myRequests: RequestGroup[] };
+
+export type RequestGroupsRole = 'client' | 'admin-worker' | 'department-head' | 'executor' | 'manager';
+
+export type RequestGroupsSegments = Record<string, RequestGroup[]>;
+
+function normalizeRequestGroupsResponse(
+  raw: unknown,
+  role: RequestGroupsRole | null
+): { list: RequestGroup[]; hasMore: boolean; segments?: RequestGroupsSegments } {
+  const r = raw as RequestGroupsBackendResponse;
+  if (!r || typeof r !== 'object') {
+    return { list: [], hasMore: false };
+  }
+
+  switch (role) {
+    case 'client': {
+      const x = r as { requests?: RequestGroup[]; page?: number; totalPages?: number };
+      const list = Array.isArray(x.requests) ? x.requests : [];
+      const page = typeof x.page === 'number' ? x.page : 1;
+      const totalPages = typeof x.totalPages === 'number' ? x.totalPages : 0;
+      return { list, hasMore: page < totalPages };
+    }
+    case 'manager': {
+      const x = r as { data?: RequestGroup[]; page?: number; totalPages?: number };
+      const list = Array.isArray(x.data) ? x.data : [];
+      const page = typeof x.page === 'number' ? x.page : 1;
+      const totalPages = typeof x.totalPages === 'number' ? x.totalPages : 0;
+      return { list, hasMore: page < totalPages };
+    }
+    case 'admin-worker': {
+      const x = r as { myRequests?: RequestGroup[]; otherRequests?: RequestGroup[]; total?: number; page?: number; pageSize?: number };
+      const my = Array.isArray(x.myRequests) ? x.myRequests : [];
+      const other = Array.isArray(x.otherRequests) ? x.otherRequests : [];
+      const list = [...my, ...other];
+      const total = typeof x.total === 'number' ? x.total : list.length;
+      const page = typeof x.page === 'number' ? x.page : 1;
+      const pageSize = typeof x.pageSize === 'number' && x.pageSize > 0 ? x.pageSize : 10;
+      const totalPages = Math.ceil(total / pageSize);
+      return {
+        list,
+        hasMore: page < totalPages,
+        segments: { incoming: other, my },
+      };
+    }
+    case 'department-head': {
+      const x = r as { myRequests?: RequestGroup[]; otherRequests?: RequestGroup[] };
+      const my = Array.isArray(x.myRequests) ? x.myRequests : [];
+      const other = Array.isArray(x.otherRequests) ? x.otherRequests : [];
+      return {
+        list: [...my, ...other],
+        hasMore: false,
+        segments: { incoming: other, my },
+      };
+    }
+    case 'executor': {
+      const x = r as { assignedRequests?: RequestGroup[]; myRequests?: RequestGroup[]; completedRequests?: RequestGroup[] };
+      const assigned = Array.isArray(x.assignedRequests) ? x.assignedRequests : [];
+      const my = Array.isArray(x.myRequests) ? x.myRequests : [];
+      const completed = Array.isArray(x.completedRequests) ? x.completedRequests : [];
+      return {
+        list: [...assigned, ...my, ...completed],
+        hasMore: false,
+        segments: { tasks: assigned, myTasks: my, completed },
+      };
+    }
+    default:
+      if (Array.isArray((r as { requests?: unknown }).requests)) {
+        const x = r as { requests: RequestGroup[] };
+        return { list: x.requests, hasMore: false };
+      }
+      if (Array.isArray((r as { data?: unknown }).data)) {
+        const x = r as { data: RequestGroup[] };
+        return { list: x.data, hasMore: false };
+      }
+      return { list: [], hasMore: false };
+  }
+}
+
+/** Параметры запроса заявок (в т.ч. для manager: офис и период). */
+export interface RequestGroupsParams {
+  status?: string | null;
+  priority?: string | null;
+  office_id?: string | null;
+  from?: string | null;
+}
+
+/** Список заявок. Один запрос для всех ролей — бэкенд по токену возвращает разную структуру. segments — для вкладок. Для manager можно передать office_id и from (период). */
+export async function getRequestGroups(
+  page = 1,
+  pageSize = 20,
+  role: RequestGroupsRole | null,
+  params?: RequestGroupsParams
+): Promise<
+  | { ok: true; data: RequestGroup[]; hasMore: boolean; segments?: RequestGroupsSegments }
+  | { ok: false; error: string }
+> {
+  const search = new URLSearchParams();
+  search.set('page', String(page));
+  search.set('pageSize', String(pageSize));
+  if (params?.status && params.status !== 'all') search.set('status', params.status);
+  if (params?.priority && params.priority !== 'all') search.set('priority', params.priority);
+  if (params?.office_id && params.office_id !== 'all') search.set('office_id', params.office_id);
+  if (params?.from) search.set('from', params.from);
+  const result = await request<RequestGroupsBackendResponse>(
+    `/request-groups?${search.toString()}`
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  const { list, hasMore, segments } = normalizeRequestGroupsResponse(result.data, role);
+  return { ok: true, data: list, hasMore, segments };
+}
+
+/** Одна группа заявок по id (для страницы детали). */
+export async function getRequestGroupById(
+  id: number
+): Promise<{ ok: true; data: RequestGroup } | { ok: false; error: string }> {
+  const result = await request<RequestGroup>(`/request-groups/${id}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data };
+}
+
+/** Параметры подзаявки при принятии заявки (admin-worker) */
+export interface AcceptSubRequestPayload {
+  id: number;
+  sla?: string | null;
+  complexity?: string | null;
+  category_id?: number;
+}
+
+/** Принять/отклонить группу заявок (admin-worker). patch_code: 1 = accept (с sub_requests, request_type, location_detail), 2 = reject (rejection_reason) */
+export async function patchRequestGroup(
+  id: number,
+  patchCode: 1 | 2,
+  body?: {
+    request_type?: string;
+    location_detail?: string;
+    rejection_reason?: string;
+    sub_requests?: AcceptSubRequestPayload[];
+  }
+): Promise<{ ok: true; data: RequestGroup } | { ok: false; error: string }> {
+  const result = await request<RequestGroup>(`/request-groups/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ patch_code: patchCode, ...body }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+/** Начать выполнение задачи (executor) */
+export async function executeRequest(
+  requestId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/requests/${requestId}/execute`, {
+    method: 'PATCH',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Завершить задачу (executor) */
+export async function completeRequest(
+  requestId: number,
+  body: { comment: string }
+): Promise<{ ok: true; data?: { requestGroup?: { id: number } } } | { ok: false; error: string }> {
+  const result = await request<{ requestGroup?: { id: number } }>(
+    `/requests/${requestId}/complete`,
+    { method: 'PATCH', body: JSON.stringify(body) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data };
+}
+
+/** Админ-завершение подзаявки (admin-worker) */
+export async function adminCompleteRequest(
+  requestId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/requests/${requestId}/admin-complete`, {
+    method: 'PATCH',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Переключить долгосрочная (admin-worker) */
+export async function toggleLongTermRequest(
+  requestId: number,
+  isLongTerm: boolean
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/requests/${requestId}/long-term`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_long_term: isLongTerm }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Перенаправить подзаявку (department-head, executor) */
+export async function redirectRequest(
+  requestId: number,
+  categoryId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/requests/${requestId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      status: 'awaiting_assignment',
+      executor_id: null,
+      actual_completion_date: null,
+      category_id: categoryId,
+      patch_code: 1,
+    }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Отклонить подзаявку (executor) */
+export async function rejectRequest(
+  requestId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/requests/${requestId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ status: 'awaiting_assignment', patch_code: 1 }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Отправить уведомление об отклонении (executor) */
+export async function postRejectNotification(
+  requestId: number,
+  reason: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>('/notifications/reject-assigned', {
+    method: 'POST',
+    body: JSON.stringify({ request_id: requestId, reason }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Удалить подзаявку */
+export async function deleteRequest(
+  requestId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/requests/${requestId}`, {
+    method: 'DELETE',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Удалить группу заявок */
+export async function deleteRequestGroup(
+  groupId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/request-groups/${groupId}`, {
+    method: 'DELETE',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Оценить работу исполнителя */
+export async function postRating(
+  requestId: number,
+  rating: number,
+  comment?: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>('/ratings', {
+    method: 'POST',
+    body: JSON.stringify({ request_id: requestId, rating, comment }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Оценить клиента */
+export async function postClientRating(
+  requestGroupId: number,
+  rating: number,
+  comment?: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>('/client-ratings', {
+    method: 'POST',
+    body: JSON.stringify({ request_group_id: requestGroupId, rating, comment }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Загрузить фото к заявке (React Native: uri от image picker) */
+export async function uploadRequestPhotos(
+  groupId: number,
+  photos: { uri: string; type?: string }[],
+  photoType: 'before' | 'after' = 'after'
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const formData = new FormData();
+  photos.forEach((p, i) => {
+    formData.append('photos', {
+      uri: p.uri,
+      type: p.type ?? 'image/jpeg',
+      name: `photo_${i}_${Date.now()}.jpg`,
+    } as unknown as Blob);
+  });
+  formData.append('type', photoType);
+
+  const token = useAuthStore.getState().token;
+  const headers: HeadersInit = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  try {
+    const res = await fetch(`${config.apiBaseUrl}/request-photos/${groupId}/photos`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const err =
+        (data as { error?: string })?.error ||
+        (data as { message?: string })?.message ||
+        'Ошибка загрузки фото';
+      return { ok: false, error: err };
+    }
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Ошибка загрузки фото';
+    return { ok: false, error: msg };
+  }
+}
+
+/** Список исполнителей (для department-head) */
+export async function getExecutors(): Promise<
+  { ok: true; data: ExecutorInCategory[] } | { ok: false; error: string }
+> {
+  const result = await request<ExecutorInCategory[] | ExecutorInCategory>('/executors');
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = result.data;
+  const list = Array.isArray(data) ? data : data ? [data] : [];
+  return { ok: true, data: list };
+}
+
+/** Назначить исполнителей на подзаявку (department-head) */
+export async function assignExecutorsToRequest(
+  subRequestId: number,
+  executors: Array<{ id: number; role: 'executor' | 'leader' }>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(
+    `/request-executors/${subRequestId}/assign`,
+    { method: 'POST', body: JSON.stringify({ executors }) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Создать группу заявок (FormData с photos) */
+export async function createRequestGroup(
+  formData: FormData
+): Promise<{ ok: true; data: RequestGroup } | { ok: false; error: string }> {
+  const token = useAuthStore.getState().token;
+  const headers: HeadersInit = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  try {
+    const res = await fetch(`${config.apiBaseUrl}/request-groups`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err =
+        (data as { error?: string })?.error ||
+        (data as { message?: string })?.message ||
+        'Ошибка создания заявки';
+      return { ok: false, error: err };
+    }
+    return { ok: true, data: data as RequestGroup };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Ошибка создания заявки';
+    return { ok: false, error: msg };
+  }
 }
 
 // ==================== Registration requests (admin) ====================
@@ -630,6 +1078,7 @@ export interface ClientRoomSubscription {
     id: number;
     name: string;
     office_id?: number;
+    room_type?: string;
     office?: {
       id: number;
       name: string;

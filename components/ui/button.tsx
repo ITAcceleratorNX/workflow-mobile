@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -11,6 +11,8 @@ export interface ButtonProps {
   variant?: Variant;
   disabled?: boolean;
   style?: ViewStyle;
+  /** Переопределить цвет текста (например, '#FFFFFF' для контраста на оранжевом) */
+  labelColor?: string;
 }
 
 export function Button({
@@ -19,6 +21,7 @@ export function Button({
   variant = 'primary',
   disabled = false,
   style,
+  labelColor,
 }: ButtonProps) {
   const primary = useThemeColor({}, 'primary');
   const background = useThemeColor({}, 'background');
@@ -33,7 +36,7 @@ export function Button({
         ? border
         : 'transparent';
   const fg =
-    variant === 'ghost' ? textMuted : variant === 'primary' ? '#FFFFFF' : textMuted;
+    labelColor ?? (variant === 'ghost' ? textMuted : variant === 'primary' ? '#FFFFFF' : textMuted);
   const borderWidth = variant === 'ghost' ? 0 : 0;
   const borderColor = variant === 'secondary' ? border : 'transparent';
 
@@ -52,17 +55,32 @@ export function Button({
         style,
       ]}
     >
-      <ThemedText
-        style={[
-          styles.label,
-          { color: fg },
-          variant === 'primary' && styles.labelPrimary,
-        ]}
-        numberOfLines={2}
-        allowFontScaling
-      >
-        {title}
-      </ThemedText>
+      {labelColor != null ? (
+        <Text
+          style={[
+            styles.label,
+            styles.labelPrimary,
+            { color: labelColor, textAlign: 'center' },
+          ]}
+          numberOfLines={2}
+          allowFontScaling
+          includeFontPadding={false}
+        >
+          {title}
+        </Text>
+      ) : (
+        <ThemedText
+          style={[
+            styles.label,
+            { color: fg },
+            variant === 'primary' && styles.labelPrimary,
+          ]}
+          numberOfLines={2}
+          allowFontScaling
+        >
+          {title}
+        </ThemedText>
+      )}
     </Pressable>
   );
 }
@@ -81,6 +99,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     textAlign: 'center',
+    width: '100%',
   },
   labelPrimary: {
     fontWeight: '600',
