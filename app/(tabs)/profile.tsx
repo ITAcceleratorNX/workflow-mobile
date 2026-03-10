@@ -2,7 +2,6 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,6 +20,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ROLE_TRANSLATIONS } from '@/constants/profile';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useToast } from '@/context/toast-context';
 import {
   changePassword,
   sendEmailVerificationCode,
@@ -45,6 +45,7 @@ export default function ProfileScreen() {
   const border = useThemeColor({}, 'border');
   const primary = useThemeColor({}, 'primary');
   const success = useThemeColor({}, 'success');
+  const { show: showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('profile');
 
@@ -131,7 +132,10 @@ export default function ProfileScreen() {
       return;
     }
     setProfileSuccess('Профиль обновлён.');
-    Alert.alert('Успешно', 'Профиль обновлён.');
+    showToast({
+      title: 'Профиль обновлён',
+      variant: 'success',
+    });
   }, [user, handleUnauthorized]);
 
   const handleSendVerificationCode = useCallback(async () => {
@@ -161,7 +165,11 @@ export default function ProfileScreen() {
     }
     setEmail(emailToSend);
     setEmailSuccess('Код верификации отправлен на email');
-    Alert.alert('Успешно', 'Код верификации отправлен на email');
+    showToast({
+      title: 'Код отправлен',
+      description: 'Код верификации отправлен на email',
+      variant: 'success',
+    });
   }, [email, user?.email, user?.email_verified, handleUnauthorized]);
 
   const handleVerifyEmail = useCallback(async () => {
@@ -189,7 +197,10 @@ export default function ProfileScreen() {
     );
     setVerificationCode('');
     setEmailSuccess('Email верифицирован');
-    Alert.alert('Успешно', 'Email верифицирован');
+    showToast({
+      title: 'Email верифицирован',
+      variant: 'success',
+    });
   }, [verificationCode, email, user?.email, updateUser, handleUnauthorized]);
 
   const handleChangePassword = useCallback(async () => {
@@ -225,7 +236,10 @@ export default function ProfileScreen() {
     setOldPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    Alert.alert('Успешно', 'Пароль изменён.');
+    showToast({
+      title: 'Пароль изменён',
+      variant: 'success',
+    });
   }, [oldPassword, newPassword, confirmPassword, handleUnauthorized]);
 
   const handleSaveNotifications = useCallback(async () => {
@@ -250,7 +264,10 @@ export default function ProfileScreen() {
       return;
     }
     setNotificationSuccess('Настройки уведомлений сохранены');
-    Alert.alert('Успешно', 'Настройки уведомлений сохранены');
+    showToast({
+      title: 'Настройки уведомлений сохранены',
+      variant: 'success',
+    });
   }, [user, handleUnauthorized]);
 
   const handleLogout = useCallback(() => {
