@@ -2,8 +2,8 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useState } from 'react';
 import {
   Pressable,
-  StyleSheet,
   TextInput as RNTextInput,
+  StyleSheet,
   View,
   type TextInputProps as RNTextInputProps,
 } from 'react-native';
@@ -120,8 +120,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   input: {
-    height: 48,
-    paddingHorizontal: 16,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     paddingRight: 48,
     borderRadius: 8,
     borderWidth: 1,

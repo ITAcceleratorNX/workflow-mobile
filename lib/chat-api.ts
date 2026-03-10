@@ -75,6 +75,9 @@ export interface SupportTicket {
   status: 'open' | 'in_progress' | 'closed';
   created_at: string;
   updated_at?: string;
+  /** Имя клиента (для админа при списке чатов) */
+  client_name?: string;
+  client?: { full_name?: string };
 }
 
 export interface SupportMessage {
@@ -92,6 +95,12 @@ export async function createSupportTicket(
     method: 'POST',
     body: JSON.stringify({ message }),
   });
+}
+
+export async function getMySupportTickets(): Promise<
+  ChatApiResult<{ tickets: SupportTicket[] }>
+> {
+  return authRequest<{ tickets: SupportTicket[] }>('/support-tickets');
 }
 
 export async function getSupportTicketMessages(

@@ -27,6 +27,7 @@ import { chatStorage } from '@/lib/storage';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   createSupportTicket,
+  getMySupportTickets,
   getSupportTicketMessages,
   sendChatMessage,
   sendSupportMessage,
@@ -161,11 +162,17 @@ export default function HelpScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const token = useAuthStore((s) => s.token);
+  const role = useAuthStore((s) => s.role);
+  const isAdminMessages = role === 'admin-worker';
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const border = useThemeColor({}, 'border');
   const primary = useThemeColor({}, 'primary');
   const background = useThemeColor({}, 'background');
+  const cardBackground = useThemeColor({}, 'cardBackground');
+
+  /** Вкладка: Чат-бот или Техподдержка (как в kcell-service-front) */
+  const [innerChatTab, setInnerChatTab] = useState<'bot' | 'support'>('bot');
 
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
   const [inputValue, setInputValue] = useState('');
@@ -185,9 +192,12 @@ export default function HelpScreen() {
   const [supportInputValue, setSupportInputValue] = useState('');
   const [supportSending, setSupportSending] = useState(false);
   const [supportError, setSupportError] = useState<string | null>(null);
+  const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const supportScrollRef = useRef<ScrollView>(null);
+  const supportFormScrollRef = useRef<ScrollView>(null);
 
   const storageKey = getChatStorageKey(token);
 
@@ -311,6 +321,7 @@ export default function HelpScreen() {
         setSupportChatView(true);
         setShowSupportForm(false);
         setSupportFormValue('');
+        setMyTickets((prev) => [ticket, ...prev.filter((t) => t.id !== ticket.id)]);
       } else {
         const fallbackTicket: SupportTicket = {
           id: Date.now(),
@@ -347,6 +358,35 @@ export default function HelpScreen() {
 
   const [supportChatView, setSupportChatView] = useState(false);
 
+  // Загрузка тикетов: для админа — при открытии экрана; для остальных — при вкладке «Техподдержка»
+  useEffect(() => {
+    if (!token) return;
+    if (isAdminMessages) {
+      setLoadingTickets(true);
+      getMySupportTickets()
+        .then((res) => (res.ok ? setMyTickets(res.data.tickets ?? []) : setMyTickets([])))
+        .catch(() => setMyTickets([]))
+        .finally(() => setLoadingTickets(false));
+      return;
+    }
+    if (innerChatTab !== 'support') return;
+    setLoadingTickets(true);
+    getMySupportTickets()
+      .then((res) => (res.ok ? setMyTickets(res.data.tickets ?? []) : setMyTickets([])))
+      .catch(() => setMyTickets([]))
+      .finally(() => setLoadingTickets(false));
+  }, [innerChatTab, token, isAdminMessages]);
+
+  const openSupportTicket = useCallback(async (ticket: SupportTicket) => {
+    setActiveSupportTicket(ticket);
+    setSupportMessages([]);
+    setSupportChatView(true);
+    const res = await getSupportTicketMessages(ticket.id);
+    if (res.ok && res.data.messages) {
+      setSupportMessages(res.data.messages);
+    }
+  }, []);
+
   const handleSupportFormSubmit = useCallback(
     (e?: { preventDefault?: () => void }) => {
       e?.preventDefault?.();
@@ -372,7 +412,7 @@ export default function HelpScreen() {
     const optimisticMsg: SupportMessage = {
       id: Date.now(),
       ticket_id: activeSupportTicket.id,
-      sender: 'user',
+      sender: isAdminMessages ? 'admin' : 'user',
       message: trimmed,
       created_at: new Date().toISOString(),
     };
@@ -400,10 +440,12 @@ export default function HelpScreen() {
       ]);
     }
     setSupportSending(false);
-  }, [supportInputValue, activeSupportTicket, supportSending]);
+  }, [supportInputValue, activeSupportTicket, supportSending, isAdminMessages]);
 
   const scrollPaddingBottom = 24;
   const inputBarBottomPadding = insets.bottom + 12;
+  /** Смещение для KeyboardAvoidingView: статус-бар + высота шапки, чтобы инпут оставался над клавиатурой */
+  const keyboardAvoidOffset = Platform.OS === 'ios' ? insets.top + 56 : 0;
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -417,11 +459,11 @@ export default function HelpScreen() {
     return (
       <KeyboardAvoidingView
         style={styles.flex1}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={keyboardAvoidOffset}
       >
         <ThemedView style={styles.container}>
-          <View style={[styles.supportHeader, { borderBottomColor: border }]}>
+          <View style={[styles.supportHeader, { borderBottomColor: border, paddingTop: insets.top + 12 }]}>
           <Pressable
             onPress={handleCloseSupportChat}
             style={({ pressed }) => [
@@ -435,9 +477,15 @@ export default function HelpScreen() {
             <MaterialIcons name="headset-mic" size={24} color={primary} />
           </View>
           <View style={styles.supportHeaderText}>
-            <ThemedText style={styles.supportTitle}>Чат с поддержкой</ThemedText>
+            <ThemedText style={styles.supportTitle} numberOfLines={1}>
+              {isAdminMessages && activeSupportTicket
+                ? (activeSupportTicket.client_name ?? activeSupportTicket.client?.full_name ?? `Клиент #${activeSupportTicket.id}`)
+                : 'Чат с поддержкой'}
+            </ThemedText>
             <ThemedText style={[styles.supportSubtitle, { color: textMuted }]}>
-              Администратор
+              {isAdminMessages && activeSupportTicket
+                ? (activeSupportTicket.status === 'closed' ? 'Закрыт' : activeSupportTicket.status === 'in_progress' ? 'В работе' : 'Открыт')
+                : 'Администратор'}
             </ThemedText>
           </View>
         </View>
@@ -451,54 +499,67 @@ export default function HelpScreen() {
             ]}
             showsVerticalScrollIndicator={false}
           >
-          {supportMessages.map((msg) => (
-            <View
-              key={msg.id}
-              style={[
-                styles.messageRow,
-                msg.sender === 'admin' ? styles.messageRowLeft : styles.messageRowRight,
-              ]}
-            >
-              {msg.sender === 'admin' && (
-                <View style={[styles.avatar, { backgroundColor: primary }]}>
-                  <MaterialIcons name="headset-mic" size={20} color="#FFF" />
-                </View>
-              )}
+          {supportMessages.map((msg) => {
+            const isFromAdmin = msg.sender === 'admin';
+            const isOwnMessage = isAdminMessages ? isFromAdmin : !isFromAdmin;
+            const showOnLeft = !isOwnMessage;
+            return (
               <View
+                key={msg.id}
                 style={[
-                  styles.bubble,
-                  msg.sender === 'admin'
-                    ? [styles.bubbleLeft, { backgroundColor: border }]
-                    : [styles.bubbleRight, { backgroundColor: primary }],
+                  styles.messageRow,
+                  showOnLeft ? styles.messageRowLeft : styles.messageRowRight,
                 ]}
               >
-                <ThemedText
+                {showOnLeft && (
+                  <View style={[styles.avatar, { backgroundColor: isFromAdmin ? primary : border }]}>
+                    <MaterialIcons
+                      name={isFromAdmin ? 'headset-mic' : 'person'}
+                      size={20}
+                      color="#FFF"
+                    />
+                  </View>
+                )}
+                <View
                   style={[
-                    styles.bubbleText,
-                    msg.sender === 'user' && styles.bubbleTextWhite,
+                    styles.bubble,
+                    showOnLeft
+                      ? [styles.bubbleLeft, { backgroundColor: border }]
+                      : [styles.bubbleRight, { backgroundColor: primary }],
                   ]}
                 >
-                  {msg.message}
-                </ThemedText>
-                <ThemedText
-                  style={[
-                    styles.bubbleTime,
-                    msg.sender === 'admin' ? { color: textMuted } : styles.bubbleTimeWhite,
-                  ]}
-                >
-                  {new Date(msg.created_at).toLocaleTimeString('ru-RU', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </ThemedText>
-              </View>
-              {msg.sender === 'user' && (
-                <View style={[styles.avatar, styles.avatarUser]}>
-                  <MaterialIcons name="person" size={20} color="#FFF" />
+                  <ThemedText
+                    style={[
+                      styles.bubbleText,
+                      isOwnMessage && styles.bubbleTextWhite,
+                    ]}
+                  >
+                    {msg.message}
+                  </ThemedText>
+                  <ThemedText
+                    style={[
+                      styles.bubbleTime,
+                      isOwnMessage ? styles.bubbleTimeWhite : { color: textMuted },
+                    ]}
+                  >
+                    {new Date(msg.created_at).toLocaleTimeString('ru-RU', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </ThemedText>
                 </View>
-              )}
-            </View>
-          ))}
+                {!showOnLeft && (
+                  <View style={[styles.avatar, { backgroundColor: primary }]}>
+                    <MaterialIcons
+                      name={isFromAdmin ? 'headset-mic' : 'person'}
+                      size={20}
+                      color="#FFF"
+                    />
+                  </View>
+                )}
+              </View>
+            );
+          })}
           {supportSending && (
             <View style={[styles.messageRow, styles.messageRowRight]}>
               <View style={[styles.bubble, styles.bubbleRight, { backgroundColor: `${primary}80` }]}>
@@ -525,10 +586,16 @@ export default function HelpScreen() {
                 style={[
                   styles.input,
                   styles.inputFlex,
-                  { color: text, borderColor: border, backgroundColor: background },
+                  {
+                    color: text,
+                    borderColor: border,
+                    backgroundColor: cardBackground,
+                  },
                 ]}
                 placeholder="Напишите сообщение..."
                 placeholderTextColor={textMuted}
+                cursorColor={text}
+                selectionColor={`${primary}40`}
                 value={supportInputValue}
                 onChangeText={setSupportInputValue}
                 multiline
@@ -554,11 +621,97 @@ export default function HelpScreen() {
     );
   }
 
+  // Админ: экран «Сообщения» — только список чатов с клиентами (как в kcell-service-front)
+  if (isAdminMessages) {
+    return (
+      <KeyboardAvoidingView
+        style={styles.flex1}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={keyboardAvoidOffset}
+      >
+        <ThemedView style={styles.container}>
+          <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+            <Pressable
+              onPress={handleBack}
+              style={({ pressed }) => [styles.headerBackButton, pressed && styles.pressed]}
+              hitSlop={12}
+            >
+              <MaterialIcons name="arrow-back" size={24} color={text} />
+            </Pressable>
+            <ThemedText type="title" style={styles.title}>
+              Сообщения
+            </ThemedText>
+          </View>
+          <View style={[styles.adminSubtitleWrap, { borderBottomColor: border }]}>
+            <View style={[styles.supportAvatar, { backgroundColor: `${primary}33` }]}>
+              <MaterialIcons name="chat" size={22} color={primary} />
+            </View>
+            <View>
+              <ThemedText style={styles.supportTitle}>Чаты с клиентами</ThemedText>
+              <ThemedText style={[styles.supportSubtitle, { color: textMuted }]}>
+                Ответьте на обращения пользователей
+              </ThemedText>
+            </View>
+          </View>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[
+              styles.scrollContent,
+              styles.supportTabContent,
+              { paddingBottom: insets.bottom + 32 },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            {loadingTickets ? (
+              <View style={styles.ticketsLoading}>
+                <ActivityIndicator size="large" color={primary} />
+                <ThemedText style={[styles.ticketsLoadingText, { color: textMuted }]}>
+                  Загрузка чатов...
+                </ThemedText>
+              </View>
+            ) : myTickets.length === 0 ? (
+              <ThemedText style={[styles.ticketsLoadingText, { color: textMuted }]}>
+                Нет чатов с клиентами
+              </ThemedText>
+            ) : (
+              <View style={styles.ticketsSection}>
+                {myTickets.map((t) => (
+                  <Pressable
+                    key={t.id}
+                    onPress={() => openSupportTicket(t)}
+                    style={({ pressed }) => [
+                      styles.ticketRow,
+                      { borderColor: border },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View style={[styles.supportAvatar, { backgroundColor: `${primary}20` }]}>
+                      <MaterialIcons name="person" size={22} color={primary} />
+                    </View>
+                    <View style={styles.adminTicketInfo}>
+                      <ThemedText style={styles.adminTicketName} numberOfLines={1}>
+                        {t.client_name ?? t.client?.full_name ?? `Клиент #${t.id}`}
+                      </ThemedText>
+                      <ThemedText style={[styles.ticketRowText, { color: textMuted }]} numberOfLines={1}>
+                        {t.status === 'closed' ? 'Закрыт' : t.status === 'in_progress' ? 'В работе' : 'Открыт'} · #{t.id}
+                      </ThemedText>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={24} color={textMuted} />
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        </ThemedView>
+      </KeyboardAvoidingView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.flex1}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={keyboardAvoidOffset}
     >
       <ThemedView style={styles.container}>
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -574,6 +727,114 @@ export default function HelpScreen() {
           </ThemedText>
         </View>
 
+        {/* Вкладки Чат-бот / Техподдержка — для не-админов (как в kcell-service-front) */}
+        <View style={[styles.tabsRow, { backgroundColor: `${border}40` }]}>
+          <Pressable
+            onPress={() => setInnerChatTab('bot')}
+            style={[
+              styles.tab,
+              innerChatTab === 'bot' && [styles.tabActive, { backgroundColor: primary }],
+            ]}
+          >
+            <MaterialIcons
+              name="smart-toy"
+              size={20}
+              color={innerChatTab === 'bot' ? '#FFF' : textMuted}
+            />
+            <ThemedText
+              style={[
+                styles.tabLabel,
+                { color: innerChatTab === 'bot' ? '#FFF' : textMuted },
+              ]}
+            >
+              Чат-бот
+            </ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => setInnerChatTab('support')}
+            style={[
+              styles.tab,
+              innerChatTab === 'support' && [styles.tabActive, { backgroundColor: primary }],
+            ]}
+          >
+            <MaterialIcons
+              name="headset-mic"
+              size={20}
+              color={innerChatTab === 'support' ? '#FFF' : textMuted}
+            />
+            <ThemedText
+              style={[
+                styles.tabLabel,
+                { color: innerChatTab === 'support' ? '#FFF' : textMuted },
+              ]}
+            >
+              Техподдержка
+            </ThemedText>
+          </Pressable>
+        </View>
+
+        {innerChatTab === 'support' ? (
+          /* Вкладка «Техподдержка»: кнопка «Написать в поддержку» + список обращений */
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[
+              styles.scrollContent,
+              styles.supportTabContent,
+              { paddingBottom: insets.bottom + 32 },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <Pressable
+              onPress={() => setShowSupportForm(true)}
+              style={({ pressed }) => [
+                styles.supportCard,
+                { borderColor: border },
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={[styles.supportCardIcon, { backgroundColor: `${primary}20` }]}>
+                <MaterialIcons name="headset-mic" size={24} color={primary} />
+              </View>
+              <View style={styles.supportCardText}>
+                <ThemedText style={styles.supportCardTitle}>Написать в поддержку</ThemedText>
+                <ThemedText style={[styles.supportCardSubtitle, { color: textMuted }]}>
+                  Опишите проблему — ответим в чате
+                </ThemedText>
+              </View>
+            </Pressable>
+            {loadingTickets ? (
+              <View style={styles.ticketsLoading}>
+                <ActivityIndicator size="large" color={primary} />
+                <ThemedText style={[styles.ticketsLoadingText, { color: textMuted }]}>
+                  Загрузка обращений...
+                </ThemedText>
+              </View>
+            ) : myTickets.length > 0 ? (
+              <View style={styles.ticketsSection}>
+                <ThemedText style={[styles.ticketsSectionTitle, { color: textMuted }]}>
+                  Мои обращения
+                </ThemedText>
+                {myTickets.map((t) => (
+                  <Pressable
+                    key={t.id}
+                    onPress={() => openSupportTicket(t)}
+                    style={({ pressed }) => [
+                      styles.ticketRow,
+                      { borderColor: border },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <ThemedText style={styles.ticketRowText} numberOfLines={1}>
+                      #{t.id} · {t.status === 'closed' ? 'Закрыт' : t.status === 'in_progress' ? 'В работе' : 'Открыт'}
+                    </ThemedText>
+                    <MaterialIcons name="chevron-right" size={24} color={textMuted} />
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </ScrollView>
+        ) : (
+        <>
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
@@ -720,64 +981,75 @@ export default function HelpScreen() {
         )}
         </ScrollView>
 
-        <View
-          style={[
-            styles.inputBar,
-            {
-              borderTopColor: border,
-              backgroundColor: background,
-              paddingBottom: inputBarBottomPadding,
-            },
-          ]}
-        >
-          {error && (
-            <ThemedText style={[styles.errorText, { color: primary }]}>{error}</ThemedText>
-          )}
-          <View style={styles.inputRow}>
-          <Pressable
-            onPress={handleShowTopicsMenu}
-            style={({ pressed }) => [
-              styles.menuButton,
-              { backgroundColor: `${border}40` },
-              pressed && styles.pressed,
-            ]}
-          >
-            <MaterialIcons name="menu" size={24} color={text} />
-          </Pressable>
-          <TextInput
+        {innerChatTab === 'bot' && (
+          <View
             style={[
-              styles.input,
-              styles.inputFlex,
-              { color: text, borderColor: border, backgroundColor: background },
-            ]}
-            placeholder="Напишите сообщение..."
-            placeholderTextColor={textMuted}
-            value={inputValue}
-            onChangeText={setInputValue}
-            onSubmitEditing={handleSubmit}
-            returnKeyType="send"
-            multiline
-            maxLength={2000}
-            editable={!isSending}
-          />
-          <Pressable
-            onPress={handleSubmit}
-            disabled={!inputValue.trim() || isSending}
-            style={({ pressed }) => [
-              styles.sendButton,
-              { backgroundColor: primary },
-              (pressed || !inputValue.trim() || isSending) &&
-                styles.sendButtonDisabled,
+              styles.inputBar,
+              {
+                borderTopColor: border,
+                backgroundColor: background,
+                paddingBottom: inputBarBottomPadding,
+              },
             ]}
           >
-            {isSending ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <MaterialIcons name="send" size={22} color="#FFF" />
+            {error && (
+              <ThemedText style={[styles.errorText, { color: primary }]}>{error}</ThemedText>
             )}
-          </Pressable>
+            <View style={styles.inputRow}>
+              <Pressable
+                onPress={handleShowTopicsMenu}
+                style={({ pressed }) => [
+                  styles.menuButton,
+                  { backgroundColor: `${border}40` },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <MaterialIcons name="menu" size={24} color={text} />
+              </Pressable>
+              <TextInput
+                style={[
+                  styles.input,
+                  styles.inputFlex,
+                  {
+                    color: text,
+                    borderColor: border,
+                    backgroundColor: cardBackground,
+                  },
+                ]}
+                placeholder="Напишите сообщение..."
+                placeholderTextColor={textMuted}
+                cursorColor={text}
+                selectionColor={`${primary}40`}
+                value={inputValue}
+                onChangeText={setInputValue}
+                onSubmitEditing={handleSubmit}
+                returnKeyType="send"
+                multiline
+                maxLength={2000}
+                editable={!isSending}
+              />
+              <Pressable
+                onPress={handleSubmit}
+                disabled={!inputValue.trim() || isSending}
+                style={({ pressed }) => [
+                  styles.sendButton,
+                  { backgroundColor: primary },
+                  (pressed || !inputValue.trim() || isSending) &&
+                    styles.sendButtonDisabled,
+                ]}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <MaterialIcons name="send" size={22} color="#FFF" />
+                )}
+              </Pressable>
+            </View>
           </View>
-        </View>
+        )}
+        </>
+        )}
+
       </ThemedView>
 
       <Modal
@@ -790,46 +1062,77 @@ export default function HelpScreen() {
           style={styles.modalBackdrop}
           onPress={() => !supportFormSubmitting && setShowSupportForm(false)}
         >
-          <View
-            style={[styles.modalContent, { backgroundColor: background }]}
-            onStartShouldSetResponder={() => true}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalKeyboardWrap}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 8 : 0}
           >
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <MaterialIcons name="headset-mic" size={24} color={primary} />
-                <ThemedText style={styles.modalTitle}>
-                  Обращение в поддержку
-                </ThemedText>
-              </View>
-              <Pressable
-                onPress={() => !supportFormSubmitting && setShowSupportForm(false)}
-                style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
-              >
-                <MaterialIcons name="close" size={24} color={textMuted} />
-              </Pressable>
-            </View>
-            <ThemedText style={[styles.modalDesc, { color: textMuted }]}>
-              Опишите вашу проблему. Администратор свяжется с вами в чате.
-            </ThemedText>
-            <TextInput
+            <View
               style={[
-                styles.modalTextArea,
-                { color: text, borderColor: border, backgroundColor: `${border}20` },
+                styles.modalContent,
+                {
+                  backgroundColor: background,
+                  paddingBottom: insets.bottom + 40,
+                },
               ]}
-              placeholder="Опишите проблему..."
-              placeholderTextColor={textMuted}
-              value={supportFormValue}
-              onChangeText={setSupportFormValue}
-              multiline
-              numberOfLines={4}
-              editable={!supportFormSubmitting}
-            />
-            {supportError && (
-              <ThemedText style={[styles.supportError, { color: primary }]}>
-                {supportError}
-              </ThemedText>
-            )}
-            <View style={styles.modalActions}>
+              onStartShouldSetResponder={() => true}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.modalTitleRow}>
+                  <MaterialIcons name="headset-mic" size={24} color={primary} />
+                  <ThemedText style={styles.modalTitle}>
+                    Обращение в поддержку
+                  </ThemedText>
+                </View>
+                <Pressable
+                  onPress={() => !supportFormSubmitting && setShowSupportForm(false)}
+                  style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
+                >
+                  <MaterialIcons name="close" size={24} color={textMuted} />
+                </Pressable>
+              </View>
+              <ScrollView
+                ref={supportFormScrollRef}
+                style={styles.modalScroll}
+                contentContainerStyle={styles.modalScrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <ThemedText style={[styles.modalDesc, { color: textMuted }]}>
+                  Опишите вашу проблему. Администратор свяжется с вами в чате.
+                </ThemedText>
+                <TextInput
+                  style={[
+                    styles.modalTextArea,
+                    {
+                      color: text,
+                      borderColor: border,
+                      backgroundColor: cardBackground,
+                    },
+                  ]}
+                  placeholder="Опишите проблему..."
+                  placeholderTextColor={textMuted}
+                  cursorColor={text}
+                  selectionColor={`${primary}40`}
+                  value={supportFormValue}
+                  onChangeText={setSupportFormValue}
+                  onFocus={() => {
+                    setTimeout(
+                      () => supportFormScrollRef.current?.scrollToEnd({ animated: true }),
+                      300
+                    );
+                  }}
+                  multiline
+                  numberOfLines={4}
+                  editable={!supportFormSubmitting}
+                />
+                {supportError && (
+                  <ThemedText style={[styles.supportError, { color: primary }]}>
+                    {supportError}
+                  </ThemedText>
+                )}
+              </ScrollView>
+              <View style={styles.modalActions}>
               <Button
                 title="Отмена"
                 variant="secondary"
@@ -862,6 +1165,7 @@ export default function HelpScreen() {
               </Pressable>
             </View>
           </View>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>
@@ -885,6 +1189,107 @@ const styles = StyleSheet.create({
   headerBackButton: {
     padding: 8,
     marginLeft: -8,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  tabActive: {},
+  tabLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  supportTabContent: {
+    // paddingBottom applied via contentContainerStyle with insets.bottom + 32
+  },
+  supportCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+    gap: 12,
+  },
+  supportCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  supportCardText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  supportCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  supportCardSubtitle: {
+    fontSize: 13,
+  },
+  ticketsLoading: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 12,
+  },
+  ticketsLoadingText: {
+    fontSize: 14,
+  },
+  ticketsSection: {
+    marginTop: 8,
+  },
+  ticketsSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  ticketRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+    gap: 12,
+  },
+  ticketRowText: {
+    fontSize: 14,
+    flex: 1,
+    marginRight: 8,
+  },
+  adminSubtitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  adminTicketInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  adminTicketName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
   },
   title: {
     marginBottom: 0,
@@ -1061,20 +1466,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   input: {
-    minHeight: 48,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
     fontSize: 16,
-    maxHeight: 120,
+    maxHeight: 100,
   },
   inputFlex: {
     flex: 1,
   },
   sendButton: {
-    width: 48,
-    height: 48,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1120,11 +1525,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
+  modalKeyboardWrap: {
+    width: '100%',
+  },
   modalContent: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 40,
+  },
+  modalScroll: {
+    // Без flex — высота по контенту, чтобы инпут всегда был виден
+  },
+  modalScrollContent: {
+    paddingBottom: 8,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1149,8 +1563,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTextArea: {
-    minHeight: 120,
-    padding: 16,
+    minHeight: 88,
+    padding: 12,
     borderRadius: 12,
     borderWidth: 1,
     fontSize: 16,
