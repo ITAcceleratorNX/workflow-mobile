@@ -46,6 +46,7 @@ import {
 } from '@/lib/api';
 import { Select } from '@/components/ui/select';
 import { useAuthStore } from '@/stores/auth-store';
+import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -134,6 +135,8 @@ export default function RequestDetailScreen() {
   const { show: showToast } = useToast();
   const role = useAuthStore((s) => s.role) as RequestUserRole | null;
   const user = useAuthStore((s) => s.user);
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const guestRequests = useGuestDemoStore((s) => s.requests);
 
   const insets = useSafeAreaInsets();
   const textColor = useThemeColor({}, 'text');
@@ -180,9 +183,14 @@ export default function RequestDetailScreen() {
 
   const refetch = useCallback(async () => {
     if (!id || Number.isNaN(numId)) return;
+    if (isGuest && numId < 0) {
+      const found = guestRequests.find((r) => r.id === numId);
+      if (found) setRequest(found as RequestGroup);
+      return;
+    }
     const res = await getRequestGroupById(numId);
     if (res.ok) setRequest(res.data);
-  }, [id, numId]);
+  }, [id, numId, isGuest, guestRequests]);
 
   useEffect(() => {
     if (!id || Number.isNaN(numId)) {
@@ -193,19 +201,28 @@ export default function RequestDetailScreen() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getRequestGroupById(numId)
-      .then((res) => {
-        if (cancelled) return;
+    const load = async () => {
+      if (isGuest && numId < 0) {
+        const found = guestRequests.find((r) => r.id === numId);
+        if (!cancelled) {
+          if (found) setRequest(found as RequestGroup);
+          else setError('Заявка не найдена (демо)');
+          setLoading(false);
+        }
+        return;
+      }
+      const res = await getRequestGroupById(numId);
+      if (!cancelled) {
         if (res.ok) setRequest(res.data);
         else setError(res.error);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+        setLoading(false);
+      }
+    };
+    load();
     return () => {
       cancelled = true;
     };
-  }, [id, numId]);
+  }, [id, numId, isGuest, guestRequests]);
 
   useEffect(() => {
     if (role === 'department-head' || role === 'executor') {
@@ -298,6 +315,31 @@ export default function RequestDetailScreen() {
   const handleRateRequest = useCallback(
     async (rating: number, comment?: string) => {
       if (!subForRate) return;
+
+      // В демо-режиме обновляем только локальный стор
+      if (isGuest && request && request.id < 0) {
+        setRequest((prev) => {
+          if (!prev) return prev;
+          const updated = {
+            ...prev,
+            requests: prev.requests.map((sr) =>
+              sr.id === subForRate.id
+                ? {
+                    ...sr,
+                    rating,
+                    comment,
+                  }
+                : sr
+            ),
+          } as RequestGroup;
+          return updated;
+        });
+        showToast({ title: 'Оценка (демо) сохранена', variant: 'success' });
+        setShowRatingModal(false);
+        setSubForRate(null);
+        return;
+      }
+
       const res = await postRating(subForRate.id, rating, comment);
       if (res.ok) {
         showToast({ title: 'Оценка отправлена', variant: 'success' });
@@ -308,7 +350,7 @@ export default function RequestDetailScreen() {
         showToast({ title: res.error, variant: 'destructive' });
       }
     },
-    [subForRate, refetch, showToast]
+    [subForRate, refetch, showToast, isGuest, request]
   );
 
   const handleRateClient = useCallback(
@@ -381,6 +423,13 @@ export default function RequestDetailScreen() {
             text: 'Удалить',
             style: 'destructive',
             onPress: async () => {
+              // В демо-режиме просто закрываем экран, ничего не шлём на сервер
+              if (isGuest && request && request.id < 0) {
+                showToast({ title: 'Демо', description: 'Заявка удалена локально', variant: 'default' });
+                goBack();
+                return;
+              }
+
               const res = await deleteRequest(sub.id);
               if (res.ok) {
                 showToast({ title: 'Заявка удалена', variant: 'success' });
@@ -393,7 +442,7 @@ export default function RequestDetailScreen() {
         ]
       );
     },
-    [goBack, showToast]
+    [goBack, showToast, isGuest, request]
   );
 
   useEffect(() => {

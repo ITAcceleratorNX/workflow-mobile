@@ -32,6 +32,7 @@ import {
   type ExecutorInCategory,
   type Office,
   type ServiceCategory,
+  type RequestGroup,
 } from '@/lib/api';
 import {
   getBlocksForOffice,
@@ -41,6 +42,7 @@ import {
   hasRoomsForLocation,
 } from '@/lib/office-locations';
 import { useAuthStore } from '@/stores/auth-store';
+import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type CreateUserRole = 'client' | 'admin-worker' | 'department-head' | 'executor' | 'manager';
@@ -99,6 +101,8 @@ export default function CreateRequestScreen() {
   const { show: showToast } = useToast();
   const role = useAuthStore((s) => s.role) as CreateUserRole | null;
   const user = useAuthStore((s) => s.user);
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const { addRequest: addGuestRequest } = useGuestDemoStore();
 
   const textColor = useThemeColor({}, 'text');
   const mutedColor = useThemeColor({}, 'textMuted');
@@ -198,6 +202,41 @@ export default function CreateRequestScreen() {
   useEffect(() => {
     const load = async () => {
       setLoading(true);
+
+      // В демо-режиме не ходим в API, используем мок-данные
+      if (isGuest) {
+        const demoOffice: Office = {
+          id: 1,
+          name: 'Офис (демо)',
+          city: 'Алматы',
+          address: 'ул. Демо, 1',
+        };
+        const demoCategories: ServiceCategory[] = [
+          {
+            id: 1,
+            name: 'IT‑инфраструктура (демо)',
+            subcategories: [
+              { id: 11, name: 'Не работает интернет', category_id: 1 },
+              { id: 12, name: 'Проблемы с ноутбуком', category_id: 1 },
+            ],
+          },
+          {
+            id: 2,
+            name: 'Офисная инфраструктура (демо)',
+            subcategories: [
+              { id: 21, name: 'Климат / кондиционер', category_id: 2 },
+              { id: 22, name: 'Мебель / рабочее место', category_id: 2 },
+            ],
+          },
+        ];
+
+        setOffices([demoOffice]);
+        setCategories(demoCategories);
+        setUserCabinetRooms([]);
+        setLoading(false);
+        return;
+      }
+
       const [offRes, catRes] = await Promise.all([
         getOffices(),
         getServiceCategories(),
@@ -421,6 +460,55 @@ export default function CreateRequestScreen() {
 
     setSubmitting(true);
     setError(null);
+
+    if (isGuest) {
+      const office = offices.find((o) => o.id === officeIdToSend);
+      const created: RequestGroup = {
+        id: -1,
+        client_id: user?.id ?? 0,
+        office_id: officeIdToSend,
+        location: `Широта: ${office?.lat ?? ''}, Долгота: ${office?.lon ?? ''} (демо)`,
+        location_detail: buildLocationDetail(),
+        date_submitted: new Date().toISOString(),
+        status: groupStatus,
+        request_type: finalRequestType,
+        rejection_reason: undefined,
+        planned_date: plannedDate || undefined,
+        created_date: new Date().toISOString(),
+        office: office ? { id: office.id, name: office.name, city: office.city ?? '', address: office.address } : undefined,
+        photos: [],
+        client: user ? { full_name: user.full_name, phone: user.phone, role: user.role } : undefined,
+        is_long_term: false,
+        requests: [
+          {
+            id: -1,
+            title: title.trim(),
+            description: description.trim(),
+            status: subStatus,
+            category_id: categoryId,
+            category: selectedCategory ? { id: selectedCategory.id, name: selectedCategory.name } : undefined,
+            complexity: complexity || undefined,
+            sla: sla || undefined,
+            created_date: new Date().toISOString(),
+            executors: [],
+            is_long_term: false,
+            ratings: [],
+            photos: [],
+          } as any,
+        ],
+      };
+
+      addGuestRequest(created as any);
+      setSubmitting(false);
+      showToast({
+        title: 'Демо',
+        description: 'Заявка создана локально',
+        variant: 'success',
+      });
+      router.replace('/requests');
+      return;
+    }
+
     const res = await createRequestGroup(formData);
     setSubmitting(false);
 

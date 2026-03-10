@@ -45,10 +45,11 @@ export function useStepsReminders() {
   const canSendNoActivity = useStepsStore((s) => s.canSendNoActivity);
 
   const officeId = useAuthStore((s) => s.user?.office_id);
+  const isGuest = useAuthStore((s) => s.isGuest);
   const todayKey = toDateKey(new Date());
 
   useEffect(() => {
-    if (!settings.stepsNotificationsEnabled || lastStepsDate !== todayKey) return;
+    if (!settings.stepsNotificationsEnabled || lastStepsDate !== todayKey || isGuest) return;
 
     const goal = settings.goalSteps ?? 0;
     if (goal <= 0) return;

@@ -16,14 +16,15 @@ import { ThemedView } from '@/components/themed-view';
 import { Select } from '@/components/ui/select';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import {
-    getOffices,
-    getRequestGroups,
-    type Office,
-    type RequestGroup,
-    type RequestGroupsRole,
-    type RequestGroupsSegments,
+  getOffices,
+  getRequestGroups,
+  type Office,
+  type RequestGroup,
+  type RequestGroupsRole,
+  type RequestGroupsSegments,
 } from '@/lib/api';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
+import { useGuestDemoStore } from '@/stores/guest-demo-store';
 
 // Размеры как в kcell-service-front compact: 140×100, rounded-xl, gap-4
 const CARD_PHOTO_WIDTH = 140;
@@ -244,6 +245,8 @@ function RequestCard({
 export default function RequestsListScreen() {
   const router = useRouter();
   const role = useAuthStore((s: AuthState) => s.role) as RequestGroupsRole | null;
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const guestRequests = useGuestDemoStore((s) => s.requests);
   const textColor = useThemeColor({}, 'text');
   const mutedColor = useThemeColor({}, 'textMuted');
   const primaryColor = useThemeColor({}, 'primary');
@@ -282,6 +285,20 @@ export default function RequestsListScreen() {
 
   const load = useCallback(
     async (pageNum: number = 1) => {
+      // Для демо-гостя работаем только с мок-данными, без запросов к API
+      if (isGuest) {
+        setError(null);
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
+        // В демо-режиме список берём из стора целиком
+        setList(guestRequests as RequestGroup[]);
+        setSegments(null);
+        setHasMore(false);
+        setPage(1);
+        return;
+      }
+
       setError(null);
       if (pageNum === 1) setLoading(true);
       let params: { status?: string; priority?: string; office_id?: string; from?: string } | undefined;
@@ -331,7 +348,7 @@ export default function RequestsListScreen() {
       setPage(pageNum);
       setLoading(false);
     },
-    [role, filterStatus, filterPriority, filterOffice, filterPeriod]
+    [role, filterStatus, filterPriority, filterOffice, filterPeriod, isGuest, guestRequests]
   );
 
   useEffect(() => {
