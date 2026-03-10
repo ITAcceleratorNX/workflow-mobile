@@ -1,14 +1,16 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, Share, StyleSheet, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
-import type { MeetingRoomBooking } from '@/lib/api';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getPublicBooking, type MeetingRoomBooking } from '@/lib/api';
+import { formatDisplayDateFromIso, formatTimeOnly } from '@/lib/dateTimeUtils';
 
 export default function BookingQrScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -54,9 +56,22 @@ export default function BookingQrScreen() {
       return;
     }
 
-    // Для не-демо пока просто ошибка, чтобы не ходить в бэк
-    setError('Мобильный QR пока доступен только в демо-режиме');
-    setLoading(false);
+    const load = async () => {
+      try {
+        const res = await getPublicBooking(numId);
+        if (res.ok) {
+          setBooking(res.data);
+        } else {
+          setError(res.error || 'Не удалось загрузить бронирование');
+        }
+      } catch (e) {
+        console.error('[BookingQR] load error', e);
+        setError('Ошибка загрузки бронирования');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, [id, guestBookings]);
 
   if (loading) {
@@ -86,6 +101,13 @@ export default function BookingQrScreen() {
 
   const office = booking.office || booking.meetingRoom?.office || booking.meeting_room?.office;
   const room = booking.meetingRoom || booking.meeting_room;
+  const appUrl = `https://app.tmk-workflow.kz/booking/${booking.id}`;
+  const qrPayload = JSON.stringify({
+    bookingId: booking.id,
+    roomId: booking.meeting_room_id,
+    tablesRemaining: (booking as any).tables_remaining ?? room?.capacity ?? 0,
+  });
+
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 12 }]}>
       <View style={styles.header}>
@@ -120,18 +142,58 @@ export default function BookingQrScreen() {
             <ThemedText style={[styles.cardTitle, { color: textColor }]}>
               {room.name}
             </ThemedText>
+            {room.floor != null && (
+              <ThemedText style={[styles.cardSubtitle, { color: mutedColor }]}>
+                Этаж {room.floor}
+              </ThemedText>
+            )}
           </View>
         )}
+
+        <View style={[styles.card, { backgroundColor: cardBackground }]}>
+          <ThemedText style={[styles.cardLabel, { color: mutedColor }]}>
+            Дата и время
+          </ThemedText>
+          <ThemedText style={[styles.cardSubtitle, { color: textColor }]}>
+            {formatDisplayDateFromIso(booking.start_time)}
+          </ThemedText>
+          <ThemedText style={[styles.cardSubtitle, { color: textColor }]}>
+            {formatTimeOnly(booking.start_time)} – {formatTimeOnly(booking.end_time)}
+          </ThemedText>
+          {'tables_remaining' in booking && (booking as any).tables_remaining != null && (
+            <ThemedText style={[styles.tablesRemaining, { color: textColor }]}>
+              Столов осталось: {(booking as any).tables_remaining}
+            </ThemedText>
+          )}
+        </View>
 
         <View style={[styles.qrCard, { backgroundColor: cardBackground }]}>
           <View style={styles.qrStubOuter}>
             <View style={styles.qrStubInner}>
-              <ThemedText style={styles.qrStubText}>DEMO QR</ThemedText>
+              <QRCode
+                value={qrPayload}
+                size={180}
+                backgroundColor="#FFFFFF"
+                color="#000000"
+              />
             </View>
           </View>
           <ThemedText style={[styles.qrHint, { color: mutedColor }]}>
-            Это демо‑QR (без камеры). Используется только для теста потока.
+            Покажите этот QR исполнителю для сканирования.
           </ThemedText>
+          <Pressable
+            style={styles.shareButton}
+            onPress={() =>
+              Share.share({
+                title: 'Бронирование переговорной',
+                message: appUrl,
+                url: appUrl,
+              })
+            }
+          >
+            <MaterialIcons name="share" size={18} color="#FFFFFF" />
+            <ThemedText style={styles.shareButtonText}>Поделиться ссылкой</ThemedText>
+          </Pressable>
         </View>
       </View>
     </ThemedView>
@@ -181,6 +243,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 4,
   },
+  tablesRemaining: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '600',
+  },
   qrCard: {
     marginTop: 12,
     borderRadius: 16,
@@ -211,6 +278,21 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 13,
     textAlign: 'center',
+  },
+  shareButton: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#111827',
+    gap: 8,
+  },
+  shareButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
   centered: {
     flex: 1,

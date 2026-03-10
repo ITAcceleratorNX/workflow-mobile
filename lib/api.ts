@@ -1334,6 +1334,30 @@ export interface RoomAvailabilityResponse {
   slots: RoomAvailabilitySlot[];
 }
 
+export interface ScanBookingQrResponse {
+  booking: MeetingRoomBooking;
+  tables_remaining: number;
+}
+
+export async function scanBookingQRCode(
+  bookingId: number
+): Promise<{ ok: true; data: ScanBookingQrResponse } | { ok: false; error: string }> {
+  const result = await request<ScanBookingQrResponse>('/meeting-room-bookings/scan-qr', {
+    method: 'POST',
+    body: JSON.stringify({ bookingId }),
+  });
+  if (result.ok) return { ok: true, data: result.data };
+  return { ok: false, error: result.error };
+}
+
+export async function getPublicBooking(
+  bookingId: number
+): Promise<{ ok: true; data: MeetingRoomBooking } | { ok: false; error: string }> {
+  const result = await request<MeetingRoomBooking>(`/meeting-room-bookings/${bookingId}/public`);
+  if (result.ok) return { ok: true, data: result.data };
+  return { ok: false, error: result.error };
+}
+
 export async function getMeetingRooms(officeId?: number): Promise<
   | { ok: true; data: MeetingRoom[] }
   | { ok: false; error: string }

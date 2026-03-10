@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Dimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1366,11 +1367,9 @@ function ClientDashboardContent() {
         <View style={styles.header}>
           {/* Title */}
           <ThemedText style={styles.headerTitle}>{getSectionTitle()}</ThemedText>
-          {getSectionSubtitle() && (
-            <ThemedText style={styles.headerSubtitle}>
-              {getSectionSubtitle()}
-            </ThemedText>
-          )}
+          <ThemedText style={styles.headerSubtitle}>
+            {getSectionSubtitle() || ' '}
+          </ThemedText>
 
           {/* Tab Icons */}
           <View style={styles.tabContainer}>
@@ -1424,13 +1423,18 @@ function ClientDashboardContent() {
           </View>
         </View>
 
-        {/* Orange Content Section */}
-        <View style={styles.contentSection}>
+        {/* Orange Content Section with gradient to black */}
+        <LinearGradient
+          colors={[PRIMARY_ORANGE, '#1C1C1E']}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.contentSection}
+        >
           {activeSection === 'home' && renderHomeSection()}
           {activeSection === 'health' && renderHealthSection()}
           {activeSection === 'settings' && renderSettingsSection()}
           {activeSection === 'steps' && renderStepsSection()}
-        </View>
+        </LinearGradient>
       </ScrollView>
     </ThemedView>
   );
@@ -1526,7 +1530,6 @@ const styles = StyleSheet.create({
   },
   contentSection: {
     flex: 1,
-    backgroundColor: PRIMARY_ORANGE,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     paddingTop: 24,

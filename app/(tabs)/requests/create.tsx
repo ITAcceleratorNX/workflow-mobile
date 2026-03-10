@@ -1,13 +1,16 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -41,6 +44,7 @@ import {
   hasLocationsForBlock,
   hasRoomsForLocation,
 } from '@/lib/office-locations';
+import { findNearestOffice } from '@/lib/nearest-office';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -118,9 +122,17 @@ export default function CreateRequestScreen() {
       stepDotActive: { backgroundColor: primaryColor },
       chipActive: { backgroundColor: primaryColor, borderColor: primaryColor },
       officeChip: { backgroundColor: cardBackground },
-      officeChipActive: { backgroundColor: primaryColor },
+      officeChipActive: {
+        backgroundColor: primaryColor,
+        borderColor: primaryColor,
+      },
       officeCard: { backgroundColor: cardBackground },
-      officeCardSelected: { borderColor: primaryColor, shadowColor: primaryColor },
+      officeCardSelected: {
+        borderColor: primaryColor,
+        shadowColor: primaryColor,
+        shadowOpacity: 0.5,
+        shadowRadius: 6,
+      },
       officeCardImage: { backgroundColor: borderColor },
       toggleRow: { backgroundColor: cardBackground },
       summaryCard: { backgroundColor: cardBackground },
@@ -179,6 +191,7 @@ export default function CreateRequestScreen() {
   const [completionComment, setCompletionComment] = useState('');
   const [completionDate, setCompletionDate] = useState(new Date());
   const [afterPhotos, setAfterPhotos] = useState<string[]>([]);
+  const [isDetectingNearestOffice, setIsDetectingNearestOffice] = useState(false);
 
   const selectedOffice =
     locationSource === 'cabinet' && selectedCabinetRoom
@@ -364,9 +377,106 @@ export default function CreateRequestScreen() {
     (role !== 'department-head' || selectedExecutors.length === 0 || selectedExecutors.some((e) => e.role === 'leader')) &&
     (role !== 'executor' || createMode !== 'createAndComplete' || (completionComment.trim() && afterPhotos.length > 0));
 
+  const handleDetectNearestOffice = useCallback(async () => {
+    if (!offices.length) return;
+    setIsDetectingNearestOffice(true);
+    try {
+      let { status, canAskAgain } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        status = req.status;
+        canAskAgain = req.canAskAgain;
+      }
+
+      if (status !== 'granted') {
+        if (!canAskAgain) {
+          Alert.alert(
+            'Геолокация выключена',
+            'Разрешите доступ к геолокации в настройках устройства, чтобы рекомендовать ближайший офис.',
+            [
+              { text: 'Отмена', style: 'cancel' },
+              {
+                text: 'Открыть настройки',
+                onPress: () => {
+                  try {
+                    Location.openSettings();
+                  } catch {
+                    // ignore
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          showToast({
+            title: 'Геолокация недоступна',
+            description: 'Разрешите доступ к геолокации, чтобы рекомендовать офис.',
+            variant: 'destructive',
+            duration: 3000,
+          });
+        }
+        return;
+      }
+
+      const current = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const nearest = findNearestOffice(offices, {
+        lat: current.coords.latitude,
+        lon: current.coords.longitude,
+      });
+      if (!nearest) {
+        showToast({
+          title: 'Офисы не найдены',
+          description: 'Нет офисов с координатами для определения ближайшего.',
+          variant: 'destructive',
+          duration: 3000,
+        });
+        return;
+      }
+
+      setSelectedOfficeId(nearest.id);
+      showToast({
+        title: 'Ближайший офис',
+        description: `Рекомендуемый офис: ${nearest.name}`,
+        variant: 'success',
+        duration: 2500,
+      });
+    } catch (e) {
+      console.error('[RequestsCreate] detect nearest office error', e);
+      showToast({
+        title: 'Ошибка геолокации',
+        description: 'Не удалось определить ближайший офис.',
+        variant: 'destructive',
+        duration: 3000,
+      });
+    } finally {
+      setIsDetectingNearestOffice(false);
+    }
+  }, [offices, showToast]);
+
   const pickImage = useCallback(async (forAfter = false) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
+    if (status !== 'granted') {
+      Alert.alert(
+        'Доступ к фото отключён',
+        'Разрешите доступ к фото/видео в настройках устройства, чтобы прикреплять файлы.',
+        [
+          { text: 'Отмена', style: 'cancel' },
+          {
+            text: 'Открыть настройки',
+            onPress: () => {
+              try {
+                Linking.openSettings();
+              } catch {
+                // ignore
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
@@ -690,6 +800,15 @@ export default function CreateRequestScreen() {
                   <ThemedText style={[styles.stepHint, { color: mutedColor }]}>
                     Выберите офис, в котором находится заявка
                   </ThemedText>
+                  <Pressable
+                    onPress={handleDetectNearestOffice}
+                    style={styles.geoButton}
+                  >
+                    <MaterialIcons name="my-location" size={18} color="#FFFFFF" />
+                    <ThemedText style={styles.geoButtonText}>
+                      {isDetectingNearestOffice ? 'Определяем ближайший офис...' : 'Определить ближайший офис'}
+                    </ThemedText>
+                  </Pressable>
                   <View style={styles.officeChipRow}>
                     {offices.map((office) => (
                       <Pressable
@@ -1481,9 +1600,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
+    borderWidth: 1,
   },
   officeChipText: {
     fontSize: 13,
+    fontWeight: '500',
+  },
+  geoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#F35713',
+    backgroundColor: '#2A2A2A',
+    gap: 6,
+  },
+  geoButtonText: {
+    fontSize: 12,
+    color: '#FFFFFF',
     fontWeight: '500',
   },
   officeGrid: {

@@ -1292,7 +1292,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   title: {
-    marginBottom: 0,
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 28,
+    marginBottom: 4,
     flex: 1,
   },
   scroll: {

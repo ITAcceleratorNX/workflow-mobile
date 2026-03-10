@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
@@ -39,6 +40,7 @@ import {
   getOffices,
   getRoomDailyAvailability,
 } from '@/lib/api';
+import { findNearestOffice } from '@/lib/nearest-office';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useRouter } from 'expo-router';
@@ -148,6 +150,82 @@ export default function BookingScreen() {
     setOffices(list);
     setLoadingOffices(false);
   }, []);
+
+  const handleDetectNearestOffice = useCallback(async () => {
+    if (!offices.length) return;
+
+    try {
+      let { status, canAskAgain } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        status = req.status;
+        canAskAgain = req.canAskAgain;
+      }
+
+      if (status !== 'granted') {
+        if (!canAskAgain) {
+          Alert.alert(
+            'Геолокация выключена',
+            'Разрешите доступ к геолокации в настройках устройства, чтобы рекомендовать ближайший офис.',
+            [
+              { text: 'Отмена', style: 'cancel' },
+              {
+                text: 'Открыть настройки',
+                onPress: () => {
+                  try {
+                    Linking.openSettings();
+                  } catch {
+                    // ignore
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          showToast({
+            title: 'Геолокация недоступна',
+            description: 'Разрешите доступ к геолокации, чтобы рекомендовать офис.',
+            variant: 'destructive',
+            duration: 3000,
+          });
+        }
+        return;
+      }
+
+      const current = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const nearest = findNearestOffice(offices, {
+        lat: current.coords.latitude,
+        lon: current.coords.longitude,
+      });
+      if (!nearest) {
+        showToast({
+          title: 'Офисы не найдены',
+          description: 'Нет офисов с координатами для определения ближайшего.',
+          variant: 'destructive',
+          duration: 3000,
+        });
+        return;
+      }
+
+      setSelectedOffice(nearest);
+      showToast({
+        title: 'Ближайший офис',
+        description: `Рекомендуемый офис: ${nearest.name}`,
+        variant: 'success',
+        duration: 2500,
+      });
+    } catch (e) {
+      console.error('[Booking] detect nearest office error', e);
+      showToast({
+        title: 'Ошибка геолокации',
+        description: 'Не удалось определить ближайший офис.',
+        variant: 'destructive',
+        duration: 3000,
+      });
+    }
+  }, [offices, showToast]);
 
   const loadRooms = useCallback(async (officeId: number) => {
     setLoadingRooms(true);
@@ -503,8 +581,37 @@ export default function BookingScreen() {
   }, [sortedMyBookings, myBookingsFilter, isBookingActive, isBookingCompleted, isBookingCancelled]);
 
   const isSlotDisabled = useCallback(
-    (slot: { start: string }) => bookedSlots.has(slot.start),
-    [bookedSlots]
+    (slot: { start: string }) => {
+      if (bookedSlots.has(slot.start)) return true;
+
+      if (!selectedDate) return false;
+
+      const now = new Date();
+      const selected = new Date(selectedDate);
+      if (
+        selected.getFullYear() !== now.getFullYear() ||
+        selected.getMonth() !== now.getMonth() ||
+        selected.getDate() !== now.getDate()
+      ) {
+        // Для будущих и прошлых дат не блокируем слоты по времени, только по бронированиям
+        return false;
+      }
+
+      // Собираем дату-время начала слота в локальной TZ
+      const [hourStr, minuteStr] = slot.start.split(':');
+      const slotDateTime = new Date(
+        selected.getFullYear(),
+        selected.getMonth(),
+        selected.getDate(),
+        Number(hourStr),
+        Number(minuteStr),
+        0,
+        0
+      );
+
+      return slotDateTime.getTime() <= now.getTime();
+    },
+    [bookedSlots, selectedDate]
   );
 
   if (step === 'form' && selectedRoom) {
@@ -699,6 +806,15 @@ export default function BookingScreen() {
                 <ThemedText style={styles.stepHintWhite}>
                   Выберите офис для просмотра переговорных комнат
                 </ThemedText>
+                <Pressable
+                  onPress={handleDetectNearestOffice}
+                  style={styles.geoButtonWhite}
+                >
+                  <MaterialIcons name="my-location" size={18} color="#FFFFFF" />
+                  <ThemedText style={styles.geoButtonTextWhite}>
+                    Определить ближайший офис
+                  </ThemedText>
+                </Pressable>
                 {loadingOffices ? (
                   <ActivityIndicator size="large" color="#fff" style={styles.loader} />
                 ) : offices.length === 0 ? (
@@ -965,11 +1081,11 @@ export default function BookingScreen() {
                       )}
                       <View style={styles.bookingCardActions}>
                         <Pressable
-                          onPress={() => Linking.openURL(getBookingPageUrl(item.id))}
+                          onPress={() => router.push(`/booking/${item.id}`)}
                           style={styles.viewBookingBtnOrange}
                         >
-                          <MaterialIcons name="open-in-new" size={18} color="#fff" />
-                          <ThemedText style={styles.viewBookingBtnText}>Просмотреть</ThemedText>
+                          <MaterialIcons name="qr-code-2" size={18} color="#fff" />
+                          <ThemedText style={styles.viewBookingBtnText}>QR код</ThemedText>
                         </Pressable>
                         {canCancel && (
                           <Pressable
@@ -1008,9 +1124,15 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   title: {
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 28,
     marginBottom: 12,
   },
   titleWhite: {
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 28,
     marginBottom: 12,
     color: '#fff',
   },
@@ -1106,6 +1228,9 @@ const styles = StyleSheet.create({
     width: '30%',
     minWidth: 100,
     maxWidth: 140,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
   officeCardImageWrap: {
     width: '100%',
@@ -1425,6 +1550,25 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
     backgroundColor: '#F35713',
+  },
+  geoButtonWhite: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    gap: 6,
+  },
+  geoButtonTextWhite: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
   bookingCardActions: {
     flexDirection: 'row',
