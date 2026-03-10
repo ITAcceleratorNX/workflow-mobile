@@ -9,6 +9,7 @@ import {
   Switch,
   View,
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, TextInput } from '@/components/ui';
@@ -54,6 +55,7 @@ export default function StepsScreen() {
   const stepLengthM = heightCm > 0 ? stepLengthMetersFromHeight(heightCm) : 0.7;
   const kmToday = stepsToKm(stepsToday, stepLengthM);
   const todayKey = toDateKey(new Date());
+  const progress = goal > 0 ? Math.min(stepsToday / goal, 1) : 0;
 
   const handleRecalculateGoal = useCallback(() => {
     if (settings.heightCm == null || settings.weightKg == null) return;
@@ -132,22 +134,56 @@ export default function StepsScreen() {
       >
         {activeTab === 'today' && (
           <View style={[styles.section, styles.sectionToday]}>
-            <View style={styles.stepsNumberWrap}>
-              <ThemedText
-                style={[styles.stepsBig, { color: text }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.35}
-              >
-                {stepsToday.toLocaleString('ru-RU')}
-              </ThemedText>
+            <View style={styles.circleWrap}>
+              <View style={styles.circleContainer}>
+                <Svg width={220} height={220}>
+                  <Circle
+                    cx={110}
+                    cy={110}
+                    r={90}
+                    stroke={border}
+                    strokeWidth={12}
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                  <Circle
+                    cx={110}
+                    cy={110}
+                    r={90}
+                    stroke={primary}
+                    strokeWidth={12}
+                    strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 90}
+                    strokeDashoffset={2 * Math.PI * 90 * (1 - progress)}
+                    fill="none"
+                    rotation={-90}
+                    originX={110}
+                    originY={110}
+                  />
+                </Svg>
+                <View style={styles.circleCenter}>
+                  <ThemedText
+                    style={[styles.stepsBig, { color: text }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.35}
+                  >
+                    {stepsToday.toLocaleString('ru-RU')}
+                  </ThemedText>
+                  {goal > 0 && (
+                    <ThemedText style={[styles.circleSubtitle, { color: textMuted }]}>
+                      из {goal.toLocaleString('ru-RU')}
+                    </ThemedText>
+                  )}
+                </View>
+              </View>
             </View>
             <ThemedText style={[styles.stepsLabel, { color: textMuted }]}>
               шагов за сегодня
             </ThemedText>
             {goal > 0 && (
               <ThemedText style={[styles.goalLine, { color: text }]}>
-                Цель: {goal.toLocaleString('ru-RU')}
+                Осталось: {(Math.max(goal - stepsToday, 0)).toLocaleString('ru-RU')} шагов
               </ThemedText>
             )}
             <ThemedText style={[styles.kmLine, { color: textMuted }]}>
@@ -355,6 +391,27 @@ const styles = StyleSheet.create({
   section: {},
   sectionToday: {
     paddingTop: 8,
+  },
+  circleWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  circleContainer: {
+    width: 220,
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circleCenter: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  circleSubtitle: {
+    fontSize: 13,
+    marginTop: 4,
   },
   sectionTitle: {
     fontSize: 18,

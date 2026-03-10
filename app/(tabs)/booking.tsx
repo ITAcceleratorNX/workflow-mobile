@@ -39,6 +39,9 @@ import {
   getOffices,
   getRoomDailyAvailability,
 } from '@/lib/api';
+import { useAuthStore } from '@/stores/auth-store';
+import { useGuestDemoStore } from '@/stores/guest-demo-store';
+import { useRouter } from 'expo-router';
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
 const CARD_ORANGE = '#E25B21';
@@ -95,6 +98,7 @@ function getBookingStatusText(status?: string): string {
 }
 
 export default function BookingScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
@@ -122,6 +126,13 @@ export default function BookingScreen() {
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const {
+    bookings: guestBookings,
+    addBooking: addGuestBooking,
+    removeBooking: removeGuestBooking,
+  } = useGuestDemoStore();
 
   // Form state
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -172,6 +183,16 @@ export default function BookingScreen() {
 
   const loadMyBookings = useCallback(async () => {
     setLoadingBookings(true);
+    if (isGuest) {
+      const sorted = [...guestBookings].sort((a, b) => {
+        const sa = typeof a.start_time === 'string' ? a.start_time : '';
+        const sb = typeof b.start_time === 'string' ? b.start_time : '';
+        return new Date(sa).getTime() - new Date(sb).getTime();
+      });
+      setMyBookings(sorted as MeetingRoomBooking[]);
+      setLoadingBookings(false);
+      return;
+    }
     const res = await getMyBookings();
     setLoadingBookings(false);
     if (res.ok) setMyBookings(res.data);
@@ -191,7 +212,7 @@ export default function BookingScreen() {
   }, [selectedOffice?.id, loadRooms]);
 
   useEffect(() => {
-    if (step === 'form' && selectedRoom && selectedDate) {
+    if (step === 'form' && selectedRoom && selectedDate && !isGuest) {
       const dateStr = formatDateForApi(selectedDate);
       setLoadingAvailability(true);
       getRoomDailyAvailability(selectedRoom.id, dateStr, 60)
@@ -219,7 +240,7 @@ export default function BookingScreen() {
     } else {
       setBookedSlots(new Set());
     }
-  }, [step, selectedRoom?.id, selectedDate]);
+  }, [step, selectedRoom?.id, selectedDate, isGuest]);
 
   const goBack = useCallback(() => {
     if (step === 'form') {
@@ -286,11 +307,51 @@ export default function BookingScreen() {
       showToast({ title: 'Ошибка', description: 'Нельзя бронировать прошедшее время', variant: 'destructive' });
       return;
     }
-    if (bookedSlots.has(slot.start)) {
+    if (!isGuest && bookedSlots.has(slot.start)) {
       showToast({ title: 'Время занято', description: 'Выберите другое время', variant: 'destructive' });
       return;
     }
     setSubmitting(true);
+
+    if (isGuest) {
+      const start_time = `${formatDateForApi(selectedDate)}T${startFormatted}`;
+      const end_time = `${formatDateForApi(selectedDate)}T${endFormatted}`;
+
+      const newId = addGuestBooking({
+        meeting_room_id: selectedRoom.id,
+        start_time,
+        end_time,
+        status: 'scheduled',
+        company_name: companyName.trim() || null,
+        meetingRoom: {
+          id: selectedRoom.id,
+          name: selectedRoom.name,
+          floor: selectedRoom.floor,
+          capacity: selectedRoom.capacity,
+          office_id: selectedRoom.office_id,
+          office: selectedRoom.office,
+          status: selectedRoom.status,
+          room_type: selectedRoom.room_type,
+          description: selectedRoom.description,
+          photos: selectedRoom.photos,
+          photo: selectedRoom.photo,
+          isActive: selectedRoom.isActive,
+        },
+      } as any);
+
+      setSubmitting(false);
+      showToast({ title: 'Демо', description: 'Бронирование создано локально', variant: 'success' });
+      setStep('rooms');
+      setSelectedRoom(null);
+      setSelectedDate(null);
+      setSelectedTimeSlot(null);
+      setCompanyName('');
+      loadMyBookings();
+      // Переходим на экран демо-QR
+      router.push(`/booking/${newId}`);
+      return;
+    }
+
     const res = await createMeetingRoomBooking({
       meeting_room_id: selectedRoom.id,
       booking_date: formatDateForApi(selectedDate),
@@ -310,7 +371,18 @@ export default function BookingScreen() {
     } else {
       showToast({ title: 'Ошибка', description: res.error, variant: 'destructive' });
     }
-  }, [selectedRoom, selectedDate, selectedTimeSlot, companyName, bookedSlots, showToast, loadMyBookings]);
+  }, [
+    selectedRoom,
+    selectedDate,
+    selectedTimeSlot,
+    companyName,
+    bookedSlots,
+    showToast,
+    loadMyBookings,
+    isGuest,
+    addGuestBooking,
+    selectedOffice,
+  ]);
 
   const handleCancelBooking = useCallback(
     (item: MeetingRoomBooking) => {
@@ -325,6 +397,17 @@ export default function BookingScreen() {
             style: 'destructive',
             onPress: async () => {
               setCancellingId(item.id);
+              if (isGuest) {
+                removeGuestBooking(item.id);
+                setCancellingId(null);
+                showToast({
+                  title: 'Демо',
+                  description: 'Бронирование отменено локально',
+                  variant: 'default',
+                });
+                loadMyBookings();
+                return;
+              }
               const res = await cancelMeetingRoomBooking(item.id);
               setCancellingId(null);
               if (res.ok) {
@@ -342,7 +425,7 @@ export default function BookingScreen() {
         ]
       );
     },
-    [showToast, loadMyBookings]
+    [showToast, loadMyBookings, isGuest, removeGuestBooking]
   );
 
   const datesForPicker = useMemo(() => {

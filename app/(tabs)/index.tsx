@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Dimensions,
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -435,6 +436,7 @@ function ClientDashboardContent() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
+  const isGuest = useAuthStore((state) => state.isGuest);
   const { show } = useToast();
   const effectiveRole = role || user?.role;
   const isClient = effectiveRole?.toLowerCase() === 'client';
@@ -454,6 +456,7 @@ function ClientDashboardContent() {
   const stepsHeightCm = useStepsStore((s) => s.settings.heightCm);
   const stepLengthM = stepsHeightCm && stepsHeightCm > 0 ? stepLengthMetersFromHeight(stepsHeightCm) : 0.7;
   const stepsKmToday = stepsToKm(stepsToday, stepLengthM);
+  const stepsProgress = stepsGoal && stepsGoal > 0 ? Math.min(stepsToday / stepsGoal, 1) : 0;
 
   // Логирование изменений статистики
   useEffect(() => {
@@ -482,6 +485,48 @@ function ClientDashboardContent() {
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
   const [isControlling, setIsControlling] = useState<string | null>(null);
   const [showRoomSelector, setShowRoomSelector] = useState(false);
+
+  const MOCK_SUBSCRIPTIONS: ClientRoomSubscription[] = [
+    {
+      id: 1,
+      client_id: 0,
+      meeting_room_id: 1,
+      meetingRoom: {
+        id: 1,
+        name: 'Кабинет 101 (демо)',
+        office_id: 1,
+        office: {
+          id: 1,
+          name: 'Демо офис',
+        },
+      },
+    },
+  ];
+
+  const MOCK_DEVICES: YandexDevice[] = [
+    {
+      id: 'demo-lamp-1',
+      name: 'Свет (демо)',
+      type: 'devices.types.light',
+      capabilities: [
+        {
+          type: 'devices.capabilities.on_off',
+          state: { instance: 'on', value: false },
+        },
+      ],
+    },
+    {
+      id: 'demo-ac-1',
+      name: 'Кондиционер (демо)',
+      type: 'devices.types.thermostat.ac',
+      capabilities: [
+        {
+          type: 'devices.capabilities.on_off',
+          state: { instance: 'on', value: true },
+        },
+      ],
+    },
+  ];
 
   // Format time helper
   const formatTime = useCallback((seconds: number): string => {
@@ -547,6 +592,12 @@ function ClientDashboardContent() {
   // Load Smart Home Subscriptions
   useEffect(() => {
     const loadSubscriptions = async () => {
+      if (isGuest) {
+        setSubscriptions(MOCK_SUBSCRIPTIONS);
+        setSelectedRoomId(1);
+        return;
+      }
+
       if (!user?.id) {
         console.log('[SmartHome] No user ID, skipping load');
         return;
@@ -586,13 +637,18 @@ function ClientDashboardContent() {
       }
     };
     loadSubscriptions();
-  }, [user?.id, show]);
+  }, [user?.id, show, isGuest]);
 
   // Load Devices when room changes
   useEffect(() => {
     const loadDevices = async () => {
       if (!selectedRoomId) {
         console.log('[SmartHome] No room selected, skipping device load');
+        return;
+      }
+
+      if (isGuest) {
+        setDevices(MOCK_DEVICES);
         return;
       }
       try {
@@ -625,57 +681,62 @@ function ClientDashboardContent() {
       }
     };
     loadDevices();
-  }, [selectedRoomId, show]);
+  }, [selectedRoomId, show, isGuest]);
 
   // Control device
   const handleControlDevice = useCallback(
     async (device: YandexDevice, value: boolean) => {
       try {
         setIsControlling(device.id);
-        const result = await controlDevice({
-          device_id: device.id,
-          action_type: 'devices.capabilities.on_off',
-          action_state: {
-            instance: 'on',
-            value: value,
-          },
+        if (!isGuest) {
+          const result = await controlDevice({
+            device_id: device.id,
+            action_type: 'devices.capabilities.on_off',
+            action_state: {
+              instance: 'on',
+              value: value,
+            },
+          });
+
+          if (!result.ok) {
+            show({
+              title: 'Ошибка',
+              description: 'Не удалось управлять устройством',
+              variant: 'destructive',
+              duration: 2000,
+            });
+            return;
+          }
+        }
+
+        show({
+          title: 'Успешно',
+          description: isGuest
+            ? `(Демо) ${device.name} ${value ? 'включено' : 'выключено'}`
+            : `${device.name} ${value ? 'включено' : 'выключено'}`,
+          variant: 'success',
+          duration: 2000,
         });
 
-        if (result.ok) {
-          show({
-            title: 'Успешно',
-            description: `${device.name} ${value ? 'включено' : 'выключено'}`,
-            variant: 'success',
-            duration: 2000,
-          });
-
-          // Update local state
-          setDevices((prevDevices) =>
-            prevDevices.map((d) => {
-              if (d.id === device.id) {
-                const updatedDevice = { ...d };
-                const capability = updatedDevice.capabilities?.find(
-                  (cap) => cap.type === 'devices.capabilities.on_off'
-                );
-                if (capability && capability.state) {
-                  capability.state = {
-                    instance: capability.state.instance,
-                    value,
-                  };
-                }
-                return updatedDevice;
+        // Update local state
+        setDevices((prevDevices) =>
+          prevDevices.map((d) => {
+            if (d.id === device.id) {
+              const updatedDevice = { ...d };
+              const capability = updatedDevice.capabilities?.find(
+                (cap) => cap.type === 'devices.capabilities.on_off'
+              );
+              if (capability && capability.state) {
+                capability.state = {
+                  instance: capability.state.instance,
+                  value,
+                };
               }
-              return d;
-            })
-          );
-        } else {
-          show({
-            title: 'Ошибка',
-            description: 'Не удалось управлять устройством',
-            variant: 'destructive',
-            duration: 2000,
-          });
-        }
+              return updatedDevice;
+            }
+            return d;
+          })
+        );
       } catch (err) {
         show({
           title: 'Ошибка',
@@ -1189,20 +1250,54 @@ function ClientDashboardContent() {
   // Секция Шаги (4-я вкладка, контент под кнопкой-шагомером)
   const renderStepsSection = () => (
     <View style={styles.sectionContent}>
-      <View style={[styles.stepsNumberWrap, { marginTop: 8 }]}>
-        <ThemedText
-          style={[styles.stepsBigValue, { color: '#FFFFFF' }]}
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.35}
-        >
-          {stepsToday.toLocaleString('ru-RU')}
-        </ThemedText>
+      <View style={styles.stepsCircleWrap}>
+        <View style={styles.stepsCircleContainer}>
+          <Svg width={180} height={180}>
+            <Circle
+              cx={90}
+              cy={90}
+              r={75}
+              stroke="rgba(255,255,255,0.25)"
+              strokeWidth={10}
+              strokeLinecap="round"
+              fill="none"
+            />
+            <Circle
+              cx={90}
+              cy={90}
+              r={75}
+              stroke="#FFFFFF"
+              strokeWidth={10}
+              strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 75}
+              strokeDashoffset={2 * Math.PI * 75 * (1 - stepsProgress)}
+              fill="none"
+              rotation={-90}
+              originX={90}
+              originY={90}
+            />
+          </Svg>
+          <View style={styles.stepsCircleCenter}>
+            <ThemedText
+              style={[styles.stepsBigValue, { color: '#FFFFFF' }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.35}
+            >
+              {stepsToday.toLocaleString('ru-RU')}
+            </ThemedText>
+            {stepsGoal != null && stepsGoal > 0 && (
+              <ThemedText style={styles.stepsCircleSubtitle}>
+                из {stepsGoal.toLocaleString('ru-RU')}
+              </ThemedText>
+            )}
+          </View>
+        </View>
       </View>
       <ThemedText style={styles.stepsBigLabel}>шагов сегодня</ThemedText>
       {stepsGoal != null && stepsGoal > 0 && (
         <ThemedText style={styles.stepsGoalLine}>
-          Цель: {stepsGoal.toLocaleString('ru-RU')}
+          Осталось: {Math.max(stepsGoal - stepsToday, 0).toLocaleString('ru-RU')} шагов
         </ThemedText>
       )}
       <ThemedText style={styles.stepsKmLine}>
@@ -1704,6 +1799,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#FFFFFF',
+  },
+  stepsCircleWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  stepsCircleContainer: {
+    width: 180,
+    height: 180,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepsCircleCenter: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  stepsCircleSubtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
   },
   notClientContainer: {
     flex: 1,

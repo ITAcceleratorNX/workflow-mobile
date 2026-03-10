@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/auth-store';
 export default function LoginScreen() {
   const router = useRouter();
   const setAuth = useAuthStore((state) => state.setAuth);
+  const setGuestAuth = useAuthStore((state) => state.setGuestAuth);
   const errorColor = useThemeColor({}, 'error');
   const textMuted = useThemeColor({}, 'textMuted');
   const border = useThemeColor({}, 'border');
@@ -81,6 +82,11 @@ export default function LoginScreen() {
     setPassword(text);
     setPasswordError('');
   }, []);
+
+  const handleDemoLogin = useCallback(() => {
+    setGuestAuth();
+    router.replace('/(tabs)');
+  }, [router, setGuestAuth]);
 
   return (
     <ThemedView style={styles.container}>
@@ -149,6 +155,12 @@ export default function LoginScreen() {
               title={loading ? 'Вход...' : 'Войти'}
               onPress={handleLogin}
               disabled={loading}
+            />
+
+            <Button
+              title="Открыть демо-режим"
+              onPress={handleDemoLogin}
+              variant="secondary"
             />
 
             <Button

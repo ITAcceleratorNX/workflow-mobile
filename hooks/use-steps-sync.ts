@@ -16,10 +16,11 @@ export function useStepsSync() {
   const lastStepsDate = useStepsStore((s) => s.lastStepsDate);
   const settings = useStepsStore((s) => s.settings);
   const token = useAuthStore((s) => s.token);
+  const isGuest = useAuthStore((s) => s.isGuest);
   const todayKey = toDateKey(new Date());
 
   useEffect(() => {
-    if (!token || lastStepsDate !== todayKey) return;
+    if (!token || lastStepsDate !== todayKey || isGuest) return;
 
     const sync = async () => {
       const result = await syncStepsToServer({

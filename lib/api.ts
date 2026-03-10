@@ -16,6 +16,22 @@ async function request<T>(
 
   // Получаем токен из auth store
   const token = useAuthStore.getState().token;
+  const isGuestToken = token === 'guest-demo';
+
+  // В демо-режиме (guest-demo) не ходим на /request-groups,
+  // возвращаем пустой ответ, чтобы работать только с мок-данными.
+  if (isGuestToken && path.startsWith('/request-groups')) {
+    const empty: any = path === '/request-groups' || path.startsWith('/request-groups?')
+      ? {
+          requests: [],
+          total: 0,
+          totalPages: 0,
+          page: 1,
+          pageSize: 20,
+        }
+      : {};
+    return { ok: true, data: empty as T };
+  }
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
