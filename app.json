@@ -14,10 +14,25 @@
       "infoPlist": {
         "NSMotionUsageDescription": "Приложение использует датчики движения для отслеживания активности (сидение/стояние) и health-напоминаний."
       },
-      "bundleIdentifier": "com.workflow.kz"
+      "bundleIdentifier": "com.workflow.kz",
+      "associatedDomains": ["applinks:app.tmk-workflow.kz"]
     },
     "android": {
       "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "app.tmk-workflow.kz",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png"

@@ -7,6 +7,10 @@ const API_BASE_URL =
     ? process.env.EXPO_PUBLIC_API_BASE_URL
     : 'https://workflow-back-zpk4.onrender.com/api';
 
+/** Базовый URL веб-приложения: по ссылке открывается в браузере или в приложении (Universal/App Links). */
+const WEB_APP_BASE_URL = 'https://app.tmk-workflow.kz';
+
 export const config = {
   apiBaseUrl: API_BASE_URL,
+  webAppBaseUrl: WEB_APP_BASE_URL,
 } as const;

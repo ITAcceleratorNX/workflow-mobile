@@ -5,6 +5,7 @@ import { Redirect } from 'expo-router';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuthStore } from '@/stores/auth-store';
+import { useDeepLinkStore } from '@/stores/deep-link-store';
 
 const LOGO_SOURCE = require('@/assets/logo/logo.png');
 const LOGO_SIZE = 300;
@@ -13,6 +14,8 @@ export default function IndexScreen() {
   const token = useAuthStore((state) => state.token);
   const role = useAuthStore((state) => state.role);
   const user = useAuthStore((state) => state.user);
+  const pendingRequestId = useDeepLinkStore((s) => s.pendingRequestId);
+  const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
   const [isReady, setIsReady] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -51,6 +54,10 @@ export default function IndexScreen() {
   console.log('[Index] Redirect decision:', { hasToken, effectiveRole });
 
   if (hasToken && effectiveRole) {
+    if (pendingRequestId != null) {
+      setPendingRequestId(null);
+      return <Redirect href={`/(tabs)/requests/${pendingRequestId}`} />;
+    }
     return <Redirect href="/(tabs)" />;
   }
 

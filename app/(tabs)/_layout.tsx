@@ -1,20 +1,33 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav } from '@/components/bottom-nav';
 import { useAutoStartWorkingHours } from '@/hooks/use-auto-start-working-hours';
 import { usePedometer } from '@/hooks/use-pedometer';
 import { useStepsSync } from '@/hooks/use-steps-sync';
+import { useDeepLinkStore } from '@/stores/deep-link-store';
 
 const NAV_BAR_HEIGHT = 70;
 const NAV_BAR_MARGIN = 12;
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [pendingRequestId, setPendingRequestId] = useDeepLinkStore((s) => [
+    s.pendingRequestId,
+    s.setPendingRequestId,
+  ]);
   const contentPaddingBottom = NAV_BAR_HEIGHT + NAV_BAR_MARGIN + insets.bottom;
+
+  useEffect(() => {
+    if (pendingRequestId != null) {
+      setPendingRequestId(null);
+      router.replace(`/(tabs)/requests/${pendingRequestId}`);
+    }
+  }, [pendingRequestId, setPendingRequestId, router]);
 
   // Автовключение трекера в рабочие часы офиса (только для клиента с office_id)
   useAutoStartWorkingHours();

@@ -1,10 +1,11 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import type { RequestGroup, SubRequest } from '@/lib/api';
+import { getWhatsAppShareUrl } from '@/lib/shareRequest';
 
 export type RequestUserRole =
   | 'client'
@@ -71,8 +72,36 @@ export function RequestActionMenu({
   const target = subRequest ?? request;
   const isSub = !!subRequest;
 
+  const handleShareWhatsApp = () => {
+    const url = getWhatsAppShareUrl({
+      requestId: request.id,
+      subRequestId: subRequest?.id,
+      title: (subRequest ?? request).title,
+      status: (subRequest ?? request).status,
+      description: (subRequest ?? request).description,
+    });
+    Linking.openURL(url).catch(() => {});
+  };
+
   const getActions = (): ActionItem[] => {
     const actions: ActionItem[] = [];
+
+    // Поделиться заявкой — для всех ролей (как в веб)
+    const shareRoles: RequestUserRole[] = [
+      'client',
+      'executor',
+      'manager',
+      'department-head',
+      'admin-worker',
+    ];
+    if (shareRoles.includes(userRole)) {
+      actions.push({
+        icon: 'share',
+        label: 'Поделиться в WhatsApp',
+        onClick: handleShareWhatsApp,
+        variant: 'default',
+      });
+    }
 
     if (userRole === 'client') {
       if (isSub && subRequest) {
