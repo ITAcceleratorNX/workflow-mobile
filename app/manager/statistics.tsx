@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 import { PageLoader, PullToRefresh } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { config } from '@/lib/config';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   getManagerStats,
   getManagerSLAStats,
@@ -95,6 +94,7 @@ function aggregateManagerStats(raw: ManagerStatsRaw) {
 export default function ManagerStatisticsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const token = useAuthStore((s) => s.token);
   const [activeTab, setActiveTab] = useState<StatsTab>('stats');
   const [rawStats, setRawStats] = useState<ManagerStatsRaw | null>(null);
   const [analyticsData, setAnalyticsData] = useState<{
@@ -145,6 +145,43 @@ export default function ManagerStatisticsScreen() {
     if (activeTab === 'stats') load(true);
     else loadAnalytics();
   }, [activeTab, load, loadAnalytics]);
+
+  const handleExport = useCallback(
+    async (format: 'xlsx' | 'pbix') => {
+      try {
+        if (!token) {
+          Alert.alert('Ошибка', 'Не найден токен авторизации. Войдите в систему ещё раз.');
+          return;
+        }
+
+        const url = `${config.apiBaseUrl}/analytics/export?format=${format}`;
+        const fileUri = `${FileSystem.cacheDirectory}analytics.${format}`;
+
+        const result = await FileSystem.downloadAsync(url, fileUri, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!result || !result.uri) {
+          Alert.alert('Ошибка', 'Не удалось скачать файл.');
+          return;
+        }
+
+        const canShare = await Sharing.isAvailableAsync();
+        if (!canShare) {
+          Alert.alert('Файл сохранён', `Файл сохранён по пути:\n${result.uri}`);
+          return;
+        }
+
+        await Sharing.shareAsync(result.uri);
+      } catch (e) {
+        console.error('Export analytics error', e);
+        Alert.alert('Ошибка', 'Не удалось экспортировать файл. Попробуйте ещё раз.');
+      }
+    },
+    [token]
+  );
 
   const stats = useMemo(
     () => (rawStats && rawStats.length > 0 ? aggregateManagerStats(rawStats) : null),
@@ -209,49 +246,71 @@ export default function ManagerStatisticsScreen() {
               loaderSize={96}
               topOffset={insets.top + 8}
             >
-              <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}>
-              <View style={styles.quickStatsRow}>
-            <View style={[styles.quickStatCard, styles.quickStatNew]}>
-              <MaterialIcons name="schedule" size={22} color="#CA8A04" />
-              <ThemedText style={styles.quickStatValue}>{sc?.new ?? 0}</ThemedText>
-              <ThemedText style={styles.quickStatLabel}>Новые</ThemedText>
-            </View>
-            <View style={[styles.quickStatCard, styles.quickStatWork]}>
-              <MaterialIcons name="people" size={22} color="#2563EB" />
-              <ThemedText style={styles.quickStatValue}>{sc?.inWork ?? 0}</ThemedText>
-              <ThemedText style={styles.quickStatLabel}>В работе</ThemedText>
-            </View>
-            <View style={[styles.quickStatCard, styles.quickStatDone]}>
-              <MaterialIcons name="check-circle" size={22} color="#16A34A" />
-              <ThemedText style={styles.quickStatValue}>{sc?.completed ?? 0}</ThemedText>
-              <ThemedText style={styles.quickStatLabel}>Завершено</ThemedText>
-            </View>
-            <View style={[styles.quickStatCard, styles.quickStatOverdue]}>
-              <MaterialIcons name="warning" size={22} color="#DC2626" />
-              <ThemedText style={styles.quickStatValue}>{sc?.overdue ?? 0}</ThemedText>
-              <ThemedText style={styles.quickStatLabel}>Просрочено</ThemedText>
-            </View>
-          </View>
+              <ScrollView
+                contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
+              >
+                <View style={styles.quickStatsRow}>
+                  <View style={[styles.quickStatCard, styles.quickStatNew]}>
+                    <MaterialIcons name="schedule" size={22} color="#CA8A04" />
+                    <ThemedText style={styles.quickStatValue}>{sc?.new ?? 0}</ThemedText>
+                    <ThemedText style={styles.quickStatLabel}>Новые</ThemedText>
+                  </View>
+                  <View style={[styles.quickStatCard, styles.quickStatWork]}>
+                    <MaterialIcons name="people" size={22} color="#2563EB" />
+                    <ThemedText style={styles.quickStatValue}>{sc?.inWork ?? 0}</ThemedText>
+                    <ThemedText style={styles.quickStatLabel}>В работе</ThemedText>
+                  </View>
+                  <View style={[styles.quickStatCard, styles.quickStatDone]}>
+                    <MaterialIcons name="check-circle" size={22} color="#16A34A" />
+                    <ThemedText style={styles.quickStatValue}>{sc?.completed ?? 0}</ThemedText>
+                    <ThemedText style={styles.quickStatLabel}>Завершено</ThemedText>
+                  </View>
+                  <View style={[styles.quickStatCard, styles.quickStatOverdue]}>
+                    <MaterialIcons name="warning" size={22} color="#DC2626" />
+                    <ThemedText style={styles.quickStatValue}>{sc?.overdue ?? 0}</ThemedText>
+                    <ThemedText style={styles.quickStatLabel}>Просрочено</ThemedText>
+                  </View>
+                </View>
 
-          <View style={styles.card}>
-            <ThemedText style={[styles.cardTitle, { color: text }]}>
-              Статистика по заявкам
-            </ThemedText>
-            <StatRow label="Всего заявок" value={stats?.totalRequests ?? 0} />
-            <StatRow label="Завершено" value={sc?.completed ?? 0} valueColor="#22C55E" />
-            <StatRow label="В работе" value={sc?.inWork ?? 0} valueColor="#3B82F6" />
-            <StatRow label="Новые" value={sc?.new ?? 0} valueColor={PRIMARY_ORANGE} />
-            <StatRow label="Просрочено" value={sc?.overdue ?? 0} valueColor="#EF4444" />
-          </View>
+                <View style={styles.card}>
+                  <ThemedText style={[styles.cardTitle, { color: text }]}>
+                    Статистика по заявкам
+                  </ThemedText>
+                  <StatRow label="Всего заявок" value={stats?.totalRequests ?? 0} />
+                  <StatRow label="Завершено" value={sc?.completed ?? 0} valueColor="#22C55E" />
+                  <StatRow label="В работе" value={sc?.inWork ?? 0} valueColor="#3B82F6" />
+                  <StatRow label="Новые" value={sc?.new ?? 0} valueColor={PRIMARY_ORANGE} />
+                  <StatRow label="Просрочено" value={sc?.overdue ?? 0} valueColor="#EF4444" />
+                </View>
 
-          <View style={styles.card}>
-            <ThemedText style={[styles.cardTitle, { color: text }]}>
-              По типам заявок
-            </ThemedText>
-            <StatRow label="Обычные" value={typeof rts.normal === 'number' ? rts.normal : 0} />
-            <StatRow label="Экстренные" value={typeof rts.urgent === 'number' ? rts.urgent : 0} />
-            <StatRow label="Плановые" value={typeof rts.planned === 'number' ? rts.planned : 0} />
-          </View>
+                <View style={styles.card}>
+                  <ThemedText style={[styles.cardTitle, { color: text }]}>
+                    По типам заявок
+                  </ThemedText>
+                  <StatRow label="Обычные" value={typeof rts.normal === 'number' ? rts.normal : 0} />
+                  <StatRow label="Экстренные" value={typeof rts.urgent === 'number' ? rts.urgent : 0} />
+                  <StatRow label="Плановые" value={typeof rts.planned === 'number' ? rts.planned : 0} />
+                </View>
+
+                <View style={styles.card}>
+                  <ThemedText style={[styles.cardTitle, { color: text }]}>
+                    Экспорт данных
+                  </ThemedText>
+                  <View style={styles.exportButtonsRow}>
+                    <Pressable
+                      style={[styles.exportButton, styles.exportButtonPrimary]}
+                      onPress={() => handleExport('xlsx')}
+                    >
+                      <ThemedText style={styles.exportButtonText}>Excel</ThemedText>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.exportButton, styles.exportButtonSecondary]}
+                      onPress={() => handleExport('pbix')}
+                    >
+                      <ThemedText style={styles.exportButtonText}>Power BI</ThemedText>
+                    </Pressable>
+                  </View>
+                </View>
               </ScrollView>
             </PullToRefresh>
           )}
@@ -441,6 +500,28 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 16,
+    fontWeight: '600',
+  },
+  exportButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  exportButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportButtonPrimary: {
+    backgroundColor: PRIMARY_ORANGE,
+  },
+  exportButtonSecondary: {
+    backgroundColor: '#4B5563',
+  },
+  exportButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '600',
   },
 });
