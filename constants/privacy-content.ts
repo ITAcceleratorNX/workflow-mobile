@@ -15,8 +15,8 @@ interface PrivacyDocument {
 export const PRIVACY_CONTENT: Record<PrivacyLanguage, PrivacyDocument> = {
   ru: {
     title: 'ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ',
-    subtitle: 'Work Flow',
-    lastUpdate: 'Дата последнего обновления: 18 февраля 2026 года',
+    subtitle: 'Workflow',
+    lastUpdate: 'Дата последнего обновления: 2 марта 2026 года',
     sections: [
       {
         heading: '1. Оператор данных и контакты',
@@ -24,17 +24,26 @@ export const PRIVACY_CONTENT: Record<PrivacyLanguage, PrivacyDocument> = {
 
 Контакты для вопросов по приватности:
 Email (Support): support@tmk-technohorizon.kz
+Почтовый адрес: workflow@tmk-limited.com
 Телефон: +7 (707) 227-29-73
-Почтовый адрес: workflow@tmk-limited.com`,
+Сайт компании: https://tmk-workflow.kz/`,
       },
       {
         heading: '2. Для кого предназначено приложение',
-        content:
-          'Work Flow предназначено для корпоративного использования. Доступ предоставляется пользователям, связанным с организацией (например, сотрудникам), в соответствии с ролью и правами доступа.',
+        content: `Workflow предназначено для корпоративного использования. Доступ предоставляется пользователям, связанным с организацией (например, сотрудникам), в соответствии с ролью и правами доступа.
+
+Также в Приложении может быть доступен демо-режим (гостевой доступ) для ознакомления с функциональностью без регистрации. В демо-режиме используется тестовое окружение: действия пользователя (например, бронирования, сервисные заявки, чат, умный кабинет, wellness-уведомления) создаются как тестовые и не влияют на рабочие процессы организаций и не отображаются пользователям рабочей среды.`,
       },
       {
         heading: '3. Какие данные мы собираем и обрабатываем',
         content: `Объём данных зависит от ваших настроек, роли и функций, доступных в вашей организации.
+
+3.0 Демо-режим (гостевой доступ)
+В демо-режиме мы не запрашиваем у пользователя ФИО, номер телефона и адрес электронной почты. Для работы демо-режима может создаваться временная тестовая сессия/учётная запись (технический идентификатор).
+В рамках демо-режима могут обрабатываться:
+— тестовые данные, которые пользователь вводит в Приложении (например, текст заявок, параметры бронирования, сообщения в чате, состояния устройств умного кабинета);
+— технические данные и данные безопасности, описанные в разделе 3.7 (включая диагностические логи), а также технические данные для доставки уведомлений (например, токен push-уведомлений).
+Демо-данные являются тестовыми, изолированы от рабочих данных организаций и не отображаются пользователям рабочей среды.
 
 3.1 Данные аккаунта и профиля
 ФИО
@@ -73,7 +82,7 @@ Email (Support): support@tmk-technohorizon.kz
       {
         heading: '4. Как мы используем данные (цели обработки)',
         content: `Мы используем данные для:
-регистрации/создания учётной записи и управления доступом (включая подтверждение номера телефона и восстановление доступа)
+регистрации/создания учётной записи и управления доступом (в рабочем режиме, включая подтверждение номера телефона и восстановление доступа; в демо-режиме подтверждение номера телефона не требуется)
 предоставления функций Приложения: заявки, бронирования, умный кабинет, личный кабинет
 отправки сервисных уведомлений (например, статусы заявок, события бронирования, системные сообщения)
 обеспечения безопасности, предотвращения злоупотреблений и ведения аудита
@@ -93,6 +102,7 @@ Email (Support): support@tmk-technohorizon.kz
 
 6.1 SMS-верификация
 Для отправки SMS-кода подтверждения и восстановления доступа номер телефона может передаваться провайдеру SMS-рассылки: Mobizon.
+SMS-верификация используется только при регистрации/восстановлении доступа в рабочем режиме. В демо-режиме номер телефона не запрашивается и не передаётся.
 
 6.2 Интеграции умного дома
 Для работы функций умного кабинета Приложение может взаимодействовать со сторонними платформами/поставщиками умного дома через API. В рамках интеграции могут передаваться технические данные, необходимые для выполнения команды и обеспечения безопасности.
@@ -106,6 +116,8 @@ Email (Support): support@tmk-technohorizon.kz
 предоставления функций Приложения
 обеспечения безопасности, аудита и поддержки
 выполнения требований законодательства
+
+Для демо-режима (гостевого доступа) тестовые данные хранятся до выхода пользователя из демо-режима либо не более 24 часов, после чего удаляются/очищаются.
 
 Сроки хранения могут различаться по типам данных. Если вы запросите удаление данных, мы обработаем запрос, как правило, в течение до 30 дней, если более длительное хранение не требуется по закону или для обеспечения безопасности и аудита.`,
       },
@@ -129,7 +141,8 @@ Email (Support): support@tmk-technohorizon.kz
 Удаление может быть доступно:
 внутри Приложения (если включено в вашей версии), и/или
 через администратора вашей организации, и/или
-через службу поддержки: support@tmk-technohorizon.kz`,
+через службу поддержки: support@tmk-technohorizon.kz
+В демо-режиме (гостевой доступ) пользователь может прекратить использование демо, выйдя из демо-режима; тестовые данные демо-режима удаляются/очищаются автоматически (см. раздел 7).`,
       },
       {
         heading: '10. Дети',
@@ -143,7 +156,7 @@ Email (Support): support@tmk-technohorizon.kz
       },
       {
         heading: '12. Изменения политики',
-        content: `Мы можем обновлять эту Политику. Актуальная версия публикуется на сайте Компании: https://workflow-service-front.vercel.app/login
+        content: `Мы можем обновлять эту Политику. Актуальная версия публикуется на сайте Компании: https://workflow-service-front.vercel.app/privacy
 Дата обновления указывается в начале документа.`,
       },
       {
@@ -151,14 +164,15 @@ Email (Support): support@tmk-technohorizon.kz
         content: `По вопросам приватности и запросам пользователей:
 Email (support): support@tmk-technohorizon.kz
 Телефон: +7 (707) 227-29-73
-Адрес: г. Алматы., проспект Аль-Фараби., дом 19/1`,
+Адрес: г. Алматы., проспект Аль-Фараби., дом 19/1
+Сайт: https://tmk-workflow.kz/`,
       },
     ],
   },
   en: {
     title: 'PRIVACY POLICY',
-    subtitle: 'Work Flow',
-    lastUpdate: 'Last updated: February 18, 2026',
+    subtitle: 'Workflow',
+    lastUpdate: 'Last updated: March 2, 2026',
     sections: [
       {
         heading: '1. Data Controller and Contact Information',
@@ -166,17 +180,26 @@ Email (support): support@tmk-technohorizon.kz
 
 Privacy contact details:
 Support Email: support@tmk-technohorizon.kz
+Mailing address: workflow@tmk-limited.com
 Phone: +7 (707) 227-29-73
-Mailing address: workflow@tmk-limited.com`,
+Company website: https://tmk-workflow.kz/`,
       },
       {
         heading: '2. Who the Application Is Intended For',
-        content:
-          'Work Flow is designed for corporate use. Access is granted to users associated with an organization (e.g., employees) according to their assigned role and access rights.',
+        content: `Workflow is designed for corporate use. Access is granted to users associated with an organization (e.g., employees) according to their assigned role and access rights.
+
+The Application may also offer a demo mode (guest access) to explore functionality without registration. In demo mode, a test environment is used: user actions (e.g., bookings, service requests, chat, smart office, wellness notifications) are created as test data and do not affect organizations' workflows or appear to users in the production environment.`,
       },
       {
         heading: '3. What Data We Collect and Process',
         content: `The scope of data depends on your settings, role, and the features available within your organization.
+
+3.0 Demo Mode (Guest Access)
+In demo mode we do not request the user's full name, phone number, or email address. A temporary test session/account (technical identifier) may be created for demo operation.
+Within demo mode we may process:
+— test data that the user enters in the Application (e.g., request text, booking parameters, chat messages, smart office device states);
+— technical and security data described in section 3.7 (including diagnostic logs), as well as technical data for delivering notifications (e.g., push notification tokens).
+Demo data is test data, isolated from organizations' production data and not visible to production users.
 
 3.1 Account and Profile Data
 Full name
@@ -215,7 +238,7 @@ Technical logs, security events, and diagnostics (e.g., for incident investigati
       {
         heading: '4. How We Use Data (Purpose of Processing)',
         content: `We use data for:
-Account registration and access management (including phone verification and recovery)
+Account registration and access management (in production mode, including phone verification and recovery; in demo mode phone verification is not required)
 Providing Application features: service tickets, bookings, smart office, personal cabinet
 Sending service notifications (e.g., ticket updates, booking events, system messages)
 Ensuring security, preventing abuse, and maintaining audit logs
@@ -235,6 +258,7 @@ We may share data only as necessary for the Application's operation and/or as re
 
 6.1 SMS Verification
 For sending verification or recovery codes, phone numbers may be shared with an SMS provider: Mobizon.
+SMS verification is used only for registration/recovery in production mode. In demo mode the phone number is not requested or shared.
 
 6.2 Smart Home Integrations
 For smart office functionality, the Application may interact with third-party smart home platforms/providers via API. Technical data necessary to execute commands and ensure security may be transmitted.
@@ -248,6 +272,8 @@ We may disclose data if required by law, by authorized authorities, or to protec
 Provide Application functionality
 Ensure security, audit, and support
 Comply with legal obligations
+
+For demo mode (guest access), test data is retained until the user exits demo mode or for no more than 24 hours, after which it is deleted/cleared.
 
 Retention periods vary depending on the data type.
 If you request deletion of your data, we will process the request within up to 30 days, unless longer retention is required by law or for security and audit purposes.`,
@@ -273,7 +299,8 @@ Account and Data Deletion
 Deletion may be available:
 Within the Application (if enabled in your version), and/or
 Through your organization's administrator, and/or
-Via support: support@tmk-technohorizon.kz`,
+Via support: support@tmk-technohorizon.kz
+In demo mode (guest access), the user may stop using the demo by exiting demo mode; demo test data is deleted/cleared automatically (see section 7).`,
       },
       {
         heading: '10. Children',
@@ -288,7 +315,7 @@ Via support: support@tmk-technohorizon.kz`,
       {
         heading: '12. Policy Changes',
         content: `We may update this Privacy Policy. The latest version is published on the Company's website:
-https://workflow-service-front.vercel.app/login
+https://workflow-service-front.vercel.app/privacy
 
 The update date is indicated at the beginning of this document.`,
       },
@@ -297,7 +324,8 @@ The update date is indicated at the beginning of this document.`,
         content: `For privacy inquiries and user requests:
 Support Email: support@tmk-technohorizon.kz
 Phone: +7 (707) 227-29-73
-Address: Almaty, Al-Farabi Avenue 19/1`,
+Address: Almaty, Al-Farabi Avenue 19/1
+Website: https://tmk-workflow.kz/`,
       },
     ],
   },
