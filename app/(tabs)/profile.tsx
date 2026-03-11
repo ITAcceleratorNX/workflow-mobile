@@ -39,6 +39,7 @@ export default function ProfileScreen() {
   const role = useAuthStore((state: AuthState) => state.role);
   const updateUser = useAuthStore((state: AuthState) => state.updateUser);
   const clearAuth = useAuthStore((state: AuthState) => state.clearAuth);
+  const isGuest = useAuthStore((state: AuthState) => state.isGuest);
 
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -117,6 +118,17 @@ export default function ProfileScreen() {
       return;
     }
 
+    // Демо-профиль: не отправляем запросы на реальный backend
+    if (isGuest) {
+      setProfileSuccess('Демо: профиль обновлён локально.');
+      showToast({
+        title: 'Демо режим',
+        description: 'Изменения сохранены только на этом устройстве.',
+        variant: 'success',
+      });
+      return;
+    }
+
     setIsSavingProfile(true);
     const result = await updateProfile(user.id, {
       full_name: user.full_name,
@@ -150,6 +162,17 @@ export default function ProfileScreen() {
       return;
     }
 
+    // В демо-режиме не отправляем код на сервер
+    if (isGuest) {
+      setEmailSuccess('Демо: код "отправлен" (заглушка).');
+      showToast({
+        title: 'Демо режим',
+        description: 'Код не отправляется на сервер в демо-версии.',
+        variant: 'success',
+      });
+      return;
+    }
+
     setIsSendingCode(true);
     setEmailError('');
     setEmailSuccess('');
@@ -171,11 +194,27 @@ export default function ProfileScreen() {
       description: 'Код верификации отправлен на email',
       variant: 'success',
     });
-  }, [email, user?.email, user?.email_verified, handleUnauthorized]);
+  }, [email, user?.email, user?.email_verified, handleUnauthorized, isGuest, showToast]);
 
   const handleVerifyEmail = useCallback(async () => {
     if (!verificationCode || verificationCode.length !== 6) {
       setEmailError('Введите 6-значный код');
+      return;
+    }
+
+    // В демо-режиме просто помечаем email как верифицированный локально
+    if (isGuest) {
+      const emailToUpdate = email || user?.email;
+      updateUser((prev) =>
+        prev ? { ...prev, email: emailToUpdate ?? '', email_verified: true } : null
+      );
+      setVerificationCode('');
+      setEmailSuccess('Демо: email помечен как верифицированный.');
+      showToast({
+        title: 'Демо режим',
+        description: 'Статус верификации изменён только локально.',
+        variant: 'success',
+      });
       return;
     }
 
@@ -202,7 +241,7 @@ export default function ProfileScreen() {
       title: 'Email верифицирован',
       variant: 'success',
     });
-  }, [verificationCode, email, user?.email, updateUser, handleUnauthorized]);
+  }, [verificationCode, email, user?.email, updateUser, handleUnauthorized, isGuest, showToast]);
 
   const handleChangePassword = useCallback(async () => {
     setPasswordError('');
@@ -216,6 +255,19 @@ export default function ProfileScreen() {
     }
     if (newPassword.length < 6) {
       setPasswordError('Пароль должен быть минимум 6 символов.');
+      return;
+    }
+
+    // В демо-режиме не отправляем смену пароля на сервер
+    if (isGuest) {
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      showToast({
+        title: 'Демо режим',
+        description: 'Смена пароля недоступна в демо-версии.',
+        variant: 'default',
+      });
       return;
     }
 
@@ -241,10 +293,21 @@ export default function ProfileScreen() {
       title: 'Пароль изменён',
       variant: 'success',
     });
-  }, [oldPassword, newPassword, confirmPassword, handleUnauthorized]);
+  }, [oldPassword, newPassword, confirmPassword, handleUnauthorized, isGuest, showToast]);
 
   const handleSaveNotifications = useCallback(async () => {
     if (!user) return;
+
+    // В демо-режиме только локальное изменение без запроса
+    if (isGuest) {
+      setNotificationSuccess('Демо: настройки уведомлений сохранены локально.');
+      showToast({
+        title: 'Демо режим',
+        description: 'Настройки не отправляются на сервер.',
+        variant: 'success',
+      });
+      return;
+    }
 
     setIsSavingNotifications(true);
     setNotificationError('');
@@ -269,17 +332,20 @@ export default function ProfileScreen() {
       title: 'Настройки уведомлений сохранены',
       variant: 'success',
     });
-  }, [user, handleUnauthorized]);
+  }, [user, handleUnauthorized, isGuest, showToast]);
 
   const handleLogout = useCallback(async () => {
     setIsLoggingOut(true);
     try {
-      await unregisterPushTokenFromBackend();
+      // В демо-режиме не дергаем backend при выходе
+      if (!isGuest) {
+        await unregisterPushTokenFromBackend();
+      }
     } finally {
       clearAuth();
       router.replace('/login');
     }
-  }, [clearAuth, router]);
+  }, [clearAuth, router, isGuest]);
 
   if (!user) {
     return null;

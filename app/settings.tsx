@@ -5,12 +5,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { useToast } from '@/context/toast-context';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useColorScheme, setAppColorScheme } from '@/hooks/use-color-scheme';
+import { useAuthStore, type AuthState } from '@/stores/auth-store';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { show: showToast } = useToast();
+  const isGuest = useAuthStore((state: AuthState) => state.isGuest);
 
   const background = useThemeColor({}, 'background');
   const text = useThemeColor({}, 'text');
@@ -40,7 +44,17 @@ export default function SettingsScreen() {
       >
         {/* Уведомления */}
         <Pressable
-          onPress={() => router.push('/notification-settings')}
+          onPress={() => {
+            if (isGuest) {
+              showToast({
+                title: 'Демо режим',
+                description: 'Настройки уведомлений недоступны в демо-версии.',
+                variant: 'default',
+              });
+              return;
+            }
+            router.push('/notification-settings');
+          }}
           style={({ pressed }) => [
             styles.item,
             { borderColor: border },
@@ -61,7 +75,17 @@ export default function SettingsScreen() {
 
         {/* Пароль */}
         <Pressable
-          onPress={() => router.push('/change-password')}
+          onPress={() => {
+            if (isGuest) {
+              showToast({
+                title: 'Демо режим',
+                description: 'Смена пароля недоступна в демо-версии.',
+                variant: 'default',
+              });
+              return;
+            }
+            router.push('/change-password');
+          }}
           style={({ pressed }) => [
             styles.item,
             { borderColor: border },

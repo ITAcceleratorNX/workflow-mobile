@@ -41,6 +41,7 @@ const CARD_WIDTH = (width - 48) / 2;
 const PRIMARY_ORANGE = '#E25B21';
 const CARD_ORANGE = '#D94F15';
 const CARD_GREEN = '#1A9A8A';
+const TRACKER_ACTIVE_TEAL = '#1CC7A5';
 const DARK_BG = '#1C1C1E';
 
 type AdminCardKey = 'categories' | 'users' | 'office' | 'smart-home' | 'statistics';
@@ -942,7 +943,11 @@ function ClientDashboardContent() {
                         <View
                           style={[
                             styles.deviceIconContainer,
-                            { backgroundColor: isOn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)' },
+                            {
+                              backgroundColor: isOn
+                                ? 'rgba(255,255,255,0.3)'
+                                : 'rgba(255,255,255,0.2)',
+                            },
                           ]}
                         >
                           {isControllingThis ? (
@@ -950,7 +955,7 @@ function ClientDashboardContent() {
                           ) : (
                             <MaterialIcons
                               name="power-settings-new"
-                              size={28}
+                              size={22}
                               color={isOn ? '#FFFFFF' : 'rgba(255,255,255,0.6)'}
                             />
                           )}
@@ -982,7 +987,10 @@ function ClientDashboardContent() {
         {/* Tracker Card */}
         <Pressable
           onPress={handleToggleTracker}
-          style={[styles.statCard, { backgroundColor: CARD_ORANGE }]}
+          style={[
+            styles.statCard,
+            { backgroundColor: isTracking ? TRACKER_ACTIVE_TEAL : CARD_ORANGE },
+          ]}
         >
           <View style={styles.statCardContent}>
             <View>
@@ -1114,7 +1122,7 @@ function ClientDashboardContent() {
   // Render Settings Section
   const renderSettingsSection = () => (
     <View style={styles.sectionContent}>
-      {/* Reminders Toggle */}
+      {/* Reminders + Interval in one card */}
       <Pressable
         onPress={() =>
           setHealthReminders({ enabled: !healthReminders.enabled })
@@ -1135,44 +1143,43 @@ function ClientDashboardContent() {
             }
           />
         </View>
-      </Pressable>
 
-      {/* Interval Settings */}
-      <View style={[styles.settingsCard, { backgroundColor: CARD_ORANGE }]}>
-        <ThemedText style={styles.settingsCardTitle}>
-          Интервал напоминаний
-        </ThemedText>
-        <View style={styles.intervalButtons}>
-          {[2, 30, 45, 60, 90, 120].map((mins) => (
-            <Pressable
-              key={mins}
-              onPress={() =>
-                setHealthReminders({ sittingIntervalMinutes: mins })
-              }
-              style={[
-                styles.intervalButton,
-                healthReminders.sittingIntervalMinutes === mins
-                  ? { backgroundColor: '#FFFFFF' }
-                  : { backgroundColor: 'rgba(255,255,255,0.2)' },
-              ]}
-            >
-              <ThemedText
-                style={[
-                  styles.intervalButtonText,
-                  {
-                    color:
-                      healthReminders.sittingIntervalMinutes === mins
-                        ? CARD_ORANGE
-                        : '#FFFFFF',
-                  },
-                ]}
-              >
-                {mins} мин
-              </ThemedText>
-            </Pressable>
-          ))}
+        <View style={{ marginTop: 16 }}>
+          <ThemedText style={styles.settingsCardTitle}>
+            Интервал напоминаний
+          </ThemedText>
+          <View style={styles.intervalButtons}>
+            {[2, 30, 45, 60, 90, 120].map((mins) => {
+              const isActive = healthReminders.sittingIntervalMinutes === mins;
+              return (
+                <Pressable
+                  key={mins}
+                  onPress={() =>
+                    setHealthReminders({ sittingIntervalMinutes: mins })
+                  }
+                  style={[
+                    styles.intervalButton,
+                    {
+                      backgroundColor: isActive
+                        ? TRACKER_ACTIVE_TEAL
+                        : 'rgba(255,255,255,0.2)',
+                    },
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.intervalButtonText,
+                      { color: '#FFFFFF' },
+                    ]}
+                  >
+                    {mins} мин
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
-      </View>
+      </Pressable>
 
       {/* Auto-start Toggle */}
       <Pressable
@@ -1652,6 +1659,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     flex: 1,
+    paddingRight: 16,
   },
   deviceName: {
     fontSize: 15,
@@ -1666,11 +1674,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   deviceIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   // Health Section Styles
   statsLabel: {
