@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 
 export type AppColorScheme = 'light' | 'dark';
 
-let currentScheme: AppColorScheme = 'light';
+let currentScheme: AppColorScheme = 'dark';
 const listeners = new Set<() => void>();
 
 export function setAppColorScheme(next: AppColorScheme) {

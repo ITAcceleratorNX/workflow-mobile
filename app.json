@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "workflowmobile",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
@@ -15,7 +15,9 @@
         "NSMotionUsageDescription": "Приложение использует датчики движения для отслеживания активности (сидение/стояние) и health-напоминаний."
       },
       "bundleIdentifier": "com.workflow.kz",
-      "associatedDomains": ["applinks:app.tmk-workflow.kz"]
+      "associatedDomains": [
+        "applinks:app.tmk-workflow.kz"
+      ]
     },
     "android": {
       "googleServicesFile": "./google-services.json",
@@ -30,7 +32,10 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "adaptiveIcon": {
@@ -43,7 +48,9 @@
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.HIGH_SAMPLING_RATE_SENSORS",
         "android.permission.CAMERA",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
       ],
       "package": "com.workflow.kz"
     },
@@ -63,6 +70,13 @@
           "dark": {
             "backgroundColor": "#040404"
           }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Приложению нужен доступ к вашим фото, чтобы прикреплять изображения к заявкам.",
+          "cameraPermission": "Приложению нужен доступ к камере для фотографий по заявкам."
         }
       ],
       [
