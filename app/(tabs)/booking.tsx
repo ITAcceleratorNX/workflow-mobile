@@ -108,6 +108,7 @@ export default function BookingScreen() {
   const textMuted = useThemeColor({}, 'textMuted');
   const tintColor = useThemeColor({}, 'tint');
   const textColor = useThemeColor({}, 'text');
+  const gradientColors = ORANGE_GRADIENT;
 
   const [activeTab, setActiveTab] = useState<BookingTab>('book');
   const [step, setStep] = useState<Step>('offices');
@@ -620,7 +621,7 @@ export default function BookingScreen() {
     const showFormImages = roomPhotoCount > 0 && !formRoomImageFailed;
     const formImageWidth = windowWidth - 40;
     return (
-      <LinearGradient colors={ORANGE_GRADIENT} style={styles.gradientFill}>
+      <LinearGradient colors={gradientColors} style={styles.gradientFill}>
         <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
           <Pressable style={styles.backRowWhite} onPress={goBack}>
             <MaterialIcons name="arrow-back" size={24} color="#fff" />
@@ -755,7 +756,7 @@ export default function BookingScreen() {
   }
 
   return (
-    <LinearGradient colors={ORANGE_GRADIENT} style={styles.gradientFill}>
+    <LinearGradient colors={gradientColors} style={styles.gradientFill}>
       <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
         <ThemedText type="title" style={styles.titleWhite}>
           Переговорные

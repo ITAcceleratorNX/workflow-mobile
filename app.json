@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "workflow-mobile",
+    "name": "Workflow",
     "slug": "workflow-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,26 +10,27 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSMotionUsageDescription": "Приложение использует датчики движения для отслеживания активности (сидение/стояние) и health-напоминаний."
       },
-      "bundleIdentifier": "com.anonymous.workflowmobile"
+      "bundleIdentifier": "com.workflow.kz"
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.HIGH_SAMPLING_RATE_SENSORS",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS"
       ],
-      "package": "com.anonymous.workflowmobile"
+      "package": "com.workflow.kz"
     },
     "web": {
       "output": "static",
@@ -49,7 +50,16 @@
           }
         }
       ],
-      "expo-barcode-scanner"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0066CC",
+          "sounds": [],
+          "defaultChannel": "default",
+          "mode": "production"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

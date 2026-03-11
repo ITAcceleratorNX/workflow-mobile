@@ -29,6 +29,7 @@ import {
   verifyEmail,
 } from '@/lib/profile-api';
 import { formatPhone } from '@/lib';
+import { unregisterPushTokenFromBackend } from '@/lib/pushNotifications';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 
 export default function ProfileScreen() {
@@ -270,10 +271,14 @@ export default function ProfileScreen() {
     });
   }, [user, handleUnauthorized]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     setIsLoggingOut(true);
-    clearAuth();
-    router.replace('/login');
+    try {
+      await unregisterPushTokenFromBackend();
+    } finally {
+      clearAuth();
+      router.replace('/login');
+    }
   }, [clearAuth, router]);
 
   if (!user) {
@@ -298,6 +303,16 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.headerRow}>
+            <ThemedText style={styles.headerTitle}>Профиль</ThemedText>
+            <Pressable
+              onPress={() => router.push('/settings')}
+              hitSlop={8}
+              style={styles.settingsButton}
+            >
+              <MaterialIcons name="settings" size={22} color={text} />
+            </Pressable>
+          </View>
 
           <ProfileTabs
             activeTab={activeTab}
@@ -547,71 +562,11 @@ export default function ProfileScreen() {
           {activeTab === 'notifications' && (
             <View style={[styles.card, { borderColor: border }]}>
               <ThemedText style={styles.sectionTitle}>
-                Настройки уведомлений
+                Уведомления
               </ThemedText>
-              <View style={[styles.switchRow, { borderColor: border }]}>
-                <ThemedText style={[styles.switchLabel, { color: text }]}>
-                  Email уведомления
-                </ThemedText>
-                <Switch
-                  value={user?.email_notifications ?? false}
-                  onValueChange={(v) =>
-                    updateUser((prev) =>
-                      prev ? { ...prev, email_notifications: v } : null
-                    )
-                  }
-                  trackColor={{ false: border, true: primary }}
-                  thumbColor="#fff"
-                />
-              </View>
-              <View style={[styles.switchRow, { borderColor: border }]}>
-                <ThemedText style={[styles.switchLabel, { color: text }]}>
-                  Безопасность
-                </ThemedText>
-                <Switch
-                  value={user?.security_notifications ?? false}
-                  onValueChange={(v) =>
-                    updateUser((prev) =>
-                      prev ? { ...prev, security_notifications: v } : null
-                    )
-                  }
-                  trackColor={{ false: border, true: primary }}
-                  thumbColor="#fff"
-                />
-              </View>
-              <View style={[styles.switchRow, { borderColor: border }]}>
-                <ThemedText style={[styles.switchLabel, { color: text }]}>
-                  Маркетинг
-                </ThemedText>
-                <Switch
-                  value={user?.marketing_notifications ?? false}
-                  onValueChange={(v) =>
-                    updateUser((prev) =>
-                      prev ? { ...prev, marketing_notifications: v } : null
-                    )
-                  }
-                  trackColor={{ false: border, true: primary }}
-                  thumbColor="#fff"
-                />
-              </View>
-              <Button
-                title={
-                  isSavingNotifications ? 'Сохранение...' : 'Сохранить'
-                }
-                onPress={handleSaveNotifications}
-                disabled={isSavingNotifications}
-              />
-              {notificationError ? (
-                <ThemedText style={[styles.errorText, { color: errorColor }]}>
-                  {notificationError}
-                </ThemedText>
-              ) : null}
-              {notificationSuccess ? (
-                <ThemedText style={[styles.successText, { color: success }]}>
-                  {notificationSuccess}
-                </ThemedText>
-              ) : null}
-
+              <ThemedText style={[styles.sectionSubtitle, { color: textMuted }]}>
+                История последних уведомлений
+              </ThemedText>
               <NotificationsList />
             </View>
           )}
@@ -632,6 +587,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 32,
     gap: 24,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
+    fontSize: 24,
+    lineHeight: 32,
+    fontWeight: '600',
+  },
+  settingsButton: {
+    padding: 4,
   },
   header: {
     gap: 8,

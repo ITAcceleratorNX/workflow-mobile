@@ -7,7 +7,6 @@ export type ProfileTab = 'profile' | 'password' | 'notifications' | 'logs';
 
 const BASE_TABS: { key: ProfileTab; label: string }[] = [
   { key: 'profile', label: 'Профиль' },
-  { key: 'password', label: 'Пароль' },
   { key: 'notifications', label: 'Уведомления' },
 ];
 

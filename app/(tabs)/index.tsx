@@ -39,10 +39,9 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
 
 const PRIMARY_ORANGE = '#E25B21';
-const DARK_BG = '#1C1C1E';
 const CARD_ORANGE = '#D94F15';
 const CARD_GREEN = '#1A9A8A';
-const GRAY_600 = '#3A3A3C';
+const DARK_BG = '#1C1C1E';
 
 type AdminCardKey = 'categories' | 'users' | 'office' | 'smart-home' | 'statistics';
 
@@ -167,6 +166,8 @@ function AdminWorkerManagementScreen() {
   const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
+  const background = useThemeColor({}, 'background');
+  const cardBackground = useThemeColor({}, 'cardBackground');
   const router = useRouter();
 
   const handleOpen = useCallback(
@@ -194,9 +195,11 @@ function AdminWorkerManagementScreen() {
   );
 
   return (
-    <ThemedView style={[styles.adminContainer, { paddingTop: insets.top + 16 }]}>
+    <ThemedView
+      style={[styles.adminContainer, { paddingTop: insets.top + 16, backgroundColor: background }]}
+    >
       <ScrollView contentContainerStyle={styles.adminContent}>
-        <ThemedText type="title" style={styles.adminTitle}>
+        <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
           Управление системой
         </ThemedText>
         <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
@@ -206,7 +209,7 @@ function AdminWorkerManagementScreen() {
           {ADMIN_MANAGEMENT_CARDS.map((card) => (
             <Pressable
               key={card.key}
-              style={styles.adminCard}
+              style={[styles.adminCard, { backgroundColor: cardBackground }]}
               onPress={() => handleOpen(card.key)}
             >
               <View style={styles.adminCardHeader}>
@@ -246,6 +249,8 @@ function ExecutorManagementScreen({
   const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
+  const background = useThemeColor({}, 'background');
+  const cardBackground = useThemeColor({}, 'cardBackground');
   const router = useRouter();
 
   const cards =
@@ -280,9 +285,11 @@ function ExecutorManagementScreen({
   );
 
   return (
-    <ThemedView style={[styles.adminContainer, { paddingTop: insets.top + 16 }]}>
+    <ThemedView
+      style={[styles.adminContainer, { paddingTop: insets.top + 16, backgroundColor: background }]}
+    >
       <ScrollView contentContainerStyle={styles.adminContent}>
-        <ThemedText type="title" style={styles.adminTitle}>
+        <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
           Управление
         </ThemedText>
         <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
@@ -292,7 +299,7 @@ function ExecutorManagementScreen({
           {cards.map((card) => (
             <Pressable
               key={card.key}
-              style={styles.adminCard}
+              style={[styles.adminCard, { backgroundColor: cardBackground }]}
               onPress={() => handleOpen(card.key)}
             >
               <View style={styles.adminCardHeader}>
@@ -328,6 +335,8 @@ function ExecutorCabinetScreen() {
   const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
+  const background = useThemeColor({}, 'background');
+  const cardBackground = useThemeColor({}, 'cardBackground');
   const router = useRouter();
 
   const handleOpen = useCallback(
@@ -339,9 +348,11 @@ function ExecutorCabinetScreen() {
   );
 
   return (
-    <ThemedView style={[styles.adminContainer, { paddingTop: insets.top + 16 }]}>
+    <ThemedView
+      style={[styles.adminContainer, { paddingTop: insets.top + 16, backgroundColor: background }]}
+    >
       <ScrollView contentContainerStyle={styles.adminContent}>
-        <ThemedText type="title" style={styles.adminTitle}>
+        <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
           Мой кабинет
         </ThemedText>
         <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
@@ -351,7 +362,7 @@ function ExecutorCabinetScreen() {
           {EXECUTOR_CABINET_CARDS.map((card) => (
             <Pressable
               key={card.key}
-              style={styles.adminCard}
+              style={[styles.adminCard, { backgroundColor: cardBackground }]}
               onPress={() => handleOpen(card.key)}
             >
               <View style={styles.adminCardHeader}>
@@ -441,6 +452,10 @@ function ClientDashboardContent() {
   const { show } = useToast();
   const effectiveRole = role || user?.role;
   const isClient = effectiveRole?.toLowerCase() === 'client';
+  const background = useThemeColor({}, 'background');
+  const headerText = useThemeColor({}, 'text');
+  const headerSubtitle = useThemeColor({}, 'textMuted');
+  const tabInactiveBackground = useThemeColor({}, 'cardBackground');
 
   // Activity Tracker Store
   const {
@@ -1319,7 +1334,9 @@ function ClientDashboardContent() {
   // Если роль еще загружается - показываем загрузку
   if (!effectiveRole) {
     return (
-      <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
+      <ThemedView
+        style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}
+      >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
         </View>
@@ -1330,13 +1347,15 @@ function ClientDashboardContent() {
   // Если пользователь не клиент - показываем заглушку
   if (!isClient) {
     return (
-      <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
+      <ThemedView
+        style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}
+      >
         <View style={styles.notClientContainer}>
           <MaterialIcons name="lock" size={64} color="#E25B21" />
-          <ThemedText style={styles.notClientTitle}>
+          <ThemedText style={[styles.notClientTitle, { color: headerText }]}>
             Доступ ограничен
           </ThemedText>
-          <ThemedText style={styles.notClientSubtitle}>
+          <ThemedText style={[styles.notClientSubtitle, { color: headerSubtitle }]}>
             Эта страница доступна только для клиентов{'\n'}
             Ваша роль: {effectiveRole || 'не определена'}
           </ThemedText>
@@ -1346,7 +1365,9 @@ function ClientDashboardContent() {
   }
 
   return (
-    <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
+    <ThemedView
+      style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}
+    >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -1366,8 +1387,10 @@ function ClientDashboardContent() {
         {/* Header Section - Dark */}
         <View style={styles.header}>
           {/* Title */}
-          <ThemedText style={styles.headerTitle}>{getSectionTitle()}</ThemedText>
-          <ThemedText style={styles.headerSubtitle}>
+          <ThemedText style={[styles.headerTitle, { color: headerText }]}>
+            {getSectionTitle()}
+          </ThemedText>
+          <ThemedText style={[styles.headerSubtitle, { color: headerSubtitle }]}>
             {getSectionSubtitle() || ' '}
           </ThemedText>
 
@@ -1378,7 +1401,10 @@ function ClientDashboardContent() {
               onPress={() => handleTabPress('home')}
               style={[
                 styles.tabButton,
-                { backgroundColor: activeSection === 'home' ? PRIMARY_ORANGE : GRAY_600 },
+                {
+                  backgroundColor:
+                    activeSection === 'home' ? PRIMARY_ORANGE : tabInactiveBackground,
+                },
               ]}
             >
               <MaterialIcons name="home" size={28} color="#FFFFFF" />
@@ -1389,7 +1415,10 @@ function ClientDashboardContent() {
               onPress={() => handleTabPress('health')}
               style={[
                 styles.tabButton,
-                { backgroundColor: activeSection === 'health' ? PRIMARY_ORANGE : GRAY_600 },
+                {
+                  backgroundColor:
+                    activeSection === 'health' ? PRIMARY_ORANGE : tabInactiveBackground,
+                },
               ]}
             >
               <MaterialIcons
@@ -1404,7 +1433,10 @@ function ClientDashboardContent() {
               onPress={() => handleTabPress('settings')}
               style={[
                 styles.tabButton,
-                { backgroundColor: activeSection === 'settings' ? PRIMARY_ORANGE : GRAY_600 },
+                {
+                  backgroundColor:
+                    activeSection === 'settings' ? PRIMARY_ORANGE : tabInactiveBackground,
+                },
               ]}
             >
               <MaterialIcons name="settings" size={28} color="#FFFFFF" />
@@ -1415,7 +1447,10 @@ function ClientDashboardContent() {
               onPress={() => handleTabPress('steps')}
               style={[
                 styles.tabButton,
-                { backgroundColor: activeSection === 'steps' ? PRIMARY_ORANGE : GRAY_600 },
+                {
+                  backgroundColor:
+                    activeSection === 'steps' ? PRIMARY_ORANGE : tabInactiveBackground,
+                },
               ]}
             >
               <MaterialIcons name="directions-walk" size={28} color="#FFFFFF" />
@@ -1423,9 +1458,9 @@ function ClientDashboardContent() {
           </View>
         </View>
 
-        {/* Orange Content Section with gradient to black */}
+        {/* Orange Content Section with fixed dark gradient for readability */}
         <LinearGradient
-          colors={[PRIMARY_ORANGE, '#1C1C1E']}
+          colors={[PRIMARY_ORANGE, DARK_BG]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={styles.contentSection}
@@ -1443,11 +1478,9 @@ function ClientDashboardContent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
   },
   adminContainer: {
     flex: 1,
-    backgroundColor: DARK_BG,
   },
   adminContent: {
     paddingHorizontal: 16,
@@ -1472,7 +1505,6 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     borderRadius: 16,
     padding: 16,
-    backgroundColor: GRAY_600,
   },
   adminCardHeader: {
     marginBottom: 12,

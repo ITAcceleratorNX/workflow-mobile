@@ -1492,3 +1492,33 @@ export async function syncStepsToServer(payload: {
   if (result.ok) return { ok: true };
   return { ok: false, error: result.error };
 }
+
+// ==================== FCM Push (Firebase) ====================
+
+/** Сохранить FCM/APNs токен на бэкенде для push-уведомлений (как в веб: POST /api/fcm/token). */
+export async function saveFcmToken(payload: {
+  token: string;
+  platform: 'android' | 'ios';
+  deviceId?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<{ success?: boolean }>('/fcm/token', {
+    method: 'POST',
+    body: JSON.stringify({
+      token: payload.token,
+      platform: payload.platform,
+      ...(payload.deviceId != null && { deviceId: payload.deviceId }),
+    }),
+  });
+  if (result.ok) return { ok: true };
+  return { ok: false, error: result.error };
+}
+
+/** Удалить FCM токен при выходе (DELETE /api/fcm/token). */
+export async function deleteFcmToken(token: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<{ success?: boolean }>('/fcm/token', {
+    method: 'DELETE',
+    body: JSON.stringify({ token }),
+  });
+  if (result.ok) return { ok: true };
+  return { ok: false, error: result.error };
+}

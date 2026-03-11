@@ -4,10 +4,12 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { ToastProvider } from '@/context/toast-context';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  usePushNotifications();
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

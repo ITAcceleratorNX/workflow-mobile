@@ -1,0 +1,13 @@
+diff --git a/node_modules/react-native/gradle/libs.versions.toml b/node_modules/react-native/gradle/libs.versions.toml
+index f0902b7..6186ba6 100644
+--- a/node_modules/react-native/gradle/libs.versions.toml
++++ b/node_modules/react-native/gradle/libs.versions.toml
+@@ -6,7 +6,7 @@ compileSdk = "36"
+ buildTools = "36.0.0"
+ ndkVersion = "27.1.12297006"
+ # Dependencies versions
+-agp = "8.11.0"
++agp = "8.6.0"
+ androidx-annotation = "1.6.0"
+ androidx-appcompat = "1.7.0"
+ androidx-autofill = "1.1.0"
