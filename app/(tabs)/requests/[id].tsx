@@ -240,8 +240,9 @@ export default function RequestDetailScreen() {
     }
   }, [role]);
 
+  // Всегда переходим в список заявок, чтобы при открытии из уведомления (Профиль) вкладка «Заявки» не застревала на экране заявки
   const goBack = useCallback(() => {
-    router.back();
+    router.replace('/(tabs)/requests');
   }, [router]);
 
   const handleStartTask = useCallback(

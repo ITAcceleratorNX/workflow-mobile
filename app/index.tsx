@@ -20,6 +20,9 @@ export default function IndexScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
+  const effectiveRole = role || user?.role;
+  const hasToken = !!token;
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsReady(true);
@@ -34,6 +37,13 @@ export default function IndexScreen() {
     return () => clearTimeout(timer);
   }, [token, role, user]);
 
+  // Очищаем pending deep link после редиректа (не в рендере — иначе цикл обновлений)
+  useEffect(() => {
+    if (pendingRequestId != null && hasToken && effectiveRole) {
+      setPendingRequestId(null);
+    }
+  }, [pendingRequestId, hasToken, effectiveRole, setPendingRequestId]);
+
   if (!isReady) {
     return (
       <View style={[styles.loaderContainer, isDark ? styles.bgDark : styles.bgLight]}>
@@ -47,15 +57,10 @@ export default function IndexScreen() {
     );
   }
 
-  // Проверяем и token, и role - но role может быть в user.role
-  const effectiveRole = role || user?.role;
-  const hasToken = !!token;
-
   console.log('[Index] Redirect decision:', { hasToken, effectiveRole });
 
   if (hasToken && effectiveRole) {
     if (pendingRequestId != null) {
-      setPendingRequestId(null);
       return <Redirect href={`/(tabs)/requests/${pendingRequestId}`} />;
     }
     return <Redirect href="/(tabs)" />;

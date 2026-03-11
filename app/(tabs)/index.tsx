@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-import { PageLoader, PullToRefresh } from '@/components/ui';
+import { PageLoader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -492,7 +492,6 @@ function ClientDashboardContent() {
 
   const [activeSection, setActiveSection] = useState<TabType>('home');
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
 
   // Smart Home State
   const [subscriptions, setSubscriptions] = useState<ClientRoomSubscription[]>([]);
@@ -789,24 +788,6 @@ function ClientDashboardContent() {
   const selectedRoom = subscriptions.find(
     (sub) => sub.meeting_room_id === selectedRoomId
   );
-
-  // Handle refresh
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    if (user?.id) {
-      const result = await getClientRoomSubscriptions(user.id);
-      if (result.ok) {
-        setSubscriptions(result.data.subscriptions || []);
-      }
-      if (selectedRoomId) {
-        const devicesResult = await getRoomDevicesForClient(selectedRoomId);
-        if (devicesResult.ok) {
-          setDevices(devicesResult.data.devices || []);
-        }
-      }
-    }
-    setRefreshing(false);
-  }, [user?.id, selectedRoomId]);
 
   // Section titles
   const getSectionTitle = () => {
@@ -1372,13 +1353,7 @@ function ClientDashboardContent() {
     <ThemedView
       style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}
     >
-      <PullToRefresh
-        refreshing={refreshing}
-        onRefresh={handleRefresh}
-        loaderSize={96}
-        topOffset={insets.top + 16}
-      >
-        <ScrollView
+      <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
@@ -1473,7 +1448,6 @@ function ClientDashboardContent() {
           {activeSection === 'steps' && renderStepsSection()}
         </LinearGradient>
       </ScrollView>
-      </PullToRefresh>
     </ThemedView>
   );
 }

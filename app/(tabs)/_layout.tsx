@@ -16,10 +16,8 @@ const NAV_BAR_MARGIN = 12;
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [pendingRequestId, setPendingRequestId] = useDeepLinkStore((s) => [
-    s.pendingRequestId,
-    s.setPendingRequestId,
-  ]);
+  const pendingRequestId = useDeepLinkStore((s) => s.pendingRequestId);
+  const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
   const contentPaddingBottom = NAV_BAR_HEIGHT + NAV_BAR_MARGIN + insets.bottom;
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
@@ -16,12 +17,13 @@ import {
   markNotificationRead,
   type Notification,
 } from '@/lib/profile-api';
-
+import { getContentSegmentsWithRequestIds } from '@/lib/notificationUtils';
 import { formatTimeAgo } from '@/lib/dateTimeUtils';
 
 const PAGE_SIZE = 10;
 
 export function NotificationsList() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -108,11 +110,19 @@ export function NotificationsList() {
     loadNotifications(page + 1, true);
   }, [loadingMore, page, totalPages, loadNotifications]);
 
+  const handleOpenRequest = useCallback(
+    (requestGroupId: number) => {
+      setSelectedNotification(null);
+      router.push(`/(tabs)/requests/${requestGroupId}`);
+    },
+    [router]
+  );
+
   return (
     <View style={[styles.card, { borderColor: border }]}>
       <ThemedText style={styles.title}>Все уведомления</ThemedText>
       <ThemedText style={[styles.subtitle, { color: textMuted }]}>
-        Нажмите на уведомление, чтобы отметить как прочитанное
+        Нажмите на уведомление, чтобы открыть. Номер заявки (№ …) откроет заявку в разделе «Заявки».
       </ThemedText>
 
       {loading && notifications.length === 0 ? (
@@ -226,9 +236,40 @@ export function NotificationsList() {
                   </Pressable>
                 </View>
                 <ScrollView style={styles.modalBody}>
-                  <ThemedText style={[styles.modalBodyText, { color: text }]}>
-                    {selectedNotification?.content}
-                  </ThemedText>
+                  <View style={styles.modalBodyContent}>
+                    {selectedNotification?.content != null
+                      ? getContentSegmentsWithRequestIds(
+                          selectedNotification.content
+                        ).map((seg, idx) =>
+                          seg.type === 'text' ? (
+                            <ThemedText
+                              key={idx}
+                              style={[styles.modalBodyText, { color: text }]}
+                            >
+                              {seg.value}
+                            </ThemedText>
+                          ) : (
+                            <Pressable
+                              key={idx}
+                              onPress={() =>
+                                handleOpenRequest(seg.requestGroupId)
+                              }
+                              style={({ pressed }) => [
+                                styles.requestIdLink,
+                                { borderBottomColor: primary },
+                                pressed && styles.requestIdLinkPressed,
+                              ]}
+                            >
+                              <ThemedText
+                                style={[styles.requestIdLinkText, { color: primary }]}
+                              >
+                                № {seg.value}
+                              </ThemedText>
+                            </Pressable>
+                          )
+                        )
+                      : null}
+                  </View>
                   <ThemedText style={[styles.modalTime, { color: textMuted }]}>
                     {selectedNotification?.created_at
                       ? new Date(selectedNotification.created_at).toLocaleString(
@@ -350,9 +391,27 @@ const styles = StyleSheet.create({
     padding: 16,
     maxHeight: 400,
   },
+  modalBodyContent: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+  },
   modalBodyText: {
     fontSize: 15,
     lineHeight: 22,
+  },
+  requestIdLink: {
+    borderBottomWidth: 1,
+    paddingHorizontal: 2,
+    marginHorizontal: 1,
+  },
+  requestIdLinkPressed: {
+    opacity: 0.7,
+  },
+  requestIdLinkText: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '600',
   },
   modalTime: {
     fontSize: 12,
