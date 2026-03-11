@@ -11,6 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PageLoader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -373,7 +374,7 @@ export default function AdminWorkerUsersScreen() {
 
           {requestsLoading ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
+              <PageLoader size={80} />
               <ThemedText style={[styles.loadingText, { color: textMuted }]}>Загрузка...</ThemedText>
             </View>
           ) : requests.length === 0 ? (

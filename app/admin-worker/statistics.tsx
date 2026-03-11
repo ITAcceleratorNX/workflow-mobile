@@ -5,7 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   View,
-  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -13,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { PullToRefresh } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { getAdminWorkerStats, type AdminWorkerStats } from '@/lib/api';
 
@@ -96,12 +96,13 @@ export default function AdminWorkerStatisticsScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[PRIMARY_ORANGE]} />
-          }
+        <PullToRefresh
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          loaderSize={96}
+          topOffset={insets.top + 8}
         >
+          <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}>
           {/* Quick Stats — как в браузере (4 карточки) */}
           <View style={styles.quickStatsRow}>
             <View style={[styles.quickStatCard, styles.quickStatNew]}>
@@ -161,7 +162,8 @@ export default function AdminWorkerStatisticsScreen() {
             <StatRow label="Экстренные" value={typeof rts.urgent === 'number' ? rts.urgent : 0} />
             <StatRow label="Плановые" value={typeof rts.planned === 'number' ? rts.planned : 0} />
           </View>
-        </ScrollView>
+          </ScrollView>
+        </PullToRefresh>
       )}
     </ThemedView>
   );

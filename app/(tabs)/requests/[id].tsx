@@ -2,7 +2,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Modal,
@@ -44,7 +43,7 @@ import {
   type RequestGroup,
   type SubRequest,
 } from '@/lib/api';
-import { Select } from '@/components/ui/select';
+import { PageLoader, Select } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -543,7 +542,7 @@ export default function RequestDetailScreen() {
   if (loading) {
     return (
       <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" color={primaryColor} />
+        <PageLoader size={80} />
         <ThemedText style={[styles.loadingText, { color: mutedColor }]}>
           Загрузка заявки...
         </ThemedText>

@@ -1,36 +1,45 @@
+import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Redirect } from 'expo-router';
 
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuthStore } from '@/stores/auth-store';
+
+const LOGO_SOURCE = require('@/assets/logo/logo.png');
+const LOGO_SIZE = 300;
 
 export default function IndexScreen() {
   const token = useAuthStore((state) => state.token);
   const role = useAuthStore((state) => state.role);
   const user = useAuthStore((state) => state.user);
   const [isReady, setIsReady] = useState(false);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   useEffect(() => {
-    // Даем время для rehydration из AsyncStorage
-    // Zustand persist загружает данные асинхронно, поэтому нужна небольшая задержка
     const timer = setTimeout(() => {
       setIsReady(true);
-      // Debug logging
       console.log('[Index] Auth state after rehydration:', {
         hasToken: !!token,
         role: role,
         userRole: user?.role,
         userId: user?.id,
       });
-    }, 500); // Увеличили время для надежности
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [token, role, user]);
 
   if (!isReady) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#F35713" />
+      <View style={[styles.loaderContainer, isDark ? styles.bgDark : styles.bgLight]}>
+        <Image
+          source={LOGO_SOURCE}
+          style={[styles.logo, { width: LOGO_SIZE, height: LOGO_SIZE }]}
+          contentFit="contain"
+          tintColor={isDark ? '#FFFFFF' : '#1a1a1a'}
+        />
       </View>
     );
   }
@@ -53,7 +62,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bgDark: {
     backgroundColor: '#040404',
+  },
+  bgLight: {
+    backgroundColor: '#f5f5f5',
+  },
+  logo: {
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
   },
 });
 

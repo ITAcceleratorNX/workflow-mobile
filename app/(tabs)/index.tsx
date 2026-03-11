@@ -5,7 +5,6 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  RefreshControl,
   Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
+import { PageLoader, PullToRefresh } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -910,78 +910,82 @@ function ClientDashboardContent() {
           {/* Devices Title */}
           <ThemedText style={styles.devicesTitle}>Устройство в комнате</ThemedText>
 
-          {/* Loading State */}
-          {isLoadingDevices ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#FFFFFF" />
-            </View>
-          ) : controllableDevices.length === 0 ? (
-            <View style={styles.emptyState}>
-              <MaterialIcons
-                name="lightbulb"
-                size={64}
-                color="rgba(255,255,255,0.4)"
-              />
-              <ThemedText style={styles.emptyTitle}>
-                Нет доступных устройств
-              </ThemedText>
-              <ThemedText style={styles.emptySubtitle}>
-                В этой комнате нет устройств
-              </ThemedText>
-            </View>
-          ) : (
-            /* Device Cards Grid */
-            <View style={styles.devicesGrid}>
-              {controllableDevices.map((device) => {
-                const isOn = getDeviceState(device);
-                const isControllingThis = isControlling === device.id;
+          {/* Devices area: content visible, loader overlay when loading */}
+          <View style={styles.devicesAreaWrapper}>
+            {isLoadingDevices ? (
+              <View style={styles.devicesGridPlaceholder} />
+            ) : controllableDevices.length === 0 ? (
+              <View style={styles.emptyState}>
+                <MaterialIcons
+                  name="lightbulb"
+                  size={64}
+                  color="rgba(255,255,255,0.4)"
+                />
+                <ThemedText style={styles.emptyTitle}>
+                  Нет доступных устройств
+                </ThemedText>
+                <ThemedText style={styles.emptySubtitle}>
+                  В этой комнате нет устройств
+                </ThemedText>
+              </View>
+            ) : (
+              <View style={styles.devicesGrid}>
+                {controllableDevices.map((device) => {
+                  const isOn = getDeviceState(device);
+                  const isControllingThis = isControlling === device.id;
 
-                return (
-                  <Pressable
-                    key={device.id}
-                    onPress={() => handleControlDevice(device, !isOn)}
-                    disabled={isControllingThis || isOn === null}
-                    style={[
-                      styles.deviceCard,
-                      { backgroundColor: isOn ? CARD_GREEN : CARD_ORANGE },
-                      isControllingThis && styles.deviceCardDisabled,
-                    ]}
-                  >
-                    <View style={styles.deviceCardContent}>
-                      <View>
-                        <ThemedText style={styles.deviceName}>
-                          {device.name}
-                        </ThemedText>
-                        <ThemedText style={styles.deviceStatus}>
-                          {isControllingThis
-                            ? 'Загрузка...'
-                            : isOn
-                              ? 'Вкл.'
-                              : 'Выкл.'}
-                        </ThemedText>
+                  return (
+                    <Pressable
+                      key={device.id}
+                      onPress={() => handleControlDevice(device, !isOn)}
+                      disabled={isControllingThis || isOn === null}
+                      style={[
+                        styles.deviceCard,
+                        { backgroundColor: isOn ? CARD_GREEN : CARD_ORANGE },
+                        isControllingThis && styles.deviceCardDisabled,
+                      ]}
+                    >
+                      <View style={styles.deviceCardContent}>
+                        <View>
+                          <ThemedText style={styles.deviceName}>
+                            {device.name}
+                          </ThemedText>
+                          <ThemedText style={styles.deviceStatus}>
+                            {isControllingThis
+                              ? 'Загрузка...'
+                              : isOn
+                                ? 'Вкл.'
+                                : 'Выкл.'}
+                          </ThemedText>
+                        </View>
+                        <View
+                          style={[
+                            styles.deviceIconContainer,
+                            { backgroundColor: isOn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)' },
+                          ]}
+                        >
+                          {isControllingThis ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <MaterialIcons
+                              name="power-settings-new"
+                              size={28}
+                              color={isOn ? '#FFFFFF' : 'rgba(255,255,255,0.6)'}
+                            />
+                          )}
+                        </View>
                       </View>
-                      <View
-                        style={[
-                          styles.deviceIconContainer,
-                          { backgroundColor: isOn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)' },
-                        ]}
-                      >
-                        {isControllingThis ? (
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : (
-                          <MaterialIcons
-                            name="power-settings-new"
-                            size={28}
-                            color={isOn ? '#FFFFFF' : 'rgba(255,255,255,0.6)'}
-                          />
-                        )}
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+            {isLoadingDevices && (
+              <View style={styles.loadingOverlay}>
+                <PageLoader size={80} />
+              </View>
+            )}
+          </View>
         </>
       )}
     </View>
@@ -1338,7 +1342,7 @@ function ClientDashboardContent() {
         style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}
       >
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
+          <PageLoader size={80} />
         </View>
       </ThemedView>
     );
@@ -1368,22 +1372,20 @@ function ClientDashboardContent() {
     <ThemedView
       style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}
     >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 100 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#FFFFFF"
-            colors={['#E25B21']}
-          />
-        }
+      <PullToRefresh
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        loaderSize={96}
+        topOffset={insets.top + 16}
       >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + 100 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Header Section - Dark */}
         <View style={styles.header}>
           {/* Title */}
@@ -1471,6 +1473,7 @@ function ClientDashboardContent() {
           {activeSection === 'steps' && renderStepsSection()}
         </LinearGradient>
       </ScrollView>
+      </PullToRefresh>
     </ThemedView>
   );
 }
@@ -1633,6 +1636,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#FFFFFF',
     marginTop: 8,
+  },
+  devicesAreaWrapper: {
+    position: 'relative',
+    minHeight: 140,
+  },
+  devicesGridPlaceholder: {
+    width: CARD_WIDTH,
+    height: 100,
+    borderRadius: 16,
+    backgroundColor: CARD_ORANGE,
+    opacity: 0.6,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
   loadingContainer: {
     alignItems: 'center',

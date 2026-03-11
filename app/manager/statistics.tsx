@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
-  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PageLoader, PullToRefresh } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -193,7 +192,7 @@ export default function ManagerStatisticsScreen() {
         <>
           {loading && !stats ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
+              <PageLoader size={80} />
               <ThemedText style={[styles.loadingText, { color: textMuted }]}>Загрузка...</ThemedText>
             </View>
           ) : error ? (
@@ -204,16 +203,13 @@ export default function ManagerStatisticsScreen() {
               </Pressable>
             </View>
           ) : (
-            <ScrollView
-              contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={[PRIMARY_ORANGE]}
-                />
-              }
+            <PullToRefresh
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              loaderSize={96}
+              topOffset={insets.top + 8}
             >
+              <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}>
               <View style={styles.quickStatsRow}>
             <View style={[styles.quickStatCard, styles.quickStatNew]}>
               <MaterialIcons name="schedule" size={22} color="#CA8A04" />
@@ -256,25 +252,23 @@ export default function ManagerStatisticsScreen() {
             <StatRow label="Экстренные" value={typeof rts.urgent === 'number' ? rts.urgent : 0} />
             <StatRow label="Плановые" value={typeof rts.planned === 'number' ? rts.planned : 0} />
           </View>
-            </ScrollView>
+              </ScrollView>
+            </PullToRefresh>
           )}
         </>
       )}
 
       {activeTab === 'analytics' && (
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
-          refreshControl={
-            <RefreshControl
-              refreshing={analyticsLoading}
-              onRefresh={loadAnalytics}
-              colors={[PRIMARY_ORANGE]}
-            />
-          }
+        <PullToRefresh
+          refreshing={analyticsLoading}
+          onRefresh={loadAnalytics}
+          loaderSize={96}
+          topOffset={insets.top + 8}
         >
+          <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}>
           {analyticsLoading && !analyticsData.sla && !analyticsData.ratings ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
+              <PageLoader size={80} />
               <ThemedText style={[styles.loadingText, { color: textMuted }]}>Загрузка...</ThemedText>
             </View>
           ) : (
@@ -293,7 +287,8 @@ export default function ManagerStatisticsScreen() {
               </View>
             </>
           )}
-        </ScrollView>
+          </ScrollView>
+        </PullToRefresh>
       )}
     </ThemedView>
   );

@@ -2,7 +2,6 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +11,7 @@ import {
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, TextInput } from '@/components/ui';
+import { Button, PageLoader, TextInput } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -72,7 +71,7 @@ export default function StepsScreen() {
           <ThemedText style={styles.title}>Шаги</ThemedText>
         </View>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={primary} />
+          <PageLoader size={80} />
         </View>
       </ThemedView>
     );

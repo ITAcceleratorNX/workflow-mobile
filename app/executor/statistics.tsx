@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
-  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PageLoader, PullToRefresh } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -81,7 +80,7 @@ export default function ExecutorStatisticsScreen() {
 
       {loading && !stats ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
+          <PageLoader size={80} />
           <ThemedText style={[styles.loadingText, { color: textMuted }]}>Загрузка...</ThemedText>
         </View>
       ) : error ? (
@@ -92,12 +91,13 @@ export default function ExecutorStatisticsScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[PRIMARY_ORANGE]} />
-          }
+        <PullToRefresh
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          loaderSize={50}
+          topOffset={insets.top + 8}
         >
+          <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}>
           <View style={styles.quickStatsRow}>
             <View style={[styles.quickStatCard, styles.quickStatWork]}>
               <MaterialIcons name="people" size={22} color="#2563EB" />
@@ -138,7 +138,8 @@ export default function ExecutorStatisticsScreen() {
               value={stats?.averageExecutionHours ?? '0.00'}
             />
           </View>
-        </ScrollView>
+          </ScrollView>
+        </PullToRefresh>
       )}
     </ThemedView>
   );

@@ -6,14 +6,13 @@ import {
     FlatList,
     Image,
     Pressable,
-    RefreshControl,
     StyleSheet,
     View,
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Select } from '@/components/ui/select';
+import { PageLoader, PullToRefresh, Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import {
   getOffices,
@@ -25,6 +24,7 @@ import {
 } from '@/lib/api';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 
 // Размеры как в kcell-service-front compact: 140×100, rounded-xl, gap-4
 const CARD_PHOTO_WIDTH = 140;
@@ -244,6 +244,7 @@ function RequestCard({
 
 export default function RequestsListScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const role = useAuthStore((s: AuthState) => s.role) as RequestGroupsRole | null;
   const isGuest = useAuthStore((s) => s.isGuest);
   const guestRequests = useGuestDemoStore((s) => s.requests);
@@ -567,7 +568,9 @@ export default function RequestsListScreen() {
   if (loading && sortedList.length === 0) {
     return (
       <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" color={useThemeColor({}, 'primary')} />
+        <View style={styles.initialLoaderPill}>
+          <PageLoader size={56} variant="overlay" />
+        </View>
         <ThemedText style={[styles.loadingText, { color: mutedColor }]}>
           Загрузка заявок...
         </ThemedText>
@@ -577,19 +580,18 @@ export default function RequestsListScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <FlatList
-        data={sortedList}
-        keyExtractor={(item) => `req-${item.id}`}
-        ListHeaderComponent={listHeader}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={useThemeColor({}, 'primary')}
-          />
-        }
-        onEndReached={onEndReached}
+      <PullToRefresh
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        loaderSize={96}
+        topOffset={insets.top + 16}
+      >
+        <FlatList
+          data={sortedList}
+          keyExtractor={(item) => `req-${item.id}`}
+          ListHeaderComponent={listHeader}
+          contentContainerStyle={styles.listContent}
+          onEndReached={onEndReached}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
           loadingMore ? (
@@ -609,7 +611,8 @@ export default function RequestsListScreen() {
         renderItem={({ item }) => (
           <RequestCard request={item} onPress={() => openDetail(item)} />
         )}
-      />
+        />
+      </PullToRefresh>
     </ThemedView>
   );
 }
@@ -623,6 +626,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 16,
+  },
+  initialLoaderPill: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(28,28,30,0.92)',
   },
   loadingText: {
     fontSize: 14,

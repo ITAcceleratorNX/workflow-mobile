@@ -1,7 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -9,7 +8,7 @@ import {
   View,
 } from 'react-native';
 
-import { Button } from '@/components/ui';
+import { Button, PageLoader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import {
@@ -118,7 +117,7 @@ export function NotificationsList() {
 
       {loading && notifications.length === 0 ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={border} />
+          <PageLoader size={80} />
           <ThemedText style={[styles.loadingText, { color: textMuted }]}>
             Загрузка...
           </ThemedText>

@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, Share, StyleSheet, View } from 'react-nat
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PageLoader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -77,7 +78,7 @@ export default function BookingQrScreen() {
   if (loading) {
     return (
       <ThemedView style={[styles.centered, { paddingTop: insets.top + 16 }]}>
-        <ActivityIndicator size="large" />
+        <PageLoader size={80} />
         <ThemedText style={[styles.loadingText, { color: mutedColor }]}>Загрузка...</ThemedText>
       </ThemedView>
     );

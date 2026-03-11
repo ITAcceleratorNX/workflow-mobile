@@ -19,7 +19,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button } from '@/components/ui/button';
+import { Button, PageLoader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -664,7 +664,7 @@ export default function HelpScreen() {
           >
             {loadingTickets ? (
               <View style={styles.ticketsLoading}>
-                <ActivityIndicator size="large" color={primary} />
+                <PageLoader size={80} />
                 <ThemedText style={[styles.ticketsLoadingText, { color: textMuted }]}>
                   Загрузка чатов...
                 </ThemedText>
@@ -804,7 +804,7 @@ export default function HelpScreen() {
             </Pressable>
             {loadingTickets ? (
               <View style={styles.ticketsLoading}>
-                <ActivityIndicator size="large" color={primary} />
+                <PageLoader size={80} />
                 <ThemedText style={[styles.ticketsLoadingText, { color: textMuted }]}>
                   Загрузка обращений...
                 </ThemedText>

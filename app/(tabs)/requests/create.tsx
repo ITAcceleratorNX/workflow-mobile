@@ -22,8 +22,7 @@ import {
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { getPrimaryPhotoUri } from '@/lib/image-uri';
-import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
+import { Button, PageLoader, Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
@@ -675,7 +674,7 @@ export default function CreateRequestScreen() {
   if (loading) {
     return (
       <ThemedView style={styles.centered}>
-        <ActivityIndicator size="large" color={primaryColor} />
+        <PageLoader size={80} />
         <ThemedText style={[styles.loadingText, { color: mutedColor }]}>Загрузка...</ThemedText>
       </ThemedView>
     );
