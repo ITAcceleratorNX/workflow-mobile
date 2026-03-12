@@ -52,6 +52,7 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<ProfileTab>('profile');
 
   // Profile tab state
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileSuccess, setProfileSuccess] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -109,13 +110,13 @@ export default function ProfileScreen() {
     [updateUser]
   );
 
-  const handleSaveProfile = useCallback(async () => {
-    if (!user) return;
+  const handleSaveProfile = useCallback(async (): Promise<boolean> => {
+    if (!user) return false;
     setProfileError('');
     setProfileSuccess('');
     if (!user.full_name || !user.phone) {
       setProfileError('ФИО и Номер обязательны.');
-      return;
+      return false;
     }
 
     // Демо-профиль: не отправляем запросы на реальный backend
@@ -126,7 +127,7 @@ export default function ProfileScreen() {
         description: 'Изменения сохранены только на этом устройстве.',
         variant: 'success',
       });
-      return;
+      return true;
     }
 
     setIsSavingProfile(true);
@@ -139,17 +140,18 @@ export default function ProfileScreen() {
     if (!result.ok) {
       if (result.unauthorized) {
         handleUnauthorized();
-        return;
+        return false;
       }
       setProfileError(result.error);
-      return;
+      return false;
     }
     setProfileSuccess('Профиль обновлён.');
     showToast({
       title: 'Профиль обновлён',
       variant: 'success',
     });
-  }, [user, handleUnauthorized]);
+    return true;
+  }, [user, handleUnauthorized, isGuest, showToast]);
 
   const handleSendVerificationCode = useCallback(async () => {
     const emailToSend = email || user?.email;
@@ -364,7 +366,11 @@ export default function ProfileScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: 24 + insets.top },
+            {
+              paddingTop: 20 + insets.top,
+              paddingHorizontal: 20,
+              paddingBottom: 24 + insets.bottom,
+            },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -387,203 +393,268 @@ export default function ProfileScreen() {
           />
 
           {activeTab === 'profile' && (
-            <View style={[styles.card, { borderColor: border }]}>
-              <ThemedText style={styles.sectionTitle}>Данные клиента</ThemedText>
-              <ThemedText style={[styles.sectionSubtitle, { color: textMuted }]}>
-                Редактирование профиля
-              </ThemedText>
-
-              <TextInput
-                label="ФИО"
-                value={user?.full_name ?? ''}
-                onChangeText={(t) =>
-                  updateUser((prev) =>
-                    prev ? { ...prev, full_name: t } : null
-                  )
-                }
-              />
-              <TextInput
-                label="Номер телефона"
-                placeholder="+7 XXX XXX XX XX"
-                value={user?.phone ?? ''}
-                onChangeText={handlePhoneChange}
-                keyboardType="phone-pad"
-                maxLength={19}
-              />
-
-              <View style={styles.field}>
-                <View style={styles.labelRow}>
-                  <ThemedText style={[styles.label, { color: text }]}>
-                    Email
+            <>
+              {/* Режим просмотра — без карточек, на всю ширину */}
+              {!isEditingProfile && (
+                <>
+                  <ThemedText style={styles.profileName}>
+                    {user?.full_name || '—'}
                   </ThemedText>
-                  {user?.email_verified && (
-                    <View style={[styles.verifiedBadge, { backgroundColor: `${success}26` }]}>
-                      <MaterialIcons
-                        name="check-circle"
-                        size={14}
-                        color={success}
-                      />
-                      <ThemedText style={[styles.verifiedText, { color: success }]}>
-                        Верифицирован
+                  <ThemedText style={[styles.profileSubtitle, { color: textMuted }]}>
+                    {role && ROLE_TRANSLATIONS[role] ? ROLE_TRANSLATIONS[role] : role ?? '—'}
+                  </ThemedText>
+
+                  <View style={styles.profileBlock}>
+                    <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: border }]}>
+                      <MaterialIcons name="phone" size={22} color={textMuted} />
+                      <ThemedText style={[styles.infoLabel, { color: textMuted }]}>Телефон</ThemedText>
+                      <ThemedText style={[styles.infoValue, { color: text }]} numberOfLines={1}>
+                        {user?.phone || '—'}
                       </ThemedText>
                     </View>
-                  )}
-                </View>
-                <View style={styles.emailColumn}>
-                  <View style={styles.emailInputFullWidth}>
-                    <TextInput
-                      placeholder="example@mail.com"
-                      value={email || user?.email || ''}
-                      onChangeText={(t) => {
-                        setEmail(t);
-                        setEmailError('');
-                        setEmailSuccess('');
-                      }}
-                      keyboardType="email-address"
-                      editable={!isSendingCode && !isVerifying}
-                    />
+                    <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: border }]}>
+                      <MaterialIcons name="email" size={22} color={textMuted} />
+                      <ThemedText style={[styles.infoLabel, { color: textMuted }]}>Email</ThemedText>
+                      <View style={styles.infoValueWrap}>
+                        <ThemedText style={[styles.infoValue, { color: text }]} numberOfLines={1}>
+                          {user?.email || '—'}
+                        </ThemedText>
+                        {user?.email_verified && (
+                          <MaterialIcons name="check-circle" size={20} color={success} />
+                        )}
+                      </View>
+                    </View>
+                    <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: border }]}>
+                      <MaterialIcons name="business" size={22} color={textMuted} />
+                      <ThemedText style={[styles.infoLabel, { color: textMuted }]}>Офис</ThemedText>
+                      <ThemedText style={[styles.infoValue, { color: text }]} numberOfLines={1}>
+                        {user?.office?.name ?? '—'}
+                      </ThemedText>
+                    </View>
+                    <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+                      <MaterialIcons name="tag" size={22} color={textMuted} />
+                      <ThemedText style={[styles.infoLabel, { color: textMuted }]}>ID</ThemedText>
+                      <ThemedText style={[styles.infoValue, styles.idValue, { color: textMuted }]}>
+                        #{user?.id}
+                      </ThemedText>
+                    </View>
                   </View>
+
                   <Pressable
-                    onPress={handleSendVerificationCode}
-                    disabled={
-                      isSendingCode ||
-                      isVerifying ||
-                      (!email && !user?.email) ||
-                      (user?.email_verified &&
-                        (email || user?.email) === user?.email)
-                    }
+                    onPress={() => setIsEditingProfile(true)}
                     style={({ pressed }) => [
-                      styles.codeButtonWrapper,
-                      styles.codeButton,
-                      { borderColor: border },
-                      (isSendingCode || isVerifying || (!email && !user?.email) ||
-                        (user?.email_verified &&
-                          (email || user?.email) === user?.email)) &&
-                        styles.buttonDisabled,
+                      styles.editButton,
+                      { borderColor: primary },
                       pressed && styles.buttonPressed,
                     ]}
                   >
-                    {isSendingCode ? (
-                      <MaterialIcons
-                        name="hourglass-empty"
-                        size={20}
-                        color={textMuted}
-                      />
-                    ) : (
-                      <MaterialIcons name="mail" size={20} color={text} />
-                    )}
-                    <ThemedText style={[styles.codeButtonText, { color: text }]}>
-                      {isSendingCode ? 'Отправка...' : 'Код'}
+                    <MaterialIcons name="edit" size={20} color={primary} />
+                    <ThemedText style={[styles.editButtonText, { color: primary }]}>
+                      Редактировать профиль
                     </ThemedText>
                   </Pressable>
-                </View>
-                {emailSuccess ? (
-                  <ThemedText style={[styles.successText, { color: success }]}>
-                    {emailSuccess}
+
+                  <Button
+                    title={isLoggingOut ? 'Выходим...' : 'Выйти из аккаунта'}
+                    onPress={handleLogout}
+                    variant="secondary"
+                    disabled={isLoggingOut}
+                  />
+                </>
+              )}
+
+              {/* Режим редактирования */}
+              {isEditingProfile && (
+                <>
+                  <ThemedText style={styles.sectionTitle}>Редактирование профиля</ThemedText>
+                  <ThemedText style={[styles.sectionSubtitle, { color: textMuted }]}>
+                    Измените данные и нажмите «Сохранить»
                   </ThemedText>
-                ) : null}
-                {emailError ? (
-                  <ThemedText style={[styles.errorText, { color: errorColor }]}>
-                    {emailError}
-                  </ThemedText>
-                ) : null}
-                {showEmailVerificationBlock && (
-                  <View style={[styles.verificationBlock, { borderColor: border }]}>
-                    <ThemedText style={[styles.label, { color: text }]}>
-                      Код верификации
-                    </ThemedText>
-                    <View style={styles.verificationRow}>
-                      <View style={styles.codeInputWrapper}>
+
+                  <TextInput
+                    label="ФИО"
+                    value={user?.full_name ?? ''}
+                    onChangeText={(t) =>
+                      updateUser((prev) =>
+                        prev ? { ...prev, full_name: t } : null
+                      )
+                    }
+                  />
+                  <TextInput
+                    label="Номер телефона"
+                    placeholder="+7 XXX XXX XX XX"
+                    value={user?.phone ?? ''}
+                    onChangeText={handlePhoneChange}
+                    keyboardType="phone-pad"
+                    maxLength={19}
+                  />
+
+                    <View style={styles.field}>
+                    <View style={styles.labelRow}>
+                      <ThemedText style={[styles.label, { color: text }]}>
+                        Email
+                      </ThemedText>
+                      {user?.email_verified && (
+                        <MaterialIcons name="check-circle" size={20} color={success} />
+                      )}
+                    </View>
+                    <View style={styles.emailColumn}>
+                      <View style={styles.emailInputFullWidth}>
                         <TextInput
-                          placeholder="000000"
-                          value={verificationCode}
+                          placeholder="example@mail.com"
+                          value={email || user?.email || ''}
                           onChangeText={(t) => {
-                            setVerificationCode(t.replace(/\D/g, '').slice(0, 6));
+                            setEmail(t);
                             setEmailError('');
+                            setEmailSuccess('');
                           }}
-                          keyboardType="number-pad"
-                          maxLength={6}
-                          editable={!isVerifying}
+                          keyboardType="email-address"
+                          editable={!isSendingCode && !isVerifying}
                         />
                       </View>
                       <Pressable
-                        onPress={handleVerifyEmail}
+                        onPress={handleSendVerificationCode}
                         disabled={
-                          isVerifying || verificationCode.length !== 6
+                          isSendingCode ||
+                          isVerifying ||
+                          (!email && !user?.email) ||
+                          (user?.email_verified &&
+                            (email || user?.email) === user?.email)
                         }
                         style={({ pressed }) => [
-                          styles.okButton,
-                          { backgroundColor: primary },
-                          (isVerifying || verificationCode.length !== 6) &&
+                          styles.codeButtonWrapper,
+                          styles.codeButton,
+                          { borderColor: border },
+                          (isSendingCode || isVerifying || (!email && !user?.email) ||
+                            (user?.email_verified &&
+                              (email || user?.email) === user?.email)) &&
                             styles.buttonDisabled,
                           pressed && styles.buttonPressed,
                         ]}
                       >
-                        {isVerifying ? (
-                          <MaterialIcons
-                            name="hourglass-empty"
-                            size={18}
-                            color="#fff"
-                          />
+                        {isSendingCode ? (
+                          <MaterialIcons name="hourglass-empty" size={20} color={textMuted} />
                         ) : (
-                          <ThemedText style={styles.okButtonText}>OK</ThemedText>
+                          <MaterialIcons name="mail" size={20} color={text} />
                         )}
+                        <ThemedText style={[styles.codeButtonText, { color: text }]}>
+                          {isSendingCode ? 'Отправка...' : 'Код'}
+                        </ThemedText>
                       </Pressable>
                     </View>
+                    {emailSuccess ? (
+                      <ThemedText style={[styles.successText, { color: success }]}>
+                        {emailSuccess}
+                      </ThemedText>
+                    ) : null}
+                    {emailError ? (
+                      <ThemedText style={[styles.errorText, { color: errorColor }]}>
+                        {emailError}
+                      </ThemedText>
+                    ) : null}
+                    {showEmailVerificationBlock && (
+                      <View style={[styles.verificationBlock, { borderColor: border }]}>
+                        <ThemedText style={[styles.label, { color: text }]}>
+                          Код верификации
+                        </ThemedText>
+                        <View style={styles.verificationRow}>
+                          <View style={styles.codeInputWrapper}>
+                            <TextInput
+                              placeholder="000000"
+                              value={verificationCode}
+                              onChangeText={(t) => {
+                                setVerificationCode(t.replace(/\D/g, '').slice(0, 6));
+                                setEmailError('');
+                              }}
+                              keyboardType="number-pad"
+                              maxLength={6}
+                              editable={!isVerifying}
+                            />
+                          </View>
+                          <Pressable
+                            onPress={handleVerifyEmail}
+                            disabled={isVerifying || verificationCode.length !== 6}
+                            style={({ pressed }) => [
+                              styles.okButton,
+                              { backgroundColor: primary },
+                              (isVerifying || verificationCode.length !== 6) && styles.buttonDisabled,
+                              pressed && styles.buttonPressed,
+                            ]}
+                          >
+                            {isVerifying ? (
+                              <MaterialIcons name="hourglass-empty" size={18} color="#fff" />
+                            ) : (
+                              <ThemedText style={styles.okButtonText}>OK</ThemedText>
+                            )}
+                          </Pressable>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
 
-              <View style={styles.field}>
-                <ThemedText style={[styles.label, { color: text }]}>Роль</ThemedText>
-                <View style={[styles.roleBadge, { borderColor: border }]}>
-                  <ThemedText style={[styles.roleText, { color: text }]}>
-                    {role && ROLE_TRANSLATIONS[role]
-                      ? ROLE_TRANSLATIONS[role]
-                      : role ?? '—'}
-                  </ThemedText>
-                </View>
-              </View>
+                  <View style={styles.field}>
+                    <ThemedText style={[styles.label, { color: text }]}>Роль</ThemedText>
+                    <View style={[styles.roleBadge, { borderColor: border }]}>
+                      <ThemedText style={[styles.roleText, { color: text }]}>
+                        {role && ROLE_TRANSLATIONS[role]
+                          ? ROLE_TRANSLATIONS[role]
+                          : role ?? '—'}
+                      </ThemedText>
+                    </View>
+                  </View>
 
-              <View style={styles.field}>
-                <ThemedText style={[styles.label, { color: text }]}>Офис</ThemedText>
-                <ThemedText style={[styles.readOnlyValue, { color: textMuted }]}>
-                  {user?.office?.name ?? '—'}
-                </ThemedText>
-              </View>
+                  <View style={styles.field}>
+                    <ThemedText style={[styles.label, { color: text }]}>Офис</ThemedText>
+                    <ThemedText style={[styles.readOnlyValue, { color: textMuted }]}>
+                      {user?.office?.name ?? '—'}
+                    </ThemedText>
+                  </View>
 
-              <View style={styles.field}>
-                <ThemedText style={[styles.label, { color: text }]}>ID</ThemedText>
-                <ThemedText style={[styles.idValue, { color: textMuted }]}>
-                  #{user?.id}
-                </ThemedText>
-              </View>
-
-              <Button
-                title={isSavingProfile ? 'Сохранение...' : 'Сохранить'}
-                onPress={handleSaveProfile}
-                disabled={isSavingProfile}
-              />
-              {profileError ? (
-                <ThemedText style={[styles.errorText, { color: errorColor }]}>
-                  {profileError}
-                </ThemedText>
-              ) : null}
-              {profileSuccess ? (
-                <ThemedText style={[styles.successText, { color: success }]}>{profileSuccess}</ThemedText>
-              ) : null}
-
-              <Button
-                title={isLoggingOut ? 'Выходим...' : 'Выйти из аккаунта'}
-                onPress={handleLogout}
-                variant="secondary"
-                disabled={isLoggingOut}
-              />
-            </View>
+                  <View style={styles.editActions}>
+                    <Pressable
+                      onPress={() => {
+                        setIsEditingProfile(false);
+                        setProfileError('');
+                        setProfileSuccess('');
+                      }}
+                      style={({ pressed }) => [
+                        styles.cancelButton,
+                        { borderColor: border },
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <ThemedText style={[styles.cancelButtonText, { color: text }]}>
+                        Отмена
+                      </ThemedText>
+                    </Pressable>
+                    <View style={styles.saveButtonWrap}>
+                      <Button
+                        title={isSavingProfile ? 'Сохранение...' : 'Сохранить'}
+                        onPress={async () => {
+                          const ok = await handleSaveProfile();
+                          if (ok) setIsEditingProfile(false);
+                        }}
+                        disabled={isSavingProfile}
+                      />
+                    </View>
+                  </View>
+                  {profileError ? (
+                    <ThemedText style={[styles.errorText, { color: errorColor }]}>
+                      {profileError}
+                    </ThemedText>
+                  ) : null}
+                  {profileSuccess ? (
+                    <ThemedText style={[styles.successText, { color: success }]}>
+                      {profileSuccess}
+                    </ThemedText>
+                  ) : null}
+                </>
+              )}
+            </>
           )}
 
           {activeTab === 'password' && (
-            <View style={[styles.card, { borderColor: border }]}>
+            <>
               <ThemedText style={styles.sectionTitle}>Смена пароля</ThemedText>
               <TextInput
                 label="Старый пароль"
@@ -618,7 +689,7 @@ export default function ProfileScreen() {
                   {passwordError}
                 </ThemedText>
               ) : null}
-            </View>
+            </>
           )}
 
           {activeTab === 'logs' && role && ['admin-worker', 'department-head', 'manager'].includes(role) && (
@@ -626,15 +697,13 @@ export default function ProfileScreen() {
           )}
 
           {activeTab === 'notifications' && (
-            <View style={[styles.card, { borderColor: border }]}>
-              <ThemedText style={styles.sectionTitle}>
-                Уведомления
-              </ThemedText>
+            <>
+              <ThemedText style={styles.sectionTitle}>Уведомления</ThemedText>
               <ThemedText style={[styles.sectionSubtitle, { color: textMuted }]}>
                 История последних уведомлений
               </ThemedText>
               <NotificationsList />
-            </View>
+            </>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -650,9 +719,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-    gap: 24,
+    gap: 28,
+    flexGrow: 1,
   },
   headerRow: {
     flexDirection: 'row',
@@ -679,11 +747,84 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
-  card: {
-    padding: 20,
-    borderRadius: 12,
+  profileName: {
+    fontSize: 22,
+    fontWeight: '600',
+  },
+  profileSubtitle: {
+    fontSize: 15,
+    marginTop: -8,
+  },
+  profileBlock: {
+    width: '100%',
+    marginTop: 4,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    gap: 12,
+    minHeight: 52,
+  },
+  infoRowBorder: {
+    borderBottomWidth: 1,
+  },
+  infoLabel: {
+    fontSize: 15,
+    minWidth: 72,
+  },
+  infoValue: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  infoValueWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    marginTop: 8,
+  },
+  editButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  editActions: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'stretch',
+    flexWrap: 'wrap',
+  },
+  cancelButton: {
+    flex: 1,
+    minWidth: 100,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
     borderWidth: 1,
-    gap: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  saveButtonWrap: {
+    flex: 1,
+    minWidth: 100,
   },
   sectionTitle: {
     fontSize: 18,
@@ -704,18 +845,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  verifiedText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   emailColumn: {
     gap: 12,
