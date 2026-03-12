@@ -1,6 +1,5 @@
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
-import { resolveUrisForUpload } from '@/lib/upload-uri';
 
 const { apiBaseUrl } = config;
 
@@ -664,18 +663,17 @@ export async function postClientRating(
   return { ok: true };
 }
 
-/** Загрузить фото к заявке (React Native: uri от image picker). На Android content:// URI приводятся к file://. */
+/** Загрузить фото к заявке (React Native: uri от image picker) */
 export async function uploadRequestPhotos(
   groupId: number,
   photos: { uri: string; type?: string }[],
   photoType: 'before' | 'after' = 'after'
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const resolvedUris = await resolveUrisForUpload(photos.map((p) => p.uri));
   const formData = new FormData();
-  resolvedUris.forEach((uri, i) => {
+  photos.forEach((p, i) => {
     formData.append('photos', {
-      uri,
-      type: photos[i]?.type ?? 'image/jpeg',
+      uri: p.uri,
+      type: p.type ?? 'image/jpeg',
       name: `photo_${i}_${Date.now()}.jpg`,
     } as unknown as Blob);
   });
