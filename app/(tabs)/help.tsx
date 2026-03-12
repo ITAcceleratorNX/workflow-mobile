@@ -2,6 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -14,8 +15,11 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -158,9 +162,16 @@ function getChatStorageKey(token: string | null) {
   return token ? `chat-messages-${token}` : 'chat-messages';
 }
 
+/** Адаптивный отступ: на маленьких экранах меньше, на больших — комфортнее */
+function getAdaptivePadding(height: number, min: number, max: number): number {
+  const ratio = height / 812; // 812 — базовая высота (iPhone X)
+  return Math.round(Math.min(max, Math.max(min, min * ratio + (max - min) * 0.3)));
+}
+
 export default function HelpScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.role);
   const isAdminMessages = role === 'admin-worker';
@@ -442,10 +453,12 @@ export default function HelpScreen() {
     setSupportSending(false);
   }, [supportInputValue, activeSupportTicket, supportSending, isAdminMessages]);
 
-  const scrollPaddingBottom = 24;
-  const inputBarBottomPadding = insets.bottom + 12;
-  /** Смещение для KeyboardAvoidingView: статус-бар + высота шапки, чтобы инпут оставался над клавиатурой */
-  const keyboardAvoidOffset = Platform.OS === 'ios' ? insets.top + 56 : 0;
+  const scrollPaddingBottom = getAdaptivePadding(windowHeight, 16, 32);
+  const inputBarPaddingBase = getAdaptivePadding(windowHeight, 8, 16);
+  const inputBarBottomPadding = insets.bottom + inputBarPaddingBase;
+  /** Только смещение для клавиатуры; safe area — через paddingTop/paddingBottom в контейнерах, не в offset */
+  const keyboardVerticalOffset = 0;
+  const modalBottomPadding = insets.bottom + getAdaptivePadding(windowHeight, 24, 40);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -455,15 +468,40 @@ export default function HelpScreen() {
     }
   }, [router]);
 
+  const handleSwipeBack = useCallback(() => {
+    if (supportChatView) {
+      handleCloseSupportChat();
+    } else {
+      handleBack();
+    }
+  }, [supportChatView, handleCloseSupportChat, handleBack]);
+
+  const SWIPE_BACK_THRESHOLD = 50;
+  const swipeBackGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX(15)
+        .failOffsetX(-20)
+        .onEnd((e) => {
+          'worklet';
+          if (e.translationX > SWIPE_BACK_THRESHOLD) {
+            runOnJS(handleSwipeBack)();
+          }
+        }),
+    [handleSwipeBack]
+  );
+
   if (supportChatView && activeSupportTicket) {
     return (
+      <GestureDetector gesture={swipeBackGesture}>
       <KeyboardAvoidingView
         style={styles.flex1}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={keyboardAvoidOffset}
+        keyboardVerticalOffset={keyboardVerticalOffset}
       >
-        <ThemedView style={styles.container}>
-          <View style={[styles.supportHeader, { borderBottomColor: border, paddingTop: insets.top + 12 }]}>
+        <View style={[styles.flex1, { paddingTop: insets.top }]}>
+          <ThemedView style={styles.container}>
+            <View style={[styles.supportHeader, { borderBottomColor: border, paddingTop: 12 }]}>
           <Pressable
             onPress={handleCloseSupportChat}
             style={({ pressed }) => [
@@ -577,6 +615,8 @@ export default function HelpScreen() {
               {
                 borderTopColor: border,
                 backgroundColor: background,
+                paddingHorizontal: getAdaptivePadding(windowHeight, 10, 16),
+                paddingTop: inputBarPaddingBase,
                 paddingBottom: inputBarBottomPadding,
               },
             ]}
@@ -617,20 +657,24 @@ export default function HelpScreen() {
             </View>
           </View>
         </ThemedView>
+        </View>
       </KeyboardAvoidingView>
+      </GestureDetector>
     );
   }
 
   // Админ: экран «Сообщения» — только список чатов с клиентами (как в kcell-service-front)
   if (isAdminMessages) {
     return (
+      <GestureDetector gesture={swipeBackGesture}>
       <KeyboardAvoidingView
         style={styles.flex1}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={keyboardAvoidOffset}
+        keyboardVerticalOffset={keyboardVerticalOffset}
       >
-        <ThemedView style={styles.container}>
-          <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={[styles.flex1, { paddingTop: insets.top }]}>
+          <ThemedView style={styles.container}>
+            <View style={[styles.header, { paddingTop: 12 }]}>
             <Pressable
               onPress={handleBack}
               style={({ pressed }) => [styles.headerBackButton, pressed && styles.pressed]}
@@ -703,18 +747,22 @@ export default function HelpScreen() {
             )}
           </ScrollView>
         </ThemedView>
+        </View>
       </KeyboardAvoidingView>
+      </GestureDetector>
     );
   }
 
   return (
+    <GestureDetector gesture={swipeBackGesture}>
     <KeyboardAvoidingView
       style={styles.flex1}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={keyboardAvoidOffset}
+      keyboardVerticalOffset={keyboardVerticalOffset}
     >
-      <ThemedView style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.flex1, { paddingTop: insets.top }]}>
+        <ThemedView style={styles.container}>
+          <View style={[styles.header, { paddingTop: 12 }]}>
           <Pressable
             onPress={handleBack}
             style={({ pressed }) => [styles.headerBackButton, pressed && styles.pressed]}
@@ -988,6 +1036,8 @@ export default function HelpScreen() {
               {
                 borderTopColor: border,
                 backgroundColor: background,
+                paddingHorizontal: getAdaptivePadding(windowHeight, 10, 16),
+                paddingTop: inputBarPaddingBase,
                 paddingBottom: inputBarBottomPadding,
               },
             ]}
@@ -1051,6 +1101,7 @@ export default function HelpScreen() {
         )}
 
       </ThemedView>
+      </View>
 
       <Modal
         visible={showSupportForm}
@@ -1065,14 +1116,15 @@ export default function HelpScreen() {
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.modalKeyboardWrap}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 8 : 0}
+            keyboardVerticalOffset={keyboardVerticalOffset}
           >
             <View
               style={[
                 styles.modalContent,
                 {
                   backgroundColor: background,
-                  paddingBottom: insets.bottom + 40,
+                  paddingTop: insets.top + 24,
+                  paddingBottom: modalBottomPadding,
                 },
               ]}
               onStartShouldSetResponder={() => true}
@@ -1169,6 +1221,7 @@ export default function HelpScreen() {
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>
+    </GestureDetector>
   );
 }
 

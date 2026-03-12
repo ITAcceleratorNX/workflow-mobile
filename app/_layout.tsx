@@ -3,6 +3,7 @@ import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Linking } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -37,19 +38,21 @@ export default function RootLayout() {
   }, [router, setPendingRequestId]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <ToastProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="login/index" />
-          <Stack.Screen name="register/index" />
-          <Stack.Screen name="reset-password/index" />
-          <Stack.Screen name="privacy/index" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="steps" />
-        </Stack>
-        <StatusBar style="auto" />
-      </ToastProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ToastProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="login/index" />
+            <Stack.Screen name="register/index" />
+            <Stack.Screen name="reset-password/index" />
+            <Stack.Screen name="privacy/index" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="steps" />
+          </Stack>
+          <StatusBar style="auto" />
+        </ToastProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
