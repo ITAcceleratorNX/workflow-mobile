@@ -22,6 +22,7 @@ import {
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { getPrimaryPhotoUri } from '@/lib/image-uri';
+import { resolveUrisForUpload } from '@/lib/upload-uri';
 import { Button, PageLoader, Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
@@ -554,11 +555,12 @@ export default function CreateRequestScreen() {
     ];
     formData.append('sub_requests', JSON.stringify(subRequestsData));
 
-    photos.forEach((uri) => {
+    const resolvedPhotos = await resolveUrisForUpload(photos);
+    resolvedPhotos.forEach((uri, i) => {
       formData.append('photos', {
         uri,
         type: 'image/jpeg',
-        name: `photo_${Date.now()}.jpg`,
+        name: `photo_${i}_${Date.now()}.jpg`,
       } as unknown as Blob);
     });
 
