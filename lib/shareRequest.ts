@@ -67,20 +67,37 @@ export function getWhatsAppShareUrl(params: ShareRequestParams): string {
 }
 
 /**
- * Извлекает requestId из URL заявки (https://app.tmk-workflow.kz?requestId=...).
- * Возвращает null, если URL не от нашего домена или нет requestId.
+ * Извлекает requestId из URL заявки.
+ * Поддерживает:
+ * - https://app.tmk-workflow.kz?requestId=123 (Universal/App Links)
+ * - workflowmobile://...?requestId=123 (custom scheme)
+ * - любой URL с query-параметром requestId
+ * - путь вида /requests/123 (если есть в pathname)
  */
 export function parseRequestDeepLinkUrl(url: string): { requestId: number } | null {
+  if (!url || typeof url !== 'string') return null;
   try {
     const parsed = new URL(url);
-    const appHost = new URL(config.webAppBaseUrl).hostname;
-    if (parsed.hostname !== appHost) return null;
-    const requestId = parsed.searchParams.get('requestId');
-    if (!requestId) return null;
-    const id = parseInt(requestId, 10);
-    if (!Number.isFinite(id)) return null;
-    return { requestId: id };
+
+    const fromQuery = parsed.searchParams.get('requestId');
+    if (fromQuery) {
+      const id = parseInt(fromQuery, 10);
+      if (Number.isFinite(id) && id > 0) return { requestId: id };
+    }
+
+    const pathMatch = parsed.pathname.match(/\/requests\/(\d+)/);
+    if (pathMatch) {
+      const id = parseInt(pathMatch[1], 10);
+      if (Number.isFinite(id) && id > 0) return { requestId: id };
+    }
+
+    return null;
   } catch {
+    const fallback = url.match(/[?&]requestId=(\d+)/);
+    if (fallback) {
+      const id = parseInt(fallback[1], 10);
+      if (Number.isFinite(id) && id > 0) return { requestId: id };
+    }
     return null;
   }
 }
