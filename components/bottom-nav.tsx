@@ -29,11 +29,10 @@ export function BottomNav({ state, navigation }: BottomTabBarProps) {
   const underlayHeight = NAV_BAR_HEIGHT + NAV_BAR_MARGIN + bottomInset;
 
   const currentRouteName = state.routes[state.index]?.name ?? 'index';
-  const isHelpScreen = currentRouteName === 'help';
-
   const currentTabRoute = state.routes[state.index];
   const nestedState = currentTabRoute?.state as { routes: { name: string }[]; index: number } | undefined;
   const nestedRouteName = nestedState?.routes?.[nestedState.index]?.name ?? null;
+  const isHelpChatScreen = currentTabRoute?.name === 'help' && nestedRouteName?.startsWith('chat/') === true;
   const isCreateRequestScreen = currentTabRoute?.name === 'requests' && nestedRouteName === 'create';
 
   const handlePress = (routeName: string) => {
@@ -43,7 +42,7 @@ export function BottomNav({ state, navigation }: BottomTabBarProps) {
     navigation.navigate(routeName);
   };
 
-  if (isHelpScreen || isCreateRequestScreen) {
+  if (isHelpChatScreen || isCreateRequestScreen) {
     return null;
   }
 
