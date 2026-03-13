@@ -81,7 +81,10 @@ function getStatusOptionsForRole(
   if (!role) return base;
   switch (role) {
     case 'client':
-      return base.filter((o) => o.value !== 'overdue');
+      return [
+        ...base.filter((o) => o.value !== 'overdue'),
+        { value: 'rejected', label: 'Отклонено' },
+      ];
     case 'admin-worker':
       return [
         ...base,
@@ -99,11 +102,13 @@ function getStatusOptionsForRole(
       return [
         ...base,
         { value: 'long_term', label: 'Долгосрочные' },
+        { value: 'rejected', label: 'Отклонено' },
       ];
     case 'manager':
       return [
         ...base,
         { value: 'long_term', label: 'Долгосрочные' },
+        { value: 'rejected', label: 'Отклонено' },
       ];
     default:
       return base;
