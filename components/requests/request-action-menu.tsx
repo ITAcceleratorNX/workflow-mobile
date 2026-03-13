@@ -42,6 +42,7 @@ interface RequestActionMenuProps {
     requestGroupId: number,
     currentStatus: boolean
   ) => void;
+  onAdminCompleteGroup?: () => void;
 }
 
 export function RequestActionMenu({
@@ -61,6 +62,7 @@ export function RequestActionMenu({
   onRateRequest,
   onRateClient,
   onToggleLongTerm,
+  onAdminCompleteGroup,
 }: RequestActionMenuProps) {
   const [visible, setVisible] = useState(false);
   const primary = useThemeColor({}, 'primary');
@@ -260,6 +262,21 @@ export function RequestActionMenu({
     }
 
     if (userRole === 'admin-worker' && isSub && subRequest) {
+      const hasActiveForAdminComplete =
+        request.status === 'in_progress' &&
+        (request.requests ?? []).some((sr) =>
+          ['in_progress', 'awaiting_assignment', 'assigned'].includes(sr.status)
+        );
+
+      if (onAdminCompleteGroup && hasActiveForAdminComplete) {
+        actions.push({
+          icon: 'done-all',
+          label: 'Завершить без назначения',
+          onClick: onAdminCompleteGroup,
+          variant: 'primary',
+        });
+      }
+
       if (subRequest.status === 'completed' && onRateRequest) {
         actions.push({
           icon: 'star',

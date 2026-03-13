@@ -35,6 +35,7 @@ import {
   postClientRating,
   postRating,
   postRejectNotification,
+  adminCompleteRequest,
   redirectRequest,
   rejectRequest,
   toggleLongTermRequest,
@@ -531,6 +532,50 @@ export default function RequestDetailScreen() {
     [refetch, showToast]
   );
 
+  const handleAdminCompleteGroup = useCallback(() => {
+    if (!request) return;
+
+    const targets = (request.requests ?? []).filter((sr) =>
+      ['in_progress', 'awaiting_assignment', 'assigned'].includes(sr.status)
+    );
+
+    if (!targets.length) {
+      showToast({ title: 'Нет подзаявок для завершения', variant: 'destructive' });
+      return;
+    }
+
+    Alert.alert(
+      'Завершить без назначения',
+      'Все подзаявки будут завершены администратором без назначения исполнителей. Продолжить?',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Завершить',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              for (const sr of targets) {
+                const res = await adminCompleteRequest(sr.id);
+                if (!res.ok) {
+                  throw new Error(res.error);
+                }
+              }
+              showToast({ title: 'Заявка завершена администратором', variant: 'success' });
+              refetch();
+            } catch (e) {
+              const message =
+                e instanceof Error ? e.message : 'Ошибка при завершении заявки';
+              showToast({ title: message, variant: 'destructive' });
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [request, refetch, showToast]);
+
   const isExecutorLeader = useCallback(
     (sub: SubRequest) => {
       return sub.executors?.some(
@@ -637,6 +682,7 @@ export default function RequestDetailScreen() {
             }}
             onRateClient={() => setShowClientRatingModal(true)}
             onToggleLongTerm={handleToggleLongTerm}
+            onAdminCompleteGroup={handleAdminCompleteGroup}
           />
         )}
       </View>
