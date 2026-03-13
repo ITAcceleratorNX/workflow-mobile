@@ -487,6 +487,7 @@ export default function RequestDetailScreen() {
       if (res.ok) {
         showToast({ title: 'Заявка принята в работу', variant: 'success' });
         refetch();
+        setShowAcceptGroupModal(false);
       } else {
         setAcceptFormError(res.error);
       }
@@ -507,6 +508,7 @@ export default function RequestDetailScreen() {
         showToast({ title: 'Заявка отклонена', variant: 'success' });
         setRejectGroupReason('');
         refetch();
+        setShowRejectGroupModal(false);
         goBack();
       } else {
         setAcceptFormError(res.error);
@@ -531,6 +533,9 @@ export default function RequestDetailScreen() {
     },
     [refetch, showToast]
   );
+
+  const [showAcceptGroupModal, setShowAcceptGroupModal] = useState(false);
+  const [showRejectGroupModal, setShowRejectGroupModal] = useState(false);
 
   const handleAdminCompleteGroup = useCallback(() => {
     if (!request) return;
@@ -683,6 +688,8 @@ export default function RequestDetailScreen() {
             onRateClient={() => setShowClientRatingModal(true)}
             onToggleLongTerm={handleToggleLongTerm}
             onAdminCompleteGroup={handleAdminCompleteGroup}
+            onAdminAcceptGroup={() => setShowAcceptGroupModal(true)}
+            onAdminRejectGroup={() => setShowRejectGroupModal(true)}
           />
         )}
       </View>
@@ -824,144 +831,7 @@ export default function RequestDetailScreen() {
           />
         )}
 
-        {role === 'admin-worker' && request.status === 'in_progress' && (
-          <View style={[styles.acceptRejectBlock, { backgroundColor: cardBackground, borderColor }]}>
-            <ThemedText style={[styles.acceptRejectBlockTitle, { color: textColor }]}>
-              Действия по заявке
-            </ThemedText>
-
-            <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
-              Тип заявки
-            </ThemedText>
-            <View style={styles.acceptModalSelectWrap}>
-              <Select
-                value={editableRequestType}
-                onValueChange={setEditableRequestType}
-                options={REQUEST_TYPE_OPTIONS}
-                placeholder="Выберите тип"
-              />
-            </View>
-
-            {editableRequestType !== 'planned' && (
-              <>
-                <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
-                  Время и сложность по подзаявкам
-                </ThemedText>
-                {(request.requests ?? []).map((sr) => (
-                  <View key={sr.id} style={[styles.acceptModalSubBlock, { borderColor }]}>
-                    <ThemedText style={[styles.acceptModalSubTitle, { color: textColor }]}>
-                      {sr.title || `Подзаявка #${sr.id}`}
-                    </ThemedText>
-                    <View style={styles.acceptModalRow}>
-                      <View style={styles.acceptModalField}>
-                        <ThemedText style={[styles.acceptModalFieldLabel, { color: mutedColor }]}>
-                          Время (SLA)
-                        </ThemedText>
-                        <Select
-                          value={subRequestSettings[sr.id]?.sla ?? ''}
-                          onValueChange={(v) =>
-                            setSubRequestSettings((prev) => ({
-                              ...prev,
-                              [sr.id]: {
-                                sla: v,
-                                complexity: prev[sr.id]?.complexity ?? '',
-                              },
-                            }))
-                          }
-                          options={SLA_OPTIONS}
-                          placeholder="Выберите"
-                        />
-                      </View>
-                      <View style={styles.acceptModalField}>
-                        <ThemedText style={[styles.acceptModalFieldLabel, { color: mutedColor }]}>
-                          Сложность
-                        </ThemedText>
-                        <Select
-                          value={subRequestSettings[sr.id]?.complexity ?? ''}
-                          onValueChange={(v) =>
-                            setSubRequestSettings((prev) => ({
-                              ...prev,
-                              [sr.id]: {
-                                sla: prev[sr.id]?.sla ?? '',
-                                complexity: v,
-                              },
-                            }))
-                          }
-                          options={COMPLEXITY_OPTIONS}
-                          placeholder="Выберите"
-                        />
-                      </View>
-                    </View>
-                  </View>
-                ))}
-              </>
-            )}
-
-            <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
-              Локация в офисе (необязательно)
-            </ThemedText>
-            <TextInput
-              style={[
-                styles.acceptRejectBlockInput,
-                {
-                  color: textColor,
-                  borderColor,
-                  backgroundColor,
-                },
-              ]}
-              placeholder="Укажите локацию"
-              placeholderTextColor={mutedColor}
-              value={locationDetail}
-              onChangeText={setLocationDetail}
-            />
-
-            <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
-              Причина отклонения (если необходимо)
-            </ThemedText>
-            <TextInput
-              style={[
-                styles.rejectGroupInput,
-                {
-                  color: textColor,
-                  borderColor,
-                  backgroundColor,
-                },
-              ]}
-              placeholder="Укажите причину отклонения..."
-              placeholderTextColor={mutedColor}
-              value={rejectGroupReason}
-              onChangeText={setRejectGroupReason}
-              multiline
-            />
-
-            {acceptFormError ? (
-              <ThemedText style={styles.acceptModalError}>{acceptFormError}</ThemedText>
-            ) : null}
-
-            <View style={styles.acceptRejectBlockButtons}>
-              <Pressable
-                onPress={handleAcceptGroupSubmit}
-                disabled={actionLoading}
-                style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnAccept]}
-              >
-                <MaterialIcons name="check-circle" size={20} color="#FFF" />
-                <ThemedText style={styles.acceptRejectLabel}>
-                  {actionLoading ? '...' : 'Принять'}
-                </ThemedText>
-              </Pressable>
-              <Pressable
-                onPress={() => handleRejectGroup()}
-                disabled={!rejectGroupReason.trim() || actionLoading}
-                style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnReject]}
-              >
-                <MaterialIcons name="cancel" size={20} color="#FFF" />
-                <ThemedText style={styles.acceptRejectLabel}>
-                  Отклонить
-                </ThemedText>
-              </Pressable>
-            </View>
-          </View>
-        )}
+        {/* Блок действий администратора перенесён в модальные окна, доступные из меню действий */}
       </ScrollView>
 
       {photoModalUrl ? (
@@ -991,6 +861,220 @@ export default function RequestDetailScreen() {
         requestGroupId={request.id}
         loading={actionLoading}
       />
+
+      {/* Модалка для принятия заявки администратором */}
+      {role === 'admin-worker' && request.status === 'in_progress' && (
+        <Modal
+          visible={showAcceptGroupModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowAcceptGroupModal(false)}
+        >
+          <Pressable
+            style={styles.backdrop}
+            onPress={() => setShowAcceptGroupModal(false)}
+          >
+            <View
+              style={[
+                styles.acceptRejectModalSheet,
+                { backgroundColor: cardBackground, borderColor },
+              ]}
+            >
+              <View style={styles.handle} />
+              <ThemedText style={[styles.acceptRejectBlockTitle, { color: textColor }]}>
+                Принять заявку
+              </ThemedText>
+
+              <ScrollView style={styles.actionsList} bounces={false}>
+                <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
+                  Тип заявки
+                </ThemedText>
+                <View style={styles.acceptModalSelectWrap}>
+                  <Select
+                    value={editableRequestType}
+                    onValueChange={setEditableRequestType}
+                    options={REQUEST_TYPE_OPTIONS}
+                    placeholder="Выберите тип"
+                  />
+                </View>
+
+                {editableRequestType !== 'planned' && (
+                  <>
+                    <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
+                      Время и сложность по подзаявкам
+                    </ThemedText>
+                    {(request.requests ?? []).map((sr) => (
+                      <View key={sr.id} style={[styles.acceptModalSubBlock, { borderColor }]}>
+                        <ThemedText style={[styles.acceptModalSubTitle, { color: textColor }]}>
+                          {sr.title || `Подзаявка #${sr.id}`}
+                        </ThemedText>
+                        <View style={styles.acceptModalRow}>
+                          <View style={styles.acceptModalField}>
+                            <ThemedText
+                              style={[styles.acceptModalFieldLabel, { color: mutedColor }]}
+                            >
+                              Время (SLA)
+                            </ThemedText>
+                            <Select
+                              value={subRequestSettings[sr.id]?.sla ?? ''}
+                              onValueChange={(v) =>
+                                setSubRequestSettings((prev) => ({
+                                  ...prev,
+                                  [sr.id]: {
+                                    sla: v,
+                                    complexity: prev[sr.id]?.complexity ?? '',
+                                  },
+                                }))
+                              }
+                              options={SLA_OPTIONS}
+                              placeholder="Выберите"
+                            />
+                          </View>
+                          <View style={styles.acceptModalField}>
+                            <ThemedText
+                              style={[styles.acceptModalFieldLabel, { color: mutedColor }]}
+                            >
+                              Сложность
+                            </ThemedText>
+                            <Select
+                              value={subRequestSettings[sr.id]?.complexity ?? ''}
+                              onValueChange={(v) =>
+                                setSubRequestSettings((prev) => ({
+                                  ...prev,
+                                  [sr.id]: {
+                                    sla: prev[sr.id]?.sla ?? '',
+                                    complexity: v,
+                                  },
+                                }))
+                              }
+                              options={COMPLEXITY_OPTIONS}
+                              placeholder="Выберите"
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
+                  Локация в офисе (необязательно)
+                </ThemedText>
+                <TextInput
+                  style={[
+                    styles.acceptRejectBlockInput,
+                    {
+                      color: textColor,
+                      borderColor,
+                      backgroundColor,
+                    },
+                  ]}
+                  placeholder="Укажите локацию"
+                  placeholderTextColor={mutedColor}
+                  value={locationDetail}
+                  onChangeText={setLocationDetail}
+                />
+
+                {acceptFormError ? (
+                  <ThemedText style={styles.acceptModalError}>{acceptFormError}</ThemedText>
+                ) : null}
+              </ScrollView>
+
+              <View style={styles.acceptRejectBlockButtons}>
+                <Pressable
+                  onPress={handleAcceptGroupSubmit}
+                  disabled={actionLoading}
+                  style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnAccept]}
+                >
+                  <MaterialIcons name="check-circle" size={20} color="#FFF" />
+                  <ThemedText style={styles.acceptRejectLabel}>
+                    {actionLoading ? '...' : 'Принять'}
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={() => setShowAcceptGroupModal(false)}
+                  style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnReject]}
+                >
+                  <MaterialIcons name="cancel" size={20} color="#FFF" />
+                  <ThemedText style={styles.acceptRejectLabel}>
+                    Отмена
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
+
+      {/* Модалка для отклонения заявки администратором */}
+      {role === 'admin-worker' && request.status === 'in_progress' && (
+        <Modal
+          visible={showRejectGroupModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowRejectGroupModal(false)}
+        >
+          <Pressable
+            style={styles.backdrop}
+            onPress={() => setShowRejectGroupModal(false)}
+          >
+            <View
+              style={[
+                styles.acceptRejectModalSheet,
+                { backgroundColor: cardBackground, borderColor },
+              ]}
+            >
+              <View style={styles.handle} />
+              <ThemedText style={[styles.acceptRejectBlockTitle, { color: textColor }]}>
+                Отклонить заявку
+              </ThemedText>
+              <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
+                Укажите причину отклонения
+              </ThemedText>
+              <TextInput
+                style={[
+                  styles.rejectGroupInput,
+                  {
+                    color: textColor,
+                    borderColor,
+                    backgroundColor,
+                  },
+                ]}
+                placeholder="Причина отклонения..."
+                placeholderTextColor={mutedColor}
+                value={rejectGroupReason}
+                onChangeText={setRejectGroupReason}
+                multiline
+              />
+              {acceptFormError ? (
+                <ThemedText style={styles.acceptModalError}>{acceptFormError}</ThemedText>
+              ) : null}
+
+              <View style={styles.acceptRejectBlockButtons}>
+                <Pressable
+                  onPress={handleRejectGroup}
+                  disabled={!rejectGroupReason.trim() || actionLoading}
+                  style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnReject]}
+                >
+                  <MaterialIcons name="cancel" size={20} color="#FFF" />
+                  <ThemedText style={styles.acceptRejectLabel}>
+                    {actionLoading ? '...' : 'Отклонить'}
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={() => setShowRejectGroupModal(false)}
+                  style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnAccept]}
+                >
+                  <MaterialIcons name="check-circle" size={20} color="#FFF" />
+                  <ThemedText style={styles.acceptRejectLabel}>
+                    Закрыть
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Modal>
+      )}
 
       <RejectModal
         visible={showRejectModal}
@@ -1093,6 +1177,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     flex: 1,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
   },
   scroll: {
     flex: 1,
@@ -1210,11 +1299,13 @@ const styles = StyleSheet.create({
   acceptRejectBlockBtnReject: {
     backgroundColor: '#EF4444',
   },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: 24,
+  acceptRejectModalSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+    maxHeight: '80%',
+    borderTopWidth: 1,
   },
   rejectGroupContent: {
     borderRadius: 16,

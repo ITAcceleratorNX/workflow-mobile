@@ -43,6 +43,8 @@ interface RequestActionMenuProps {
     currentStatus: boolean
   ) => void;
   onAdminCompleteGroup?: () => void;
+  onAdminAcceptGroup?: () => void;
+  onAdminRejectGroup?: () => void;
 }
 
 export function RequestActionMenu({
@@ -63,6 +65,8 @@ export function RequestActionMenu({
   onRateClient,
   onToggleLongTerm,
   onAdminCompleteGroup,
+  onAdminAcceptGroup,
+  onAdminRejectGroup,
 }: RequestActionMenuProps) {
   const [visible, setVisible] = useState(false);
   const primary = useThemeColor({}, 'primary');
@@ -262,11 +266,30 @@ export function RequestActionMenu({
     }
 
     if (userRole === 'admin-worker' && isSub && subRequest) {
+      const canProcessGroup = request.status === 'in_progress';
       const hasActiveForAdminComplete =
-        request.status === 'in_progress' &&
+        canProcessGroup &&
         (request.requests ?? []).some((sr) =>
           ['in_progress', 'awaiting_assignment', 'assigned'].includes(sr.status)
         );
+
+      if (onAdminAcceptGroup && canProcessGroup) {
+        actions.push({
+          icon: 'playlist-add-check',
+          label: 'Принять заявку',
+          onClick: onAdminAcceptGroup,
+          variant: 'primary',
+        });
+      }
+
+      if (onAdminRejectGroup && canProcessGroup) {
+        actions.push({
+          icon: 'cancel',
+          label: 'Отклонить заявку',
+          onClick: onAdminRejectGroup,
+          variant: 'destructive',
+        });
+      }
 
       if (onAdminCompleteGroup && hasActiveForAdminComplete) {
         actions.push({
