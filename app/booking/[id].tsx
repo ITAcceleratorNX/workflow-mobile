@@ -121,7 +121,7 @@ export default function BookingQrScreen() {
         </ThemedText>
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingBottom: insets.bottom + 88 }]}>
         {office && (
           <View style={[styles.card, { backgroundColor: cardBackground }]}>
             <ThemedText style={[styles.cardTitle, { color: textColor }]}>
@@ -182,20 +182,20 @@ export default function BookingQrScreen() {
           <ThemedText style={[styles.qrHint, { color: mutedColor }]}>
             Покажите этот QR исполнителю для сканирования.
           </ThemedText>
-          <Pressable
-            style={styles.shareButton}
-            onPress={() =>
-              Share.share({
-                title: 'Бронирование переговорной',
-                message: appUrl,
-                url: appUrl,
-              })
-            }
-          >
-            <MaterialIcons name="share" size={18} color="#FFFFFF" />
-            <ThemedText style={styles.shareButtonText}>Поделиться ссылкой</ThemedText>
-          </Pressable>
         </View>
+        <Pressable
+          style={[styles.shareButtonFloating, { bottom: insets.bottom + 16 }]}
+          onPress={() =>
+            Share.share({
+              title: 'Бронирование переговорной',
+              message: appUrl,
+              url: appUrl,
+            })
+          }
+        >
+          <MaterialIcons name="share" size={18} color="#FFFFFF" />
+          <ThemedText style={styles.shareButtonText}>Поделиться ссылкой</ThemedText>
+        </Pressable>
       </View>
     </ThemedView>
   );
@@ -286,6 +286,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#111827',
+    gap: 8,
+  },
+  shareButtonFloating: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 999,
     backgroundColor: '#111827',
     gap: 8,

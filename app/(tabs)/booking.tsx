@@ -32,6 +32,7 @@ import { getImageUri, getPrimaryPhotoUri, getRoomPhotoUris } from '@/lib/image-u
 import {
   type MeetingRoom,
   type MeetingRoomBooking,
+  type MyBookingsStatusFilter,
   type Office,
   cancelMeetingRoomBooking,
   createMeetingRoomBooking,
@@ -122,6 +123,10 @@ export default function BookingScreen() {
   const [offices, setOffices] = useState<Office[]>([]);
   const [rooms, setRooms] = useState<MeetingRoom[]>([]);
   const [myBookings, setMyBookings] = useState<MeetingRoomBooking[]>([]);
+  const [myBookingsPage, setMyBookingsPage] = useState(1);
+  const [myBookingsHasMore, setMyBookingsHasMore] = useState(false);
+  const [loadingMoreBookings, setLoadingMoreBookings] = useState(false);
+  const [myBookingsFilter, setMyBookingsFilter] = useState<MyBookingsFilter>('active');
 
   const [loadingOffices, setLoadingOffices] = useState(false);
   const [loadingRooms, setLoadingRooms] = useState(false);
@@ -260,31 +265,53 @@ export default function BookingScreen() {
     } else setRooms([]);
   }, []);
 
-  const loadMyBookings = useCallback(async () => {
-    setLoadingBookings(true);
-    if (isGuest) {
-      const sorted = [...guestBookings].sort((a, b) => {
-        const sa = typeof a.start_time === 'string' ? a.start_time : '';
-        const sb = typeof b.start_time === 'string' ? b.start_time : '';
-        return new Date(sa).getTime() - new Date(sb).getTime();
-      });
-      setMyBookings(sorted as MeetingRoomBooking[]);
-      setLoadingBookings(false);
-      return;
-    }
-    const res = await getMyBookings();
-    setLoadingBookings(false);
-    if (res.ok) setMyBookings(res.data);
-    else setMyBookings([]);
-  }, []);
+  const PAGE_SIZE = 20;
+
+  const loadMyBookings = useCallback(
+    async (statusFilter: MyBookingsStatusFilter, page: number, append: boolean) => {
+      if (isGuest) {
+        const sorted = [...guestBookings].sort((a, b) => {
+          const sa = typeof a.start_time === 'string' ? a.start_time : '';
+          const sb = typeof b.start_time === 'string' ? b.start_time : '';
+          return new Date(sa).getTime() - new Date(sb).getTime();
+        });
+        setMyBookings(sorted as MeetingRoomBooking[]);
+        setMyBookingsHasMore(false);
+        return;
+      }
+      if (append) setLoadingMoreBookings(true);
+      else setLoadingBookings(true);
+      const res = await getMyBookings({ status: statusFilter, page, pageSize: PAGE_SIZE });
+      if (append) setLoadingMoreBookings(false);
+      else setLoadingBookings(false);
+      if (res.ok) {
+        if (append) {
+          setMyBookings((prev) => [...prev, ...res.data]);
+        } else {
+          setMyBookings(res.data);
+        }
+        setMyBookingsPage(res.page);
+        setMyBookingsHasMore(res.hasMore);
+      } else if (!append) {
+        setMyBookings([]);
+        setMyBookingsHasMore(false);
+      }
+    },
+    [isGuest, guestBookings]
+  );
+
+  const loadMyBookingsForCurrentFilter = useCallback(
+    (page: number, append: boolean) => loadMyBookings(myBookingsFilter, page, append),
+    [loadMyBookings, myBookingsFilter]
+  );
 
   useEffect(() => {
     loadOffices();
   }, [loadOffices]);
 
   useEffect(() => {
-    if (activeTab === 'my-bookings') loadMyBookings();
-  }, [activeTab, loadMyBookings]);
+    if (activeTab === 'my-bookings') loadMyBookings(myBookingsFilter, 1, false);
+  }, [activeTab, myBookingsFilter, loadMyBookings]);
 
   useEffect(() => {
     if (selectedOffice) loadRooms(selectedOffice.id);
@@ -425,7 +452,7 @@ export default function BookingScreen() {
       setSelectedDate(null);
       setSelectedTimeSlot(null);
       setCompanyName('');
-      loadMyBookings();
+      loadMyBookings(myBookingsFilter, 1, false);
       // Переходим на экран демо-QR
       router.push(`/booking/${newId}`);
       return;
@@ -446,7 +473,7 @@ export default function BookingScreen() {
       setSelectedDate(null);
       setSelectedTimeSlot(null);
       setCompanyName('');
-      loadMyBookings();
+      loadMyBookings(myBookingsFilter, 1, false);
     } else {
       showToast({ title: 'Ошибка', description: res.error, variant: 'destructive' });
     }
@@ -458,6 +485,7 @@ export default function BookingScreen() {
     bookedSlots,
     showToast,
     loadMyBookings,
+    myBookingsFilter,
     isGuest,
     addGuestBooking,
     selectedOffice,
@@ -484,7 +512,7 @@ export default function BookingScreen() {
                   description: 'Бронирование отменено локально',
                   variant: 'default',
                 });
-                loadMyBookings();
+                loadMyBookings(myBookingsFilter, 1, false);
                 return;
               }
               const res = await cancelMeetingRoomBooking(item.id);
@@ -495,7 +523,7 @@ export default function BookingScreen() {
                   description: 'Бронирование успешно отменено',
                   variant: 'default',
                 });
-                loadMyBookings();
+                loadMyBookings(myBookingsFilter, 1, false);
               } else {
                 showToast({ title: 'Ошибка', description: res.error, variant: 'destructive' });
               }
@@ -504,7 +532,7 @@ export default function BookingScreen() {
         ]
       );
     },
-    [showToast, loadMyBookings, isGuest, removeGuestBooking]
+    [showToast, loadMyBookings, myBookingsFilter, isGuest, removeGuestBooking]
   );
 
   const datesForPicker = useMemo(() => {
@@ -545,8 +573,6 @@ export default function BookingScreen() {
       }),
     [myBookings]
   );
-
-  const [myBookingsFilter, setMyBookingsFilter] = useState<MyBookingsFilter>('active');
 
   const isBookingCancelled = useCallback((b: MeetingRoomBooking) => {
     return b.status === 'cancelled' || b.status === 'auto_cancelled';
@@ -828,36 +854,40 @@ export default function BookingScreen() {
                     </ThemedText>
                   </View>
                 ) : (
-                  <View style={styles.officeGrid}>
-                    {offices.map((item) => {
-                      const photoUri = getImageUri(item.photo);
-                      return (
-                        <Pressable
-                          key={item.id}
-                          style={styles.officeCard}
-                          onPress={() => handleSelectOffice(item)}
-                        >
-                          <View style={styles.officeCardImageWrap}>
-                            {photoUri ? (
-                              <Image source={{ uri: photoUri }} style={styles.officeCardImage} contentFit="cover" />
-                            ) : (
-                              <View style={styles.officeCardImagePlaceholder}>
-                                <MaterialIcons name="location-on" size={32} color="rgba(255,255,255,0.4)" />
-                              </View>
-                            )}
-                          </View>
-                          <ThemedText style={styles.officeCardName} numberOfLines={2}>
-                            {item.name}
-                          </ThemedText>
-                          {(item.address || item.city) && (
-                            <ThemedText style={styles.officeCardMeta} numberOfLines={2}>
-                              {[item.address, item.city].filter(Boolean).join(', ')}
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                  >
+                    <View style={styles.officeGrid}>
+                      {offices.map((item) => {
+                        const photoUri = getImageUri(item.photo);
+                        return (
+                          <Pressable
+                            key={item.id}
+                            style={styles.officeCard}
+                            onPress={() => handleSelectOffice(item)}
+                          >
+                            <View style={styles.officeCardImageWrap}>
+                              {photoUri ? (
+                                <Image source={{ uri: photoUri }} style={styles.officeCardImage} contentFit="cover" />
+                              ) : (
+                                <View style={styles.officeCardImagePlaceholder}>
+                                  <MaterialIcons name="location-on" size={32} color="rgba(255,255,255,0.4)" />
+                                </View>
+                              )}
+                            </View>
+                            <ThemedText style={styles.officeCardName} numberOfLines={2}>
+                              {item.name}
                             </ThemedText>
-                          )}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                            {(item.address || item.city) && (
+                              <ThemedText style={styles.officeCardMeta} numberOfLines={2}>
+                                {[item.address, item.city].filter(Boolean).join(', ')}
+                              </ThemedText>
+                            )}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
                 )}
               </>
             )}
@@ -1043,8 +1073,14 @@ export default function BookingScreen() {
                 ))}
               </View>
               <FlatList
-                data={filteredMyBookings}
+                data={isGuest ? filteredMyBookings : myBookings}
                 keyExtractor={(b) => String(b.id)}
+                onEndReached={
+                  !isGuest && myBookingsHasMore && !loadingMoreBookings
+                    ? () => loadMyBookings(myBookingsFilter, myBookingsPage + 1, true)
+                    : undefined
+                }
+                onEndReachedThreshold={0.4}
                 ListEmptyComponent={
                   <ThemedText style={styles.emptyWhite}>
                     {myBookingsFilter === 'active'
@@ -1053,6 +1089,13 @@ export default function BookingScreen() {
                         ? 'Нет завершённых бронирований'
                         : 'Нет отменённых бронирований'}
                   </ThemedText>
+                }
+                ListFooterComponent={
+                  loadingMoreBookings ? (
+                    <View style={styles.loaderFooter}>
+                      <ActivityIndicator size="small" color="#fff" />
+                    </View>
+                  ) : null
                 }
                 renderItem={({ item }) => {
                   const room = item.meeting_room ?? item.meetingRoom;
@@ -1764,6 +1807,10 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginVertical: 20,
+  },
+  loaderFooter: {
+    paddingVertical: 16,
+    alignItems: 'center',
   },
   slotsGrid: {
     flexDirection: 'row',

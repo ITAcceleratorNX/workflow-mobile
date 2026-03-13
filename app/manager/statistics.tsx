@@ -4,7 +4,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 
 import { PageLoader, PullToRefresh } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
@@ -165,6 +164,19 @@ export default function ManagerStatisticsScreen() {
 
         if (!result || !result.uri) {
           Alert.alert('Ошибка', 'Не удалось скачать файл.');
+          return;
+        }
+
+        let Sharing: typeof import('expo-sharing') | null = null;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          Sharing = require('expo-sharing');
+        } catch {
+          Sharing = null;
+        }
+
+        if (!Sharing) {
+          Alert.alert('Файл сохранён', `Файл сохранён по пути:\n${result.uri}`);
           return;
         }
 

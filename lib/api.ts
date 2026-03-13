@@ -1455,17 +1455,43 @@ export async function createMeetingRoomBooking(data: {
   return { ok: false, error: result.error };
 }
 
-export async function getMyBookings(): Promise<
-  | { ok: true; data: MeetingRoomBooking[] }
+export type MyBookingsStatusFilter = 'active' | 'completed' | 'cancelled';
+
+export interface GetMyBookingsParams {
+  status?: MyBookingsStatusFilter | null;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface GetMyBookingsResponse {
+  data: MeetingRoomBooking[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+export async function getMyBookings(params?: GetMyBookingsParams): Promise<
+  | { ok: true; data: MeetingRoomBooking[]; total: number; page: number; pageSize: number; hasMore: boolean }
   | { ok: false; error: string }
 > {
-  const result = await request<MeetingRoomBooking[] | MeetingRoomBooking>(
-    '/meeting-room-bookings/my'
-  );
+  const search = new URLSearchParams();
+  if (params?.status) search.set('status', params.status);
+  if (params?.page != null) search.set('page', String(params.page));
+  if (params?.pageSize != null) search.set('pageSize', String(params.pageSize));
+  const qs = search.toString();
+  const path = qs ? `/meeting-room-bookings/my?${qs}` : '/meeting-room-bookings/my';
+  const result = await request<GetMyBookingsResponse>(path);
   if (!result.ok) return { ok: false, error: result.error };
-  const data = result.data;
-  const list = Array.isArray(data) ? data : data ? [data] : [];
-  return { ok: true, data: list };
+  const raw = result.data;
+  const list = Array.isArray((raw as { data?: MeetingRoomBooking[] })?.data)
+    ? (raw as GetMyBookingsResponse).data
+    : [];
+  const total = typeof (raw as GetMyBookingsResponse).total === 'number' ? (raw as GetMyBookingsResponse).total : list.length;
+  const page = typeof (raw as GetMyBookingsResponse).page === 'number' ? (raw as GetMyBookingsResponse).page : 1;
+  const pageSize = typeof (raw as GetMyBookingsResponse).pageSize === 'number' ? (raw as GetMyBookingsResponse).pageSize : list.length;
+  const hasMore = typeof (raw as GetMyBookingsResponse).hasMore === 'boolean' ? (raw as GetMyBookingsResponse).hasMore : false;
+  return { ok: true, data: list, total, page, pageSize, hasMore };
 }
 
 export async function cancelMeetingRoomBooking(

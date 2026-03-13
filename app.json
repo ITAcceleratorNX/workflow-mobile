@@ -8,11 +8,16 @@
     "scheme": "workflowmobile",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "googleServicesFile": "./GoogleService-Info.plist",
-      "infoPlist": {
-        "NSMotionUsageDescription": "Приложение использует датчики движения для отслеживания активности (сидение/стояние) и health-напоминаний."
+      "ios": {
+        "buildNumber": "7",
+        "supportsTablet": true,
+        "googleServicesFile": "./GoogleService-Info.plist",
+        "infoPlist": {
+        "NSMotionUsageDescription": "Приложение использует датчики движения для отслеживания активности (сидение/стояние) и health-напоминаний.",
+        "NSLocationWhenInUseUsageDescription": "Доступ к геолокации нужен, чтобы привязывать заявки к вашему текущему адресу и находить ближайший офис обслуживания.",
+        "NSUserNotificationUsageDescription": "Уведомления нужны, чтобы сообщать о статусе ваших заявок и важных событиях в системе.",
+        "NSPhotoLibraryUsageDescription": "Доступ к фотографиям нужен, чтобы прикреплять изображения и документы к заявкам.",
+        "NSCameraUsageDescription": "Доступ к камере нужен, чтобы делать фотографии и сканы для заявок."
       },
       "bundleIdentifier": "com.workflow.kz",
       "associatedDomains": [
@@ -52,6 +57,7 @@
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
       ],
+      "versionCode": 2,
       "package": "com.workflow.kz"
     },
     "web": {
