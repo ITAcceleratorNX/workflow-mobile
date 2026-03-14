@@ -1,9 +1,10 @@
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 import { Redirect } from 'expo-router';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { parseRequestDeepLinkUrl } from '@/lib/shareRequest';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
 
@@ -17,11 +18,22 @@ export default function IndexScreen() {
   const pendingRequestId = useDeepLinkStore((s) => s.pendingRequestId);
   const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
   const [isReady, setIsReady] = useState(false);
+  const [initialRequestId, setInitialRequestId] = useState<number | null>(null);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const effectiveRole = role || user?.role;
   const hasToken = !!token;
+
+  // Читаем начальный URL при холодном старте (как для брони): getInitialURL может прийти позже, чем редирект
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        const parsed = parseRequestDeepLinkUrl(url);
+        if (parsed) setInitialRequestId(parsed.requestId);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -60,8 +72,9 @@ export default function IndexScreen() {
   console.log('[Index] Redirect decision:', { hasToken, effectiveRole });
 
   if (hasToken && effectiveRole) {
-    if (pendingRequestId != null) {
-      return <Redirect href={`/(tabs)/requests/${pendingRequestId}`} />;
+    const requestIdFromLink = initialRequestId ?? pendingRequestId;
+    if (requestIdFromLink != null) {
+      return <Redirect href={`/(tabs)/requests/${requestIdFromLink}`} />;
     }
     return <Redirect href="/(tabs)" />;
   }

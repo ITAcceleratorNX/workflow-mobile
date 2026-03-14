@@ -23,14 +23,12 @@ export interface ShareRequestParams {
 }
 
 /**
- * Собирает URL заявки для шаринга.
- * Открывается в приложении (если настроены Universal/App Links) или в браузере на app.tmk-workflow.kz.
+ * Собирает URL заявки для шаринга (как у бронирования: путь /requests/:id).
+ * Открывается в приложении (Universal/App Links) или в браузере на app.tmk-workflow.kz.
  */
 export function getRequestShareUrl(params: ShareRequestParams): string {
   const base = config.webAppBaseUrl.replace(/\/$/, '');
-  const search = new URLSearchParams();
-  search.set('requestId', String(params.requestId));
-  return `${base}?${search.toString()}`;
+  return `${base}/requests/${params.requestId}`;
 }
 
 /**
