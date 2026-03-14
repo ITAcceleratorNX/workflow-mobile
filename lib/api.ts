@@ -1,3 +1,5 @@
+import { router } from 'expo-router';
+
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -47,6 +49,10 @@ async function request<T>(
 
     if (!res.ok) {
       console.error(`[API Error] ${path}:`, res.status, data);
+      if (res.status === 401) {
+        useAuthStore.getState().clearAuth();
+        router.replace('/login');
+      }
       const error =
         (data as { error?: string })?.error ||
         (data as { message?: string })?.message ||
