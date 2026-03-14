@@ -1,3 +1,4 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -65,14 +66,23 @@ export default function PrivacyScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
         <View style={styles.inner}>
-          {/* Sticky header */}
-          <View style={[styles.headerSticky, { backgroundColor: background, borderBottomColor: border }]}>
-            <Pressable style={styles.backRow} onPress={() => router.back()} hitSlop={12}>
-              <ThemedText style={[styles.backText, { color: textMuted }]}>
-                {lang === 'ru' ? 'Назад' : 'Back'}
-              </ThemedText>
+          {/* Header: back icon + title + RU/EN */}
+          <View style={[styles.headerRow, { backgroundColor: background, borderBottomColor: border }]}>
+            <Pressable
+              style={styles.backButton}
+              onPress={() => router.back()}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <MaterialIcons name="chevron-left" size={28} color={primary} />
             </Pressable>
-
+            <ThemedText
+              type="title"
+              style={styles.title}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
+              {content.title}
+            </ThemedText>
             <View style={styles.langRow}>
               <Pressable
                 style={[
@@ -99,8 +109,9 @@ export default function PrivacyScreen() {
                 </ThemedText>
               </Pressable>
             </View>
+          </View>
 
-            <ThemedText type="title" style={styles.title}>{content.title}</ThemedText>
+          <View style={styles.metaBlock}>
             <ThemedText style={[styles.subtitle, { color: textMuted }]}>{content.subtitle}</ThemedText>
             <ThemedText style={[styles.lastUpdate, { color: textMuted }]}>{content.lastUpdate}</ThemedText>
           </View>
@@ -173,39 +184,49 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 16,
   },
-  headerSticky: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
     paddingBottom: 12,
     borderBottomWidth: 1,
+    gap: 12,
   },
-  backRow: {
-    marginBottom: 12,
-    paddingVertical: 8,
+  backButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -8,
   },
-  backText: { fontSize: 16, fontWeight: '500' },
-  langRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  langButton: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  langText: { fontWeight: '600', fontSize: 14 },
   title: {
-    fontSize: 22,
-    lineHeight: 28,
+    flex: 1,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '700',
     textAlign: 'center',
   },
+  langRow: { flexDirection: 'row', gap: 8 },
+  langButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  langText: { fontWeight: '600', fontSize: 13 },
+  metaBlock: {
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
   subtitle: {
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
     textAlign: 'center',
-    marginTop: 4,
   },
   lastUpdate: {
     textAlign: 'center',
     marginTop: 4,
-    fontSize: 13,
+    fontSize: 12,
   },
   tocWrap: {
     borderBottomWidth: 1,
