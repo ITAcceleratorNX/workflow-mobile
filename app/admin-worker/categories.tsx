@@ -29,9 +29,6 @@ import {
   deleteSubcategory,
 } from '@/lib/api';
 
-const PRIMARY_ORANGE = '#E25B21';
-const GRAY_600 = '#3A3A3C';
-const DARK_BG = '#1C1C1E';
 
 type TabType = 'categories' | 'subcategories' | 'executors';
 
@@ -89,6 +86,9 @@ export default function AdminWorkerCategoriesScreen() {
   const { show } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
+  const primary = useThemeColor({}, 'primary');
+  const gray600 = useThemeColor({}, 'gray600');
+  const screenBg = useThemeColor({}, 'screenBackgroundDark');
 
   const initialTab: TabType =
     tab === 'subcategories' ? 'subcategories' : tab === 'executors' ? 'executors' : 'categories';
@@ -264,7 +264,7 @@ export default function AdminWorkerCategoriesScreen() {
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <MaterialIcons name="chevron-left" size={24} color={PRIMARY_ORANGE} />
+          <MaterialIcons name="chevron-left" size={24} color={primary} />
           <ThemedText style={styles.backLabel}>Назад</ThemedText>
         </Pressable>
         <ThemedText type="title" style={styles.title}>
@@ -301,7 +301,7 @@ export default function AdminWorkerCategoriesScreen() {
 
       {loading ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
+          <ActivityIndicator size="large" color={primary} />
           <ThemedText style={[styles.loadingText, { color: textMuted }]}>Загрузка...</ThemedText>
         </View>
       ) : error ? (
@@ -648,7 +648,7 @@ export default function AdminWorkerCategoriesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: '#1C1C1E',
   },
   header: {
     paddingHorizontal: 16,
@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
   },
   backLabel: {
     fontSize: 16,
-    color: PRIMARY_ORANGE,
+    color: '#E25B21',
     marginLeft: 4,
   },
   title: {
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: GRAY_600,
+    backgroundColor: '#3A3A3C',
     borderRadius: 10,
     padding: 4,
   },
@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tabActive: {
-    backgroundColor: PRIMARY_ORANGE,
+    backgroundColor: '#E25B21',
   },
   tabText: {
     fontSize: 15,
@@ -718,7 +718,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: PRIMARY_ORANGE,
+    backgroundColor: '#E25B21',
     borderRadius: 8,
   },
   retryText: {
@@ -751,8 +751,8 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: GRAY_600,
-    backgroundColor: DARK_BG,
+    borderColor: '#3A3A3C',
+    backgroundColor: '#1C1C1E',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -766,8 +766,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: GRAY_600,
-    backgroundColor: DARK_BG,
+    borderColor: '#3A3A3C',
+    backgroundColor: '#1C1C1E',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -777,7 +777,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   dropdown: {
-    backgroundColor: GRAY_600,
+    backgroundColor: '#3A3A3C',
     borderRadius: 10,
     marginBottom: 12,
     overflow: 'hidden',
@@ -797,7 +797,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
   },
   primaryButton: {
-    backgroundColor: PRIMARY_ORANGE,
+    backgroundColor: '#E25B21',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,

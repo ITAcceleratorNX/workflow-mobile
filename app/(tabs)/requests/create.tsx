@@ -47,6 +47,7 @@ import { findNearestOffice } from '@/lib/nearest-office';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { COMPLEXITY_OPTIONS, SLA_OPTIONS } from '@/constants/requests';
 
 type CreateUserRole = 'client' | 'admin-worker' | 'department-head' | 'executor' | 'manager';
 
@@ -55,21 +56,6 @@ const REQUEST_TYPES: { value: string; label: string }[] = [
   { value: 'urgent', label: 'Экстренная' },
   { value: 'planned', label: 'Плановая' },
   { value: 'recurring', label: 'Повторяющаяся задача' },
-];
-
-const COMPLEXITY_OPTIONS = [
-  { value: 'simple', label: 'Простая' },
-  { value: 'medium', label: 'Средняя' },
-  { value: 'complex', label: 'Сложная' },
-];
-
-const SLA_OPTIONS = [
-  { value: '1h', label: '1 час' },
-  { value: '4h', label: '4 часа' },
-  { value: '8h', label: '8 часов' },
-  { value: '1d', label: '1 день' },
-  { value: '3d', label: '3 дня' },
-  { value: '1w', label: '1 неделя' },
 ];
 
 /** Как в kcell: для справочника офисов используем office.name (совпадает с address в officeLocationsData) */

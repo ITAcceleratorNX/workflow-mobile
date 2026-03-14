@@ -24,7 +24,8 @@ import {
 } from '@/lib/api';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
-import {useSafeAreaInsets} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getStatusLabel, getTypeLabel } from '@/constants/requests';
 
 // Размеры как в kcell-service-front compact: 140×100, rounded-xl, gap-4
 const CARD_PHOTO_WIDTH = 140;
@@ -43,21 +44,6 @@ const KCELL = {
   chevron: '#6B7280',
   title: '#FFFFFF',
 } as const;
-
-const STATUS_LABELS: Record<string, string> = {
-  completed: 'Завершено',
-  in_progress: 'В обработке',
-  awaiting_assignment: 'Ожидает назначения',
-  execution: 'Исполнение',
-  rejected: 'Отклонено',
-  cancelled: 'Отменено',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  urgent: 'Экстренная',
-  planned: 'Плановая',
-  normal: 'Обычная',
-};
 
 const TYPE_OPTIONS = [
   { value: 'all', label: 'Все' },
@@ -139,14 +125,6 @@ const TABS_BY_ROLE: Record<string, { key: string; label: string }[]> = {
   ],
 };
 
-function translateStatus(status: string) {
-  return STATUS_LABELS[status] ?? status;
-}
-
-function translateType(type: string) {
-  return TYPE_LABELS[type] ?? 'Обычная';
-}
-
 /** Первое фото заявки: с группы (как в kcell compact — request.photos[0]) или с первой подзаявки */
 function getFirstPhotoUrl(request: RequestGroup): string | null {
   const fromGroup = request.photos?.[0]?.photo_url;
@@ -163,8 +141,8 @@ function RequestCard({
   request: RequestGroup;
   onPress: () => void;
 }) {
-  const typeLabel = translateType(request.request_type ?? 'normal');
-  const statusLabel = translateStatus(request.status);
+  const typeLabel = getTypeLabel(request.request_type ?? 'normal');
+  const statusLabel = getStatusLabel(request.status);
   const formattedDateLong = request.created_date
     ? new Date(request.created_date).toLocaleDateString('ru-RU', {
         day: 'numeric',

@@ -49,49 +49,13 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const STATUS_LABELS: Record<string, string> = {
-  completed: 'Завершено',
-  in_progress: 'В обработке',
-  awaiting_assignment: 'Ожидает назначения',
-  execution: 'Исполнение',
-  rejected: 'Отклонено',
-  cancelled: 'Отменено',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  urgent: 'Экстренная',
-  planned: 'Плановая',
-  normal: 'Обычная',
-};
-
-const REQUEST_TYPE_OPTIONS = [
-  { value: 'normal', label: 'Обычная' },
-  { value: 'urgent', label: 'Экстренная' },
-  { value: 'planned', label: 'Плановая' },
-];
-
-const SLA_OPTIONS = [
-  { value: '1h', label: '1 час' },
-  { value: '4h', label: '4 часа' },
-  { value: '8h', label: '8 часов' },
-  { value: '1d', label: '1 день' },
-  { value: '3d', label: '3 дня' },
-  { value: '1w', label: '1 неделя' },
-];
-
-const COMPLEXITY_OPTIONS = [
-  { value: 'simple', label: 'Простая' },
-  { value: 'medium', label: 'Средняя' },
-  { value: 'complex', label: 'Сложная' },
-];
-
-function translateStatus(s: string) {
-  return STATUS_LABELS[s] ?? s;
-}
-
-function translateType(t: string) {
-  return TYPE_LABELS[t] ?? 'Обычная';
-}
+import {
+  REQUEST_TYPE_OPTIONS,
+  SLA_OPTIONS,
+  COMPLEXITY_OPTIONS,
+  getStatusLabel,
+  getTypeLabel,
+} from '@/constants/requests';
 
 function PhotoGrid({
   photos,
@@ -702,12 +666,12 @@ export default function RequestDetailScreen() {
         <View style={styles.badges}>
           <View style={[styles.badge, { backgroundColor: primaryColor }]}>
             <ThemedText style={styles.badgeText}>
-              {translateStatus(request.status)}
+              {getStatusLabel(request.status)}
             </ThemedText>
           </View>
           <View style={[styles.badge, { backgroundColor: mutedColor }]}>
             <ThemedText style={styles.badgeText}>
-              {translateType(request.request_type ?? 'normal')}
+              {getTypeLabel(request.request_type ?? 'normal')}
             </ThemedText>
           </View>
         </View>

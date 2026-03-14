@@ -34,10 +34,6 @@ import {
 } from '@/lib/api';
 import { formatRequestDate } from '@/lib/dateTimeUtils';
 
-const PRIMARY_ORANGE = '#E25B21';
-const GRAY_600 = '#3A3A3C';
-const DARK_BG = '#1C1C1E';
-
 type TabType = 'requests' | 'management';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -48,7 +44,8 @@ const ROLE_LABELS: Record<string, string> = {
   manager: 'Руководитель',
 };
 
-const STATUS_LABELS: Record<string, string> = {
+/** Статусы запросов на регистрацию (отдельно от статусов заявок) */
+const REGISTRATION_STATUS_LABELS: Record<string, string> = {
   pending: 'Ожидает',
   approved: 'Одобрено',
   rejected: 'Отклонено',
@@ -62,6 +59,9 @@ export default function AdminWorkerUsersScreen() {
   const user = useAuthStore((s) => s.user);
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
+  const primary = useThemeColor({}, 'primary');
+  const gray600 = useThemeColor({}, 'gray600');
+  const screenBg = useThemeColor({}, 'screenBackgroundDark');
 
   const initialTab: TabType = tab === 'management' ? 'management' : 'requests';
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
@@ -278,20 +278,20 @@ export default function AdminWorkerUsersScreen() {
   );
 
   return (
-    <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <MaterialIcons name="chevron-left" size={24} color={PRIMARY_ORANGE} />
-          <ThemedText style={styles.backLabel}>Назад</ThemedText>
+          <MaterialIcons name="chevron-left" size={24} color={primary} />
+          <ThemedText style={[styles.backLabel, { color: primary }]}>Назад</ThemedText>
         </Pressable>
         <ThemedText type="title" style={styles.title}>
           Пользователи
         </ThemedText>
       </View>
 
-      <View style={styles.tabs}>
+      <View style={[styles.tabs, { backgroundColor: gray600 }]}>
         <Pressable
-          style={[styles.tab, activeTab === 'requests' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'requests' && { backgroundColor: primary }]}
           onPress={() => setActiveTab('requests')}
         >
           <MaterialIcons
@@ -304,7 +304,7 @@ export default function AdminWorkerUsersScreen() {
           </ThemedText>
         </Pressable>
         <Pressable
-          style={[styles.tab, activeTab === 'management' && styles.tabActive]}
+          style={[styles.tab, activeTab === 'management' && { backgroundColor: primary }]}
           onPress={() => setActiveTab('management')}
         >
           <MaterialIcons
@@ -333,11 +333,11 @@ export default function AdminWorkerUsersScreen() {
           <View style={styles.field}>
             <ThemedText style={[styles.label, { color: textMuted }]}>Статус</ThemedText>
             <Pressable
-              style={styles.selectTrigger}
+              style={[styles.selectTrigger, { borderColor: gray600, backgroundColor: screenBg }]}
               onPress={() => setShowStatusDropdown((v) => !v)}
             >
               <ThemedText style={[styles.selectTriggerText, { color: text }]}>
-                {filters.status ? STATUS_LABELS[filters.status] ?? filters.status : 'Все статусы'}
+                {filters.status ? REGISTRATION_STATUS_LABELS[filters.status] ?? filters.status : 'Все статусы'}
               </ThemedText>
               <MaterialIcons
                 name={showStatusDropdown ? 'expand-less' : 'expand-more'}
@@ -346,7 +346,7 @@ export default function AdminWorkerUsersScreen() {
               />
             </Pressable>
             {showStatusDropdown && (
-              <View style={styles.dropdown}>
+              <View style={[styles.dropdown, { backgroundColor: screenBg }]}>
                 <Pressable
                   style={[styles.dropdownItem, !filters.status && styles.dropdownItemActive]}
                   onPress={() => {
@@ -365,7 +365,7 @@ export default function AdminWorkerUsersScreen() {
                       setShowStatusDropdown(false);
                     }}
                   >
-                    <ThemedText style={styles.dropdownItemText}>{STATUS_LABELS[s]}</ThemedText>
+                    <ThemedText style={styles.dropdownItemText}>{REGISTRATION_STATUS_LABELS[s]}</ThemedText>
                   </Pressable>
                 ))}
               </View>
@@ -382,12 +382,12 @@ export default function AdminWorkerUsersScreen() {
           ) : (
             <View style={styles.requestList}>
               {requests.map((req) => (
-                <View key={req.id} style={styles.requestCard}>
+                <View key={req.id} style={[styles.requestCard, { backgroundColor: gray600 }]}>
                   <View style={styles.requestCardHeader}>
                     <ThemedText style={styles.requestName}>{req.full_name}</ThemedText>
-                    <View style={[styles.badge, req.status === 'pending' && styles.badgePending]}>
+                    <View style={[styles.badge, req.status === 'pending' && { backgroundColor: primary }]}>
                       <ThemedText style={styles.badgeText}>
-                        {STATUS_LABELS[req.status] ?? req.status}
+                        {REGISTRATION_STATUS_LABELS[req.status] ?? req.status}
                       </ThemedText>
                     </View>
                   </View>
@@ -444,17 +444,17 @@ export default function AdminWorkerUsersScreen() {
         >
           {officeUsersLoading ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
+              <ActivityIndicator size="large" color={primary} />
             </View>
           ) : (
             <>
-              <View style={styles.card}>
+              <View style={[styles.card, { backgroundColor: gray600 }]}>
                 <ThemedText style={[styles.cardTitle, { color: text }]}>Смена пароля</ThemedText>
                 <ThemedText style={[styles.cardSubtitle, { color: textMuted }]}>
                   Изменение пароля пользователей вашего офиса
                 </ThemedText>
                 <Pressable
-                  style={styles.selectTrigger}
+                  style={[styles.selectTrigger, { borderColor: gray600, backgroundColor: screenBg }]}
                   onPress={() => setShowUserDropdown((v) => !v)}
                 >
                   <ThemedText style={[styles.selectTriggerText, { color: selectedUserName ? text : textMuted }]}>
@@ -463,7 +463,7 @@ export default function AdminWorkerUsersScreen() {
                   <MaterialIcons name={showUserDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
                 </Pressable>
                 {showUserDropdown && (
-                  <View style={styles.dropdown}>
+                  <View style={[styles.dropdown, { backgroundColor: screenBg }]}>
                     {officeUsers.map((u) => (
                       <Pressable
                         key={u.id}
@@ -481,7 +481,7 @@ export default function AdminWorkerUsersScreen() {
                   </View>
                 )}
                 <TextInput
-                  style={[styles.input, { color: text }]}
+                  style={[styles.input, { color: text, borderColor: gray600, backgroundColor: screenBg }]}
                   placeholder="Новый пароль"
                   placeholderTextColor={textMuted}
                   value={newPassword}
@@ -490,7 +490,7 @@ export default function AdminWorkerUsersScreen() {
                   editable={!isChangingPassword}
                 />
                 <TextInput
-                  style={[styles.input, { color: text }]}
+                  style={[styles.input, { color: text, borderColor: gray600, backgroundColor: screenBg }]}
                   placeholder="Подтверждение"
                   placeholderTextColor={textMuted}
                   value={confirmPassword}
@@ -504,6 +504,7 @@ export default function AdminWorkerUsersScreen() {
                 <Pressable
                   style={[
                     styles.primaryButton,
+                    { backgroundColor: primary },
                     (!selectedUserId || !newPassword || !confirmPassword || isChangingPassword) && styles.buttonDisabled,
                   ]}
                   onPress={handleChangePassword}
@@ -517,13 +518,13 @@ export default function AdminWorkerUsersScreen() {
                 </Pressable>
               </View>
 
-              <View style={styles.card}>
+              <View style={[styles.card, { backgroundColor: gray600 }]}>
                 <ThemedText style={[styles.cardTitle, { color: text }]}>Смена роли</ThemedText>
                 <ThemedText style={[styles.cardSubtitle, { color: textMuted }]}>
                   Изменение роли пользователей вашего офиса
                 </ThemedText>
                 <Pressable
-                  style={styles.selectTrigger}
+                  style={[styles.selectTrigger, { borderColor: gray600, backgroundColor: screenBg }]}
                   onPress={() => setShowRoleUserDropdown((v) => !v)}
                 >
                   <ThemedText style={[styles.selectTriggerText, { color: selectedRoleUserName ? text : textMuted }]}>
@@ -534,7 +535,7 @@ export default function AdminWorkerUsersScreen() {
                   <MaterialIcons name={showRoleUserDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
                 </Pressable>
                 {showRoleUserDropdown && (
-                  <View style={styles.dropdown}>
+                  <View style={[styles.dropdown, { backgroundColor: screenBg }]}>
                     {officeUsers.map((u) => (
                       <Pressable
                         key={u.id}
@@ -552,7 +553,7 @@ export default function AdminWorkerUsersScreen() {
                   </View>
                 )}
                 <Pressable
-                  style={styles.selectTrigger}
+                  style={[styles.selectTrigger, { borderColor: gray600, backgroundColor: screenBg }]}
                   onPress={() => setShowRoleDropdown((v) => !v)}
                 >
                   <ThemedText style={[styles.selectTriggerText, { color: newRole ? text : textMuted }]}>
@@ -561,7 +562,7 @@ export default function AdminWorkerUsersScreen() {
                   <MaterialIcons name={showRoleDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
                 </Pressable>
                 {showRoleDropdown && (
-                  <View style={styles.dropdown}>
+                  <View style={[styles.dropdown, { backgroundColor: screenBg }]}>
                     {Object.entries(ROLE_LABELS).map(([id, label]) => (
                       <Pressable
                         key={id}
@@ -578,7 +579,11 @@ export default function AdminWorkerUsersScreen() {
                 )}
                 {roleError ? <ThemedText style={styles.errorText}>{roleError}</ThemedText> : null}
                 <Pressable
-                  style={[styles.primaryButton, (!selectedRoleUserId || !newRole || isChangingRole) && styles.buttonDisabled]}
+                  style={[
+                    styles.primaryButton,
+                    { backgroundColor: primary },
+                    (!selectedRoleUserId || !newRole || isChangingRole) && styles.buttonDisabled,
+                  ]}
                   onPress={handleChangeRole}
                   disabled={!selectedRoleUserId || !newRole || isChangingRole}
                 >
@@ -590,13 +595,13 @@ export default function AdminWorkerUsersScreen() {
                 </Pressable>
               </View>
 
-              <View style={styles.card}>
+              <View style={[styles.card, { backgroundColor: gray600 }]}>
                 <ThemedText style={[styles.cardTitle, { color: text }]}>Смена руководителя категории</ThemedText>
                 <ThemedText style={[styles.cardSubtitle, { color: textMuted }]}>
                   Назначение нового руководителя для категории услуг
                 </ThemedText>
                 <Pressable
-                  style={styles.selectTrigger}
+                  style={[styles.selectTrigger, { borderColor: gray600, backgroundColor: screenBg }]}
                   onPress={() => !isLoadingExecutors && setShowCategoryDropdown((v) => !v)}
                 >
                   <ThemedText style={[styles.selectTriggerText, { color: selectedCategoryName ? text : textMuted }]}>
@@ -605,7 +610,7 @@ export default function AdminWorkerUsersScreen() {
                   <MaterialIcons name={showCategoryDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
                 </Pressable>
                 {showCategoryDropdown && (
-                  <View style={styles.dropdown}>
+                  <View style={[styles.dropdown, { backgroundColor: screenBg }]}>
                     {categories.map((c) => (
                       <Pressable
                         key={c.id}
@@ -623,7 +628,7 @@ export default function AdminWorkerUsersScreen() {
                 {selectedCategoryId && (
                   <>
                     <Pressable
-                      style={styles.selectTrigger}
+                      style={[styles.selectTrigger, { borderColor: gray600, backgroundColor: screenBg }]}
                       onPress={() => !isLoadingExecutors && setShowExecutorDropdown((v) => !v)}
                     >
                       <ThemedText style={[styles.selectTriggerText, { color: selectedExecutorName ? text : textMuted }]}>
@@ -632,7 +637,7 @@ export default function AdminWorkerUsersScreen() {
                       <MaterialIcons name={showExecutorDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
                     </Pressable>
                     {showExecutorDropdown && (
-                      <View style={styles.dropdown}>
+                      <View style={[styles.dropdown, { backgroundColor: screenBg }]}>
                         {executors.length === 0 && !isLoadingExecutors ? (
                           <ThemedText style={[styles.dropdownItemText, styles.dropdownItemDisabled]}>
                             Нет доступных исполнителей
@@ -661,6 +666,7 @@ export default function AdminWorkerUsersScreen() {
                 <Pressable
                   style={[
                     styles.primaryButton,
+                    { backgroundColor: primary },
                     (!selectedCategoryId || !selectedExecutorId || isChangingHead) && styles.buttonDisabled,
                   ]}
                   onPress={handleChangeCategoryHead}
@@ -674,7 +680,7 @@ export default function AdminWorkerUsersScreen() {
                 </Pressable>
                 {(selectedCategoryId || selectedExecutorId) && (
                   <Pressable
-                    style={styles.secondaryButton}
+                    style={[styles.secondaryButton, { borderColor: gray600 }]}
                     onPress={() => {
                       setSelectedCategoryId(null);
                       setSelectedExecutorId(null);
@@ -689,7 +695,7 @@ export default function AdminWorkerUsersScreen() {
               </View>
 
               <View style={styles.warnBox}>
-                <MaterialIcons name="info-outline" size={20} color={PRIMARY_ORANGE} />
+                <MaterialIcons name="info-outline" size={20} color={primary} />
                 <ThemedText style={styles.warnText}>
                   Новый пароль — минимум 6 символов. Пользователь сможет войти с новым паролем сразу после изменения.
                 </ThemedText>
@@ -705,7 +711,6 @@ export default function AdminWorkerUsersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
   },
   header: {
     paddingHorizontal: 16,
@@ -718,7 +723,6 @@ const styles = StyleSheet.create({
   },
   backLabel: {
     fontSize: 16,
-    color: PRIMARY_ORANGE,
     marginLeft: 4,
   },
   title: {
@@ -729,7 +733,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: GRAY_600,
     borderRadius: 10,
     padding: 4,
   },
@@ -742,9 +745,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
   },
-  tabActive: {
-    backgroundColor: PRIMARY_ORANGE,
-  },
+  tabActive: {},
   tabText: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.7)',
@@ -771,8 +772,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: GRAY_600,
-    backgroundColor: DARK_BG,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -798,7 +797,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   requestCard: {
-    backgroundColor: GRAY_600,
     borderRadius: 12,
     padding: 16,
   },
@@ -824,9 +822,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  badgePending: {
-    backgroundColor: PRIMARY_ORANGE,
-  },
+  badgePending: {},
   badgeText: {
     fontSize: 12,
     color: '#fff',
@@ -860,7 +856,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   card: {
-    backgroundColor: GRAY_600,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -875,7 +870,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dropdown: {
-    backgroundColor: DARK_BG,
     borderRadius: 10,
     marginBottom: 12,
     overflow: 'hidden',
@@ -896,8 +890,6 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: GRAY_600,
-    backgroundColor: DARK_BG,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -910,7 +902,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   primaryButton: {
-    backgroundColor: PRIMARY_ORANGE,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -926,7 +917,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: GRAY_600,
   },
   secondaryButtonText: {
     color: '#fff',

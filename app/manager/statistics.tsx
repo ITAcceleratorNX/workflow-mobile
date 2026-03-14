@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 
-import { PageLoader, PullToRefresh } from '@/components/ui';
+import { PageLoader, PullToRefresh, ScreenHeader, StatRow } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -22,29 +22,6 @@ import {
 type ManagerStatsRaw = ManagerStatsRawItem[];
 
 type StatsTab = 'stats' | 'analytics';
-
-const PRIMARY_ORANGE = '#E25B21';
-const GRAY_600 = '#3A3A3C';
-const DARK_BG = '#1C1C1E';
-
-function StatRow({
-  label,
-  value,
-  valueColor,
-}: {
-  label: string;
-  value: number;
-  valueColor?: string;
-}) {
-  const text = useThemeColor({}, 'text');
-  const textMuted = useThemeColor({}, 'textMuted');
-  return (
-    <View style={styles.statRow}>
-      <ThemedText style={[styles.statLabel, { color: textMuted }]}>{label}</ThemedText>
-      <ThemedText style={[styles.statValue, { color: valueColor ?? text }]}>{value}</ThemedText>
-    </View>
-  );
-}
 
 /** Агрегирует данные manager stats (по офисам и датам) в общие суммы */
 function aggregateManagerStats(raw: ManagerStatsRaw) {
@@ -94,6 +71,10 @@ export default function ManagerStatisticsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const token = useAuthStore((s) => s.token);
+  const primary = useThemeColor({}, 'primary');
+  const gray600 = useThemeColor({}, 'gray600');
+  const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const styles = useManagerStatsStyles(primary, gray600, screenBg);
   const [activeTab, setActiveTab] = useState<StatsTab>('stats');
   const [rawStats, setRawStats] = useState<ManagerStatsRaw | null>(null);
   const [analyticsData, setAnalyticsData] = useState<{
@@ -207,15 +188,7 @@ export default function ManagerStatisticsScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <MaterialIcons name="chevron-left" size={24} color={PRIMARY_ORANGE} />
-          <ThemedText style={styles.backLabel}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.title}>
-          Аналитика
-        </ThemedText>
-      </View>
+      <ScreenHeader title="Аналитика" />
 
       {/* Вкладки как в браузере: Статистика | Аналитика */}
       <View style={styles.tabsRow}>
@@ -291,7 +264,7 @@ export default function ManagerStatisticsScreen() {
                   <StatRow label="Всего заявок" value={stats?.totalRequests ?? 0} />
                   <StatRow label="Завершено" value={sc?.completed ?? 0} valueColor="#22C55E" />
                   <StatRow label="В работе" value={sc?.inWork ?? 0} valueColor="#3B82F6" />
-                  <StatRow label="Новые" value={sc?.new ?? 0} valueColor={PRIMARY_ORANGE} />
+                  <StatRow label="Новые" value={sc?.new ?? 0} valueColor={primary} />
                   <StatRow label="Просрочено" value={sc?.overdue ?? 0} valueColor="#EF4444" />
                 </View>
 
@@ -365,175 +338,87 @@ export default function ManagerStatisticsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: DARK_BG,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  backLabel: {
-    fontSize: 16,
-    color: PRIMARY_ORANGE,
-    marginLeft: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  tabsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: GRAY_600,
-    alignItems: 'center',
-  },
-  tabActive: {
-    backgroundColor: PRIMARY_ORANGE,
-  },
-  tabText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.8)',
-  },
-  tabTextActive: {
-    color: '#fff',
-  },
-  loadingBox: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-  },
-  errorBox: {
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(239,68,68,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.4)',
-  },
-  errorText: {
-    color: '#FCA5A5',
-    marginBottom: 12,
-  },
-  retryButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: PRIMARY_ORANGE,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-  },
-  quickStatsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
-  },
-  quickStatCard: {
-    flex: 1,
-    minWidth: '47%',
-    maxWidth: '48%',
-    borderRadius: 12,
-    padding: 14,
-  },
-  quickStatNew: {
-    backgroundColor: 'rgba(202,138,4,0.2)',
-  },
-  quickStatWork: {
-    backgroundColor: 'rgba(37,99,235,0.2)',
-  },
-  quickStatDone: {
-    backgroundColor: 'rgba(22,163,74,0.2)',
-  },
-  quickStatOverdue: {
-    backgroundColor: 'rgba(220,38,38,0.2)',
-  },
-  quickStatValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 6,
-  },
-  quickStatLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
-  },
-  card: {
-    backgroundColor: GRAY_600,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  cardDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: -8,
-    marginBottom: 8,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statLabel: {
-    fontSize: 15,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  exportButtonsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  exportButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exportButtonPrimary: {
-    backgroundColor: PRIMARY_ORANGE,
-  },
-  exportButtonSecondary: {
-    backgroundColor: '#4B5563',
-  },
-  exportButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-});
+function useManagerStatsStyles(primary: string, gray600: string, screenBg: string) {
+  return useMemo(
+    () =>
+      StyleSheet.create({
+        container: { flex: 1, backgroundColor: screenBg },
+        tabsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 },
+        tab: {
+          flex: 1,
+          paddingVertical: 10,
+          paddingHorizontal: 16,
+          borderRadius: 10,
+          backgroundColor: gray600,
+          alignItems: 'center',
+        },
+        tabActive: { backgroundColor: primary },
+        tabText: { fontSize: 15, fontWeight: '500', color: 'rgba(255,255,255,0.8)' },
+        tabTextActive: { color: '#fff' },
+        loadingBox: {
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: 12,
+        },
+        loadingText: { fontSize: 14 },
+        errorBox: {
+          margin: 16,
+          padding: 16,
+          borderRadius: 12,
+          backgroundColor: 'rgba(239,68,68,0.15)',
+          borderWidth: 1,
+          borderColor: 'rgba(239,68,68,0.4)',
+        },
+        errorText: { color: '#FCA5A5', marginBottom: 12 },
+        retryButton: {
+          alignSelf: 'flex-start',
+          paddingVertical: 8,
+          paddingHorizontal: 16,
+          backgroundColor: primary,
+          borderRadius: 8,
+        },
+        retryText: { color: '#fff', fontWeight: '600' },
+        scrollContent: { paddingHorizontal: 16 },
+        quickStatsRow: {
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: 10,
+          marginBottom: 16,
+        },
+        quickStatCard: {
+          flex: 1,
+          minWidth: '47%',
+          maxWidth: '48%',
+          borderRadius: 12,
+          padding: 14,
+        },
+        quickStatNew: { backgroundColor: 'rgba(202,138,4,0.2)' },
+        quickStatWork: { backgroundColor: 'rgba(37,99,235,0.2)' },
+        quickStatDone: { backgroundColor: 'rgba(22,163,74,0.2)' },
+        quickStatOverdue: { backgroundColor: 'rgba(220,38,38,0.2)' },
+        quickStatValue: { fontSize: 22, fontWeight: 'bold', color: '#fff', marginTop: 6 },
+        quickStatLabel: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+        card: {
+          backgroundColor: gray600,
+          borderRadius: 12,
+          padding: 16,
+          marginBottom: 16,
+        },
+        cardTitle: { fontSize: 17, fontWeight: '600', marginBottom: 16 },
+        cardDescription: { fontSize: 14, lineHeight: 20, marginTop: -8, marginBottom: 8 },
+        exportButtonsRow: { flexDirection: 'row', gap: 12 },
+        exportButton: {
+          flex: 1,
+          paddingVertical: 10,
+          borderRadius: 10,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        exportButtonPrimary: { backgroundColor: primary },
+        exportButtonSecondary: { backgroundColor: '#4B5563' },
+        exportButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+      }),
+    [primary, gray600, screenBg],
+  );
+}

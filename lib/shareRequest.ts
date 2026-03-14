@@ -1,18 +1,5 @@
 import { config } from '@/lib/config';
-
-const STATUS_LABELS: Record<string, string> = {
-  completed: 'Завершена',
-  in_progress: 'В процессе',
-  awaiting_assignment: 'Ожидает назначения',
-  execution: 'Выполняется',
-  assigned: 'Назначена',
-  rejected: 'Отклонена',
-  cancelled: 'Отменена',
-};
-
-function translateStatus(status: string): string {
-  return STATUS_LABELS[status] ?? status;
-}
+import { getStatusLabel } from '@/constants/requests';
 
 export interface ShareRequestParams {
   requestId: number;
@@ -40,7 +27,7 @@ export function getRequestShareMessage(params: ShareRequestParams): string {
       ? `${params.requestId}/${params.subRequestId}`
       : String(params.requestId);
   const title = params.title ?? 'Заявка';
-  const status = translateStatus(params.status ?? '');
+  const status = getStatusLabel(params.status ?? '');
   const desc = (params.description ?? '').slice(0, 200);
   const shortDesc = params.description && params.description.length > 200 ? `${desc}...` : desc;
   const url = getRequestShareUrl(params);

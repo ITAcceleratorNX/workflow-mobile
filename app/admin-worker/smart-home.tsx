@@ -36,9 +36,6 @@ import {
   deleteClientRoomSubscription,
 } from '@/lib/api';
 
-const PRIMARY_ORANGE = '#E25B21';
-const GRAY_600 = '#3A3A3C';
-const DARK_BG = '#1C1C1E';
 
 function formatExpiresAt(iso: string | null): string {
   if (!iso) return '—';
@@ -58,6 +55,9 @@ export default function AdminWorkerSmartHomeScreen() {
   const { show } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
+  const primary = useThemeColor({}, 'primary');
+  const gray600 = useThemeColor({}, 'gray600');
+  const screenBg = useThemeColor({}, 'screenBackgroundDark');
 
   // ——— Токены ———
   const [tokensMeta, setTokensMeta] = useState<{ id: number; expires_at: string | null } | null>(null);
@@ -356,7 +356,7 @@ export default function AdminWorkerSmartHomeScreen() {
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <MaterialIcons name="chevron-left" size={24} color={PRIMARY_ORANGE} />
+          <MaterialIcons name="chevron-left" size={24} color={primary} />
           <ThemedText style={styles.backLabel}>Назад</ThemedText>
         </Pressable>
         <ThemedText type="title" style={styles.title}>
@@ -379,7 +379,7 @@ export default function AdminWorkerSmartHomeScreen() {
             Токены настраиваются в веб-версии через OAuth. Здесь можно обновить или удалить.
           </ThemedText>
           {tokensLoading ? (
-            <ActivityIndicator size="small" color={PRIMARY_ORANGE} style={styles.loader} />
+            <ActivityIndicator size="small" color={primary} style={styles.loader} />
           ) : tokensError ? (
             <View style={styles.errorBox}>
               <ThemedText style={styles.errorBoxText}>{tokensError}</ThemedText>
@@ -435,7 +435,7 @@ export default function AdminWorkerSmartHomeScreen() {
             Сначала выберите офис, затем управляйте привязкой устройств к переговорным этого офиса.
           </ThemedText>
           {officesLoading ? (
-            <ActivityIndicator size="small" color={PRIMARY_ORANGE} style={styles.loader} />
+            <ActivityIndicator size="small" color={primary} style={styles.loader} />
           ) : (
             <>
               <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Выберите офис</ThemedText>
@@ -504,7 +504,7 @@ export default function AdminWorkerSmartHomeScreen() {
               Сначала выберите офис выше.
             </ThemedText>
           ) : linksLoading ? (
-            <ActivityIndicator size="small" color={PRIMARY_ORANGE} style={styles.loader} />
+            <ActivityIndicator size="small" color={primary} style={styles.loader} />
           ) : (
             <>
               {selectedOffice && (
@@ -680,7 +680,7 @@ export default function AdminWorkerSmartHomeScreen() {
               </View>
 
               {subscriptionsLoading ? (
-                <ActivityIndicator size="small" color={PRIMARY_ORANGE} style={styles.loader} />
+                <ActivityIndicator size="small" color={primary} style={styles.loader} />
               ) : subscriptionsForOffice.length > 0 ? (
                 <View style={styles.groupList}>
                   <ThemedText style={[styles.officeSectionTitle, { color: textMuted }]}>
@@ -812,7 +812,7 @@ export default function AdminWorkerSmartHomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: '#1C1C1E',
   },
   header: {
     paddingHorizontal: 16,
@@ -825,7 +825,7 @@ const styles = StyleSheet.create({
   },
   backLabel: {
     fontSize: 16,
-    color: PRIMARY_ORANGE,
+    color: '#E25B21',
     marginLeft: 4,
   },
   title: {
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   card: {
-    backgroundColor: GRAY_600,
+    backgroundColor: '#3A3A3C',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -912,7 +912,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   primaryButton: {
-    backgroundColor: PRIMARY_ORANGE,
+    backgroundColor: '#E25B21',
     paddingVertical: 12,
     minHeight: 44,
     borderRadius: 10,
@@ -983,7 +983,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: DARK_BG,
+    backgroundColor: '#1C1C1E',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1006,8 +1006,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: GRAY_600,
-    backgroundColor: DARK_BG,
+    borderColor: '#3A3A3C',
+    backgroundColor: '#1C1C1E',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1017,7 +1017,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   dropdown: {
-    backgroundColor: DARK_BG,
+    backgroundColor: '#1C1C1E',
     borderRadius: 10,
     marginBottom: 12,
     overflow: 'hidden',

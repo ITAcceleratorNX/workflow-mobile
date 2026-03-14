@@ -38,12 +38,14 @@ export default function IndexScreen() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsReady(true);
-      console.log('[Index] Auth state after rehydration:', {
-        hasToken: !!token,
-        role: role,
-        userRole: user?.role,
-        userId: user?.id,
-      });
+      if (__DEV__) {
+        console.log('[Index] Auth state after rehydration:', {
+          hasToken: !!token,
+          role: role,
+          userRole: user?.role,
+          userId: user?.id,
+        });
+      }
     }, 1200);
 
     return () => clearTimeout(timer);
@@ -69,7 +71,9 @@ export default function IndexScreen() {
     );
   }
 
-  console.log('[Index] Redirect decision:', { hasToken, effectiveRole });
+  if (__DEV__) {
+    console.log('[Index] Redirect decision:', { hasToken, effectiveRole });
+  }
 
   if (hasToken && effectiveRole) {
     const requestIdFromLink = initialRequestId ?? pendingRequestId;

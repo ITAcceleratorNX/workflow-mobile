@@ -38,11 +38,9 @@ type TabType = 'home' | 'health' | 'settings' | 'steps';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
 
-const PRIMARY_ORANGE = '#E25B21';
 const CARD_ORANGE = '#D94F15';
 const CARD_GREEN = '#1A9A8A';
 const TRACKER_ACTIVE_TEAL = '#1CC7A5';
-const DARK_BG = '#1C1C1E';
 
 type AdminCardKey = 'categories' | 'users' | 'office' | 'smart-home' | 'statistics';
 
@@ -169,6 +167,7 @@ function AdminWorkerManagementScreen() {
   const textMuted = useThemeColor({}, 'textMuted');
   const background = useThemeColor({}, 'background');
   const cardBackground = useThemeColor({}, 'cardBackground');
+  const primary = useThemeColor({}, 'primary');
   const router = useRouter();
 
   const handleOpen = useCallback(
@@ -217,7 +216,7 @@ function AdminWorkerManagementScreen() {
                 <MaterialIcons
                   name={card.icon}
                   size={28}
-                  color={PRIMARY_ORANGE}
+                  color={primary}
                   style={styles.adminIcon}
                 />
               </View>
@@ -230,7 +229,7 @@ function AdminWorkerManagementScreen() {
               <MaterialIcons
                 name="chevron-right"
                 size={20}
-                color={PRIMARY_ORANGE}
+                color={primary}
                 style={styles.adminChevron}
               />
             </Pressable>
@@ -252,6 +251,7 @@ function ExecutorManagementScreen({
   const textMuted = useThemeColor({}, 'textMuted');
   const background = useThemeColor({}, 'background');
   const cardBackground = useThemeColor({}, 'cardBackground');
+  const primary = useThemeColor({}, 'primary');
   const router = useRouter();
 
   const cards =
@@ -307,7 +307,7 @@ function ExecutorManagementScreen({
                 <MaterialIcons
                   name={card.icon}
                   size={28}
-                  color={PRIMARY_ORANGE}
+                  color={primary}
                   style={styles.adminIcon}
                 />
               </View>
@@ -320,7 +320,7 @@ function ExecutorManagementScreen({
               <MaterialIcons
                 name="chevron-right"
                 size={20}
-                color={PRIMARY_ORANGE}
+                color={primary}
                 style={styles.adminChevron}
               />
             </Pressable>
@@ -338,6 +338,7 @@ function ExecutorCabinetScreen() {
   const textMuted = useThemeColor({}, 'textMuted');
   const background = useThemeColor({}, 'background');
   const cardBackground = useThemeColor({}, 'cardBackground');
+  const primary = useThemeColor({}, 'primary');
   const router = useRouter();
 
   const handleOpen = useCallback(
@@ -370,7 +371,7 @@ function ExecutorCabinetScreen() {
                 <MaterialIcons
                   name={card.icon}
                   size={28}
-                  color={PRIMARY_ORANGE}
+                  color={primary}
                   style={styles.adminIcon}
                 />
               </View>
@@ -383,7 +384,7 @@ function ExecutorCabinetScreen() {
               <MaterialIcons
                 name="chevron-right"
                 size={20}
-                color={PRIMARY_ORANGE}
+                color={primary}
                 style={styles.adminChevron}
               />
             </Pressable>
@@ -457,6 +458,8 @@ function ClientDashboardContent() {
   const headerText = useThemeColor({}, 'text');
   const headerSubtitle = useThemeColor({}, 'textMuted');
   const tabInactiveBackground = useThemeColor({}, 'cardBackground');
+  const primary = useThemeColor({}, 'primary');
+  const screenBg = useThemeColor({}, 'screenBackgroundDark');
 
   // Activity Tracker Store
   const {
@@ -1387,7 +1390,7 @@ function ClientDashboardContent() {
                 styles.tabButton,
                 {
                   backgroundColor:
-                    activeSection === 'home' ? PRIMARY_ORANGE : tabInactiveBackground,
+                    activeSection === 'home' ? primary : tabInactiveBackground,
                 },
               ]}
             >
@@ -1401,7 +1404,7 @@ function ClientDashboardContent() {
                 styles.tabButton,
                 {
                   backgroundColor:
-                    activeSection === 'health' ? PRIMARY_ORANGE : tabInactiveBackground,
+                    activeSection === 'health' ? primary : tabInactiveBackground,
                 },
               ]}
             >
@@ -1419,7 +1422,7 @@ function ClientDashboardContent() {
                 styles.tabButton,
                 {
                   backgroundColor:
-                    activeSection === 'settings' ? PRIMARY_ORANGE : tabInactiveBackground,
+                    activeSection === 'settings' ? primary : tabInactiveBackground,
                 },
               ]}
             >
@@ -1433,7 +1436,7 @@ function ClientDashboardContent() {
                 styles.tabButton,
                 {
                   backgroundColor:
-                    activeSection === 'steps' ? PRIMARY_ORANGE : tabInactiveBackground,
+                    activeSection === 'steps' ? primary : tabInactiveBackground,
                 },
               ]}
             >
@@ -1444,7 +1447,7 @@ function ClientDashboardContent() {
 
         {/* Orange Content Section with fixed dark gradient for readability */}
         <LinearGradient
-          colors={[PRIMARY_ORANGE, DARK_BG]}
+          colors={[primary, screenBg]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={styles.contentSection}

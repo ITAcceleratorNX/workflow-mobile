@@ -11,3 +11,5 @@ export { TextInput } from './text-input';
 export { IconSymbol } from './icon-symbol';
 export { PageLoader } from './page-loader';
 export { PullToRefresh } from './pull-to-refresh';
+export { StatRow } from './stat-row';
+export { ScreenHeader } from './screen-header';

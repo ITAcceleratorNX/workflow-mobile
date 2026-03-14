@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -32,10 +32,6 @@ import {
   deleteMeetingRoom,
 } from '@/lib/api';
 
-const PRIMARY_ORANGE = '#E25B21';
-const GRAY_600 = '#3A3A3C';
-const DARK_BG = '#1C1C1E';
-
 /** "HH:mm" or "HH:mm:ss" -> "HH:mm:ss" */
 function toHHmmss(v: string): string {
   const s = (v || '').trim();
@@ -61,6 +57,9 @@ export default function AdminWorkerOfficeScreen() {
   const { show } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
+  const primary = useThemeColor({}, 'primary');
+  const gray600 = useThemeColor({}, 'gray600');
+  const screenBg = useThemeColor({}, 'screenBackgroundDark');
 
   const [offices, setOffices] = useState<Office[]>([]);
   const [loading, setLoading] = useState(true);
@@ -374,11 +373,17 @@ export default function AdminWorkerOfficeScreen() {
 
   const onRefresh = useCallback(() => load(true), [load]);
 
+  const styles = useMemo(
+    () =>
+      createOfficeStyles(primary, gray600, screenBg),
+    [primary, gray600, screenBg],
+  );
+
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <MaterialIcons name="chevron-left" size={24} color={PRIMARY_ORANGE} />
+          <MaterialIcons name="chevron-left" size={24} color={primary} />
           <ThemedText style={styles.backLabel}>Назад</ThemedText>
         </Pressable>
         <ThemedText type="title" style={styles.title}>
@@ -391,7 +396,7 @@ export default function AdminWorkerOfficeScreen() {
 
       {loading && offices.length === 0 ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
+          <ActivityIndicator size="large" color={primary} />
           <ThemedText style={[styles.loadingText, { color: textMuted }]}>Загрузка...</ThemedText>
         </View>
       ) : error ? (
@@ -479,7 +484,7 @@ export default function AdminWorkerOfficeScreen() {
                     onPress={() => expand(office)}
                   >
                     <View style={styles.cardHeaderLeft}>
-                      <MaterialIcons name="business" size={22} color={PRIMARY_ORANGE} />
+                      <MaterialIcons name="business" size={22} color={primary} />
                       <View style={styles.cardTitleBlock}>
                         <ThemedText style={[styles.cardTitle, { color: text }]} numberOfLines={1}>
                           {office.name}
@@ -567,7 +572,7 @@ export default function AdminWorkerOfficeScreen() {
                         <Switch
                           value={autoTrack}
                           onValueChange={setAutoTrack}
-                          trackColor={{ false: GRAY_600, true: PRIMARY_ORANGE }}
+                          trackColor={{ false: gray600, true: primary }}
                           thumbColor="#fff"
                         />
                       </View>
@@ -587,7 +592,7 @@ export default function AdminWorkerOfficeScreen() {
                         Переговорные
                       </ThemedText>
                       {roomsLoading ? (
-                        <ActivityIndicator size="small" color={PRIMARY_ORANGE} style={styles.roomsLoader} />
+                        <ActivityIndicator size="small" color={primary} style={styles.roomsLoader} />
                       ) : (
                         <>
                           <View style={styles.roomList}>
@@ -658,7 +663,7 @@ export default function AdminWorkerOfficeScreen() {
                                         onPress={() => startEditRoom(r)}
                                         disabled={deletingRoomId === r.id}
                                       >
-                                        <MaterialIcons name="edit" size={20} color={PRIMARY_ORANGE} />
+                                        <MaterialIcons name="edit" size={20} color={primary} />
                                       </Pressable>
                                       <Pressable
                                         style={styles.roomIconBtn}
@@ -682,8 +687,8 @@ export default function AdminWorkerOfficeScreen() {
                               style={styles.addRoomButton}
                               onPress={() => setShowAddRoom(true)}
                             >
-                              <MaterialIcons name="add" size={20} color={PRIMARY_ORANGE} />
-                              <ThemedText style={[styles.addRoomButtonText, { color: PRIMARY_ORANGE }]}>
+                              <MaterialIcons name="add" size={20} color={primary} />
+                              <ThemedText style={[styles.addRoomButtonText, { color: primary }]}>
                                 Добавить переговорную
                               </ThemedText>
                             </Pressable>
@@ -774,7 +779,7 @@ export default function AdminWorkerOfficeScreen() {
           )}
 
           <View style={styles.hintBox}>
-            <MaterialIcons name="info-outline" size={18} color={PRIMARY_ORANGE} />
+            <MaterialIcons name="info-outline" size={18} color={primary} />
             <ThemedText style={styles.hintText}>
               Блоки и местонахождения офисов настраиваются в веб-версии.
             </ThemedText>
@@ -786,10 +791,11 @@ export default function AdminWorkerOfficeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createOfficeStyles(primary: string, gray600: string, screenBg: string) {
+  return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: screenBg,
   },
   header: {
     paddingHorizontal: 16,
@@ -802,7 +808,7 @@ const styles = StyleSheet.create({
   },
   backLabel: {
     fontSize: 16,
-    color: PRIMARY_ORANGE,
+    color: primary,
     marginLeft: 4,
   },
   title: {
@@ -839,7 +845,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: PRIMARY_ORANGE,
+    backgroundColor: primary,
     borderRadius: 8,
   },
   retryText: {
@@ -854,7 +860,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: PRIMARY_ORANGE,
+    backgroundColor: primary,
     paddingVertical: 12,
     borderRadius: 12,
     marginBottom: 16,
@@ -865,7 +871,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   createCard: {
-    backgroundColor: GRAY_600,
+    backgroundColor: gray600,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -873,7 +879,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: DARK_BG,
+    backgroundColor: screenBg,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -886,7 +892,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   card: {
-    backgroundColor: GRAY_600,
+    backgroundColor: gray600,
     borderRadius: 16,
     marginBottom: 12,
     overflow: 'hidden',
@@ -940,7 +946,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: DARK_BG,
+    backgroundColor: screenBg,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -961,7 +967,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   saveBtn: {
-    backgroundColor: PRIMARY_ORANGE,
+    backgroundColor: primary,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
@@ -990,7 +996,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   roomEditBlock: {
-    backgroundColor: DARK_BG,
+    backgroundColor: screenBg,
     borderRadius: 10,
     padding: 12,
     gap: 8,
@@ -998,7 +1004,7 @@ const styles = StyleSheet.create({
   roomInput: {
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: GRAY_600,
+    backgroundColor: gray600,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1008,7 +1014,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: GRAY_600,
+    backgroundColor: gray600,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1024,7 +1030,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   roomActionBtn: {
-    backgroundColor: PRIMARY_ORANGE,
+    backgroundColor: primary,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 10,
@@ -1048,7 +1054,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: DARK_BG,
+    backgroundColor: screenBg,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
@@ -1083,7 +1089,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderStyle: 'dashed',
     borderWidth: 1,
-    borderColor: PRIMARY_ORANGE,
+    borderColor: primary,
     borderRadius: 10,
     marginBottom: 8,
   },
@@ -1092,7 +1098,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   addRoomCard: {
-    backgroundColor: GRAY_600,
+    backgroundColor: gray600,
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
@@ -1134,3 +1140,4 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.75)',
   },
 });
+}

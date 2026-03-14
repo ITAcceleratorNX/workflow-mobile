@@ -1,47 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { PullToRefresh } from '@/components/ui';
+import { PullToRefresh, ScreenHeader, StatRow } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { getAdminWorkerStats, type AdminWorkerStats } from '@/lib/api';
 
-const PRIMARY_ORANGE = '#E25B21';
-const GRAY_600 = '#3A3A3C';
-const DARK_BG = '#1C1C1E';
-
-function StatRow({
-  label,
-  value,
-  valueColor,
-}: {
-  label: string;
-  value: number;
-  valueColor?: string;
-}) {
-  const text = useThemeColor({}, 'text');
-  const textMuted = useThemeColor({}, 'textMuted');
-  return (
-    <View style={styles.statRow}>
-      <ThemedText style={[styles.statLabel, { color: textMuted }]}>{label}</ThemedText>
-      <ThemedText style={[styles.statValue, { color: valueColor ?? text }]}>{value}</ThemedText>
-    </View>
-  );
-}
-
 export default function AdminWorkerStatisticsScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const primary = useThemeColor({}, 'primary');
+  const gray600 = useThemeColor({}, 'gray600');
+  const screenBg = useThemeColor({}, 'screenBackgroundDark');
   const [stats, setStats] = useState<AdminWorkerStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -72,26 +44,18 @@ export default function AdminWorkerStatisticsScreen() {
   const rts = stats?.requestTypeSummary ?? {};
 
   return (
-    <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <MaterialIcons name="chevron-left" size={24} color={PRIMARY_ORANGE} />
-          <ThemedText style={styles.backLabel}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.title}>
-          Статистика
-        </ThemedText>
-      </View>
+    <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
+      <ScreenHeader title="Статистика" />
 
       {loading && !stats ? (
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color={PRIMARY_ORANGE} />
+          <ActivityIndicator size="large" color={primary} />
           <ThemedText style={[styles.loadingText, { color: textMuted }]}>Загрузка...</ThemedText>
         </View>
       ) : error ? (
         <View style={styles.errorBox}>
           <ThemedText style={styles.errorText}>{error}</ThemedText>
-          <Pressable style={styles.retryButton} onPress={() => load()}>
+          <Pressable style={[styles.retryButton, { backgroundColor: primary }]} onPress={() => load()}>
             <ThemedText style={styles.retryText}>Повторить</ThemedText>
           </Pressable>
         </View>
@@ -127,7 +91,7 @@ export default function AdminWorkerStatisticsScreen() {
             </View>
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: gray600 }]}>
             <ThemedText style={[styles.cardTitle, { color: text }]}>
               Статистика по заявкам
             </ThemedText>
@@ -145,7 +109,7 @@ export default function AdminWorkerStatisticsScreen() {
             <StatRow
               label="Новые"
               value={sc?.new ?? 0}
-              valueColor={PRIMARY_ORANGE}
+              valueColor={primary}
             />
             <StatRow
               label="Просрочено"
@@ -154,7 +118,7 @@ export default function AdminWorkerStatisticsScreen() {
             />
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: gray600 }]}>
             <ThemedText style={[styles.cardTitle, { color: text }]}>
               По типам заявок
             </ThemedText>
@@ -172,25 +136,6 @@ export default function AdminWorkerStatisticsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_BG,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  backLabel: {
-    fontSize: 16,
-    color: PRIMARY_ORANGE,
-    marginLeft: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
   },
   loadingBox: {
     flex: 1,
@@ -217,7 +162,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: PRIMARY_ORANGE,
     borderRadius: 8,
   },
   retryText: {
@@ -264,7 +208,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   card: {
-    backgroundColor: GRAY_600,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -273,18 +216,5 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     marginBottom: 16,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statLabel: {
-    fontSize: 15,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

@@ -2,24 +2,20 @@ import { useCallback, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import { scanBookingQRCode } from '@/lib/api';
 
-const PRIMARY_ORANGE = '#E25B21';
 const CARD_ORANGE = '#D94F15';
 
 export default function ExecutorScanQrScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { show } = useToast();
-  const text = useThemeColor({}, 'text');
-
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
 
@@ -94,11 +90,7 @@ export default function ExecutorScanQrScreen() {
   if (!permission) {
     return (
       <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.header}>
-          <ThemedText type="title" style={[styles.title, { color: text }]}>
-            QR сканер
-          </ThemedText>
-        </View>
+        <ScreenHeader title="QR сканер" />
         <View style={styles.card}>
           <ThemedText style={styles.cardDescription}>Запрос доступа к камере…</ThemedText>
         </View>
@@ -109,11 +101,7 @@ export default function ExecutorScanQrScreen() {
   if (!permission.granted) {
     return (
       <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.header}>
-          <ThemedText type="title" style={[styles.title, { color: text }]}>
-            QR сканер
-          </ThemedText>
-        </View>
+        <ScreenHeader title="QR сканер" />
         <View style={styles.card}>
           <ThemedText style={styles.cardDescription}>Нет доступа к камере</ThemedText>
           <Pressable style={styles.actionButton} onPress={handleRequestPermission}>
@@ -127,15 +115,7 @@ export default function ExecutorScanQrScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
-          <MaterialIcons name="chevron-left" size={24} color={PRIMARY_ORANGE} />
-          <ThemedText style={styles.backLabel}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={[styles.title, { color: text }]}>
-          QR сканер
-        </ThemedText>
-      </View>
+      <ScreenHeader title="QR сканер" />
 
       <View style={styles.card}>
         <ThemedText style={styles.cardTitle}>Сканирование QR кода</ThemedText>
@@ -167,24 +147,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1C1C1E',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  backLabel: {
-    fontSize: 16,
-    color: PRIMARY_ORANGE,
-    marginLeft: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
   },
   card: {
     marginHorizontal: 16,

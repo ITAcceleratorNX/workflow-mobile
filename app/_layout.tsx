@@ -6,6 +6,7 @@ import { Linking } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
+import { ErrorBoundary } from '@/components/error-boundary';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { ToastProvider } from '@/context/toast-context';
@@ -38,9 +39,10 @@ export default function RootLayout() {
   }, [router, setPendingRequestId]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <ToastProvider>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <ToastProvider>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="login/index" />
@@ -51,8 +53,9 @@ export default function RootLayout() {
             <Stack.Screen name="steps" />
           </Stack>
           <StatusBar style="auto" />
-        </ToastProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+          </ToastProvider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

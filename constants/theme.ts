@@ -8,12 +8,14 @@ import { Platform } from 'react-native';
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
 
-const primaryAccent = '#F35713';
+const primaryAccent = '#E25B21';
 const borderSecondary = '#212121';
 const borderLight = '#E5E5EA';
 const textMuted = '#6E6E6E';
 const errorColor = '#F35713';
 const successColor = '#22c55e';
+const gray600 = '#3A3A3C';
+const screenBackgroundDark = '#1C1C1E';
 
 export const Colors = {
   light: {
@@ -29,6 +31,8 @@ export const Colors = {
     textMuted,
     error: errorColor,
     success: successColor,
+    gray600,
+    screenBackgroundDark: '#1C1C1E',
   },
   dark: {
     text: '#ECEDEE',
@@ -43,6 +47,8 @@ export const Colors = {
     textMuted,
     error: errorColor,
     success: successColor,
+    gray600,
+    screenBackgroundDark,
   },
 };
 
