@@ -464,13 +464,6 @@ export default function HelpScreen() {
       <View style={[styles.flex1, { paddingTop: insets.top }]}>
         <ThemedView style={styles.container}>
           <View style={[styles.header, { paddingTop: 12 }]}>
-            <Pressable
-              onPress={handleBack}
-              style={({ pressed }) => [styles.headerBackButton, pressed && styles.pressed]}
-              hitSlop={12}
-            >
-              <MaterialIcons name="arrow-back" size={24} color={text} />
-            </Pressable>
             <ThemedText type="title" style={styles.title}>
               Сообщение
             </ThemedText>

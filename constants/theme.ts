@@ -52,6 +52,16 @@ export const Colors = {
   },
 };
 
+/** Шкала размеров шрифтов для мобильных (Apple HIG / Material) */
+export const FontSizes = {
+  caption: 12,
+  body: 15,
+  bodySmall: 14,
+  title: 17,
+  titleLarge: 20,
+  headline: 22,
+} as const;
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */

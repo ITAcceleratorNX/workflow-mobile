@@ -100,7 +100,7 @@ export default function SupportChatScreen() {
       if (messagesRes.ok && messagesRes.data.messages) {
         setSupportMessages(messagesRes.data.messages);
       } else {
-        setSupportError(messagesRes.error ?? 'Не удалось загрузить сообщения');
+        setSupportError('Не удалось загрузить сообщения');
         setSupportMessages([]);
       }
       setLoading(false);
@@ -170,6 +170,7 @@ export default function SupportChatScreen() {
             <View style={[styles.supportHeader, { borderBottomColor: border, paddingTop: 12 }]}>
               <Pressable
                 onPress={handleBack}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
               >
                 <MaterialIcons name="arrow-back" size={24} color={text} />
@@ -203,6 +204,7 @@ export default function SupportChatScreen() {
           <View style={[styles.supportHeader, { borderBottomColor: border, paddingTop: 12 }]}>
             <Pressable
               onPress={handleBack}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
             >
               <MaterialIcons name="arrow-back" size={24} color={text} />

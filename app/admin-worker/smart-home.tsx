@@ -355,7 +355,7 @@ export default function AdminWorkerSmartHomeScreen() {
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={8}>
+        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialIcons name="chevron-left" size={24} color={primary} />
           <ThemedText style={styles.backLabel}>Назад</ThemedText>
         </Pressable>
@@ -821,7 +821,10 @@ const styles = StyleSheet.create({
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 44,
+    minHeight: 44,
     marginBottom: 8,
+    justifyContent: 'center',
   },
   backLabel: {
     fontSize: 16,

@@ -19,7 +19,7 @@ export function ScreenHeader({ title, onBack, rightSlot }: ScreenHeaderProps) {
 
   return (
     <View style={styles.header}>
-      <Pressable onPress={handleBack} style={styles.backButton} hitSlop={8}>
+      <Pressable onPress={handleBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
         <MaterialIcons name="chevron-left" size={24} color={primary} />
         <ThemedText style={[styles.backLabel, { color: primary }]}>Назад</ThemedText>
       </Pressable>
@@ -39,6 +39,8 @@ const styles = StyleSheet.create({
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 44,
+    minHeight: 44,
     marginBottom: 8,
   },
   backLabel: {

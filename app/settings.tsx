@@ -28,7 +28,7 @@ export default function SettingsScreen() {
       <View style={styles.headerRow}>
         <Pressable
           onPress={() => router.back()}
-          hitSlop={8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={styles.backButton}
         >
           <MaterialIcons name="arrow-back" size={22} color={text} />
@@ -169,7 +169,11 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   backButton: {
+    minWidth: 44,
+    minHeight: 44,
     padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     flex: 1,

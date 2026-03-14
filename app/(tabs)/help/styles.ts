@@ -330,8 +330,12 @@ export const styles = StyleSheet.create({
     gap: 12,
   },
   backButton: {
+    minWidth: 44,
+    minHeight: 44,
     padding: 8,
     marginLeft: -8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   supportAvatar: {
     width: 40,

@@ -65,7 +65,7 @@ export default function StepsScreen() {
     return (
       <ThemedView style={[styles.container, { paddingTop: insets.top + 24 }]}>
         <View style={styles.backRow}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <MaterialIcons name="arrow-back" size={24} color={text} />
           </Pressable>
           <ThemedText style={styles.title}>Шаги</ThemedText>
@@ -81,7 +81,7 @@ export default function StepsScreen() {
     return (
       <ThemedView style={[styles.container, { paddingTop: insets.top + 24 }]}>
         <View style={styles.backRow}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <MaterialIcons name="arrow-back" size={24} color={text} />
           </Pressable>
           <ThemedText style={styles.title}>Шаги</ThemedText>
@@ -358,8 +358,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   backButton: {
+    minWidth: 44,
+    minHeight: 44,
     padding: 8,
     marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     fontSize: 20,

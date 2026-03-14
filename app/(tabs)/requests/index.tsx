@@ -645,12 +645,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    minHeight: 44,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderRadius: 8,
   },
   createBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
   },
@@ -666,9 +667,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   tab: {
+    minHeight: 44,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderRadius: 8,
+    justifyContent: 'center',
   },
   tabLabel: {
     fontSize: 14,
@@ -676,11 +679,13 @@ const styles = StyleSheet.create({
   },
   filtersRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 16,
   },
   filterItem: {
     flex: 1,
+    minWidth: 140,
   },
   card: {
     flexDirection: 'row',

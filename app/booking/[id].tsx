@@ -87,7 +87,7 @@ export default function BookingQrScreen() {
   if (error || !booking) {
     return (
       <ThemedView style={[styles.container, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backRow} hitSlop={8}>
+        <Pressable onPress={() => router.back()} style={styles.backRow} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color={textColor} />
           <ThemedText style={[styles.backLabel, { color: textColor }]}>Назад</ThemedText>
         </Pressable>
@@ -112,7 +112,7 @@ export default function BookingQrScreen() {
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 12 }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backRow} hitSlop={8}>
+        <Pressable onPress={() => router.back()} style={styles.backRow} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color={textColor} />
           <ThemedText style={[styles.backLabel, { color: textColor }]}>Назад</ThemedText>
         </Pressable>
@@ -212,6 +212,8 @@ const styles = StyleSheet.create({
   backRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 44,
+    minHeight: 44,
     marginBottom: 8,
   },
   backLabel: {
