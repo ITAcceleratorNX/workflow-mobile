@@ -577,21 +577,14 @@ export default function BookingScreen() {
   const isBookingCancelled = useCallback((b: MeetingRoomBooking) => {
     return b.status === 'cancelled' || b.status === 'auto_cancelled';
   }, []);
-  const isBookingCompleted = useCallback((b: MeetingRoomBooking) => {
-    if (b.status === 'completed') return true;
-    const endStr = typeof b.end_time === 'string' ? b.end_time : '';
-    if (!endStr) return false;
-    return new Date(endStr).getTime() < Date.now();
-  }, []);
+  const isBookingCompleted = useCallback(
+    (b: MeetingRoomBooking) => b.status === 'completed',
+    []
+  );
   const isBookingActive = useCallback(
-    (b: MeetingRoomBooking) => {
-      if (isBookingCancelled(b)) return false;
-      if (b.status === 'completed') return false;
-      if (b.status === 'in_progress') return true;
-      const startStr = typeof b.start_time === 'string' ? b.start_time : '';
-      return startStr ? new Date(startStr).getTime() > Date.now() : true;
-    },
-    [isBookingCancelled]
+    (b: MeetingRoomBooking) =>
+      !isBookingCancelled(b) && !isBookingCompleted(b),
+    [isBookingCancelled, isBookingCompleted]
   );
 
   const filteredMyBookings = useMemo(() => {

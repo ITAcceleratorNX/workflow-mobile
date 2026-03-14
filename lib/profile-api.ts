@@ -1,3 +1,5 @@
+import { router } from 'expo-router';
+
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -29,6 +31,7 @@ async function authRequest<T>(
 
     if (res.status === 401) {
       useAuthStore.getState().clearAuth();
+      router.replace('/login');
       return {
         ok: false,
         error: 'Сессия истекла. Войдите снова.',
