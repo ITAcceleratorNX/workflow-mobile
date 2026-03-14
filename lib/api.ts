@@ -52,6 +52,7 @@ async function request<T>(
       if (res.status === 401) {
         useAuthStore.getState().clearAuth();
         router.replace('/login');
+        return { ok: false, error: 'Сессия истекла. Войдите снова.' };
       }
       const error =
         (data as { error?: string })?.error ||
