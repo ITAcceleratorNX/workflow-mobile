@@ -1,11 +1,11 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import type { RequestGroup, SubRequest } from '@/lib/api';
-import { getWhatsAppShareUrl } from '@/lib/shareRequest';
+import { getRequestShareMessage } from '@/lib/shareRequest';
 
 export type RequestUserRole =
   | 'client'
@@ -78,15 +78,29 @@ export function RequestActionMenu({
   const target = subRequest ?? request;
   const isSub = !!subRequest;
 
-  const handleShareWhatsApp = () => {
-    const url = getWhatsAppShareUrl({
+  const handleShare = () => {
+    const target = subRequest ?? request.requests?.[0];
+    const params = {
       requestId: request.id,
       subRequestId: subRequest?.id,
-      title: (subRequest ?? request).title,
+      title: target?.title,
       status: (subRequest ?? request).status,
-      description: (subRequest ?? request).description,
-    });
-    Linking.openURL(url).catch(() => {});
+      description: target?.description,
+    };
+    const message = getRequestShareMessage(params);
+    const displayId = subRequest != null ? `${request.id}/${subRequest.id}` : String(request.id);
+    // Только title + message: на iOS message+url вместе мешают открытию share sheet; на Android url в Intent тоже. Ссылка уже в message.
+    const sharePayload = {
+      title: `Заявка #${displayId}`,
+      message,
+    };
+    // На iOS share sheet не показывается, если вызвать Share после закрытия модалки — вызываем пока модалка открыта, закрываем после then/catch
+    Share.share(sharePayload)
+      .then(() => setVisible(false))
+      .catch((err) => {
+        setVisible(false);
+        if (__DEV__) console.warn('[RequestActionMenu] Share failed', err);
+      });
   };
 
   const getActions = (): ActionItem[] => {
@@ -103,8 +117,8 @@ export function RequestActionMenu({
     if (shareRoles.includes(userRole)) {
       actions.push({
         icon: 'share',
-        label: 'Поделиться в WhatsApp',
-        onClick: handleShareWhatsApp,
+        label: 'Поделиться ссылкой',
+        onClick: handleShare,
         variant: 'default',
       });
     }
@@ -371,7 +385,8 @@ export function RequestActionMenu({
   };
 
   const handleAction = (action: ActionItem) => {
-    setVisible(false);
+    const isShare = action.label === 'Поделиться ссылкой';
+    if (!isShare) setVisible(false);
     action.onClick();
   };
 

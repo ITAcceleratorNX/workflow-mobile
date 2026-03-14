@@ -30,9 +30,6 @@ export function getRequestShareUrl(params: ShareRequestParams): string {
   const base = config.webAppBaseUrl.replace(/\/$/, '');
   const search = new URLSearchParams();
   search.set('requestId', String(params.requestId));
-  if (params.subRequestId != null) {
-    search.set('subRequestId', String(params.subRequestId));
-  }
   return `${base}?${search.toString()}`;
 }
 
