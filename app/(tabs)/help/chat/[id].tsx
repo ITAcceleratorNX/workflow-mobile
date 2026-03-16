@@ -29,7 +29,7 @@ import {
   type SupportMessage,
   type SupportTicket,
 } from '@/lib/chat-api';
-import { styles } from '../styles';
+import { helpStyles as styles } from '../../../../src/styles/help';
 
 type Params = {
   id?: string;

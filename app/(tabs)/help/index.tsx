@@ -30,7 +30,7 @@ import {
   getMySupportTickets,
   type SupportTicket,
 } from '@/lib/chat-api';
-import { styles } from './styles';
+import { helpStyles as styles } from '../../../src/styles/help';
 
 type ChatMessage = { from: 'user' | 'bot'; text: string };
 
