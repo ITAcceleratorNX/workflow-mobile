@@ -44,9 +44,10 @@ export default function TabLayout() {
           route.name === 'help' ? 0 : isCreateRequest ? 0 : contentPaddingBottom;
         return {
           headerShown: false,
-          tabBarShowLabel: false,
-          tabBarStyle: { backgroundColor: 'transparent', borderTopWidth: 0, elevation: 0, shadowOpacity: 0 },
-          sceneStyle: { paddingBottom },
+            tabBarShowLabel: false,
+            tabBarTransparent: true,
+            tabBarStyle: { position: 'absolute' },
+            sceneStyle: { paddingBottom: 0 },
         };
       }}>
       <Tabs.Screen name="index" options={{ title: 'Главная' }} />
