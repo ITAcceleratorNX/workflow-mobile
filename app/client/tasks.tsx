@@ -17,8 +17,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ScreenHeader, Select, Button } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useTodoStore, type TodoItem, getTaskDate } from '@/stores/todo-store';
+import { useTodoStore, type TodoItem, getTaskDate, getTaskTime } from '@/stores/todo-store';
 import { formatDateForApi } from '@/lib/dateTimeUtils';
+import { TIME_SLOTS, getDateOptions } from '@/constants/task-form';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
@@ -58,6 +59,7 @@ interface TaskRowProps {
 
 function TaskRow({ item, onToggle, onRemove, textColor, textMuted, primary, borderColor }: TaskRowProps) {
   const dateStr = getTaskDate(item);
+  const timeStr = getTaskTime(item);
   const today = formatDateForApi(new Date());
   const isOverdue = dateStr < today && !item.completed;
 
@@ -80,7 +82,7 @@ function TaskRow({ item, onToggle, onRemove, textColor, textMuted, primary, bord
           {item.text}
         </ThemedText>
         <ThemedText style={[styles.rowDate, { color: textMuted }, isOverdue && { color: '#EF4444' }]}>
-          {formatTaskDate(dateStr)}
+          {formatTaskDate(dateStr)} • {timeStr}
           {isOverdue && ' • Просрочено'}
         </ThemedText>
       </View>
@@ -113,6 +115,8 @@ export default function TasksScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [addInputText, setAddInputText] = useState('');
+  const [addDate, setAddDate] = useState(formatDateForApi(new Date()));
+  const [addTime, setAddTime] = useState('09:00');
 
   const todayKey = formatDateForApi(new Date());
   const weekStart = (() => {
@@ -150,6 +154,9 @@ export default function TasksScreen() {
       const da = getTaskDate(a);
       const db = getTaskDate(b);
       if (da !== db) return da.localeCompare(db);
+      const ta = getTaskTime(a);
+      const tb = getTaskTime(b);
+      if (ta !== tb) return ta.localeCompare(tb);
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [items, filterStatus, filterDate, searchQuery, todayKey, weekStartKey]);
@@ -157,10 +164,14 @@ export default function TasksScreen() {
   const handleAddTask = useCallback(() => {
     const trimmed = addInputText.trim();
     if (!trimmed) return;
-    addItem(trimmed, formatDateForApi(new Date()));
+    addItem(trimmed, addDate, addTime);
     setAddInputText('');
+    setAddDate(formatDateForApi(new Date()));
+    setAddTime('09:00');
     setAddModalVisible(false);
-  }, [addInputText, addItem]);
+  }, [addInputText, addDate, addTime, addItem]);
+
+  const dateOptions = useMemo(() => getDateOptions(), []);
 
   const renderItem = useCallback(
     ({ item }: { item: TodoItem }) => (
@@ -191,6 +202,8 @@ export default function TasksScreen() {
     <Pressable
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setAddDate(formatDateForApi(new Date()));
+        setAddTime('09:00');
         setAddModalVisible(true);
       }}
       style={({ pressed }) => [styles.headerAddBtn, { opacity: pressed ? 0.8 : 1 }]}
@@ -279,6 +292,26 @@ export default function TasksScreen() {
                 autoFocus
                 style={[styles.modalInput, { color: headerText, borderColor: border }]}
               />
+              <View style={styles.modalRow}>
+                <View style={styles.modalField}>
+                  <ThemedText style={[styles.modalLabel, { color: headerSubtitle }]}>Дата</ThemedText>
+                  <Select
+                    value={addDate}
+                    onValueChange={setAddDate}
+                    options={dateOptions}
+                    placeholder="Дата"
+                  />
+                </View>
+                <View style={styles.modalField}>
+                  <ThemedText style={[styles.modalLabel, { color: headerSubtitle }]}>Время</ThemedText>
+                  <Select
+                    value={addTime}
+                    onValueChange={setAddTime}
+                    options={TIME_SLOTS}
+                    placeholder="Время"
+                  />
+                </View>
+              </View>
               <View style={styles.modalActions}>
                 <Button
                   title="Отмена"
@@ -376,6 +409,9 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 16 },
+  modalRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  modalField: { flex: 1 },
+  modalLabel: { fontSize: 14, marginBottom: 6 },
   modalInput: {
     fontSize: 16,
     paddingHorizontal: 14,

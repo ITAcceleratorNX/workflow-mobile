@@ -5,6 +5,7 @@ import {
   FlatList,
   Pressable,
   Modal,
+  TextInput as RNTextInput,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -13,11 +14,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { ScreenHeader } from '@/components/ui';
+import { ScreenHeader, Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { NEWS_ITEMS, NEWS_TAGS, type NewsItem } from '@/constants/news';
+import { NEWS_ITEMS, type NewsItem } from '@/constants/news';
+import { formatDateForApi } from '@/lib/dateTimeUtils';
+
+const DATE_OPTIONS = [
+  { value: 'all', label: 'Все даты' },
+  { value: 'today', label: 'Сегодня' },
+  { value: 'week', label: 'За неделю' },
+  { value: 'month', label: 'За месяц' },
+];
 
 const NEWS_IMAGE_SIZE = 100;
+const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+function formatNewsDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
 
 function NewsRow({
   item,
@@ -32,6 +47,7 @@ function NewsRow({
   textMuted: string;
   primary: string;
 }) {
+  const dateLabel = item.date ? formatNewsDate(item.date) : null;
   return (
     <Pressable
       onPress={() => {
@@ -55,6 +71,9 @@ function NewsRow({
         <ThemedText style={[styles.rowDesc, { color: textMuted }]} numberOfLines={2}>
           {item.desc}
         </ThemedText>
+        {dateLabel && (
+          <ThemedText style={[styles.rowDate, { color: textMuted }]}>{dateLabel}</ThemedText>
+        )}
       </View>
       <MaterialIcons name="chevron-right" size={24} color={textMuted} />
     </Pressable>
@@ -70,13 +89,38 @@ export default function NewsScreen() {
   const cardBg = useThemeColor({}, 'cardBackground');
   const border = useThemeColor({}, 'border');
 
-  const [filterTag, setFilterTag] = useState('Все');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterDate, setFilterDate] = useState('all');
   const [selectedItem, setSelectedItem] = useState<NewsItem | null>(null);
 
+  const todayKey = formatDateForApi(new Date());
+
   const filteredItems = useMemo(() => {
-    if (filterTag === 'Все') return NEWS_ITEMS;
-    return NEWS_ITEMS.filter((i) => i.tag === filterTag);
-  }, [filterTag]);
+    let list = NEWS_ITEMS;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(
+        (i) =>
+          i.title.toLowerCase().includes(q) ||
+          i.desc.toLowerCase().includes(q) ||
+          i.tag.toLowerCase().includes(q)
+      );
+    }
+    if (filterDate === 'today') {
+      list = list.filter((i) => i.date === todayKey);
+    } else if (filterDate === 'week') {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekKey = formatDateForApi(weekAgo);
+      list = list.filter((i) => i.date && i.date >= weekKey && i.date <= todayKey);
+    } else if (filterDate === 'month') {
+      const monthAgo = new Date();
+      monthAgo.setMonth(monthAgo.getMonth() - 1);
+      const monthKey = formatDateForApi(monthAgo);
+      list = list.filter((i) => i.date && i.date >= monthKey && i.date <= todayKey);
+    }
+    return list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }, [searchQuery, filterDate, todayKey]);
 
   const renderItem = useCallback(
     ({ item }: { item: NewsItem }) => (
@@ -94,36 +138,33 @@ export default function NewsScreen() {
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
       <ScreenHeader title="Все новости" />
-      <View style={[styles.filters, { borderBottomColor: border }]}>
-        <FlatList
-          horizontal
-          data={NEWS_TAGS}
-          keyExtractor={(t) => t}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-          renderItem={({ item: tag }) => {
-            const isActive = filterTag === tag;
-            return (
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setFilterTag(tag);
-                }}
-                style={[
-                  styles.filterChip,
-                  { borderColor: border },
-                  isActive && { backgroundColor: primary, borderColor: primary },
-                ]}
-              >
-                <ThemedText
-                  style={[styles.filterChipText, { color: isActive ? '#FFFFFF' : headerText }]}
-                >
-                  {tag}
-                </ThemedText>
-              </Pressable>
-            );
-          }}
+      <View style={[styles.searchRow, { backgroundColor: cardBg, borderColor: border }]}>
+        <MaterialIcons name="search" size={20} color={headerSubtitle} />
+        <RNTextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Поиск новостей..."
+          placeholderTextColor={headerSubtitle}
+          style={[styles.searchInput, { color: headerText }]}
         />
+        {searchQuery.length > 0 && (
+          <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+            <MaterialIcons name="close" size={20} color={headerSubtitle} />
+          </Pressable>
+        )}
+      </View>
+      <View style={[styles.filters, { borderBottomColor: border }]}>
+        <View style={styles.filterRow}>
+          <ThemedText style={[styles.filterLabel, { color: headerSubtitle }]}>Дата</ThemedText>
+          <View style={styles.selectWrap}>
+            <Select
+              value={filterDate}
+              onValueChange={setFilterDate}
+              options={DATE_OPTIONS}
+              placeholder="Все даты"
+            />
+          </View>
+        </View>
       </View>
       <FlatList
         data={filteredItems}
@@ -161,8 +202,15 @@ export default function NewsScreen() {
                   contentFit="cover"
                 />
                 <View style={styles.modalBody}>
-                  <View style={[styles.modalTag, { backgroundColor: primary }]}>
-                    <ThemedText style={styles.modalTagText}>{selectedItem.tag}</ThemedText>
+                  <View style={styles.modalMeta}>
+                    <View style={[styles.modalTag, { backgroundColor: primary }]}>
+                      <ThemedText style={styles.modalTagText}>{selectedItem.tag}</ThemedText>
+                    </View>
+                    {selectedItem.date && (
+                      <ThemedText style={[styles.modalDate, { color: headerSubtitle }]}>
+                        {formatNewsDate(selectedItem.date)}
+                      </ThemedText>
+                    )}
                   </View>
                   <ThemedText style={[styles.modalTitle, { color: headerText }]}>
                     {selectedItem.title}
@@ -188,21 +236,31 @@ export default function NewsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+  },
+  searchInput: { flex: 1, fontSize: 16, paddingVertical: 4 },
   filters: {
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  filterScroll: {
-    paddingHorizontal: 16,
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
   },
-  filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginRight: 10,
-  },
-  filterChipText: { fontSize: 14, fontWeight: '500' },
+  filterLabel: { fontSize: 14, marginRight: 12, minWidth: 50 },
+  selectWrap: { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingTop: 16 },
   row: {
     flexDirection: 'row',
@@ -226,6 +284,7 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
   rowTitle: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
   rowDesc: { fontSize: 14, lineHeight: 20 },
+  rowDate: { fontSize: 12, marginTop: 4 },
   separator: { height: StyleSheet.hairlineWidth },
   empty: { paddingVertical: 48, alignItems: 'center' },
   emptyText: { fontSize: 16 },
@@ -244,13 +303,13 @@ const styles = StyleSheet.create({
     height: 200,
   },
   modalBody: { padding: 20 },
+  modalMeta: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   modalTag: {
-    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    marginBottom: 12,
   },
+  modalDate: { fontSize: 14 },
   modalTagText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
   modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 12 },
   modalDesc: { fontSize: 16, lineHeight: 24 },

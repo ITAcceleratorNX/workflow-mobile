@@ -78,7 +78,7 @@ export default function TodoListScreen() {
   const [inputText, setInputText] = useState('');
 
   const handleAdd = useCallback(() => {
-    addItem(inputText, formatDateForApi(new Date()));
+    addItem(inputText, formatDateForApi(new Date()), '09:00');
     setInputText('');
   }, [inputText, addItem]);
 

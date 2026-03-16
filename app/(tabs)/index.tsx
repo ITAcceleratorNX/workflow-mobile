@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -15,13 +15,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-import { PageLoader } from '@/components/ui';
+import { PageLoader, Select } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
-import { useTodoStore, type TodoItem, getTaskDate } from '@/stores/todo-store';
+import { useTodoStore, type TodoItem, getTaskDate, getTaskTime } from '@/stores/todo-store';
+import { TIME_SLOTS, getDateOptions } from '@/constants/task-form';
 import { useToast } from '@/context/toast-context';
 import { getRequestGroups, getMyBookings, type RequestGroup, type MeetingRoomBooking } from '@/lib/api';
 import {   formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
@@ -471,12 +472,15 @@ function TodoRowInline({
       <View style={[styles.todoCheckbox, { borderColor: item.completed ? primary : borderColor }, item.completed && { backgroundColor: primary }]}>
         {item.completed && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
       </View>
-      <ThemedText
-        style={[styles.todoRowText, { color: item.completed ? textMuted : textColor }, item.completed && styles.todoTextCompleted]}
-        numberOfLines={2}
-      >
-        {item.text}
-      </ThemedText>
+      <View style={styles.todoRowContent}>
+        <ThemedText
+          style={[styles.todoRowText, { color: item.completed ? textMuted : textColor }, item.completed && styles.todoTextCompleted]}
+          numberOfLines={2}
+        >
+          {item.text}
+        </ThemedText>
+        <ThemedText style={[styles.todoRowTime, { color: textMuted }]}>{getTaskTime(item)}</ThemedText>
+      </View>
       <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -510,6 +514,8 @@ function ClientDashboardContent() {
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
   const [showTodoList, setShowTodoList] = useState(false);
   const [todoInputText, setTodoInputText] = useState('');
+  const [todoAddDate, setTodoAddDate] = useState(() => formatDateForApi(new Date()));
+  const [todoAddTime, setTodoAddTime] = useState('09:00');
   const [hasNotifications] = useState(true);
   const [selectedInsight, setSelectedInsight] = useState<(typeof NEWS_ITEMS)[number] | null>(null);
   const [requests, setRequests] = useState<RequestGroup[]>([]);
@@ -560,7 +566,7 @@ function ClientDashboardContent() {
       if (itemDate !== dateKey) continue;
       items.push({
         id: `task-${item.id}`,
-        time: '00:00',
+        time: getTaskTime(item),
         title: item.text,
         color: TASK_COLOR_TODO,
         taskId: item.id,
@@ -699,13 +705,20 @@ function ClientDashboardContent() {
 
   const handleToggleView = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setShowTodoList((prev) => !prev);
+    setShowTodoList((prev) => {
+      if (!prev) {
+        setTodoAddDate(formatDateForApi(selectedDate));
+      }
+      return !prev;
+    });
   };
 
   const handleAddTodo = useCallback(() => {
-    addTodoItem(todoInputText, formatDateForApi(selectedDate));
+    addTodoItem(todoInputText, todoAddDate, todoAddTime);
     setTodoInputText('');
-  }, [todoInputText, addTodoItem, selectedDate]);
+  }, [todoInputText, todoAddDate, todoAddTime, addTodoItem]);
+
+  const todoDateOptions = useMemo(() => getDateOptions(), []);
 
   const todoCompletedCount = todoItems.filter((i) => i.completed).length;
 
@@ -839,7 +852,7 @@ function ClientDashboardContent() {
                   <RNTextInput
                     value={todoInputText}
                     onChangeText={setTodoInputText}
-                    placeholder={`Добавить задачу на ${formatDateShort()}`}
+                    placeholder="Введите задачу..."
                     placeholderTextColor={headerSubtitle}
                     onSubmitEditing={handleAddTodo}
                     returnKeyType="done"
@@ -857,6 +870,26 @@ function ClientDashboardContent() {
                   >
                     <MaterialIcons name="add" size={24} color="#FFFFFF" />
                   </Pressable>
+                </View>
+                <View style={[styles.todoAddRow, { borderColor: border }]}>
+                  <View style={styles.todoAddField}>
+                    <ThemedText style={[styles.todoAddLabel, { color: headerSubtitle }]}>Дата</ThemedText>
+                    <Select
+                      value={todoAddDate}
+                      onValueChange={setTodoAddDate}
+                      options={todoDateOptions}
+                      placeholder="Дата"
+                    />
+                  </View>
+                  <View style={styles.todoAddField}>
+                    <ThemedText style={[styles.todoAddLabel, { color: headerSubtitle }]}>Время</ThemedText>
+                    <Select
+                      value={todoAddTime}
+                      onValueChange={setTodoAddTime}
+                      options={TIME_SLOTS}
+                      placeholder="Время"
+                    />
+                  </View>
                 </View>
                 <View style={styles.todoListContent}>
                   {todoItems.length === 0 ? (
@@ -941,7 +974,7 @@ function ClientDashboardContent() {
                       >
                         <View style={[styles.taskTimeIndicator, { backgroundColor: task.color }]} />
                         <ThemedText style={[styles.taskTime, { color: headerSubtitle }]}>
-                          {task.taskId ? '—' : task.time}
+                          {task.time}
                         </ThemedText>
                         <ThemedText style={[styles.taskTitle, { color: headerText }]} numberOfLines={1}>{task.title}</ThemedText>
                         <View style={[styles.taskDot, { backgroundColor: task.color }]} />
@@ -1187,6 +1220,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   todoInput: { flex: 1, fontSize: 16, paddingVertical: 10 },
+  todoAddRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  todoAddField: { flex: 1 },
+  todoAddLabel: { fontSize: 14, marginBottom: 6 },
   todoAddButton: {
     width: 40,
     height: 40,
@@ -1217,7 +1259,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  todoRowText: { flex: 1, fontSize: 16 },
+  todoRowContent: { flex: 1, minWidth: 0 },
+  todoRowText: { fontSize: 16 },
+  todoRowTime: { fontSize: 12, marginTop: 2 },
   todoTextCompleted: { textDecorationLine: 'line-through' },
   todoRemoveBtn: { padding: 4 },
   todoClearButton: { alignSelf: 'flex-end', marginTop: 12, paddingVertical: 6, paddingHorizontal: 10 },
