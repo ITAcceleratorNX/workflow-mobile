@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,6 +6,7 @@ import {
   Pressable,
   Modal,
   TextInput as RNTextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,7 +17,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ScreenHeader, Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { NEWS_ITEMS, type NewsItem } from '@/constants/news';
+import { NEWS_ITEMS } from '@/constants/news';
+import { getNewsAll } from '@/lib/news-api';
+import type { NewsDisplayItem } from '@/lib/news-api';
 import { formatDateForApi } from '@/lib/dateTimeUtils';
 
 const DATE_OPTIONS = [
@@ -41,7 +44,7 @@ function NewsRow({
   textMuted,
   primary,
 }: {
-  item: NewsItem;
+  item: NewsDisplayItem;
   onPress: () => void;
   textColor: string;
   textMuted: string;
@@ -57,7 +60,7 @@ function NewsRow({
       style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}
     >
       <Image
-        source={{ uri: item.image }}
+        source={{ uri: item.image || 'https://via.placeholder.com/100' }}
         style={styles.rowImage}
         contentFit="cover"
       />
@@ -91,12 +94,26 @@ export default function NewsScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('all');
-  const [selectedItem, setSelectedItem] = useState<NewsItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<NewsDisplayItem | null>(null);
+  const [newsList, setNewsList] = useState<NewsDisplayItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getNewsAll().then((res) => {
+      if (cancelled) return;
+      if (res.ok) setNewsList(res.data);
+      else setNewsList(NEWS_ITEMS.map((i) => ({ id: i.id, tag: i.tag || 'Новость', title: i.title, desc: i.desc, image: i.image, date: i.date })));
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const todayKey = formatDateForApi(new Date());
 
   const filteredItems = useMemo(() => {
-    let list = NEWS_ITEMS;
+    let list = newsList;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       list = list.filter(
@@ -120,10 +137,10 @@ export default function NewsScreen() {
       list = list.filter((i) => i.date && i.date >= monthKey && i.date <= todayKey);
     }
     return list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  }, [searchQuery, filterDate, todayKey]);
+  }, [searchQuery, filterDate, todayKey, newsList]);
 
   const renderItem = useCallback(
-    ({ item }: { item: NewsItem }) => (
+    ({ item }: { item: NewsDisplayItem }) => (
       <NewsRow
         item={item}
         onPress={() => setSelectedItem(item)}
@@ -166,19 +183,26 @@ export default function NewsScreen() {
           </View>
         </View>
       </View>
-      <FlatList
-        data={filteredItems}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
-        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: border }]} />}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <ThemedText style={[styles.emptyText, { color: headerSubtitle }]}>Нет новостей</ThemedText>
-          </View>
-        }
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="large" color={primary} />
+          <ThemedText style={[styles.loadingText, { color: headerSubtitle }]}>Загрузка...</ThemedText>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredItems}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
+          ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: border }]} />}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <ThemedText style={[styles.emptyText, { color: headerSubtitle }]}>Нет новостей</ThemedText>
+            </View>
+          }
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       <Modal
         visible={!!selectedItem}
@@ -286,6 +310,8 @@ const styles = StyleSheet.create({
   rowDesc: { fontSize: 14, lineHeight: 20 },
   rowDate: { fontSize: 12, marginTop: 4 },
   separator: { height: StyleSheet.hairlineWidth },
+  loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, paddingVertical: 48 },
+  loadingText: { fontSize: 16 },
   empty: { paddingVertical: 48, alignItems: 'center' },
   emptyText: { fontSize: 16 },
   modalOverlay: {

@@ -27,6 +27,8 @@ import { useToast } from '@/context/toast-context';
 import { getRequestGroups, getMyBookings, type RequestGroup, type MeetingRoomBooking } from '@/lib/api';
 import {   formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
 import { NEWS_ITEMS } from '@/constants/news';
+import { getNewsMain } from '@/lib/news-api';
+import type { NewsDisplayItem } from '@/lib/news-api';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -35,7 +37,7 @@ const CARD_ORANGE = '#D94F15';
 const CARD_GREEN = '#1A9A8A';
 const TRACKER_ACTIVE_TEAL = '#1CC7A5';
 
-type AdminCardKey = 'categories' | 'users' | 'office' | 'smart-home' | 'statistics';
+type AdminCardKey = 'categories' | 'users' | 'office' | 'smart-home' | 'statistics' | 'news';
 
 const ADMIN_MANAGEMENT_CARDS: {
   key: AdminCardKey;
@@ -72,6 +74,12 @@ const ADMIN_MANAGEMENT_CARDS: {
     title: 'Статистика',
     subtitle: 'Отчёты и аналитика по заявкам',
     icon: 'insert-chart-outlined',
+  },
+  {
+    key: 'news',
+    title: 'Управление новостями',
+    subtitle: 'Создание и редактирование новостей для клиентов',
+    icon: 'article',
   },
 ];
 
@@ -179,6 +187,11 @@ function AdminWorkerManagementScreen() {
           router.push('/admin-worker/smart-home');
           break;
         case 'statistics':
+          router.push('/admin-worker/statistics');
+          break;
+        case 'news':
+          router.push('/admin-worker/news');
+          break;
         default:
           router.push('/admin-worker/statistics');
           break;
@@ -517,7 +530,7 @@ function ClientDashboardContent() {
   const [todoAddDate, setTodoAddDate] = useState(() => formatDateForApi(new Date()));
   const [todoAddTime, setTodoAddTime] = useState('09:00');
   const [hasNotifications] = useState(true);
-  const [selectedInsight, setSelectedInsight] = useState<(typeof NEWS_ITEMS)[number] | null>(null);
+  const [selectedInsight, setSelectedInsight] = useState<NewsDisplayItem | null>(null);
   const [requests, setRequests] = useState<RequestGroup[]>([]);
   const [bookings, setBookings] = useState<MeetingRoomBooking[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -526,6 +539,16 @@ function ClientDashboardContent() {
   const guestBookings = useGuestDemoStore((state) => state.bookings);
   const guestRequests = useGuestDemoStore((state) => state.requests);
   const { items: todoItems, addItem: addTodoItem, removeItem: removeTodoItem, toggleItem: toggleTodoItem, clearCompleted: clearTodoCompleted } = useTodoStore();
+  const [insightItems, setInsightItems] = useState<NewsDisplayItem[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getNewsMain().then((res) => {
+      if (cancelled) return;
+      if (res.ok) setInsightItems(res.data);
+      else setInsightItems(NEWS_ITEMS.map((i) => ({ id: i.id, tag: i.tag || 'Новость', title: i.title, desc: i.desc, image: i.image, date: i.date })));
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // Неделя, содержащая selectedDate (Пн–Вс)
   const weekDates = (() => {
@@ -789,7 +812,7 @@ function ClientDashboardContent() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.insightsScroll}
         >
-          {NEWS_ITEMS.slice(0, 5).map((item) => (
+          {insightItems.slice(0, 5).map((item) => (
             <Pressable
               key={item.id}
               onPress={() => {
@@ -799,7 +822,7 @@ function ClientDashboardContent() {
               style={styles.insightCard}
             >
               <Image
-                source={{ uri: item.image }}
+                source={{ uri: item.image || 'https://via.placeholder.com/400' }}
                 style={styles.insightCardImage}
                 contentFit="cover"
               />
@@ -1076,6 +1099,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 16,
   },
+  adminSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  adminBlock: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+  },
+  adminBlockCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  adminBlockCardContent: { flex: 1, minWidth: 0 },
   adminGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
