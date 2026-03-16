@@ -749,27 +749,25 @@ function ClientDashboardContent() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Daily Insights — заголовок + уведомления + Все новости + скролл новостей */}
+        {/* Daily Insights — заголовок + уведомления, кнопка Все новости под заголовком */}
         <View style={styles.insightsHeader}>
-          <View style={styles.insightsHeaderLeft}>
+          <View style={styles.insightsHeaderRow}>
             <ThemedText style={[styles.insightsTitle, { color: headerText }]}>Обзор дня</ThemedText>
-          </View>
-          <View style={styles.insightsHeaderRight}>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push('/client/news');
-              }}
-              style={styles.viewAllLink}
-            >
-              <ThemedText style={[styles.viewAllText, { color: primary }]}>Все новости</ThemedText>
-              <MaterialIcons name="arrow-forward" size={18} color={primary} />
-            </Pressable>
             <Pressable onPress={() => router.push('/(tabs)/profile?tab=notifications')} style={styles.notificationButton}>
               <MaterialIcons name="notifications" size={26} color={headerText} />
               {hasNotifications && <View style={[styles.notificationDot, { backgroundColor: primary }]} />}
             </Pressable>
           </View>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push('/client/news');
+            }}
+            style={styles.insightsViewAllLink}
+          >
+            <ThemedText style={[styles.viewAllText, { color: primary }]}>Все новости</ThemedText>
+            <MaterialIcons name="arrow-forward" size={18} color={primary} />
+          </Pressable>
         </View>
         <ScrollView
           horizontal
@@ -1078,16 +1076,23 @@ const styles = StyleSheet.create({
   },
   // Client Dashboard — Daily Insights
   insightsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 24,
     paddingBottom: 12,
   },
-  insightsHeaderLeft: { flex: 1 },
-  insightsHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  insightsTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 4 },
+  insightsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  insightsTitle: { fontSize: 24, fontWeight: 'bold' },
+  insightsViewAllLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
   notificationButton: { padding: 8, position: 'relative' },
   notificationDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4 },
   insightsScroll: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
