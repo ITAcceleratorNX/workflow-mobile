@@ -6,6 +6,8 @@ import {
   Pressable,
   Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -427,12 +429,13 @@ export default function ClientDashboardScreen() {
   return <ClientDashboardContent />;
 }
 
-const INSIGHT_CARD_WIDTH = width * 0.75;
+const INSIGHT_CARD_WIDTH = width * 0.88;
+const INSIGHT_CARD_HEIGHT = 260;
 
 const MOCK_INSIGHTS = [
-  { id: '1', tag: 'Wellness', title: 'Оптимизируйте сон', desc: 'Новые метрики показывают: сон на 15 мин раньше может повысить концентрацию на 20%.', bg: '#1E3A5F' },
-  { id: '2', tag: 'Умный дом', title: 'Экономия энергии', desc: 'Ваши умные устройства экономят энергию, синхронизируясь с расписанием.', bg: '#2D5A3D' },
-  { id: '3', tag: 'Продуктивность', title: 'Советы на день', desc: 'Рекомендуем сделать перерыв через 45 минут работы.', bg: '#4A3D6B' },
+  { id: '1', tag: 'Wellness', title: 'Оптимизируйте сон', desc: 'Новые метрики показывают: сон на 15 мин раньше может повысить концентрацию на 20%.', image: 'https://images.unsplash.com/photo-1541783245831-57d6fb0926d3?w=600' },
+  { id: '2', tag: 'Умный дом', title: 'Экономия энергии', desc: 'Ваши умные устройства экономят энергию, синхронизируясь с расписанием.', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600' },
+  { id: '3', tag: 'Продуктивность', title: 'Советы на день', desc: 'Рекомендуем сделать перерыв через 45 минут работы.', image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600' },
 ];
 
 const MOCK_TASKS = [
@@ -574,28 +577,40 @@ function ClientDashboardContent() {
           contentContainerStyle={styles.insightsScroll}
         >
           {MOCK_INSIGHTS.map((item) => (
-            <View key={item.id} style={[styles.insightCard, { backgroundColor: item.bg }]}>
-              <View style={styles.insightTag}>
-                <ThemedText style={styles.insightTagText}>{item.tag}</ThemedText>
+            <View key={item.id} style={styles.insightCard}>
+              <Image
+                source={{ uri: item.image }}
+                style={styles.insightCardImage}
+                contentFit="cover"
+              />
+              <View style={styles.insightTagTop}>
+                <View style={styles.insightTag}>
+                  <ThemedText style={styles.insightTagText}>{item.tag}</ThemedText>
+                </View>
               </View>
-              <ThemedText style={styles.insightTitle}>{item.title}</ThemedText>
-              <ThemedText style={styles.insightDesc} numberOfLines={3}>{item.desc}</ThemedText>
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.7)']}
+                style={styles.insightCardOverlay}
+              >
+                <ThemedText style={styles.insightTitle}>{item.title}</ThemedText>
+                <ThemedText style={styles.insightDesc} numberOfLines={3}>{item.desc}</ThemedText>
+              </LinearGradient>
             </View>
           ))}
         </ScrollView>
 
         {/* Smart Control — две кнопки */}
-        <View style={[styles.section, { backgroundColor: screenBg }]}>
-          <ThemedText style={styles.sectionTitle}>Smart Control</ThemedText>
+        <View style={[styles.section, { backgroundColor: background }]}>
+          <ThemedText style={[styles.sectionTitle, { color: headerText }]}>Smart Control</ThemedText>
           <View style={styles.smartControlGrid}>
             <Pressable onPress={handleSmartHome} style={[styles.smartControlButton, { backgroundColor: cardBg }]}>
-              <View style={[styles.smartControlIconWrap, { backgroundColor: screenBg }]}>
+              <View style={[styles.smartControlIconWrap, { backgroundColor: `${primary}80` }]}>
                 <MaterialIcons name="home" size={28} color={primary} />
               </View>
               <ThemedText style={[styles.smartControlLabel, { color: headerText }]}>Управление умным домом</ThemedText>
             </Pressable>
             <Pressable onPress={handleHealthStats} style={[styles.smartControlButton, { backgroundColor: cardBg }]}>
-              <View style={[styles.smartControlIconWrap, { backgroundColor: screenBg }]}>
+              <View style={[styles.smartControlIconWrap, { backgroundColor: '#60A5FA80' }]}>
                 <MaterialIcons name="favorite" size={28} color="#60A5FA" />
               </View>
               <ThemedText style={[styles.smartControlLabel, { color: headerText }]}>Health трекер</ThemedText>
@@ -604,45 +619,65 @@ function ClientDashboardContent() {
         </View>
 
         {/* Tasks — заголовок + Все задачи + календарь + список */}
-        <View style={[styles.section, { backgroundColor: screenBg }]}>
+        <View style={[styles.section, { backgroundColor: background }]}>
           <View style={styles.tasksHeader}>
-            <ThemedText style={styles.sectionTitle}>Задачи</ThemedText>
+            <ThemedText style={[styles.sectionTitle, { color: headerText }]}>Задачи</ThemedText>
             <Pressable onPress={handleAllTasks} style={styles.viewAllLink}>
               <ThemedText style={[styles.viewAllText, { color: primary }]}>Все задачи</ThemedText>
               <MaterialIcons name="arrow-forward" size={18} color={primary} />
             </Pressable>
           </View>
-          <View style={styles.dateNav}>
-            <Pressable onPress={handlePrevDay} style={styles.dateNavButton}>
-              <MaterialIcons name="chevron-left" size={24} color={headerText} />
-            </Pressable>
-            <ThemedText style={[styles.dateNavLabel, { color: headerText }]}>
-              {formatDateNav()}
-            </ThemedText>
-            <Pressable onPress={handleNextDay} style={styles.dateNavButton}>
-              <MaterialIcons name="chevron-right" size={24} color={headerText} />
-            </Pressable>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekScroll}>
-            {weekDates.map((day) => (
-              <Pressable
-                key={day.date.toISOString()}
-                onPress={() => setSelectedDate(day.date)}
-                style={[styles.weekDay, day.isToday && { backgroundColor: primary }]}
-              >
-                <ThemedText style={[styles.weekDayText, { color: day.isToday ? '#FFF' : headerText }]}>{day.label}</ThemedText>
+          <View style={[styles.tasksBlock, { backgroundColor: cardBg }]}>
+            <View style={styles.dateNav}>
+              <Pressable onPress={handlePrevDay} style={styles.dateNavButton}>
+                <MaterialIcons name="chevron-left" size={24} color={headerText} />
               </Pressable>
-            ))}
-          </ScrollView>
-          <View style={styles.taskList}>
-            {MOCK_TASKS.map((task) => (
-              <View key={task.id} style={styles.taskRow}>
-                <View style={[styles.taskTimeIndicator, { backgroundColor: task.color }]} />
-                <ThemedText style={[styles.taskTime, { color: headerSubtitle }]}>{task.time}</ThemedText>
-                <ThemedText style={[styles.taskTitle, { color: headerText }]}>{task.title}</ThemedText>
-                <View style={[styles.taskDot, { backgroundColor: task.color }]} />
-              </View>
-            ))}
+              <ThemedText style={[styles.dateNavLabel, { color: headerText }]}>
+                {formatDateNav()}
+              </ThemedText>
+              <Pressable onPress={handleNextDay} style={styles.dateNavButton}>
+                <MaterialIcons name="chevron-right" size={24} color={headerText} />
+              </Pressable>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekScroll}>
+              {weekDates.map((day) => (
+                <Pressable
+                  key={day.date.toISOString()}
+                  onPress={() => setSelectedDate(day.date)}
+                  style={[styles.weekDay, day.isToday && { backgroundColor: primary }]}
+                >
+                  <ThemedText style={[styles.weekDayText, { color: day.isToday ? '#FFF' : headerText }]}>{day.label}</ThemedText>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <View style={styles.taskList}>
+              {MOCK_TASKS.map((task) => (
+                <View key={task.id} style={styles.taskRow}>
+                  <View style={[styles.taskTimeIndicator, { backgroundColor: task.color }]} />
+                  <ThemedText style={[styles.taskTime, { color: headerSubtitle }]}>{task.time}</ThemedText>
+                  <ThemedText style={[styles.taskTitle, { color: headerText }]}>{task.title}</ThemedText>
+                  <View style={[styles.taskDot, { backgroundColor: task.color }]} />
+                </View>
+              ))}
+            </View>
+          </View>
+          <Pressable onPress={handleAllTasks} style={styles.todoListButton}>
+            <ThemedText style={[styles.todoListButtonText, { color: primary }]}>Todo list</ThemedText>
+            <MaterialIcons name="format-list-bulleted" size={20} color={primary} />
+          </Pressable>
+        </View>
+
+        {/* Daily Performance — процент выполненных задач за день */}
+        <View style={[styles.section, { backgroundColor: background }]}>
+          <View style={[styles.dailyPerformanceCard, { backgroundColor: `${primary}80` }]}>
+            <View style={[styles.dailyPerformanceIconWrap, { backgroundColor: primary }]}>
+              <MaterialIcons name="show-chart" size={28} color="#FFFFFF" />
+            </View>
+            <View style={styles.dailyPerformanceText}>
+              <ThemedText style={styles.dailyPerformanceLabel}>Дневная продуктивность</ThemedText>
+              <ThemedText style={styles.dailyPerformanceStatus}>Цель достигнута!</ThemedText>
+            </View>
+            <ThemedText style={styles.dailyPerformancePercent}>94%</ThemedText>
           </View>
         </View>
       </ScrollView>
@@ -725,17 +760,37 @@ const styles = StyleSheet.create({
   insightsScroll: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
   insightCard: {
     width: INSIGHT_CARD_WIDTH,
-    borderRadius: 16,
-    padding: 16,
-    marginRight: 12,
+    height: INSIGHT_CARD_HEIGHT,
+    borderRadius: 20,
+    marginRight: 14,
+    overflow: 'hidden',
   },
-  insightTag: { alignSelf: 'flex-start', backgroundColor: CARD_ORANGE, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 12 },
-  insightTagText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
-  insightTitle: { fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 8 },
-  insightDesc: { fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 20 },
+  insightCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  insightTagTop: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+  },
+  insightCardOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 18,
+    paddingTop: 60,
+    justifyContent: 'flex-end',
+  },
+  insightTag: { alignSelf: 'flex-start', backgroundColor: CARD_ORANGE, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  insightTagText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
+  insightTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 6 },
+  insightDesc: { fontSize: 15, color: 'rgba(255,255,255,0.9)', lineHeight: 22 },
   // Smart Control
   section: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 24, marginTop: 8 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 16 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
   smartControlGrid: { flexDirection: 'row', gap: 12 },
   smartControlButton: { flex: 1, borderRadius: 16, padding: 16, alignItems: 'center' },
   smartControlIconWrap: { width: 56, height: 56, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
@@ -744,18 +799,40 @@ const styles = StyleSheet.create({
   tasksHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   viewAllLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   viewAllText: { fontSize: 14, fontWeight: '500' },
+  tasksBlock: { borderRadius: 16, padding: 16 },
   dateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   dateNavButton: { padding: 8 },
   dateNavLabel: { fontSize: 16, fontWeight: '500' },
-  weekScroll: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  weekScroll: { flexDirection: 'row', gap: 8 },
   weekDay: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
   weekDayText: { fontSize: 14, fontWeight: '500' },
-  taskList: { gap: 4 },
+  todoListButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16, alignSelf: 'flex-end' },
+  todoListButtonText: { fontSize: 14, fontWeight: '500' },
+  taskList: { gap: 4, marginTop: 16 },
   taskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   taskTimeIndicator: { width: 4, height: 24, borderRadius: 2, marginRight: 12 },
   taskTime: { fontSize: 14, width: 44 },
   taskTitle: { flex: 1, fontSize: 16 },
   taskDot: { width: 8, height: 8, borderRadius: 4 },
+  // Daily Performance
+  dailyPerformanceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 16,
+    padding: 16,
+  },
+  dailyPerformanceIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  dailyPerformanceText: { flex: 1, flexShrink: 1, minWidth: 0 },
+  dailyPerformanceLabel: { fontSize: 13, marginBottom: 2, color: 'rgba(255,255,255,0.9)' },
+  dailyPerformanceStatus: { fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' },
+  dailyPerformancePercent: { fontSize: 22, fontWeight: 'bold', flexShrink: 0, marginLeft: 8, color: '#FFFFFF' },
   // Legacy (admin/executor)
   emptyState: {
     alignItems: 'center',
