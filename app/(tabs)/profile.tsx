@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -49,6 +49,7 @@ export default function ProfileScreen() {
   const success = useThemeColor({}, 'success');
   const { show: showToast } = useToast();
 
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<ProfileTab>('profile');
 
   // Profile tab state
@@ -78,6 +79,10 @@ export default function ProfileScreen() {
   const [isSavingNotifications, setIsSavingNotifications] = useState(false);
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    if (tab === 'notifications') setActiveTab('notifications');
+  }, [tab]);
 
   useEffect(() => {
     if (user?.email) setEmail(user.email);

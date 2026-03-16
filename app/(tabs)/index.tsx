@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   ScrollView,
   Pressable,
   Dimensions,
+  Modal,
+  TextInput as RNTextInput,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,7 +20,11 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuthStore } from '@/stores/auth-store';
+import { useGuestDemoStore } from '@/stores/guest-demo-store';
+import { useTodoStore, type TodoItem } from '@/stores/todo-store';
 import { useToast } from '@/context/toast-context';
+import { getRequestGroups, getMyBookings, type RequestGroup, type MeetingRoomBooking } from '@/lib/api';
+import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -438,14 +444,57 @@ const MOCK_INSIGHTS = [
   { id: '3', tag: 'Продуктивность', title: 'Советы на день', desc: 'Рекомендуем сделать перерыв через 45 минут работы.', image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600' },
 ];
 
-const MOCK_TASKS = [
-  { id: '1', time: '09:30', title: 'Code review', color: '#3B82F6' },
-  { id: '2', time: '11:00', title: 'Security audit', color: CARD_ORANGE },
-  { id: '3', time: '13:00', title: 'Lunch meeting', color: CARD_ORANGE },
-  { id: '4', time: '15:30', title: 'Documentation update', color: '#3B82F6' },
-];
-
 const WEEK_DAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+const TASK_COLOR_REQUEST = '#3B82F6';
+const TASK_COLOR_BOOKING = CARD_ORANGE;
+
+function TodoRowInline({
+  item,
+  onToggle,
+  onRemove,
+  textColor,
+  textMuted,
+  primary,
+  borderColor,
+}: {
+  item: TodoItem;
+  onToggle: () => void;
+  onRemove: () => void;
+  textColor: string;
+  textMuted: string;
+  primary: string;
+  borderColor: string;
+}) {
+  return (
+    <Pressable
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onToggle();
+      }}
+      style={styles.todoRow}
+    >
+      <View style={[styles.todoCheckbox, { borderColor: item.completed ? primary : borderColor }, item.completed && { backgroundColor: primary }]}>
+        {item.completed && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
+      </View>
+      <ThemedText
+        style={[styles.todoRowText, { color: item.completed ? textMuted : textColor }, item.completed && styles.todoTextCompleted]}
+        numberOfLines={2}
+      >
+        {item.text}
+      </ThemedText>
+      <Pressable
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          onRemove();
+        }}
+        hitSlop={12}
+        style={styles.todoRemoveBtn}
+      >
+        <MaterialIcons name="close" size={20} color={textMuted} />
+      </Pressable>
+    </Pressable>
+  );
+}
 
 /** Контент главной только для роли client. Вынесен в отдельный компонент, чтобы не нарушать правила хуков (одинаковое количество хуков при любом рендере). */
 function ClientDashboardContent() {
@@ -461,24 +510,134 @@ function ClientDashboardContent() {
   const primary = useThemeColor({}, 'primary');
   const screenBg = useThemeColor({}, 'screenBackgroundDark');
   const cardBg = useThemeColor({}, 'cardBackground');
+  const border = useThemeColor({}, 'border');
 
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [showTodoList, setShowTodoList] = useState(false);
+  const [todoInputText, setTodoInputText] = useState('');
   const [hasNotifications] = useState(true);
+  const [selectedInsight, setSelectedInsight] = useState<(typeof MOCK_INSIGHTS)[number] | null>(null);
+  const [requests, setRequests] = useState<RequestGroup[]>([]);
+  const [bookings, setBookings] = useState<MeetingRoomBooking[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
 
+  const isGuest = useAuthStore((state) => state.isGuest);
+  const guestBookings = useGuestDemoStore((state) => state.bookings);
+  const guestRequests = useGuestDemoStore((state) => state.requests);
+  const { items: todoItems, addItem: addTodoItem, removeItem: removeTodoItem, toggleItem: toggleTodoItem, clearCompleted: clearTodoCompleted } = useTodoStore();
+
+  // Неделя, содержащая selectedDate (Пн–Вс)
   const weekDates = (() => {
+    const d = new Date(selectedDate);
+    const dayOfWeek = d.getDay(); // 0=Вс, 1=Пн, ...
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + mondayOffset);
     const today = new Date();
-    const days: { date: Date; label: string; isToday: boolean }[] = [];
-    for (let i = -2; i <= 2; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
+    const days: { date: Date; label: string; isToday: boolean; isSelected: boolean }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() + i);
       days.push({
-        date: d,
-        label: `${WEEK_DAYS[d.getDay()]} ${d.getDate()}`,
-        isToday: d.toDateString() === today.toDateString(),
+        date: day,
+        label: `${WEEK_DAYS[day.getDay()]} ${day.getDate()}`,
+        isToday: day.toDateString() === today.toDateString(),
+        isSelected: day.toDateString() === selectedDate.toDateString(),
       });
     }
     return days;
   })();
+
+  // Задачи на выбранную дату: заявки + брони
+  const tasksForSelectedDate = (() => {
+    const dateKey = formatDateForApi(selectedDate);
+    const dayStart = new Date(selectedDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(selectedDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const items: { id: string; time: string; title: string; color: string; requestId?: number; bookingId?: number }[] = [];
+
+    // Заявки: created_date или planned_date
+    const reqList = isGuest ? guestRequests : requests;
+    for (const rg of reqList) {
+      const dateStr = ('planned_date' in rg ? rg.planned_date : null) || rg.created_date;
+      if (!dateStr) continue;
+      const itemDate = new Date(dateStr);
+      if (itemDate < dayStart || itemDate > dayEnd) continue;
+      const dateOnly = dateStr.slice(0, 10);
+      if (dateOnly !== dateKey) continue;
+      const title = rg.requests?.[0]?.title || rg.location_detail || 'Заявка';
+      items.push({
+        id: `req-${rg.id}`,
+        time: formatTimeOnly(dateStr),
+        title,
+        color: TASK_COLOR_REQUEST,
+        requestId: rg.id,
+      });
+    }
+
+    // Брони: start_time
+    const bookList = isGuest ? guestBookings : bookings;
+    for (const b of bookList) {
+      const startStr = b.start_time;
+      if (!startStr) continue;
+      const itemDate = new Date(startStr);
+      if (itemDate < dayStart || itemDate > dayEnd) continue;
+      const bDateKey = formatDateForApi(itemDate);
+      if (bDateKey !== dateKey) continue;
+      const roomName = (b as MeetingRoomBooking).meetingRoom?.name || (b as MeetingRoomBooking).meeting_room?.name || 'Переговорная';
+      items.push({
+        id: `book-${b.id}`,
+        time: formatTimeOnly(startStr),
+        title: roomName,
+        color: TASK_COLOR_BOOKING,
+        bookingId: b.id,
+      });
+    }
+
+    items.sort((a, b) => a.time.localeCompare(b.time));
+    return items;
+  })();
+
+  // Дневная продуктивность: completed / total for selected date
+  const dailyPerformance = (() => {
+    const dateKey = formatDateForApi(selectedDate);
+    const reqList = isGuest ? guestRequests : requests;
+    let total = 0;
+    let completed = 0;
+    for (const rg of reqList) {
+      const dateStr = ('planned_date' in rg ? rg.planned_date : null) || rg.created_date;
+      if (!dateStr || dateStr.slice(0, 10) !== dateKey) continue;
+      total++;
+      if (rg.status === 'completed') completed++;
+    }
+    const bookList = isGuest ? guestBookings : bookings;
+    for (const b of bookList) {
+      if (!b.start_time) continue;
+      if (formatDateForApi(new Date(b.start_time)) !== dateKey) continue;
+      total++;
+      if (b.status === 'completed') completed++;
+    }
+    if (total === 0) return { percent: 0, total: 0, completed: 0 };
+    return { percent: Math.round((completed / total) * 100), total, completed };
+  })();
+
+  const loadTasks = useCallback(async () => {
+    if (isGuest) return;
+    setTasksLoading(true);
+    const [reqRes, bookRes] = await Promise.all([
+      getRequestGroups(1, 100, 'client'),
+      getMyBookings({ page: 1, pageSize: 100 }),
+    ]);
+    setTasksLoading(false);
+    if (reqRes.ok) setRequests(reqRes.data);
+    if (bookRes.ok) setBookings(bookRes.data);
+  }, [isGuest]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
   const formatDateNav = () => {
     const d = selectedDate;
@@ -516,6 +675,18 @@ function ClientDashboardContent() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/(tabs)/requests');
   };
+
+  const handleToggleView = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowTodoList((prev) => !prev);
+  };
+
+  const handleAddTodo = useCallback(() => {
+    addTodoItem(todoInputText);
+    setTodoInputText('');
+  }, [todoInputText, addTodoItem]);
+
+  const todoCompletedCount = todoItems.filter((i) => i.completed).length;
 
   // Если роль еще загружается - показываем загрузку
   if (!effectiveRole) {
@@ -561,12 +732,8 @@ function ClientDashboardContent() {
         <View style={styles.insightsHeader}>
           <View style={styles.insightsHeaderLeft}>
             <ThemedText style={[styles.insightsTitle, { color: headerText }]}>Обзор дня</ThemedText>
-            <Pressable onPress={() => {}} style={styles.exploreLink}>
-              <ThemedText style={[styles.exploreText, { color: primary }]}>Подробнее</ThemedText>
-              <MaterialIcons name="arrow-forward" size={18} color={primary} />
-            </Pressable>
           </View>
-          <Pressable onPress={() => {}} style={styles.notificationButton}>
+          <Pressable onPress={() => router.push('/(tabs)/profile?tab=notifications')} style={styles.notificationButton}>
             <MaterialIcons name="notifications" size={26} color={headerText} />
             {hasNotifications && <View style={[styles.notificationDot, { backgroundColor: primary }]} />}
           </Pressable>
@@ -577,7 +744,14 @@ function ClientDashboardContent() {
           contentContainerStyle={styles.insightsScroll}
         >
           {MOCK_INSIGHTS.map((item) => (
-            <View key={item.id} style={styles.insightCard}>
+            <Pressable
+              key={item.id}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSelectedInsight(item);
+              }}
+              style={styles.insightCard}
+            >
               <Image
                 source={{ uri: item.image }}
                 style={styles.insightCardImage}
@@ -595,7 +769,7 @@ function ClientDashboardContent() {
                 <ThemedText style={styles.insightTitle}>{item.title}</ThemedText>
                 <ThemedText style={styles.insightDesc} numberOfLines={3}>{item.desc}</ThemedText>
               </LinearGradient>
-            </View>
+            </Pressable>
           ))}
         </ScrollView>
 
@@ -628,42 +802,122 @@ function ClientDashboardContent() {
             </Pressable>
           </View>
           <View style={[styles.tasksBlock, { backgroundColor: cardBg }]}>
-            <View style={styles.dateNav}>
-              <Pressable onPress={handlePrevDay} style={styles.dateNavButton}>
-                <MaterialIcons name="chevron-left" size={24} color={headerText} />
-              </Pressable>
-              <ThemedText style={[styles.dateNavLabel, { color: headerText }]}>
-                {formatDateNav()}
-              </ThemedText>
-              <Pressable onPress={handleNextDay} style={styles.dateNavButton}>
-                <MaterialIcons name="chevron-right" size={24} color={headerText} />
-              </Pressable>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekScroll}>
-              {weekDates.map((day) => (
-                <Pressable
-                  key={day.date.toISOString()}
-                  onPress={() => setSelectedDate(day.date)}
-                  style={[styles.weekDay, day.isToday && { backgroundColor: primary }]}
-                >
-                  <ThemedText style={[styles.weekDayText, { color: day.isToday ? '#FFF' : headerText }]}>{day.label}</ThemedText>
-                </Pressable>
-              ))}
-            </ScrollView>
-            <View style={styles.taskList}>
-              {MOCK_TASKS.map((task) => (
-                <View key={task.id} style={styles.taskRow}>
-                  <View style={[styles.taskTimeIndicator, { backgroundColor: task.color }]} />
-                  <ThemedText style={[styles.taskTime, { color: headerSubtitle }]}>{task.time}</ThemedText>
-                  <ThemedText style={[styles.taskTitle, { color: headerText }]}>{task.title}</ThemedText>
-                  <View style={[styles.taskDot, { backgroundColor: task.color }]} />
+            {showTodoList ? (
+              <>
+                <View style={[styles.todoInputRow, { backgroundColor: cardBg, borderColor: border }]}>
+                  <RNTextInput
+                    value={todoInputText}
+                    onChangeText={setTodoInputText}
+                    placeholder="Добавить задачу..."
+                    placeholderTextColor={headerSubtitle}
+                    onSubmitEditing={handleAddTodo}
+                    returnKeyType="done"
+                    style={[styles.todoInput, { color: headerText }]}
+                  />
+                  <Pressable
+                    onPress={handleAddTodo}
+                    style={[styles.todoAddButton, { backgroundColor: primary }]}
+                    disabled={!todoInputText.trim()}
+                  >
+                    <MaterialIcons name="add" size={24} color="#FFFFFF" />
+                  </Pressable>
                 </View>
-              ))}
-            </View>
+                <View style={styles.todoListContent}>
+                  {todoItems.length === 0 ? (
+                    <View style={styles.todoEmptyState}>
+                      <MaterialIcons name="format-list-bulleted" size={40} color={headerSubtitle} />
+                      <ThemedText style={[styles.todoEmptyTitle, { color: headerText }]}>Нет задач</ThemedText>
+                      <ThemedText style={[styles.todoEmptySubtitle, { color: headerSubtitle }]}>Добавьте задачу выше</ThemedText>
+                    </View>
+                  ) : (
+                    <View style={styles.todoListBlock}>
+                      {todoItems.map((item) => (
+                        <TodoRowInline
+                          key={item.id}
+                          item={item}
+                          onToggle={() => toggleTodoItem(item.id)}
+                          onRemove={() => removeTodoItem(item.id)}
+                          textColor={headerText}
+                          textMuted={headerSubtitle}
+                          primary={primary}
+                          borderColor={border}
+                        />
+                      ))}
+                    </View>
+                  )}
+                  {todoCompletedCount > 0 && (
+                    <Pressable
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        clearTodoCompleted();
+                      }}
+                      style={styles.todoClearButton}
+                    >
+                      <ThemedText style={[styles.todoClearButtonText, { color: primary }]}>
+                        Очистить выполненные ({todoCompletedCount})
+                      </ThemedText>
+                    </Pressable>
+                  )}
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.dateNav}>
+                  <Pressable onPress={handlePrevDay} style={styles.dateNavButton}>
+                    <MaterialIcons name="chevron-left" size={24} color={headerText} />
+                  </Pressable>
+                  <ThemedText style={[styles.dateNavLabel, { color: headerText }]}>
+                    {formatDateNav()}
+                  </ThemedText>
+                  <Pressable onPress={handleNextDay} style={styles.dateNavButton}>
+                    <MaterialIcons name="chevron-right" size={24} color={headerText} />
+                  </Pressable>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekScroll}>
+                  {weekDates.map((day) => (
+                    <Pressable
+                      key={day.date.toISOString()}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setSelectedDate(day.date);
+                      }}
+                      style={[styles.weekDay, (day.isSelected || day.isToday) && { backgroundColor: primary }]}
+                    >
+                      <ThemedText style={[styles.weekDayText, { color: day.isSelected || day.isToday ? '#FFF' : headerText }]}>{day.label}</ThemedText>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <View style={styles.taskList}>
+                  {tasksLoading ? (
+                    <ThemedText style={[styles.taskEmpty, { color: headerSubtitle }]}>Загрузка...</ThemedText>
+                  ) : tasksForSelectedDate.length === 0 ? (
+                    <ThemedText style={[styles.taskEmpty, { color: headerSubtitle }]}>Нет задач на эту дату</ThemedText>
+                  ) : (
+                    tasksForSelectedDate.map((task) => (
+                      <Pressable
+                        key={task.id}
+                        onPress={() => {
+                          if (task.requestId) router.push(`/(tabs)/requests/${task.requestId}`);
+                          else if (task.bookingId) router.push(`/booking/${task.bookingId}`);
+                        }}
+                        style={styles.taskRow}
+                      >
+                        <View style={[styles.taskTimeIndicator, { backgroundColor: task.color }]} />
+                        <ThemedText style={[styles.taskTime, { color: headerSubtitle }]}>{task.time}</ThemedText>
+                        <ThemedText style={[styles.taskTitle, { color: headerText }]} numberOfLines={1}>{task.title}</ThemedText>
+                        <View style={[styles.taskDot, { backgroundColor: task.color }]} />
+                      </Pressable>
+                    ))
+                  )}
+                </View>
+              </>
+            )}
           </View>
-          <Pressable onPress={handleAllTasks} style={styles.todoListButton}>
-            <ThemedText style={[styles.todoListButtonText, { color: primary }]}>Todo list</ThemedText>
-            <MaterialIcons name="format-list-bulleted" size={20} color={primary} />
+          <Pressable onPress={handleToggleView} style={styles.todoListButton}>
+            <ThemedText style={[styles.todoListButtonText, { color: primary }]}>
+              {showTodoList ? 'Календарь' : 'Todo list'}
+            </ThemedText>
+            <MaterialIcons name={showTodoList ? 'calendar-today' : 'format-list-bulleted'} size={20} color={primary} />
           </Pressable>
         </View>
 
@@ -675,12 +929,51 @@ function ClientDashboardContent() {
             </View>
             <View style={styles.dailyPerformanceText}>
               <ThemedText style={styles.dailyPerformanceLabel}>Дневная продуктивность</ThemedText>
-              <ThemedText style={styles.dailyPerformanceStatus}>Цель достигнута!</ThemedText>
+              <ThemedText style={styles.dailyPerformanceStatus}>
+              {dailyPerformance.total === 0 ? 'Нет задач' : dailyPerformance.percent >= 100 ? 'Цель достигнута!' : `${dailyPerformance.completed} из ${dailyPerformance.total}`}
+            </ThemedText>
             </View>
-            <ThemedText style={styles.dailyPerformancePercent}>94%</ThemedText>
+            <ThemedText style={styles.dailyPerformancePercent}>{dailyPerformance.percent}%</ThemedText>
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={!!selectedInsight}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedInsight(null)}
+      >
+        <Pressable
+          style={styles.insightModalOverlay}
+          onPress={() => setSelectedInsight(null)}
+        >
+          <Pressable style={[styles.insightModalContent, { backgroundColor: cardBg }]} onPress={(e) => e.stopPropagation()}>
+            {selectedInsight && (
+              <>
+                <Image
+                  source={{ uri: selectedInsight.image }}
+                  style={styles.insightModalImage}
+                  contentFit="cover"
+                />
+                <View style={styles.insightModalBody}>
+                  <View style={[styles.insightTag, { marginBottom: 12 }]}>
+                    <ThemedText style={styles.insightTagText}>{selectedInsight.tag}</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.insightModalTitle, { color: headerText }]}>{selectedInsight.title}</ThemedText>
+                  <ThemedText style={[styles.insightModalDesc, { color: headerSubtitle }]}>{selectedInsight.desc}</ThemedText>
+                </View>
+                <Pressable
+                  onPress={() => setSelectedInsight(null)}
+                  style={[styles.insightModalClose, { backgroundColor: primary }]}
+                >
+                  <ThemedText style={styles.insightModalCloseText}>Закрыть</ThemedText>
+                </Pressable>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
@@ -746,15 +1039,13 @@ const styles = StyleSheet.create({
   insightsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 24,
     paddingBottom: 12,
   },
   insightsHeaderLeft: { flex: 1 },
   insightsTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 4 },
-  exploreLink: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  exploreText: { fontSize: 14, fontWeight: '500' },
   notificationButton: { padding: 8, position: 'relative' },
   notificationDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4 },
   insightsScroll: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
@@ -788,6 +1079,36 @@ const styles = StyleSheet.create({
   insightTagText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
   insightTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 6 },
   insightDesc: { fontSize: 15, color: 'rgba(255,255,255,0.9)', lineHeight: 22 },
+  // Insight modal
+  insightModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  insightModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  insightModalImage: {
+    width: '100%',
+    height: 200,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  insightModalBody: { padding: 20 },
+  insightModalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 12 },
+  insightModalDesc: { fontSize: 16, lineHeight: 24 },
+  insightModalClose: {
+    margin: 20,
+    marginTop: 0,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  insightModalCloseText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
   // Smart Control
   section: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 24, marginTop: 8 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
@@ -808,7 +1129,54 @@ const styles = StyleSheet.create({
   weekDayText: { fontSize: 14, fontWeight: '500' },
   todoListButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16, alignSelf: 'flex-end' },
   todoListButtonText: { fontSize: 14, fontWeight: '500' },
+  // Todo list (inline)
+  todoInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  todoInput: { flex: 1, fontSize: 16, paddingVertical: 10 },
+  todoAddButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  todoListContent: { marginTop: 4 },
+  todoEmptyState: { alignItems: 'center', paddingVertical: 32 },
+  todoEmptyTitle: { fontSize: 16, fontWeight: '600', marginTop: 12 },
+  todoEmptySubtitle: { fontSize: 14, marginTop: 4 },
+  todoListBlock: { borderRadius: 12, overflow: 'hidden' },
+  todoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  todoCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  todoRowText: { flex: 1, fontSize: 16 },
+  todoTextCompleted: { textDecorationLine: 'line-through' },
+  todoRemoveBtn: { padding: 4 },
+  todoClearButton: { alignSelf: 'flex-end', marginTop: 12, paddingVertical: 6, paddingHorizontal: 10 },
+  todoClearButtonText: { fontSize: 13, fontWeight: '500' },
   taskList: { gap: 4, marginTop: 16 },
+  taskEmpty: { fontSize: 14, paddingVertical: 16, textAlign: 'center' },
   taskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
   taskTimeIndicator: { width: 4, height: 24, borderRadius: 2, marginRight: 12 },
   taskTime: { fontSize: 14, width: 44 },

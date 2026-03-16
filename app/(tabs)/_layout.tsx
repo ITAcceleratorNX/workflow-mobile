@@ -45,6 +45,7 @@ export default function TabLayout() {
         return {
           headerShown: false,
           tabBarShowLabel: false,
+          tabBarStyle: { backgroundColor: 'transparent', borderTopWidth: 0, elevation: 0, shadowOpacity: 0 },
           sceneStyle: { paddingBottom },
         };
       }}>
