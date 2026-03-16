@@ -1,14 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
   ScrollView,
   Pressable,
-  ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -19,21 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuthStore } from '@/stores/auth-store';
-import { useActivityTrackerStore } from '@/stores/activity-tracker-store';
-import { useStepsStore } from '@/stores/steps-store';
 import { useToast } from '@/context/toast-context';
-import { useActivityTracker } from '@/hooks/use-activity-tracker';
-import { useHealthReminders } from '@/hooks/use-health-reminders';
-import {
-  getClientRoomSubscriptions,
-  getRoomDevicesForClient,
-  controlDevice,
-  type YandexDevice,
-  type ClientRoomSubscription,
-} from '@/lib/api';
-import { stepLengthMetersFromHeight, stepsToKm } from '@/lib/steps-utils';
-
-type TabType = 'home' | 'health' | 'settings' | 'steps';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -444,887 +427,92 @@ export default function ClientDashboardScreen() {
   return <ClientDashboardContent />;
 }
 
+const INSIGHT_CARD_WIDTH = width * 0.75;
+
+const MOCK_INSIGHTS = [
+  { id: '1', tag: 'Wellness', title: 'Оптимизируйте сон', desc: 'Новые метрики показывают: сон на 15 мин раньше может повысить концентрацию на 20%.', bg: '#1E3A5F' },
+  { id: '2', tag: 'Умный дом', title: 'Экономия энергии', desc: 'Ваши умные устройства экономят энергию, синхронизируясь с расписанием.', bg: '#2D5A3D' },
+  { id: '3', tag: 'Продуктивность', title: 'Советы на день', desc: 'Рекомендуем сделать перерыв через 45 минут работы.', bg: '#4A3D6B' },
+];
+
+const MOCK_TASKS = [
+  { id: '1', time: '09:30', title: 'Code review', color: '#3B82F6' },
+  { id: '2', time: '11:00', title: 'Security audit', color: CARD_ORANGE },
+  { id: '3', time: '13:00', title: 'Lunch meeting', color: CARD_ORANGE },
+  { id: '4', time: '15:30', title: 'Documentation update', color: '#3B82F6' },
+];
+
+const WEEK_DAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+
 /** Контент главной только для роли client. Вынесен в отдельный компонент, чтобы не нарушать правила хуков (одинаковое количество хуков при любом рендере). */
 function ClientDashboardContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
-  const isGuest = useAuthStore((state) => state.isGuest);
-  const { show } = useToast();
   const effectiveRole = role || user?.role;
   const isClient = effectiveRole?.toLowerCase() === 'client';
   const background = useThemeColor({}, 'background');
   const headerText = useThemeColor({}, 'text');
   const headerSubtitle = useThemeColor({}, 'textMuted');
-  const tabInactiveBackground = useThemeColor({}, 'cardBackground');
   const primary = useThemeColor({}, 'primary');
   const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const cardBg = useThemeColor({}, 'cardBackground');
 
-  // Activity Tracker Store
-  const {
-    statistics,
-    healthReminders,
-    autoStartInWorkingHours,
-    setHealthReminders,
-    setAutoStartInWorkingHours,
-  } = useActivityTrackerStore();
+  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+  const [hasNotifications] = useState(true);
 
-  // Шагомер: данные с устройства (iOS: Motion & Fitness, Android: счётчик шагов)
-  const stepsToday = useStepsStore((s) => s.stepsToday);
-  const stepsGoal = useStepsStore((s) => s.settings.goalSteps);
-  const stepsHeightCm = useStepsStore((s) => s.settings.heightCm);
-  const stepLengthM = stepsHeightCm && stepsHeightCm > 0 ? stepLengthMetersFromHeight(stepsHeightCm) : 0.7;
-  const stepsKmToday = stepsToKm(stepsToday, stepLengthM);
-  const stepsProgress = stepsGoal && stepsGoal > 0 ? Math.min(stepsToday / stepsGoal, 1) : 0;
-
-  // Логирование изменений статистики
-  useEffect(() => {
-    console.log('[UI] Statistics updated:', {
-      sitting: statistics.totalSittingTime.toFixed(1),
-      standing: statistics.totalStandingTime.toFixed(1),
-      standUps: statistics.standUpCount,
-      posture: statistics.currentPosture,
-    });
-  }, [statistics]);
-
-  // Activity Tracker Hook (работает с сенсорами)
-  const { isTracking, startTracking, stopTracking, requestPermission, isAvailable } = useActivityTracker();
-
-  // Health-напоминания: уведомление "пора встать" при долгом сидении
-  useHealthReminders();
-
-  const [activeSection, setActiveSection] = useState<TabType>('home');
-  const [loading, setLoading] = useState(false);
-
-  // Smart Home State
-  const [subscriptions, setSubscriptions] = useState<ClientRoomSubscription[]>([]);
-  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
-  const [devices, setDevices] = useState<YandexDevice[]>([]);
-  const [isLoadingDevices, setIsLoadingDevices] = useState(false);
-  const [isControlling, setIsControlling] = useState<string | null>(null);
-  const [showRoomSelector, setShowRoomSelector] = useState(false);
-
-  const MOCK_SUBSCRIPTIONS: ClientRoomSubscription[] = [
-    {
-      id: 1,
-      client_id: 0,
-      meeting_room_id: 1,
-      meetingRoom: {
-        id: 1,
-        name: 'Кабинет 101 (демо)',
-        office_id: 1,
-        office: {
-          id: 1,
-          name: 'Демо офис',
-        },
-      },
-    },
-  ];
-
-  const MOCK_DEVICES: YandexDevice[] = [
-    {
-      id: 'demo-lamp-1',
-      name: 'Свет (демо)',
-      type: 'devices.types.light',
-      capabilities: [
-        {
-          type: 'devices.capabilities.on_off',
-          state: { instance: 'on', value: false },
-        },
-      ],
-    },
-    {
-      id: 'demo-ac-1',
-      name: 'Кондиционер (демо)',
-      type: 'devices.types.thermostat.ac',
-      capabilities: [
-        {
-          type: 'devices.capabilities.on_off',
-          state: { instance: 'on', value: true },
-        },
-      ],
-    },
-  ];
-
-  // Format time helper
-  const formatTime = useCallback((seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}ч ${minutes}м ${secs.toString().padStart(2, '0')}с`;
-    } else if (minutes > 0) {
-      return `${minutes}м ${secs.toString().padStart(2, '0')}с`;
-    } else {
-      return `${secs}с`;
-    }
-  }, []);
-
-  // Toggle tracker
-  const handleToggleTracker = useCallback(async () => {
-    if (isTracking) {
-      stopTracking(true);
-      show({
-        title: 'Трекер остановлен',
-        variant: 'default',
-        duration: 2000,
-      });
-    } else {
-      // Проверяем доступность датчиков
-      if (isAvailable === false) {
-        show({
-          title: 'Датчики недоступны',
-          description: 'Акселерометр не доступен на этом устройстве',
-          variant: 'destructive',
-          duration: 4000,
-        });
-        return;
-      }
-
-      // Запрашиваем разрешение на датчики (iOS требует explicit permission request)
-      console.log('[Tracker] Requesting motion permission...');
-      const granted = await requestPermission();
-      console.log('[Tracker] Permission granted:', granted);
-
-      if (!granted) {
-        show({
-          title: 'Доступ к датчикам',
-          description: 'Разрешите доступ к датчикам движения для работы трекера активности. Откройте Настройки > Приватность и безопасность > Движение и фитнес.',
-          variant: 'destructive',
-          duration: 5000,
-        });
-        return;
-      }
-
-      startTracking(true);
-      show({
-        title: 'Трекер запущен',
-        description: 'Отслеживание активности начато',
-        variant: 'success',
-        duration: 2000,
+  const weekDates = (() => {
+    const today = new Date();
+    const days: { date: Date; label: string; isToday: boolean }[] = [];
+    for (let i = -2; i <= 2; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      days.push({
+        date: d,
+        label: `${WEEK_DAYS[d.getDay()]} ${d.getDate()}`,
+        isToday: d.toDateString() === today.toDateString(),
       });
     }
-  }, [isTracking, isAvailable, startTracking, stopTracking, requestPermission, show]);
+    return days;
+  })();
 
-  // Load Smart Home Subscriptions
-  useEffect(() => {
-    const loadSubscriptions = async () => {
-      if (isGuest) {
-        setSubscriptions(MOCK_SUBSCRIPTIONS);
-        setSelectedRoomId(1);
-        return;
-      }
-
-      if (!user?.id) {
-        console.log('[SmartHome] No user ID, skipping load');
-        return;
-      }
-      try {
-        setLoading(true);
-        console.log('[SmartHome] Loading subscriptions for user:', user.id);
-        const result = await getClientRoomSubscriptions(user.id);
-        console.log('[SmartHome] Subscriptions result:', result);
-
-        if (result.ok) {
-          const subs = result.data.subscriptions || [];
-          console.log('[SmartHome] Loaded subscriptions:', subs.length);
-          setSubscriptions(subs);
-          if (subs.length > 0 && !selectedRoomId) {
-            setSelectedRoomId(subs[0].meeting_room_id);
-          }
-        } else {
-          console.error('[SmartHome] Failed to load subscriptions:', result.error);
-          show({
-            title: 'Ошибка загрузки',
-            description: result.error,
-            variant: 'destructive',
-            duration: 3000,
-          });
-        }
-      } catch (err) {
-        console.error('[SmartHome] Error loading subscriptions:', err);
-        show({
-          title: 'Ошибка',
-          description: 'Не удалось загрузить комнаты',
-          variant: 'destructive',
-          duration: 3000,
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadSubscriptions();
-  }, [user?.id, show, isGuest]);
-
-  // Load Devices when room changes
-  useEffect(() => {
-    const loadDevices = async () => {
-      if (!selectedRoomId) {
-        console.log('[SmartHome] No room selected, skipping device load');
-        return;
-      }
-
-      if (isGuest) {
-        setDevices(MOCK_DEVICES);
-        return;
-      }
-      try {
-        setIsLoadingDevices(true);
-        console.log('[SmartHome] Loading devices for room:', selectedRoomId);
-        const result = await getRoomDevicesForClient(selectedRoomId);
-        console.log('[SmartHome] Devices result:', result);
-
-        if (result.ok) {
-          setDevices(result.data.devices || []);
-        } else {
-          console.error('[SmartHome] Failed to load devices:', result.error);
-          show({
-            title: 'Ошибка загрузки',
-            description: result.error,
-            variant: 'destructive',
-            duration: 3000,
-          });
-        }
-      } catch (err) {
-        console.error('[SmartHome] Error loading devices:', err);
-        show({
-          title: 'Ошибка',
-          description: 'Не удалось загрузить устройства',
-          variant: 'destructive',
-          duration: 3000,
-        });
-      } finally {
-        setIsLoadingDevices(false);
-      }
-    };
-    loadDevices();
-  }, [selectedRoomId, show, isGuest]);
-
-  // Control device
-  const handleControlDevice = useCallback(
-    async (device: YandexDevice, value: boolean) => {
-      try {
-        setIsControlling(device.id);
-        if (!isGuest) {
-          const result = await controlDevice({
-            device_id: device.id,
-            action_type: 'devices.capabilities.on_off',
-            action_state: {
-              instance: 'on',
-              value: value,
-            },
-          });
-
-          if (!result.ok) {
-            show({
-              title: 'Ошибка',
-              description: 'Не удалось управлять устройством',
-              variant: 'destructive',
-              duration: 2000,
-            });
-            return;
-          }
-        }
-
-        show({
-          title: 'Успешно',
-          description: isGuest
-            ? `(Демо) ${device.name} ${value ? 'включено' : 'выключено'}`
-            : `${device.name} ${value ? 'включено' : 'выключено'}`,
-          variant: 'success',
-          duration: 2000,
-        });
-
-        // Update local state
-        setDevices((prevDevices) =>
-          prevDevices.map((d) => {
-            if (d.id === device.id) {
-              const updatedDevice = { ...d };
-              const capability = updatedDevice.capabilities?.find(
-                (cap) => cap.type === 'devices.capabilities.on_off'
-              );
-              if (capability && capability.state) {
-                capability.state = {
-                  instance: capability.state.instance,
-                  value,
-                };
-              }
-              return updatedDevice;
-            }
-            return d;
-          })
-        );
-      } catch (err) {
-        show({
-          title: 'Ошибка',
-          description: 'Не удалось управлять устройством',
-          variant: 'destructive',
-          duration: 2000,
-        });
-      } finally {
-        setIsControlling(null);
-      }
-    },
-    [show]
-  );
-
-  // Get device state
-  const getDeviceState = useCallback((device: YandexDevice): boolean | null => {
-    const capability = device.capabilities?.find(
-      (cap) => cap.type === 'devices.capabilities.on_off'
-    );
-    if (capability?.state?.value !== undefined) {
-      return capability.state.value;
-    }
-    return null;
-  }, []);
-
-  // Get controllable devices
-  const controllableDevices = devices.filter((device) => {
-    return device.capabilities?.some(
-      (cap) => cap.type === 'devices.capabilities.on_off'
-    );
-  });
-
-  // Get selected room name
-  const selectedRoom = subscriptions.find(
-    (sub) => sub.meeting_room_id === selectedRoomId
-  );
-
-  // Section titles
-  const getSectionTitle = () => {
-    switch (activeSection) {
-      case 'home':
-        return 'Управление "умным домом"';
-      case 'health':
-        return 'Health-напоминание';
-      case 'settings':
-        return 'Настройки трекера';
-      case 'steps':
-        return 'Шаги';
-      default:
-        return '';
-    }
+  const formatDateNav = () => {
+    const d = selectedDate;
+    const today = new Date();
+    const dateStr = `${d.getDate()} ${['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'][d.getMonth()]}`;
+    if (d.toDateString() === today.toDateString()) return `Сегодня – ${dateStr}`;
+    return dateStr;
   };
 
-  const getSectionSubtitle = () => {
-    switch (activeSection) {
-      case 'home':
-        return 'Выберите комнату и управляйте устройствами';
-      case 'health':
-        return '';
-      case 'settings':
-        return 'Настройте параметры отслеживания';
-      case 'steps':
-        return 'Шаги за день, цель и история';
-      default:
-        return '';
-    }
+  const handlePrevDay = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(d);
   };
 
-  const handleTabPress = useCallback((tab: TabType) => {
-    setActiveSection(tab);
-    if (tab === 'home') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  }, []);
+  const handleNextDay = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + 1);
+    setSelectedDate(d);
+  };
 
-  // Render Home Section (Smart Home)
-  const renderHomeSection = () => (
-    <View style={styles.sectionContent}>
-      {subscriptions.length === 0 ? (
-        <View style={styles.emptyState}>
-          <MaterialIcons name="home" size={64} color="rgba(255,255,255,0.4)" />
-          <ThemedText style={styles.emptyTitle}>Нет подписок на комнаты</ThemedText>
-          <ThemedText style={styles.emptySubtitle}>
-            Обратитесь к администратору
-          </ThemedText>
-        </View>
-      ) : (
-        <>
-          {/* Room Selector */}
-          <View style={styles.roomSelectorContainer}>
-            <ThemedText style={styles.roomLabel}>Выберите комнату:</ThemedText>
-            <Pressable
-              onPress={() => setShowRoomSelector(!showRoomSelector)}
-              style={styles.roomSelectorButton}
-            >
-              <ThemedText style={styles.roomSelectorText}>
-                {selectedRoom?.meetingRoom?.name || 'Выберите комнату'}
-                {selectedRoom?.meetingRoom?.office
-                  ? ` (${selectedRoom.meetingRoom.office.name})`
-                  : ''}
-              </ThemedText>
-              <MaterialIcons
-                name={showRoomSelector ? 'expand-less' : 'expand-more'}
-                size={24}
-                color="#FFFFFF"
-              />
-            </Pressable>
+  const handleSmartHome = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/client/smart-home');
+  };
 
-            {/* Room Dropdown */}
-            {showRoomSelector && (
-              <View style={styles.roomDropdown}>
-                {subscriptions.map((sub) => (
-                  <Pressable
-                    key={sub.id}
-                    onPress={() => {
-                      setSelectedRoomId(sub.meeting_room_id);
-                      setShowRoomSelector(false);
-                    }}
-                    style={[
-                      styles.roomDropdownItem,
-                      selectedRoomId === sub.meeting_room_id &&
-                        styles.roomDropdownItemActive,
-                    ]}
-                  >
-                    <ThemedText style={styles.roomDropdownText}>
-                      {sub.meetingRoom?.name || `Комната ID: ${sub.meeting_room_id}`}
-                      {sub.meetingRoom?.office
-                        ? ` (${sub.meetingRoom.office.name})`
-                        : ''}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </View>
+  const handleHealthStats = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/client/health-screen');
+  };
 
-          {/* Devices Title */}
-          <ThemedText style={styles.devicesTitle}>Устройство в комнате</ThemedText>
-
-          {/* Devices area: content visible, loader overlay when loading */}
-          <View style={styles.devicesAreaWrapper}>
-            {isLoadingDevices ? (
-              <View style={styles.devicesGridPlaceholder} />
-            ) : controllableDevices.length === 0 ? (
-              <View style={styles.emptyState}>
-                <MaterialIcons
-                  name="lightbulb"
-                  size={64}
-                  color="rgba(255,255,255,0.4)"
-                />
-                <ThemedText style={styles.emptyTitle}>
-                  Нет доступных устройств
-                </ThemedText>
-                <ThemedText style={styles.emptySubtitle}>
-                  В этой комнате нет устройств
-                </ThemedText>
-              </View>
-            ) : (
-              <View style={styles.devicesGrid}>
-                {controllableDevices.map((device) => {
-                  const isOn = getDeviceState(device);
-                  const isControllingThis = isControlling === device.id;
-
-                  return (
-                    <Pressable
-                      key={device.id}
-                      onPress={() => handleControlDevice(device, !isOn)}
-                      disabled={isControllingThis || isOn === null}
-                      style={[
-                        styles.deviceCard,
-                        { backgroundColor: isOn ? CARD_GREEN : CARD_ORANGE },
-                        isControllingThis && styles.deviceCardDisabled,
-                      ]}
-                    >
-                      <View style={styles.deviceCardContent}>
-                        <View>
-                          <ThemedText style={styles.deviceName}>
-                            {device.name}
-                          </ThemedText>
-                          <ThemedText style={styles.deviceStatus}>
-                            {isControllingThis
-                              ? 'Загрузка...'
-                              : isOn
-                                ? 'Вкл.'
-                                : 'Выкл.'}
-                          </ThemedText>
-                        </View>
-                        <View
-                          style={[
-                            styles.deviceIconContainer,
-                            {
-                              backgroundColor: isOn
-                                ? 'rgba(255,255,255,0.3)'
-                                : 'rgba(255,255,255,0.2)',
-                            },
-                          ]}
-                        >
-                          {isControllingThis ? (
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                          ) : (
-                            <MaterialIcons
-                              name="power-settings-new"
-                              size={22}
-                              color={isOn ? '#FFFFFF' : 'rgba(255,255,255,0.6)'}
-                            />
-                          )}
-                        </View>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-            {isLoadingDevices && (
-              <View style={styles.loadingOverlay}>
-                <PageLoader size={80} />
-              </View>
-            )}
-          </View>
-        </>
-      )}
-    </View>
-  );
-
-  // Render Health Section
-  const renderHealthSection = () => (
-    <View style={styles.sectionContent}>
-      <ThemedText style={styles.statsLabel}>Общая статистика</ThemedText>
-
-      {/* Stats Grid */}
-      <View style={styles.statsGrid}>
-        {/* Tracker Card */}
-        <Pressable
-          onPress={handleToggleTracker}
-          style={[
-            styles.statCard,
-            { backgroundColor: isTracking ? TRACKER_ACTIVE_TEAL : CARD_ORANGE },
-          ]}
-        >
-          <View style={styles.statCardContent}>
-            <View>
-              <ThemedText style={styles.statCardTitle}>Трекер</ThemedText>
-              <ThemedText style={styles.statCardSubtitle}>
-                {isTracking ? 'Вкл.' : 'Выкл.'}
-              </ThemedText>
-            </View>
-            <View style={styles.statIconContainer}>
-              <MaterialIcons
-                name={isTracking ? 'pause' : 'play-arrow'}
-                size={24}
-                color="#FFFFFF"
-              />
-            </View>
-          </View>
-        </Pressable>
-
-        {/* Шагомер: данные с датчика шагов (iOS: Motion & Fitness, Android: счётчик шагов) */}
-        <Pressable
-          onPress={() => router.push('/steps')}
-          style={[styles.statCard, { backgroundColor: CARD_GREEN }]}
-        >
-          <View style={styles.statCardContent}>
-            <View>
-              <ThemedText style={styles.statCardTitle}>Шаги</ThemedText>
-              <ThemedText style={[styles.statCardSubtitle, { opacity: 0.9 }]}>
-                {stepsGoal ? `Цель ${stepsGoal.toLocaleString('ru-RU')}` : 'Датчик шагов'}
-              </ThemedText>
-            </View>
-            <MaterialIcons name="directions-walk" size={24} color="#FFFFFF" />
-          </View>
-          <ThemedText style={styles.statCardValue}>
-            {stepsToday.toLocaleString('ru-RU')}
-          </ThemedText>
-          <ThemedText style={[styles.statCardSubtitle, { marginTop: 2, opacity: 0.85, fontSize: 11 }]}>
-            ~{stepsKmToday.toFixed(2)} км
-          </ThemedText>
-        </Pressable>
-
-        {/* Sitting Time Card */}
-        <View style={[styles.statCard, { backgroundColor: CARD_GREEN }]}>
-          <View style={styles.statCardContent}>
-            <View>
-              <ThemedText style={styles.statCardTitle}>Время сидя</ThemedText>
-            </View>
-            <MaterialIcons name="access-time" size={24} color="#FFFFFF" />
-          </View>
-          <ThemedText style={styles.statCardValue}>
-            {formatTime(statistics.totalSittingTime)}
-          </ThemedText>
-        </View>
-
-        {/* Total Tracking Time Card - spans 2 rows */}
-        <View
-          style={[
-            styles.statCard,
-            styles.statCardLarge,
-            { backgroundColor: CARD_ORANGE },
-          ]}
-        >
-          <ThemedText style={styles.statCardTitle}>
-            Общее время отслеживания
-          </ThemedText>
-          <ThemedText style={styles.statCardValueLarge}>
-            {formatTime(statistics.totalSittingTime + statistics.totalStandingTime)}
-          </ThemedText>
-        </View>
-
-        {/* Standing Time Card */}
-        <View style={[styles.statCard, { backgroundColor: CARD_GREEN }]}>
-          <View style={styles.statCardContent}>
-            <View>
-              <ThemedText style={styles.statCardTitle}>Время стоя</ThemedText>
-            </View>
-            <MaterialIcons name="trending-up" size={24} color="#FFFFFF" />
-          </View>
-          <ThemedText style={styles.statCardValue}>
-            {formatTime(statistics.totalStandingTime)}
-          </ThemedText>
-        </View>
-
-        {/* Stand Up Count Card */}
-        <View style={[styles.statCard, { backgroundColor: CARD_GREEN }]}>
-          <View style={styles.statCardContent}>
-            <View style={{ flex: 1 }}>
-              <ThemedText style={[styles.statCardTitle, { fontSize: 13 }]}>
-                Количество вставаний
-              </ThemedText>
-            </View>
-            <MaterialIcons name="bar-chart" size={24} color="#FFFFFF" />
-          </View>
-          <ThemedText style={styles.statCardValue}>
-            {statistics.standUpCount}
-          </ThemedText>
-        </View>
-      </View>
-    </View>
-  );
-
-  // Toggle component
-  const Toggle = ({
-    value,
-    onToggle,
-  }: {
-    value: boolean;
-    onToggle: () => void;
-  }) => (
-    <Pressable onPress={onToggle} style={styles.toggleContainer}>
-      <View
-        style={[
-          styles.toggleTrack,
-          { backgroundColor: value ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)' },
-        ]}
-      >
-        <View
-          style={[
-            styles.toggleThumb,
-            {
-              backgroundColor: value ? '#FFFFFF' : 'rgba(255,255,255,0.4)',
-              transform: [{ translateX: value ? 20 : 0 }],
-            },
-          ]}
-        />
-      </View>
-    </Pressable>
-  );
-
-  // Render Settings Section
-  const renderSettingsSection = () => (
-    <View style={styles.sectionContent}>
-      {/* Reminders + Interval in one card */}
-      <Pressable
-        onPress={() =>
-          setHealthReminders({ enabled: !healthReminders.enabled })
-        }
-        style={[styles.settingsCard, { backgroundColor: CARD_ORANGE }]}
-      >
-        <View style={styles.settingsRow}>
-          <View style={styles.settingsTextContainer}>
-            <ThemedText style={styles.settingsCardTitle}>Напоминания</ThemedText>
-            <ThemedText style={styles.settingsCardSubtitle}>
-              Напоминать вставать каждые {healthReminders.sittingIntervalMinutes} мин
-            </ThemedText>
-          </View>
-          <Toggle
-            value={healthReminders.enabled}
-            onToggle={() =>
-              setHealthReminders({ enabled: !healthReminders.enabled })
-            }
-          />
-        </View>
-
-        <View style={{ marginTop: 16 }}>
-          <ThemedText style={styles.settingsCardTitle}>
-            Интервал напоминаний
-          </ThemedText>
-          <View style={styles.intervalButtons}>
-            {[2, 30, 45, 60, 90, 120].map((mins) => {
-              const isActive = healthReminders.sittingIntervalMinutes === mins;
-              return (
-                <Pressable
-                  key={mins}
-                  onPress={() =>
-                    setHealthReminders({ sittingIntervalMinutes: mins })
-                  }
-                  style={[
-                    styles.intervalButton,
-                    {
-                      backgroundColor: isActive
-                        ? TRACKER_ACTIVE_TEAL
-                        : 'rgba(255,255,255,0.2)',
-                    },
-                  ]}
-                >
-                  <ThemedText
-                    style={[
-                      styles.intervalButtonText,
-                      { color: '#FFFFFF' },
-                    ]}
-                  >
-                    {mins} мин
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      </Pressable>
-
-      {/* Auto-start Toggle */}
-      <Pressable
-        onPress={() => setAutoStartInWorkingHours(!autoStartInWorkingHours)}
-        style={[styles.settingsCard, { backgroundColor: CARD_ORANGE }]}
-      >
-        <View style={styles.settingsRow}>
-          <View style={styles.settingsTextContainer}>
-            <ThemedText style={styles.settingsCardTitle}>
-              Автозапуск трекера
-            </ThemedText>
-            <ThemedText style={styles.settingsCardSubtitle}>
-              Запускать в рабочее время
-            </ThemedText>
-          </View>
-          <Toggle
-            value={autoStartInWorkingHours}
-            onToggle={() => setAutoStartInWorkingHours(!autoStartInWorkingHours)}
-          />
-        </View>
-      </Pressable>
-
-      {/* Quiet Mode Toggle */}
-      <Pressable
-        onPress={() =>
-          setHealthReminders({
-            disableDuringMeetings: !healthReminders.disableDuringMeetings,
-          })
-        }
-        style={[styles.settingsCard, { backgroundColor: CARD_ORANGE }]}
-      >
-        <View style={styles.settingsRow}>
-          <View style={styles.settingsTextContainer}>
-            <ThemedText style={styles.settingsCardTitle}>
-              Тихий режим на встречах
-            </ThemedText>
-            <ThemedText style={styles.settingsCardSubtitle}>
-              Отключать напоминания во время встреч
-            </ThemedText>
-          </View>
-          <Toggle
-            value={healthReminders.disableDuringMeetings}
-            onToggle={() =>
-              setHealthReminders({
-                disableDuringMeetings: !healthReminders.disableDuringMeetings,
-              })
-            }
-          />
-        </View>
-      </Pressable>
-
-      {/* Шагомер — рядом с настройками трекера; данные: датчик шагов устройства */}
-      <Pressable
-        onPress={() => router.push('/steps')}
-        style={[styles.settingsCard, { backgroundColor: CARD_GREEN }]}
-      >
-        <View style={styles.settingsRow}>
-          <View style={styles.settingsTextContainer}>
-            <ThemedText style={styles.settingsCardTitle}>
-              Шагомер
-            </ThemedText>
-            <ThemedText style={styles.settingsCardSubtitle}>
-              Цель, история, уведомления. Данные: датчик шагов (iOS: Motion & Fitness, Android: счётчик шагов)
-            </ThemedText>
-          </View>
-          <MaterialIcons name="chevron-right" size={24} color="#FFFFFF" />
-        </View>
-      </Pressable>
-
-      <ThemedText style={[styles.settingsCardSubtitle, { marginTop: 12, opacity: 0.8 }]}>
-        Трекер учитывает время, когда приложение на экране. В фоне учёт приостанавливается.
-      </ThemedText>
-    </View>
-  );
-
-  // Секция Шаги (4-я вкладка, контент под кнопкой-шагомером)
-  const renderStepsSection = () => (
-    <View style={styles.sectionContent}>
-      <View style={styles.stepsCircleWrap}>
-        <View style={styles.stepsCircleContainer}>
-          <Svg width={180} height={180}>
-            <Circle
-              cx={90}
-              cy={90}
-              r={75}
-              stroke="rgba(255,255,255,0.25)"
-              strokeWidth={10}
-              strokeLinecap="round"
-              fill="none"
-            />
-            <Circle
-              cx={90}
-              cy={90}
-              r={75}
-              stroke="#FFFFFF"
-              strokeWidth={10}
-              strokeLinecap="round"
-              strokeDasharray={2 * Math.PI * 75}
-              strokeDashoffset={2 * Math.PI * 75 * (1 - stepsProgress)}
-              fill="none"
-              rotation={-90}
-              originX={90}
-              originY={90}
-            />
-          </Svg>
-          <View style={styles.stepsCircleCenter}>
-            <ThemedText
-              style={[styles.stepsBigValue, { color: '#FFFFFF' }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.35}
-            >
-              {stepsToday.toLocaleString('ru-RU')}
-            </ThemedText>
-            {stepsGoal != null && stepsGoal > 0 && (
-              <ThemedText style={styles.stepsCircleSubtitle}>
-                из {stepsGoal.toLocaleString('ru-RU')}
-              </ThemedText>
-            )}
-          </View>
-        </View>
-      </View>
-      <ThemedText style={styles.stepsBigLabel}>шагов сегодня</ThemedText>
-      {stepsGoal != null && stepsGoal > 0 && (
-        <ThemedText style={styles.stepsGoalLine}>
-          Осталось: {Math.max(stepsGoal - stepsToday, 0).toLocaleString('ru-RU')} шагов
-        </ThemedText>
-      )}
-      <ThemedText style={styles.stepsKmLine}>
-        ≈ {stepsKmToday.toFixed(2)} км
-      </ThemedText>
-      <Pressable
-        onPress={() => router.push('/steps')}
-        style={[styles.stepsDetailButton, { backgroundColor: CARD_GREEN }]}
-      >
-        <ThemedText style={styles.stepsDetailButtonText}>
-          Подробнее: история и настройки
-        </ThemedText>
-        <MaterialIcons name="chevron-right" size={24} color="#FFFFFF" />
-      </Pressable>
-    </View>
-  );
+  const handleAllTasks = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/(tabs)/requests');
+  };
 
   // Если роль еще загружается - показываем загрузку
   if (!effectiveRole) {
@@ -1360,103 +548,103 @@ function ClientDashboardContent() {
   }
 
   return (
-    <ThemedView
-      style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}
-    >
+    <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
       <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + 100 },
-          ]}
-          showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Daily Insights — заголовок + уведомления + скролл новостей */}
+        <View style={styles.insightsHeader}>
+          <View style={styles.insightsHeaderLeft}>
+            <ThemedText style={[styles.insightsTitle, { color: headerText }]}>Обзор дня</ThemedText>
+            <Pressable onPress={() => {}} style={styles.exploreLink}>
+              <ThemedText style={[styles.exploreText, { color: primary }]}>Подробнее</ThemedText>
+              <MaterialIcons name="arrow-forward" size={18} color={primary} />
+            </Pressable>
+          </View>
+          <Pressable onPress={() => {}} style={styles.notificationButton}>
+            <MaterialIcons name="notifications" size={26} color={headerText} />
+            {hasNotifications && <View style={[styles.notificationDot, { backgroundColor: primary }]} />}
+          </Pressable>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.insightsScroll}
         >
-        {/* Header Section - Dark */}
-        <View style={styles.header}>
-          {/* Title */}
-          <ThemedText style={[styles.headerTitle, { color: headerText }]}>
-            {getSectionTitle()}
-          </ThemedText>
-          <ThemedText style={[styles.headerSubtitle, { color: headerSubtitle }]}>
-            {getSectionSubtitle() || ' '}
-          </ThemedText>
+          {MOCK_INSIGHTS.map((item) => (
+            <View key={item.id} style={[styles.insightCard, { backgroundColor: item.bg }]}>
+              <View style={styles.insightTag}>
+                <ThemedText style={styles.insightTagText}>{item.tag}</ThemedText>
+              </View>
+              <ThemedText style={styles.insightTitle}>{item.title}</ThemedText>
+              <ThemedText style={styles.insightDesc} numberOfLines={3}>{item.desc}</ThemedText>
+            </View>
+          ))}
+        </ScrollView>
 
-          {/* Tab Icons */}
-          <View style={styles.tabContainer}>
-            {/* Home Tab */}
-            <Pressable
-              onPress={() => handleTabPress('home')}
-              style={[
-                styles.tabButton,
-                {
-                  backgroundColor:
-                    activeSection === 'home' ? primary : tabInactiveBackground,
-                },
-              ]}
-            >
-              <MaterialIcons name="home" size={28} color="#FFFFFF" />
+        {/* Smart Control — две кнопки */}
+        <View style={[styles.section, { backgroundColor: screenBg }]}>
+          <ThemedText style={styles.sectionTitle}>Smart Control</ThemedText>
+          <View style={styles.smartControlGrid}>
+            <Pressable onPress={handleSmartHome} style={[styles.smartControlButton, { backgroundColor: cardBg }]}>
+              <View style={[styles.smartControlIconWrap, { backgroundColor: screenBg }]}>
+                <MaterialIcons name="home" size={28} color={primary} />
+              </View>
+              <ThemedText style={[styles.smartControlLabel, { color: headerText }]}>Управление умным домом</ThemedText>
             </Pressable>
-
-            {/* Health Tab */}
-            <Pressable
-              onPress={() => handleTabPress('health')}
-              style={[
-                styles.tabButton,
-                {
-                  backgroundColor:
-                    activeSection === 'health' ? primary : tabInactiveBackground,
-                },
-              ]}
-            >
-              <MaterialIcons
-                name="favorite"
-                size={28}
-                color="#FFFFFF"
-              />
-            </Pressable>
-
-            {/* Settings Tab */}
-            <Pressable
-              onPress={() => handleTabPress('settings')}
-              style={[
-                styles.tabButton,
-                {
-                  backgroundColor:
-                    activeSection === 'settings' ? primary : tabInactiveBackground,
-                },
-              ]}
-            >
-              <MaterialIcons name="settings" size={28} color="#FFFFFF" />
-            </Pressable>
-
-            {/* Steps Tab (4-я кнопка, как на скрине) */}
-            <Pressable
-              onPress={() => handleTabPress('steps')}
-              style={[
-                styles.tabButton,
-                {
-                  backgroundColor:
-                    activeSection === 'steps' ? primary : tabInactiveBackground,
-                },
-              ]}
-            >
-              <MaterialIcons name="directions-walk" size={28} color="#FFFFFF" />
+            <Pressable onPress={handleHealthStats} style={[styles.smartControlButton, { backgroundColor: cardBg }]}>
+              <View style={[styles.smartControlIconWrap, { backgroundColor: screenBg }]}>
+                <MaterialIcons name="favorite" size={28} color="#60A5FA" />
+              </View>
+              <ThemedText style={[styles.smartControlLabel, { color: headerText }]}>Health трекер</ThemedText>
             </Pressable>
           </View>
         </View>
 
-        {/* Orange Content Section with fixed dark gradient for readability */}
-        <LinearGradient
-          colors={[primary, screenBg]}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={styles.contentSection}
-        >
-          {activeSection === 'home' && renderHomeSection()}
-          {activeSection === 'health' && renderHealthSection()}
-          {activeSection === 'settings' && renderSettingsSection()}
-          {activeSection === 'steps' && renderStepsSection()}
-        </LinearGradient>
+        {/* Tasks — заголовок + Все задачи + календарь + список */}
+        <View style={[styles.section, { backgroundColor: screenBg }]}>
+          <View style={styles.tasksHeader}>
+            <ThemedText style={styles.sectionTitle}>Задачи</ThemedText>
+            <Pressable onPress={handleAllTasks} style={styles.viewAllLink}>
+              <ThemedText style={[styles.viewAllText, { color: primary }]}>Все задачи</ThemedText>
+              <MaterialIcons name="arrow-forward" size={18} color={primary} />
+            </Pressable>
+          </View>
+          <View style={styles.dateNav}>
+            <Pressable onPress={handlePrevDay} style={styles.dateNavButton}>
+              <MaterialIcons name="chevron-left" size={24} color={headerText} />
+            </Pressable>
+            <ThemedText style={[styles.dateNavLabel, { color: headerText }]}>
+              {formatDateNav()}
+            </ThemedText>
+            <Pressable onPress={handleNextDay} style={styles.dateNavButton}>
+              <MaterialIcons name="chevron-right" size={24} color={headerText} />
+            </Pressable>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekScroll}>
+            {weekDates.map((day) => (
+              <Pressable
+                key={day.date.toISOString()}
+                onPress={() => setSelectedDate(day.date)}
+                style={[styles.weekDay, day.isToday && { backgroundColor: primary }]}
+              >
+                <ThemedText style={[styles.weekDayText, { color: day.isToday ? '#FFF' : headerText }]}>{day.label}</ThemedText>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <View style={styles.taskList}>
+            {MOCK_TASKS.map((task) => (
+              <View key={task.id} style={styles.taskRow}>
+                <View style={[styles.taskTimeIndicator, { backgroundColor: task.color }]} />
+                <ThemedText style={[styles.taskTime, { color: headerSubtitle }]}>{task.time}</ThemedText>
+                <ThemedText style={[styles.taskTitle, { color: headerText }]}>{task.title}</ThemedText>
+                <View style={[styles.taskDot, { backgroundColor: task.color }]} />
+              </View>
+            ))}
+          </View>
+        </View>
       </ScrollView>
     </ThemedView>
   );
@@ -1519,47 +707,56 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
   },
-  header: {
+  // Client Dashboard — Daily Insights
+  insightsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 24,
+    paddingBottom: 12,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
-    marginBottom: 16,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  tabButton: {
-    width: 64,
-    height: 64,
+  insightsHeaderLeft: { flex: 1 },
+  insightsTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 4 },
+  exploreLink: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  exploreText: { fontSize: 14, fontWeight: '500' },
+  notificationButton: { padding: 8, position: 'relative' },
+  notificationDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4 },
+  insightsScroll: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
+  insightCard: {
+    width: INSIGHT_CARD_WIDTH,
     borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 16,
+    marginRight: 12,
   },
-  contentSection: {
-    flex: 1,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingTop: 24,
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-    minHeight: 500,
-  },
-  sectionContent: {
-    gap: 16,
-  },
-  // Home Section Styles
+  insightTag: { alignSelf: 'flex-start', backgroundColor: CARD_ORANGE, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 12 },
+  insightTagText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
+  insightTitle: { fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 8 },
+  insightDesc: { fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 20 },
+  // Smart Control
+  section: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 24, marginTop: 8 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 16 },
+  smartControlGrid: { flexDirection: 'row', gap: 12 },
+  smartControlButton: { flex: 1, borderRadius: 16, padding: 16, alignItems: 'center' },
+  smartControlIconWrap: { width: 56, height: 56, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  smartControlLabel: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
+  // Tasks
+  tasksHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  viewAllLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  viewAllText: { fontSize: 14, fontWeight: '500' },
+  dateNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  dateNavButton: { padding: 8 },
+  dateNavLabel: { fontSize: 16, fontWeight: '500' },
+  weekScroll: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  weekDay: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  weekDayText: { fontSize: 14, fontWeight: '500' },
+  taskList: { gap: 4 },
+  taskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  taskTimeIndicator: { width: 4, height: 24, borderRadius: 2, marginRight: 12 },
+  taskTime: { fontSize: 14, width: 44 },
+  taskTitle: { flex: 1, fontSize: 16 },
+  taskDot: { width: 8, height: 8, borderRadius: 4 },
+  // Legacy (admin/executor)
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',

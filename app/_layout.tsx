@@ -50,6 +50,7 @@ export default function RootLayout() {
             <Stack.Screen name="reset-password/index" />
             <Stack.Screen name="privacy/index" />
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="client" />
             <Stack.Screen name="steps" />
           </Stack>
           <StatusBar style="auto" />
