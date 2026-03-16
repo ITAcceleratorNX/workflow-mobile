@@ -9,7 +9,7 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
       "ios": {
-        "buildNumber": "7",
+        "buildNumber": "8",
         "supportsTablet": true,
         "googleServicesFile": "./GoogleService-Info.plist",
         "infoPlist": {
@@ -57,7 +57,7 @@
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 2,
+      "versionCode": 3,
       "package": "com.workflow.kz"
     },
     "web": {
