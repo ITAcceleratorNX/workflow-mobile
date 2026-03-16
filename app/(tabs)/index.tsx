@@ -21,7 +21,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
-import { useTodoStore, type TodoItem } from '@/stores/todo-store';
+import { useTodoStore, type TodoItem, getTaskDate } from '@/stores/todo-store';
 import { useToast } from '@/context/toast-context';
 import { getRequestGroups, getMyBookings, type RequestGroup, type MeetingRoomBooking } from '@/lib/api';
 import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
@@ -556,7 +556,21 @@ function ClientDashboardContent() {
     const dayEnd = new Date(selectedDate);
     dayEnd.setHours(23, 59, 59, 999);
 
-    const items: { id: string; time: string; title: string; color: string; requestId?: number; bookingId?: number }[] = [];
+    const items: { id: string; time: string; title: string; color: string; requestId?: number; bookingId?: number; taskId?: string }[] = [];
+
+    // Личные задачи (из Todo list)
+    const TASK_COLOR_TODO = '#10B981';
+    for (const item of todoItems) {
+      const itemDate = getTaskDate(item);
+      if (itemDate !== dateKey) continue;
+      items.push({
+        id: `task-${item.id}`,
+        time: '00:00',
+        title: item.text,
+        color: TASK_COLOR_TODO,
+        taskId: item.id,
+      });
+    }
 
     // Заявки: created_date или planned_date
     const reqList = isGuest ? guestRequests : requests;
@@ -600,12 +614,17 @@ function ClientDashboardContent() {
     return items;
   })();
 
-  // Дневная продуктивность: completed / total for selected date
+  // Дневная продуктивность: completed / total for selected date (задачи + заявки + брони)
   const dailyPerformance = (() => {
     const dateKey = formatDateForApi(selectedDate);
-    const reqList = isGuest ? guestRequests : requests;
     let total = 0;
     let completed = 0;
+    for (const item of todoItems) {
+      if (getTaskDate(item) !== dateKey) continue;
+      total++;
+      if (item.completed) completed++;
+    }
+    const reqList = isGuest ? guestRequests : requests;
     for (const rg of reqList) {
       const dateStr = ('planned_date' in rg ? rg.planned_date : null) || rg.created_date;
       if (!dateStr || dateStr.slice(0, 10) !== dateKey) continue;
@@ -647,6 +666,13 @@ function ClientDashboardContent() {
     return dateStr;
   };
 
+  const formatDateShort = () => {
+    const d = selectedDate;
+    const today = new Date();
+    if (d.toDateString() === today.toDateString()) return 'сегодня';
+    return `${d.getDate()} ${['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'][d.getMonth()]}`;
+  };
+
   const handlePrevDay = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const d = new Date(selectedDate);
@@ -673,7 +699,7 @@ function ClientDashboardContent() {
 
   const handleAllTasks = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/requests');
+    router.push('/client/tasks');
   };
 
   const handleToggleView = () => {
@@ -682,9 +708,9 @@ function ClientDashboardContent() {
   };
 
   const handleAddTodo = useCallback(() => {
-    addTodoItem(todoInputText);
+    addTodoItem(todoInputText, formatDateForApi(selectedDate));
     setTodoInputText('');
-  }, [todoInputText, addTodoItem]);
+  }, [todoInputText, addTodoItem, selectedDate]);
 
   const todoCompletedCount = todoItems.filter((i) => i.completed).length;
 
@@ -808,16 +834,21 @@ function ClientDashboardContent() {
                   <RNTextInput
                     value={todoInputText}
                     onChangeText={setTodoInputText}
-                    placeholder="Добавить задачу..."
+                    placeholder={`Добавить задачу на ${formatDateShort()}`}
                     placeholderTextColor={headerSubtitle}
                     onSubmitEditing={handleAddTodo}
                     returnKeyType="done"
                     style={[styles.todoInput, { color: headerText }]}
                   />
                   <Pressable
-                    onPress={handleAddTodo}
-                    style={[styles.todoAddButton, { backgroundColor: primary }]}
-                    disabled={!todoInputText.trim()}
+                    onPress={() => {
+                      if (todoInputText.trim()) handleAddTodo();
+                      else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    }}
+                    style={[
+                      styles.todoAddButton,
+                      { backgroundColor: primary, opacity: todoInputText.trim() ? 1 : 0.5 },
+                    ]}
                   >
                     <MaterialIcons name="add" size={24} color="#FFFFFF" />
                   </Pressable>
@@ -897,13 +928,16 @@ function ClientDashboardContent() {
                       <Pressable
                         key={task.id}
                         onPress={() => {
-                          if (task.requestId) router.push(`/(tabs)/requests/${task.requestId}`);
+                          if (task.taskId) setShowTodoList(true);
+                          else if (task.requestId) router.push(`/(tabs)/requests/${task.requestId}`);
                           else if (task.bookingId) router.push(`/booking/${task.bookingId}`);
                         }}
                         style={styles.taskRow}
                       >
                         <View style={[styles.taskTimeIndicator, { backgroundColor: task.color }]} />
-                        <ThemedText style={[styles.taskTime, { color: headerSubtitle }]}>{task.time}</ThemedText>
+                        <ThemedText style={[styles.taskTime, { color: headerSubtitle }]}>
+                          {task.taskId ? '—' : task.time}
+                        </ThemedText>
                         <ThemedText style={[styles.taskTitle, { color: headerText }]} numberOfLines={1}>{task.title}</ThemedText>
                         <View style={[styles.taskDot, { backgroundColor: task.color }]} />
                       </Pressable>

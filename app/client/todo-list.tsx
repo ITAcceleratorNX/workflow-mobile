@@ -17,6 +17,7 @@ import { ThemedView } from '@/components/themed-view';
 import { ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoStore, type TodoItem } from '@/stores/todo-store';
+import { formatDateForApi } from '@/lib/dateTimeUtils';
 
 interface TodoRowProps {
   item: TodoItem;
@@ -77,7 +78,7 @@ export default function TodoListScreen() {
   const [inputText, setInputText] = useState('');
 
   const handleAdd = useCallback(() => {
-    addItem(inputText);
+    addItem(inputText, formatDateForApi(new Date()));
     setInputText('');
   }, [inputText, addItem]);
 

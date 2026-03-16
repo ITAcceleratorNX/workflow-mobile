@@ -6,6 +6,7 @@ export default function ClientLayout() {
       <Stack.Screen name="smart-home" />
       <Stack.Screen name="health-screen" />
       <Stack.Screen name="todo-list" />
+      <Stack.Screen name="tasks" />
     </Stack>
   );
 }
