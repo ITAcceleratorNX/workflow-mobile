@@ -24,7 +24,8 @@ import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useTodoStore, type TodoItem, getTaskDate } from '@/stores/todo-store';
 import { useToast } from '@/context/toast-context';
 import { getRequestGroups, getMyBookings, type RequestGroup, type MeetingRoomBooking } from '@/lib/api';
-import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
+import {   formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
+import { NEWS_ITEMS } from '@/constants/news';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -438,12 +439,6 @@ export default function ClientDashboardScreen() {
 const INSIGHT_CARD_WIDTH = width * 0.88;
 const INSIGHT_CARD_HEIGHT = 260;
 
-const MOCK_INSIGHTS = [
-  { id: '1', tag: 'Wellness', title: 'Оптимизируйте сон', desc: 'Новые метрики показывают: сон на 15 мин раньше может повысить концентрацию на 20%.', image: 'https://images.unsplash.com/photo-1541783245831-57d6fb0926d3?w=600' },
-  { id: '2', tag: 'Умный дом', title: 'Экономия энергии', desc: 'Ваши умные устройства экономят энергию, синхронизируясь с расписанием.', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600' },
-  { id: '3', tag: 'Продуктивность', title: 'Советы на день', desc: 'Рекомендуем сделать перерыв через 45 минут работы.', image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600' },
-];
-
 const WEEK_DAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const TASK_COLOR_REQUEST = '#3B82F6';
 const TASK_COLOR_BOOKING = CARD_ORANGE;
@@ -516,7 +511,7 @@ function ClientDashboardContent() {
   const [showTodoList, setShowTodoList] = useState(false);
   const [todoInputText, setTodoInputText] = useState('');
   const [hasNotifications] = useState(true);
-  const [selectedInsight, setSelectedInsight] = useState<(typeof MOCK_INSIGHTS)[number] | null>(null);
+  const [selectedInsight, setSelectedInsight] = useState<(typeof NEWS_ITEMS)[number] | null>(null);
   const [requests, setRequests] = useState<RequestGroup[]>([]);
   const [bookings, setBookings] = useState<MeetingRoomBooking[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -754,22 +749,34 @@ function ClientDashboardContent() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Daily Insights — заголовок + уведомления + скролл новостей */}
+        {/* Daily Insights — заголовок + уведомления + Все новости + скролл новостей */}
         <View style={styles.insightsHeader}>
           <View style={styles.insightsHeaderLeft}>
             <ThemedText style={[styles.insightsTitle, { color: headerText }]}>Обзор дня</ThemedText>
           </View>
-          <Pressable onPress={() => router.push('/(tabs)/profile?tab=notifications')} style={styles.notificationButton}>
-            <MaterialIcons name="notifications" size={26} color={headerText} />
-            {hasNotifications && <View style={[styles.notificationDot, { backgroundColor: primary }]} />}
-          </Pressable>
+          <View style={styles.insightsHeaderRight}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push('/client/news');
+              }}
+              style={styles.viewAllLink}
+            >
+              <ThemedText style={[styles.viewAllText, { color: primary }]}>Все новости</ThemedText>
+              <MaterialIcons name="arrow-forward" size={18} color={primary} />
+            </Pressable>
+            <Pressable onPress={() => router.push('/(tabs)/profile?tab=notifications')} style={styles.notificationButton}>
+              <MaterialIcons name="notifications" size={26} color={headerText} />
+              {hasNotifications && <View style={[styles.notificationDot, { backgroundColor: primary }]} />}
+            </Pressable>
+          </View>
         </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.insightsScroll}
         >
-          {MOCK_INSIGHTS.map((item) => (
+          {NEWS_ITEMS.slice(0, 5).map((item) => (
             <Pressable
               key={item.id}
               onPress={() => {
@@ -1079,6 +1086,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   insightsHeaderLeft: { flex: 1 },
+  insightsHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   insightsTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 4 },
   notificationButton: { padding: 8, position: 'relative' },
   notificationDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4 },
