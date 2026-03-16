@@ -464,7 +464,7 @@ function TodoRowInline({
   return (
     <Pressable
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onToggle();
       }}
       style={styles.todoRow}
@@ -559,9 +559,10 @@ function ClientDashboardContent() {
 
     const items: { id: string; time: string; title: string; color: string; requestId?: number; bookingId?: number; taskId?: string }[] = [];
 
-    // Личные задачи (из Todo list)
+    // Личные задачи (из Todo list) — только активные, выполненные скрыты
     const TASK_COLOR_TODO = '#10B981';
     for (const item of todoItems) {
+      if (item.completed) continue;
       const itemDate = getTaskDate(item);
       if (itemDate !== dateKey) continue;
       items.push({
@@ -720,6 +721,7 @@ function ClientDashboardContent() {
 
   const todoDateOptions = useMemo(() => getDateOptions(), []);
 
+  const todoActiveItems = useMemo(() => todoItems.filter((i) => !i.completed), [todoItems]);
   const todoCompletedCount = todoItems.filter((i) => i.completed).length;
 
   // Если роль еще загружается - показываем загрузку
@@ -892,15 +894,17 @@ function ClientDashboardContent() {
                   </View>
                 </View>
                 <View style={styles.todoListContent}>
-                  {todoItems.length === 0 ? (
+                  {todoActiveItems.length === 0 ? (
                     <View style={styles.todoEmptyState}>
                       <MaterialIcons name="format-list-bulleted" size={40} color={headerSubtitle} />
                       <ThemedText style={[styles.todoEmptyTitle, { color: headerText }]}>Нет задач</ThemedText>
-                      <ThemedText style={[styles.todoEmptySubtitle, { color: headerSubtitle }]}>Добавьте задачу выше</ThemedText>
+                      <ThemedText style={[styles.todoEmptySubtitle, { color: headerSubtitle }]}>
+                        {todoCompletedCount > 0 ? 'Все задачи выполнены' : 'Добавьте задачу выше'}
+                      </ThemedText>
                     </View>
                   ) : (
                     <View style={styles.todoListBlock}>
-                      {todoItems.map((item) => (
+                      {todoActiveItems.map((item) => (
                         <TodoRowInline
                           key={item.id}
                           item={item}
@@ -922,6 +926,7 @@ function ClientDashboardContent() {
                       }}
                       style={styles.todoClearButton}
                     >
+                      <MaterialIcons name="delete-outline" size={18} color={primary} />
                       <ThemedText style={[styles.todoClearButtonText, { color: primary }]}>
                         Очистить выполненные ({todoCompletedCount})
                       </ThemedText>
@@ -1264,7 +1269,15 @@ const styles = StyleSheet.create({
   todoRowTime: { fontSize: 12, marginTop: 2 },
   todoTextCompleted: { textDecorationLine: 'line-through' },
   todoRemoveBtn: { padding: 4 },
-  todoClearButton: { alignSelf: 'flex-end', marginTop: 12, paddingVertical: 6, paddingHorizontal: 10 },
+  todoClearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
   todoClearButtonText: { fontSize: 13, fontWeight: '500' },
   taskList: { gap: 4, marginTop: 16 },
   taskEmpty: { fontSize: 14, paddingVertical: 16, textAlign: 'center' },

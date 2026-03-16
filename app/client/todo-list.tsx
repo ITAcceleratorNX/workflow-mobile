@@ -33,7 +33,7 @@ function TodoRow({ item, onToggle, onRemove, textColor, textMuted, primary, bord
   return (
     <Pressable
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onToggle();
       }}
       style={styles.todoRow}
@@ -76,6 +76,7 @@ export default function TodoListScreen() {
 
   const { items, addItem, removeItem, toggleItem, clearCompleted } = useTodoStore();
   const [inputText, setInputText] = useState('');
+  const activeItems = items.filter((i) => !i.completed);
 
   const handleAdd = useCallback(() => {
     addItem(inputText, formatDateForApi(new Date()), '09:00');
@@ -116,17 +117,17 @@ export default function TodoListScreen() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
           showsVerticalScrollIndicator={false}
         >
-          {items.length === 0 ? (
+          {activeItems.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="format-list-bulleted" size={48} color={headerSubtitle} />
               <ThemedText style={[styles.emptyTitle, { color: headerText }]}>Нет задач</ThemedText>
               <ThemedText style={[styles.emptySubtitle, { color: headerSubtitle }]}>
-                Добавьте задачу выше
+                {completedCount > 0 ? 'Все задачи выполнены' : 'Добавьте задачу выше'}
               </ThemedText>
             </View>
           ) : (
             <View style={[styles.listBlock, { backgroundColor: cardBg }]}>
-              {items.map((item) => (
+              {activeItems.map((item) => (
                 <TodoRow
                   key={item.id}
                   item={item}
@@ -149,6 +150,7 @@ export default function TodoListScreen() {
               }}
               style={styles.clearButton}
             >
+              <MaterialIcons name="delete-outline" size={18} color={primary} />
               <ThemedText style={[styles.clearButtonText, { color: primary }]}>
                 Очистить выполненные ({completedCount})
               </ThemedText>
@@ -240,7 +242,10 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   clearButton: {
-    alignSelf: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
     marginTop: 16,
     paddingVertical: 8,
     paddingHorizontal: 12,

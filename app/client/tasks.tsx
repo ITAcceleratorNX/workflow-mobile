@@ -66,7 +66,7 @@ function TaskRow({ item, onToggle, onRemove, textColor, textMuted, primary, bord
   return (
     <Pressable
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onToggle();
       }}
       style={[styles.row, { borderBottomColor: borderColor }]}
