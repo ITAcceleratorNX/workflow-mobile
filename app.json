@@ -49,15 +49,13 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": [
-        "android.permission.ACTIVITY_RECOGNITION",
-        "android.permission.HIGH_SAMPLING_RATE_SENSORS",
-        "android.permission.CAMERA",
-        "android.permission.POST_NOTIFICATIONS",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO"
-      ],
-      "versionCode": 3,
+     "permissions": [
+  "android.permission.ACTIVITY_RECOGNITION",
+  "android.permission.HIGH_SAMPLING_RATE_SENSORS",
+  "android.permission.CAMERA",
+  "android.permission.POST_NOTIFICATIONS"
+],
+      "versionCode": 4,
       "package": "com.workflow.kz"
     },
     "web": {
