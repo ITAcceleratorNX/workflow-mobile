@@ -8,11 +8,11 @@
     "scheme": "workflowmobile",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
-      "ios": {
-        "buildNumber": "9",
-        "supportsTablet": true,
-        "googleServicesFile": "./GoogleService-Info.plist",
-        "infoPlist": {
+    "ios": {
+      "buildNumber": "9",
+      "supportsTablet": true,
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
         "NSMotionUsageDescription": "Приложение использует датчики движения для отслеживания активности (сидение/стояние) и health-напоминаний.",
         "NSLocationWhenInUseUsageDescription": "Доступ к геолокации нужен, чтобы привязывать заявки к вашему текущему адресу и находить ближайший офис обслуживания.",
         "NSUserNotificationUsageDescription": "Уведомления нужны, чтобы сообщать о статусе ваших заявок и важных событиях в системе.",
@@ -49,12 +49,12 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-     "permissions": [
-  "android.permission.ACTIVITY_RECOGNITION",
-  "android.permission.HIGH_SAMPLING_RATE_SENSORS",
-  "android.permission.CAMERA",
-  "android.permission.POST_NOTIFICATIONS"
-],
+      "permissions": [
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.HIGH_SAMPLING_RATE_SENSORS",
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
@@ -96,7 +96,8 @@
           "defaultChannel": "default",
           "mode": "production"
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "experiments": {
       "typedRoutes": true,

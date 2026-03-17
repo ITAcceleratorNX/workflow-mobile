@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { ErrorBoundary } from '@/components/error-boundary';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { registerBackgroundStepsTask } from '@/lib/background-steps-sync';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { ToastProvider } from '@/context/toast-context';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
@@ -19,6 +20,10 @@ export default function RootLayout() {
   const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
 
   usePushNotifications();
+
+  useEffect(() => {
+    registerBackgroundStepsTask();
+  }, []);
 
   useEffect(() => {
     const handleUrl = (url: string) => {
