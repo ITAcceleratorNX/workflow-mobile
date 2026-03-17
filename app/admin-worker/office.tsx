@@ -18,6 +18,7 @@ import { ThemedView } from '@/components/themed-view';
 import { PullToRefresh } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
+import * as ImagePicker from 'expo-image-picker';
 import {
   type Office,
   type MeetingRoom,
@@ -25,7 +26,9 @@ import {
   getOfficeRooms,
   updateOfficeWorkingHours,
   updateOffice,
+  updateOfficeWithPhoto,
   createOffice,
+  createOfficeWithPhoto,
   deleteOffice,
   createMeetingRoom,
   updateMeetingRoom,
@@ -83,6 +86,8 @@ export default function AdminWorkerOfficeScreen() {
   const [newCity, setNewCity] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [newOfficePhoto, setNewOfficePhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [editOfficePhoto, setEditOfficePhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
   // Управление комнатами внутри офиса
   const [showAddRoom, setShowAddRoom] = useState(false);
@@ -128,12 +133,14 @@ export default function AdminWorkerOfficeScreen() {
         setShowAddRoom(false);
         setEditingRoomId(null);
         setRoomCreateError(null);
+        setEditOfficePhoto(null);
         return;
       }
       setExpandedId(id);
       setShowAddRoom(false);
       setEditingRoomId(null);
       setRoomCreateError(null);
+      setEditOfficePhoto(null);
       setStartInput(toHHmm(office.working_hours_start ?? ''));
       setEndInput(toHHmm(office.working_hours_end ?? ''));
       setAutoTrack(!!office.auto_track_enabled);
@@ -252,6 +259,34 @@ export default function AdminWorkerOfficeScreen() {
     [show, loadRooms]
   );
 
+  const pickPhotoForNew = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      show({ title: 'Нет доступа к галерее', variant: 'destructive' });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    if (!result.canceled) setNewOfficePhoto(result.assets[0]);
+  }, [show]);
+
+  const pickPhotoForEdit = useCallback(async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      show({ title: 'Нет доступа к галерее', variant: 'destructive' });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    if (!result.canceled) setEditOfficePhoto(result.assets[0]);
+  }, [show]);
+
   const saveOfficeData = useCallback(
     async (officeId: number) => {
       if (!editName.trim()) {
@@ -259,17 +294,34 @@ export default function AdminWorkerOfficeScreen() {
         return;
       }
       setSavingDataId(officeId);
-      const result = await updateOffice(officeId, {
-        name: editName.trim(),
-        address: editAddress.trim() || undefined,
-        city: editCity.trim() || undefined,
-      });
+      let result;
+      if (editOfficePhoto) {
+        const fd = new FormData();
+        fd.append('name', editName.trim());
+        fd.append('address', editAddress.trim());
+        fd.append('city', editCity.trim());
+        const asset = editOfficePhoto;
+        const ext = asset.uri.split('.').pop() || 'jpg';
+        fd.append('photo', {
+          uri: asset.uri,
+          type: (asset as { mimeType?: string }).mimeType || 'image/jpeg',
+          name: `photo.${ext}`,
+        } as unknown as Blob);
+        result = await updateOfficeWithPhoto(officeId, fd);
+        setEditOfficePhoto(null);
+      } else {
+        result = await updateOffice(officeId, {
+          name: editName.trim(),
+          address: editAddress.trim() || undefined,
+          city: editCity.trim() || undefined,
+        });
+      }
       if (result.ok) {
         show({ title: 'Данные офиса сохранены', variant: 'success' });
         setOffices((prev) =>
           prev.map((o) =>
             o.id === officeId
-              ? { ...o, name: editName.trim(), address: editAddress.trim(), city: editCity.trim() }
+              ? { ...o, name: editName.trim(), address: editAddress.trim(), city: editCity.trim(), photo: result.ok ? result.data?.photo : o.photo }
               : o
           )
         );
@@ -278,7 +330,7 @@ export default function AdminWorkerOfficeScreen() {
       }
       setSavingDataId(null);
     },
-    [editName, editAddress, editCity, show]
+    [editName, editAddress, editCity, editOfficePhoto, show]
   );
 
   const handleCreateOffice = useCallback(async () => {
@@ -288,23 +340,40 @@ export default function AdminWorkerOfficeScreen() {
     }
     setCreateError(null);
     setIsCreating(true);
-    const result = await createOffice({
-      name: newName.trim(),
-      address: newAddress.trim(),
-      city: newCity.trim(),
-    });
+    let result;
+    if (newOfficePhoto) {
+      const fd = new FormData();
+      fd.append('name', newName.trim());
+      fd.append('address', newAddress.trim());
+      fd.append('city', newCity.trim());
+      const asset = newOfficePhoto;
+      const ext = asset.uri.split('.').pop() || 'jpg';
+      fd.append('photo', {
+        uri: asset.uri,
+        type: (asset as { mimeType?: string }).mimeType || 'image/jpeg',
+        name: `photo.${ext}`,
+      } as unknown as Blob);
+      result = await createOfficeWithPhoto(fd);
+    } else {
+      result = await createOffice({
+        name: newName.trim(),
+        address: newAddress.trim(),
+        city: newCity.trim(),
+      });
+    }
     if (result.ok) {
       show({ title: 'Офис создан', variant: 'success' });
       setNewName('');
       setNewAddress('');
       setNewCity('');
+      setNewOfficePhoto(null);
       setShowCreateForm(false);
       load();
     } else {
       setCreateError(result.error);
     }
     setIsCreating(false);
-  }, [newName, newAddress, newCity, show, load]);
+  }, [newName, newAddress, newCity, newOfficePhoto, show, load]);
 
   const handleDeleteOffice = useCallback(
     (office: Office) => {
@@ -419,7 +488,10 @@ export default function AdminWorkerOfficeScreen() {
           >
           <Pressable
             style={styles.addOfficeButton}
-            onPress={() => setShowCreateForm((v) => !v)}
+            onPress={() => {
+              if (showCreateForm) setNewOfficePhoto(null);
+              setShowCreateForm((v) => !v);
+            }}
           >
             <MaterialIcons name="add-business" size={20} color="#fff" />
             <ThemedText style={styles.addOfficeButtonText}>
@@ -451,6 +523,12 @@ export default function AdminWorkerOfficeScreen() {
                 value={newCity}
                 onChangeText={setNewCity}
               />
+              <Pressable style={styles.addRoomButton} onPress={pickPhotoForNew}>
+                <MaterialIcons name="add-a-photo" size={20} color={primary} />
+                <ThemedText style={[styles.addRoomButtonText, { color: primary }]}>
+                  {newOfficePhoto ? 'Фото выбрано' : 'Добавить фото офиса'}
+                </ThemedText>
+              </Pressable>
               {createError ? (
                 <ThemedText style={styles.errorText}>{createError}</ThemedText>
               ) : null}
@@ -531,6 +609,12 @@ export default function AdminWorkerOfficeScreen() {
                         value={editCity}
                         onChangeText={setEditCity}
                       />
+                      <Pressable style={[styles.addRoomButton, { marginBottom: 12 }]} onPress={pickPhotoForEdit}>
+                        <MaterialIcons name="add-a-photo" size={20} color={primary} />
+                        <ThemedText style={[styles.addRoomButtonText, { color: primary }]}>
+                          {editOfficePhoto ? 'Фото выбрано' : 'Изменить фото офиса'}
+                        </ThemedText>
+                      </Pressable>
                       <Pressable
                         style={[styles.saveBtn, savingDataId === office.id && styles.buttonDisabled]}
                         onPress={() => saveOfficeData(office.id)}

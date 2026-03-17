@@ -9,7 +9,7 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
       "ios": {
-        "buildNumber": "8",
+        "buildNumber": "9",
         "supportsTablet": true,
         "googleServicesFile": "./GoogleService-Info.plist",
         "infoPlist": {
@@ -58,7 +58,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 4,
+      "versionCode": 5,
       "package": "com.workflow.kz"
     },
     "web": {
@@ -67,6 +67,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withFirebaseAppDelegate",
       [
         "expo-splash-screen",
         {

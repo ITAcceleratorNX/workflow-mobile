@@ -70,6 +70,46 @@ async function request<T>(
   }
 }
 
+/** Отправка FormData (для multipart: офисы с фото, фото комнат). Не задавать Content-Type. */
+async function requestFormData<T>(
+  path: string,
+  formData: FormData,
+  method: 'POST' | 'PUT' = 'POST'
+): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
+  const url = `${apiBaseUrl}${path}`;
+  const token = useAuthStore.getState().token;
+
+  const headers: HeadersInit = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  try {
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: formData,
+    });
+    if (res.status === 204) return { ok: true, data: undefined as T };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 401) {
+        useAuthStore.getState().clearAuth();
+        router.replace('/login');
+        return { ok: false, error: 'Сессия истекла. Войдите снова.' };
+      }
+      const error =
+        (data as { error?: string })?.error ||
+        (data as { message?: string })?.message ||
+        'Произошла ошибка';
+      return { ok: false, error };
+    }
+    return { ok: true, data: data as T };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Сетевая ошибка';
+    return { ok: false, error: message };
+  }
+}
+
 // ==================== Types ====================
 
 export interface Office {
@@ -173,6 +213,25 @@ export async function createOffice(body: {
     method: 'POST',
     body: JSON.stringify(body),
   });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+/** Создать офис с фото (FormData). Использовать при выборе фото через image picker. */
+export async function createOfficeWithPhoto(
+  formData: FormData
+): Promise<{ ok: true; data: Office } | { ok: false; error: string }> {
+  const result = await requestFormData<Office>('/offices', formData, 'POST');
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+/** Обновить офис с фото (FormData). Передавать name, address, city и опционально photo. */
+export async function updateOfficeWithPhoto(
+  id: number,
+  formData: FormData
+): Promise<{ ok: true; data: Office } | { ok: false; error: string }> {
+  const result = await requestFormData<Office>(`/offices/${id}`, formData, 'PUT');
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: result.data! };
 }
