@@ -59,12 +59,13 @@ function TaskRow({
   const hasScheduled = !!task.scheduled_at;
 
   return (
-    <Pressable style={[styles.taskRow, { borderBottomColor: borderColor }]} onPress={onPress}>
+    <View style={[styles.taskRow, { borderBottomColor: borderColor }]}>
       <Pressable
         onPress={() => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           onToggle();
         }}
+        hitSlop={10}
         style={[
           styles.checkbox,
           { borderColor: task.completed ? primary : borderColor },
@@ -73,39 +74,45 @@ function TaskRow({
       >
         {task.completed && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
       </Pressable>
-      <View style={styles.taskContent}>
-        <ThemedText
-          style={[
-            styles.taskTitle,
-            { color: task.completed ? textMuted : textColor },
-            task.completed && styles.taskCompleted,
-          ]}
-          numberOfLines={2}
-        >
-          {task.title}
-        </ThemedText>
-        {scheduledStr && (
-          <ThemedText style={[styles.taskMeta, { color: textMuted }]}>{scheduledStr}</ThemedText>
-        )}
-        {task.assignee_ids?.length > 0 && (
-          <View style={[styles.badge, styles.badgeRow, { backgroundColor: primary }]}>
-            <MaterialIcons name="group" size={12} color="#FFFFFF" style={styles.badgeIcon} />
-            <ThemedText style={styles.badgeText}>Командная</ThemedText>
-          </View>
-        )}
-        {status === 'overdue' && !task.completed && (
-          <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
-            <ThemedText style={styles.badgeText}>Просрочено</ThemedText>
-          </View>
-        )}
-        {status === 'expiring' && !task.completed && (
-          <View style={[styles.badge, { backgroundColor: '#F59E0B' }]}>
-            <ThemedText style={styles.badgeText}>Истекает срок</ThemedText>
-          </View>
-        )}
-      </View>
-      <MaterialIcons name="chevron-right" size={24} color={textMuted} />
-    </Pressable>
+      <Pressable
+        onPress={onPress}
+        hitSlop={{ top: 10, bottom: 10, left: 6, right: 16 }}
+        style={({ pressed }) => [styles.taskPressArea, { opacity: pressed ? 0.92 : 1 }]}
+      >
+        <View style={styles.taskContent}>
+          <ThemedText
+            style={[
+              styles.taskTitle,
+              { color: task.completed ? textMuted : textColor },
+              task.completed && styles.taskCompleted,
+            ]}
+            numberOfLines={2}
+          >
+            {task.title}
+          </ThemedText>
+          {scheduledStr && (
+            <ThemedText style={[styles.taskMeta, { color: textMuted }]}>{scheduledStr}</ThemedText>
+          )}
+          {task.assignee_ids?.length > 0 && (
+            <View style={[styles.badge, styles.badgeRow, { backgroundColor: primary }]}>
+              <MaterialIcons name="group" size={12} color="#FFFFFF" style={styles.badgeIcon} />
+              <ThemedText style={styles.badgeText}>Командная</ThemedText>
+            </View>
+          )}
+          {status === 'overdue' && !task.completed && (
+            <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
+              <ThemedText style={styles.badgeText}>Просрочено</ThemedText>
+            </View>
+          )}
+          {status === 'expiring' && !task.completed && (
+            <View style={[styles.badge, { backgroundColor: '#F59E0B' }]}>
+              <ThemedText style={styles.badgeText}>Истекает срок</ThemedText>
+            </View>
+          )}
+        </View>
+        <MaterialIcons name="chevron-right" size={24} color={textMuted} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -122,7 +129,8 @@ export function TodoTab({ filter = 'all' }: TodoTabProps) {
 
   const handleEditTask = useCallback((task: UserTask) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: '/client/tasks/task-editor', params: { mode: 'edit', taskId: task.id.toString() } });
+    if (task?.id == null) return;
+    router.push({ pathname: '/client/tasks/task-editor', params: { mode: 'edit', taskId: String(task.id) } });
   }, [router]);
 
   return (
@@ -183,6 +191,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
+    minHeight: 56,
+  },
+  taskPressArea: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   checkbox: {
     width: 24,

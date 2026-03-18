@@ -333,7 +333,10 @@ export default function TasksScreen() {
         onChangeDraftTitle={setDraftTitle}
         onSubmitTitle={saveInlineEdit}
         onCancelEdit={cancelInlineEdit}
-        onPressInfo={() => router.push({ pathname: '/client/tasks/details', params: { taskId: item.id.toString() } })}
+        onPressInfo={() => {
+          if (item?.id == null) return;
+          router.push({ pathname: '/client/tasks/details', params: { taskId: String(item.id) } });
+        }}
         inputRef={editingTaskId === item.id ? editInputRef : undefined}
         textColor={headerText}
         textMuted={headerSubtitle}
@@ -430,7 +433,12 @@ export default function TasksScreen() {
             }}
             data={filteredTasks}
             renderItem={renderItem}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item) => {
+              if (item?.id != null) return String(item.id);
+              const created = (item as any)?.created_at ?? '';
+              const title = (item as any)?.title ?? '';
+              return `tmp-${created}-${title}`;
+            }}
             contentContainerStyle={[styles.listContent, { paddingBottom: 40 + insets.bottom }]}
             ListEmptyComponent={ListEmpty}
             showsVerticalScrollIndicator={false}

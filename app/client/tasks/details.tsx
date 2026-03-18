@@ -15,6 +15,7 @@ import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
 import { toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/taskDateTime';
 import { useAuthStore } from '@/stores/auth-store';
+import { useToast } from '@/context/toast-context';
 
 function isoForDateTime(dateKey: string, time: string) {
   return toUtcIsoFromAppDateTime(dateKey, time);
@@ -55,6 +56,7 @@ export default function TaskDetailsScreen() {
   const { taskId: taskIdParam } = useLocalSearchParams<{ taskId?: string }>();
   const taskId = taskIdParam ? parseInt(taskIdParam) : null;
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const { show } = useToast();
 
   const background = useThemeColor({}, 'background');
   const text = useThemeColor({}, 'text');
@@ -69,6 +71,8 @@ export default function TaskDetailsScreen() {
     if (!taskId) return null;
     return tasks.find((t) => t.id === taskId) ?? null;
   }, [tasks, taskId]);
+
+  const canEditDetails = !!task && !!currentUserId && task.creator_id === currentUserId;
 
   const scheduledEnabled = !!task?.scheduled_at;
   const deadlineEnabled = !!task?.deadline_to;
@@ -328,10 +332,20 @@ export default function TaskDetailsScreen() {
             onChangeText={setTitleDraft}
             onSubmitEditing={saveTitle}
             onBlur={saveTitle}
+            editable={canEditDetails}
+            onPressIn={() => {
+              if (canEditDetails) return;
+              show({
+                title: 'Только создатель может редактировать',
+                description: 'Вы можете менять статус выполнения, но не название задачи.',
+                variant: 'default',
+                duration: 3500,
+              });
+            }}
             returnKeyType="done"
             placeholder="Название задачи"
             placeholderTextColor={textMuted}
-            style={[styles.titleInput, { color: text }]}
+            style={[styles.titleInput, { color: canEditDetails ? text : textMuted }]}
           />
         </View>
 

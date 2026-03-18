@@ -86,7 +86,8 @@ export function CalendarTab() {
 
   const openTaskDetails = useCallback((task: CalendarTask) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push({ pathname: '/client/tasks/details', params: { taskId: task.id.toString() } });
+    if (task?.id == null) return;
+    router.push({ pathname: '/client/tasks/details', params: { taskId: String(task.id) } });
   }, [router]);
 
   const tasksByHour = useMemo(() => {
