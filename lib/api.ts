@@ -7,7 +7,7 @@ const { apiBaseUrl } = config;
 
 type RequestOptions = RequestInit & { params?: Record<string, string> };
 
-async function request<T>(
+export async function request<T>(
   path: string,
   options: RequestOptions = {}
 ): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
@@ -32,6 +32,18 @@ async function request<T>(
           pageSize: 20,
         }
       : {};
+    return { ok: true, data: empty as T };
+  }
+
+  if (isGuestToken && path.startsWith('/user-tasks') && (init.method === 'GET' || !init.method)) {
+    const empty: any =
+      path === '/user-tasks' || path.startsWith('/user-tasks?')
+        ? { tasks: [], total: 0, page: 1, pageSize: 50, totalPages: 0 }
+        : path.includes('today-stats')
+          ? { todayCompleted: 0, todayTotal: 0, overdueCount: 0 }
+          : path.includes('calendar')
+            ? { tasks: [] }
+            : {};
     return { ok: true, data: empty as T };
   }
 
@@ -846,6 +858,26 @@ export async function getOfficeUsers(officeId: number): Promise<
   if (!result.ok) return { ok: false, error: result.error };
   const data = result.data;
   const list = Array.isArray(data) ? data : [];
+  return { ok: true, data: list };
+}
+
+/** Поиск пользователей для назначения исполнителей задач (командные задачи). */
+export interface UserSearchItem {
+  id: number;
+  full_name: string;
+  phone?: string;
+}
+
+export async function searchUsersForAssign(query: string): Promise<
+  { ok: true; data: UserSearchItem[] } | { ok: false; error: string }
+> {
+  const q = query?.trim();
+  if (!q || q.length < 2) return { ok: true, data: [] };
+  const result = await request<{ success: boolean; users: UserSearchItem[] }>('/users/search', {
+    params: { q, role: 'client' },
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  const list = Array.isArray(result.data?.users) ? result.data.users : [];
   return { ok: true, data: list };
 }
 

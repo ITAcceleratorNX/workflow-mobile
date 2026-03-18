@@ -3,7 +3,8 @@ import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 
 import { useAuthStore } from '@/stores/auth-store';
-import { setNotificationHandler, registerPushTokenWithBackend } from '@/lib/pushNotifications';
+import { setNotificationHandler, setupTaskReminderCategory, registerPushTokenWithBackend } from '@/lib/pushNotifications';
+import { remindUserTask } from '@/lib/user-tasks-api';
 
 /**
  * Регистрирует push-уведомления и отправляет токен на бэкенд при авторизации.
@@ -17,6 +18,7 @@ export function usePushNotifications(): void {
 
   useEffect(() => {
     setNotificationHandler();
+    setupTaskReminderCategory();
   }, []);
 
   useEffect(() => {
@@ -36,6 +38,26 @@ export function usePushNotifications(): void {
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown>;
+      const type = data?.type as string | undefined;
+
+      if (type === 'task_reminder') {
+        const taskIdRaw = data?.task_id;
+        const taskId = typeof taskIdRaw === 'string' ? parseInt(taskIdRaw, 10) : typeof taskIdRaw === 'number' ? taskIdRaw : null;
+        const action = response.actionIdentifier as string | undefined;
+
+        if (taskId != null && !Number.isNaN(taskId)) {
+          const validActions = ['in_1h', 'tomorrow', 'off'] as const;
+          const isActionButton = action && validActions.includes(action as (typeof validActions)[number]);
+          if (isActionButton) {
+            remindUserTask(taskId, action as 'in_1h' | 'tomorrow' | 'off');
+            // Не навигируем при нажатии кнопки — остаёмся в фоне
+          } else {
+            router.push('/(tabs)' as const);
+          }
+        }
+        return;
+      }
+
       const parseId = (v: unknown): number | undefined =>
         typeof v === 'number' && !Number.isNaN(v) ? v : typeof v === 'string' ? parseInt(v, 10) : undefined;
       const requestGroupId = parseId(data?.request_group_id ?? data?.requestGroupId);

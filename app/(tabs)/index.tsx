@@ -15,12 +15,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-import { PageLoader, Select } from '@/components/ui';
+import { PageLoader, PullToRefresh, Select } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { TasksSection } from '@/components/tasks/TasksSection';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
+import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useTodoStore, type TodoItem, getTaskDate, getTaskTime } from '@/stores/todo-store';
 import { TIME_SLOTS, getDateOptions } from '@/constants/task-form';
 import { useToast } from '@/context/toast-context';
@@ -540,6 +542,9 @@ function ClientDashboardContent() {
   const guestRequests = useGuestDemoStore((state) => state.requests);
   const { items: todoItems, addItem: addTodoItem, removeItem: removeTodoItem, toggleItem: toggleTodoItem, clearCompleted: clearTodoCompleted } = useTodoStore();
   const [insightItems, setInsightItems] = useState<NewsDisplayItem[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
+
   useEffect(() => {
     let cancelled = false;
     getNewsMain().then((res) => {
@@ -639,34 +644,6 @@ function ClientDashboardContent() {
     return items;
   })();
 
-  // Дневная продуктивность: completed / total for selected date (задачи + заявки + брони)
-  const dailyPerformance = (() => {
-    const dateKey = formatDateForApi(selectedDate);
-    let total = 0;
-    let completed = 0;
-    for (const item of todoItems) {
-      if (getTaskDate(item) !== dateKey) continue;
-      total++;
-      if (item.completed) completed++;
-    }
-    const reqList = isGuest ? guestRequests : requests;
-    for (const rg of reqList) {
-      const dateStr = ('planned_date' in rg ? rg.planned_date : null) || rg.created_date;
-      if (!dateStr || dateStr.slice(0, 10) !== dateKey) continue;
-      total++;
-      if (rg.status === 'completed') completed++;
-    }
-    const bookList = isGuest ? guestBookings : bookings;
-    for (const b of bookList) {
-      if (!b.start_time) continue;
-      if (formatDateForApi(new Date(b.start_time)) !== dateKey) continue;
-      total++;
-      if (b.status === 'completed') completed++;
-    }
-    if (total === 0) return { percent: 0, total: 0, completed: 0 };
-    return { percent: Math.round((completed / total) * 100), total, completed };
-  })();
-
   const loadTasks = useCallback(async () => {
     if (isGuest) return;
     setTasksLoading(true);
@@ -682,6 +659,18 @@ function ClientDashboardContent() {
   useEffect(() => {
     loadTasks();
   }, [loadTasks]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    const newsPromise = getNewsMain().then((res) => {
+      if (res.ok) setInsightItems(res.data);
+      else setInsightItems(NEWS_ITEMS.map((i) => ({ id: i.id, tag: i.tag || 'Новость', title: i.title, desc: i.desc, image: i.image, date: i.date })));
+    });
+    const tasksPromise = isGuest ? Promise.resolve() : loadTasks();
+    bumpTasks();
+    await Promise.all([newsPromise, tasksPromise]);
+    setRefreshing(false);
+  }, [isGuest, loadTasks, bumpTasks]);
 
   const formatDateNav = () => {
     const d = selectedDate;
@@ -782,11 +771,17 @@ function ClientDashboardContent() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
-        showsVerticalScrollIndicator={false}
+      <PullToRefresh
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        loaderSize={96}
+        topOffset={insets.top + 16}
       >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+          showsVerticalScrollIndicator={false}
+        >
         {/* Daily Insights — заголовок + уведомления, кнопка Все новости под заголовком */}
         <View style={styles.insightsHeader}>
           <View style={styles.insightsHeaderRow}>
@@ -861,182 +856,10 @@ function ClientDashboardContent() {
           </View>
         </View>
 
-        {/* Tasks — заголовок + Все задачи + календарь + список */}
-        <View style={[styles.section, { backgroundColor: background }]}>
-          <View style={styles.tasksHeader}>
-            <ThemedText style={[styles.sectionTitle, { color: headerText }]}>Задачи</ThemedText>
-            <Pressable onPress={handleAllTasks} style={styles.viewAllLink}>
-              <ThemedText style={[styles.viewAllText, { color: primary }]}>Все задачи</ThemedText>
-              <MaterialIcons name="arrow-forward" size={18} color={primary} />
-            </Pressable>
-          </View>
-          <View style={[styles.tasksBlock, { backgroundColor: cardBg }]}>
-            {showTodoList ? (
-              <>
-                <View style={[styles.todoInputRow, { backgroundColor: cardBg, borderColor: border }]}>
-                  <RNTextInput
-                    value={todoInputText}
-                    onChangeText={setTodoInputText}
-                    placeholder="Введите задачу..."
-                    placeholderTextColor={headerSubtitle}
-                    onSubmitEditing={handleAddTodo}
-                    returnKeyType="done"
-                    style={[styles.todoInput, { color: headerText }]}
-                  />
-                  <Pressable
-                    onPress={() => {
-                      if (todoInputText.trim()) handleAddTodo();
-                      else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                    }}
-                    style={[
-                      styles.todoAddButton,
-                      { backgroundColor: primary, opacity: todoInputText.trim() ? 1 : 0.5 },
-                    ]}
-                  >
-                    <MaterialIcons name="add" size={24} color="#FFFFFF" />
-                  </Pressable>
-                </View>
-                <View style={[styles.todoAddRow, { borderColor: border }]}>
-                  <View style={styles.todoAddField}>
-                    <ThemedText style={[styles.todoAddLabel, { color: headerSubtitle }]}>Дата</ThemedText>
-                    <Select
-                      value={todoAddDate}
-                      onValueChange={setTodoAddDate}
-                      options={todoDateOptions}
-                      placeholder="Дата"
-                    />
-                  </View>
-                  <View style={styles.todoAddField}>
-                    <ThemedText style={[styles.todoAddLabel, { color: headerSubtitle }]}>Время</ThemedText>
-                    <Select
-                      value={todoAddTime}
-                      onValueChange={setTodoAddTime}
-                      options={TIME_SLOTS}
-                      placeholder="Время"
-                    />
-                  </View>
-                </View>
-                <View style={styles.todoListContent}>
-                  {todoActiveItems.length === 0 ? (
-                    <View style={styles.todoEmptyState}>
-                      <MaterialIcons name="format-list-bulleted" size={40} color={headerSubtitle} />
-                      <ThemedText style={[styles.todoEmptyTitle, { color: headerText }]}>Нет задач</ThemedText>
-                      <ThemedText style={[styles.todoEmptySubtitle, { color: headerSubtitle }]}>
-                        {todoCompletedCount > 0 ? 'Все задачи выполнены' : 'Добавьте задачу выше'}
-                      </ThemedText>
-                    </View>
-                  ) : (
-                    <View style={styles.todoListBlock}>
-                      {todoActiveItems.map((item) => (
-                        <TodoRowInline
-                          key={item.id}
-                          item={item}
-                          onToggle={() => toggleTodoItem(item.id)}
-                          onRemove={() => removeTodoItem(item.id)}
-                          textColor={headerText}
-                          textMuted={headerSubtitle}
-                          primary={primary}
-                          borderColor={border}
-                        />
-                      ))}
-                    </View>
-                  )}
-                  {todoCompletedCount > 0 && (
-                    <Pressable
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        clearTodoCompleted();
-                      }}
-                      style={styles.todoClearButton}
-                    >
-                      <MaterialIcons name="delete-outline" size={18} color={primary} />
-                      <ThemedText style={[styles.todoClearButtonText, { color: primary }]}>
-                        Очистить выполненные ({todoCompletedCount})
-                      </ThemedText>
-                    </Pressable>
-                  )}
-                </View>
-              </>
-            ) : (
-              <>
-                <View style={styles.dateNav}>
-                  <Pressable onPress={handlePrevDay} style={styles.dateNavButton}>
-                    <MaterialIcons name="chevron-left" size={24} color={headerText} />
-                  </Pressable>
-                  <ThemedText style={[styles.dateNavLabel, { color: headerText }]}>
-                    {formatDateNav()}
-                  </ThemedText>
-                  <Pressable onPress={handleNextDay} style={styles.dateNavButton}>
-                    <MaterialIcons name="chevron-right" size={24} color={headerText} />
-                  </Pressable>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.weekScroll}>
-                  {weekDates.map((day) => (
-                    <Pressable
-                      key={day.date.toISOString()}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setSelectedDate(day.date);
-                      }}
-                      style={[styles.weekDay, (day.isSelected || day.isToday) && { backgroundColor: primary }]}
-                    >
-                      <ThemedText style={[styles.weekDayText, { color: day.isSelected || day.isToday ? '#FFF' : headerText }]}>{day.label}</ThemedText>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-                <View style={styles.taskList}>
-                  {tasksLoading ? (
-                    <ThemedText style={[styles.taskEmpty, { color: headerSubtitle }]}>Загрузка...</ThemedText>
-                  ) : tasksForSelectedDate.length === 0 ? (
-                    <ThemedText style={[styles.taskEmpty, { color: headerSubtitle }]}>Нет задач на эту дату</ThemedText>
-                  ) : (
-                    tasksForSelectedDate.map((task) => (
-                      <Pressable
-                        key={task.id}
-                        onPress={() => {
-                          if (task.taskId) setShowTodoList(true);
-                          else if (task.requestId) router.push(`/(tabs)/requests/${task.requestId}`);
-                          else if (task.bookingId) router.push(`/booking/${task.bookingId}`);
-                        }}
-                        style={styles.taskRow}
-                      >
-                        <View style={[styles.taskTimeIndicator, { backgroundColor: task.color }]} />
-                        <ThemedText style={[styles.taskTime, { color: headerSubtitle }]}>
-                          {task.time}
-                        </ThemedText>
-                        <ThemedText style={[styles.taskTitle, { color: headerText }]} numberOfLines={1}>{task.title}</ThemedText>
-                        <View style={[styles.taskDot, { backgroundColor: task.color }]} />
-                      </Pressable>
-                    ))
-                  )}
-                </View>
-              </>
-            )}
-          </View>
-          <Pressable onPress={handleToggleView} style={styles.todoListButton}>
-            <ThemedText style={[styles.todoListButtonText, { color: primary }]}>
-              {showTodoList ? 'Календарь' : 'Todo list'}
-            </ThemedText>
-            <MaterialIcons name={showTodoList ? 'calendar-today' : 'format-list-bulleted'} size={20} color={primary} />
-          </Pressable>
-        </View>
-
-        {/* Daily Performance — процент выполненных задач за день */}
-        <View style={[styles.section, { backgroundColor: background }]}>
-          <View style={[styles.dailyPerformanceCard, { backgroundColor: `${primary}80` }]}>
-            <View style={[styles.dailyPerformanceIconWrap, { backgroundColor: primary }]}>
-              <MaterialIcons name="show-chart" size={28} color="#FFFFFF" />
-            </View>
-            <View style={styles.dailyPerformanceText}>
-              <ThemedText style={styles.dailyPerformanceLabel}>Дневная продуктивность</ThemedText>
-              <ThemedText style={styles.dailyPerformanceStatus}>
-              {dailyPerformance.total === 0 ? 'Нет задач' : dailyPerformance.percent >= 100 ? 'Цель достигнута!' : `${dailyPerformance.completed} из ${dailyPerformance.total}`}
-            </ThemedText>
-            </View>
-            <ThemedText style={styles.dailyPerformancePercent}>{dailyPerformance.percent}%</ThemedText>
-          </View>
-        </View>
+        {/* Tasks: только прогресс, переход в экран задач */}
+        <TasksSection />
       </ScrollView>
+      </PullToRefresh>
 
       <Modal
         visible={!!selectedInsight}
@@ -1324,25 +1147,6 @@ const styles = StyleSheet.create({
   taskTime: { fontSize: 14, width: 44 },
   taskTitle: { flex: 1, fontSize: 16 },
   taskDot: { width: 8, height: 8, borderRadius: 4 },
-  // Daily Performance
-  dailyPerformanceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    padding: 16,
-  },
-  dailyPerformanceIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  dailyPerformanceText: { flex: 1, flexShrink: 1, minWidth: 0 },
-  dailyPerformanceLabel: { fontSize: 13, marginBottom: 2, color: 'rgba(255,255,255,0.9)' },
-  dailyPerformanceStatus: { fontSize: 16, fontWeight: 'bold', color: '#FFFFFF' },
-  dailyPerformancePercent: { fontSize: 22, fontWeight: 'bold', flexShrink: 0, marginLeft: 8, color: '#FFFFFF' },
   // Legacy (admin/executor)
   emptyState: {
     alignItems: 'center',

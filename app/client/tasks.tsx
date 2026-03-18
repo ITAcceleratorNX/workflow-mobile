@@ -1,30 +1,35 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
   FlatList,
   Pressable,
   TextInput as RNTextInput,
-  Modal,
-  KeyboardAvoidingView,
+  ActivityIndicator,
+  Keyboard,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { ScreenHeader, Select, Button } from '@/components/ui';
+import { ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useTodoStore, type TodoItem, getTaskDate, getTaskTime } from '@/stores/todo-store';
-import { formatDateForApi } from '@/lib/dateTimeUtils';
-import { TIME_SLOTS, getDateOptions } from '@/constants/task-form';
+import { useTodoList } from '@/hooks/use-todo-list';
+import { useAuthStore } from '@/stores/auth-store';
+import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
+import { getDeadlineStatus } from '@/lib/taskDeadlineUtils';
+import type { UserTask } from '@/lib/user-tasks-api';
+import { CalendarTab } from '@/components/tasks/CalendarTab';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 function formatTaskDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
+  const d = new Date(dateStr + 'T12:00:00'); // Hack to avoid timezone issues
   const today = new Date();
   const todayKey = formatDateForApi(today);
   if (dateStr === todayKey) return 'Сегодня';
@@ -34,74 +39,117 @@ function formatTaskDate(dateStr: string): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-const STATUS_OPTIONS = [
+const FILTER_OPTIONS: { value: 'all' | 'today' | 'overdue'; label: string }[] = [
   { value: 'all', label: 'Все' },
-  { value: 'active', label: 'Активные' },
-  { value: 'completed', label: 'Выполненные' },
-];
-
-const DATE_OPTIONS = [
-  { value: 'all', label: 'Все даты' },
   { value: 'today', label: 'Сегодня' },
-  { value: 'week', label: 'Эта неделя' },
   { value: 'overdue', label: 'Просроченные' },
 ];
 
 interface TaskRowProps {
-  item: TodoItem;
+  item: UserTask;
   onToggle: () => void;
-  onRemove: () => void;
+  onPressTitle: () => void;
+  isEditing: boolean;
+  draftTitle: string;
+  onChangeDraftTitle: (v: string) => void;
+  onSubmitTitle: () => void;
+  onCancelEdit: () => void;
+  onPressInfo: () => void;
+  inputRef?: React.RefObject<RNTextInput | null>;
   textColor: string;
   textMuted: string;
   primary: string;
   borderColor: string;
+  isTeam: boolean;
 }
 
-function TaskRow({ item, onToggle, onRemove, textColor, textMuted, primary, borderColor }: TaskRowProps) {
-  const dateStr = getTaskDate(item);
-  const timeStr = getTaskTime(item);
-  const today = formatDateForApi(new Date());
-  const isOverdue = dateStr < today && !item.completed;
+function TaskRow({
+  item,
+  onToggle,
+  onPressTitle,
+  isEditing,
+  draftTitle,
+  onChangeDraftTitle,
+  onSubmitTitle,
+  onCancelEdit,
+  onPressInfo,
+  inputRef,
+  textColor,
+  textMuted,
+  primary,
+  borderColor,
+  isTeam,
+}: TaskRowProps) {
+  const dateStr = item.scheduled_at ? formatDateForApi(new Date(item.scheduled_at)) : null;
+  const timeStr = item.scheduled_at ? formatTimeOnly(item.scheduled_at) : null;
+  const isOverdue = item.deadline_to && getDeadlineStatus(item.deadline_to, item.deadline_time) === 'overdue' && !item.completed;
 
   return (
     <Pressable
-      onPress={() => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onToggle();
-      }}
-      style={[styles.row, { borderBottomColor: borderColor }]}
-    >
-      <View style={[styles.checkbox, { borderColor: item.completed ? primary : borderColor }, item.completed && { backgroundColor: primary }]}>
-        {item.completed && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
-      </View>
-      <View style={styles.rowContent}>
-        <ThemedText
-          style={[styles.rowText, { color: item.completed ? textMuted : textColor }, item.completed && styles.textCompleted]}
-          numberOfLines={2}
-        >
-          {item.text}
-        </ThemedText>
-        <ThemedText style={[styles.rowDate, { color: textMuted }, isOverdue && { color: '#EF4444' }]}>
-          {formatTaskDate(dateStr)} • {timeStr}
-          {isOverdue && ' • Просрочено'}
-        </ThemedText>
-      </View>
+      style={[styles.row, { borderBottomColor: borderColor }]}>
       <Pressable
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onRemove();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          onToggle();
         }}
-        hitSlop={12}
-        style={styles.removeBtn}
-      >
-        <MaterialIcons name="close" size={20} color={textMuted} />
+        style={[styles.checkbox, { borderColor: item.completed ? primary : borderColor }, item.completed && { backgroundColor: primary }]}>
+        {item.completed && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
       </Pressable>
+      <View style={styles.rowContent}>
+        {isEditing ? (
+          <RNTextInput
+            ref={inputRef as any}
+            value={draftTitle}
+            onChangeText={onChangeDraftTitle}
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={onSubmitTitle}
+            onBlur={onCancelEdit}
+            placeholder="Название задачи"
+            placeholderTextColor={textMuted}
+            style={[
+              styles.inlineInput,
+              { color: textColor, borderColor: borderColor },
+            ]}
+          />
+        ) : (
+          <Pressable onPress={onPressTitle} hitSlop={6}>
+            <ThemedText
+              style={[styles.rowText, { color: item.completed ? textMuted : textColor }, item.completed && styles.textCompleted]}
+              numberOfLines={2}>
+              {item.title}
+            </ThemedText>
+          </Pressable>
+        )}
+        {(dateStr || timeStr) && (
+          <ThemedText style={[styles.rowDate, { color: textMuted }, isOverdue && { color: '#EF4444' }]}>
+            {dateStr && formatTaskDate(dateStr)} {timeStr && `• ${timeStr}`}
+            {isOverdue && ' • Просрочено'}
+            {isTeam && ' • Командный'}
+          </ThemedText>
+        )}
+      </View>
+      {isEditing ? (
+        <Pressable onPress={onPressInfo} hitSlop={12} style={styles.infoBtn}>
+          <MaterialIcons name="info-outline" size={24} color={primary} />
+        </Pressable>
+      ) : (
+        <MaterialIcons name="chevron-right" size={24} color={textMuted} />
+      )}
     </Pressable>
   );
 }
 
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const { filter: initialFilter, date: initialDate, view: initialView } = useLocalSearchParams<{
+    filter?: 'all' | 'today' | 'overdue';
+    date?: string;
+    view?: 'list' | 'calendar';
+  }>();
+
   const background = useThemeColor({}, 'background');
   const headerText = useThemeColor({}, 'text');
   const headerSubtitle = useThemeColor({}, 'textMuted');
@@ -109,83 +157,192 @@ export default function TasksScreen() {
   const cardBg = useThemeColor({}, 'cardBackground');
   const border = useThemeColor({}, 'border');
 
-  const { items, addItem, removeItem, toggleItem } = useTodoStore();
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [filterDate, setFilterDate] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [addInputText, setAddInputText] = useState('');
-  const [addDate, setAddDate] = useState(formatDateForApi(new Date()));
-  const [addTime, setAddTime] = useState('09:00');
+  const { tasks, toggleComplete, loading: loadingTasks, addTask, updateTask } = useTodoList();
+  const [filterDate, setFilterDate] = useState<'all' | 'today' | 'overdue'>(initialDate === 'today' || initialDate === 'overdue' ? initialDate : (initialFilter ?? 'all') ?? 'all');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>(initialView === 'calendar' ? 'calendar' : 'list');
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createDraftTitle, setCreateDraftTitle] = useState('');
+
+  const editInputRef = useRef<RNTextInput | null>(null);
+  const createInputRef = useRef<RNTextInput | null>(null);
+  const listRef = useRef<FlatList<UserTask> | null>(null);
+
+  useEffect(() => {
+    if (initialFilter === 'today' || initialFilter === 'overdue') setFilterDate(initialFilter);
+    if (initialDate === 'today' || initialDate === 'overdue') setFilterDate(initialDate);
+  }, [initialFilter, initialDate]);
+
+  useEffect(() => {
+    if (initialView === 'calendar') setViewMode('calendar');
+    if (initialView === 'list') setViewMode('list');
+  }, [initialView]);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const subShow = Keyboard.addListener(showEvt as any, (e: any) => setKeyboardHeight(e?.endCoordinates?.height ?? 0));
+    const subHide = Keyboard.addListener(hideEvt as any, () => setKeyboardHeight(0));
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
 
   const todayKey = formatDateForApi(new Date());
-  const weekStart = (() => {
+  const weekStart = useMemo(() => {
     const d = new Date();
     const day = d.getDay();
     const mondayOffset = day === 0 ? -6 : 1 - day;
     const monday = new Date(d);
     monday.setDate(d.getDate() + mondayOffset);
     return monday;
-  })();
+  }, []);
   const weekStartKey = formatDateForApi(weekStart);
 
-  const filteredItems = useMemo(() => {
-    let list = [...items];
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter((i) => i.text.toLowerCase().includes(q));
-    }
-    if (filterStatus === 'active') list = list.filter((i) => !i.completed);
-    else if (filterStatus === 'completed') list = list.filter((i) => i.completed);
+  const filteredTasks = useMemo(() => {
+    let list = [...tasks];
     if (filterDate === 'today') {
-      list = list.filter((i) => getTaskDate(i) === todayKey);
-    } else if (filterDate === 'week') {
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 6);
-      const weekEndKey = formatDateForApi(weekEnd);
-      list = list.filter((i) => {
-        const d = getTaskDate(i);
-        return d >= weekStartKey && d <= weekEndKey;
-      });
+      list = list.filter((i) => i.scheduled_at && formatDateForApi(new Date(i.scheduled_at)) === todayKey);
     } else if (filterDate === 'overdue') {
-      list = list.filter((i) => getTaskDate(i) < todayKey && !i.completed);
+      list = list.filter((i) => i.deadline_to && getDeadlineStatus(i.deadline_to, i.deadline_time) === 'overdue' && !i.completed);
     }
+
     return list.sort((a, b) => {
-      const da = getTaskDate(a);
-      const db = getTaskDate(b);
-      if (da !== db) return da.localeCompare(db);
-      const ta = getTaskTime(a);
-      const tb = getTaskTime(b);
-      if (ta !== tb) return ta.localeCompare(tb);
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      const dateA = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0;
+      const dateB = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0;
+      return dateA - dateB;
     });
-  }, [items, filterStatus, filterDate, searchQuery, todayKey, weekStartKey]);
+  }, [tasks, filterDate, todayKey]);
 
-  const handleAddTask = useCallback(() => {
-    const trimmed = addInputText.trim();
-    if (!trimmed) return;
-    addItem(trimmed, addDate, addTime);
-    setAddInputText('');
-    setAddDate(formatDateForApi(new Date()));
-    setAddTime('09:00');
-    setAddModalVisible(false);
-  }, [addInputText, addDate, addTime, addItem]);
+  const scrollToActiveInput = useCallback(() => {
+    if (viewMode !== 'list') return;
+    // If creating, scroll to end (footer input)
+    if (creating) {
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToEnd({ animated: true });
+      });
+      return;
+    }
+    // If editing, scroll to item
+    if (editingTaskId) {
+      const idx = filteredTasks.findIndex((t) => t.id === editingTaskId);
+      if (idx < 0) return;
+      requestAnimationFrame(() => {
+        try {
+          listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.25 });
+        } catch {
+          // ignore
+        }
+      });
+    }
+  }, [creating, editingTaskId, filteredTasks, viewMode]);
 
-  const dateOptions = useMemo(() => getDateOptions(), []);
+  const openInlineCreate = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditingTaskId(null);
+    setDraftTitle('');
+    setCreating(true);
+    setCreateDraftTitle('');
+    requestAnimationFrame(() => {
+      scrollToActiveInput();
+      createInputRef.current?.focus();
+    });
+  }, [scrollToActiveInput]);
+
+  const startInlineEdit = useCallback((task: UserTask) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCreating(false);
+    setCreateDraftTitle('');
+    setEditingTaskId(task.id);
+    setDraftTitle(task.title);
+    requestAnimationFrame(() => {
+      scrollToActiveInput();
+      editInputRef.current?.focus();
+    });
+  }, [scrollToActiveInput]);
+
+  const saveInlineEdit = useCallback(async () => {
+    if (!editingTaskId) return;
+    const trimmed = draftTitle.trim();
+    const original = tasks.find((t) => t.id === editingTaskId);
+    if (!trimmed || !original) {
+      setEditingTaskId(null);
+      setDraftTitle('');
+      return;
+    }
+    if (trimmed !== original.title) {
+      await updateTask(original, { title: trimmed });
+    }
+    setEditingTaskId(null);
+    setDraftTitle('');
+    Keyboard.dismiss();
+  }, [draftTitle, editingTaskId, tasks, updateTask]);
+
+  const cancelInlineEdit = useCallback(() => {
+    if (editingTaskId) {
+      setEditingTaskId(null);
+      setDraftTitle('');
+    }
+  }, [editingTaskId]);
+
+  const saveInlineCreate = useCallback(async () => {
+    const trimmed = createDraftTitle.trim();
+    if (!trimmed) {
+      setCreating(false);
+      setCreateDraftTitle('');
+      Keyboard.dismiss();
+      return;
+    }
+    const scheduledAtIso = filterDate === 'today' ? `${todayKey}T09:00:00.000Z` : null;
+    await addTask(trimmed, scheduledAtIso);
+    setCreating(false);
+    setCreateDraftTitle('');
+    Keyboard.dismiss();
+  }, [addTask, createDraftTitle, filterDate, todayKey]);
+
+  const cancelInlineCreate = useCallback(() => {
+    if (creating) {
+      setCreating(false);
+      setCreateDraftTitle('');
+    }
+  }, [creating]);
+
+  useEffect(() => {
+    if (viewMode !== 'list') return;
+    if (!creating && !editingTaskId) return;
+    // When keyboard appears/changes, ensure input is visible
+    scrollToActiveInput();
+  }, [keyboardHeight, creating, editingTaskId, scrollToActiveInput, viewMode]);
+
+  const openTaskEditor = useCallback((params: Record<string, string | undefined>) => {
+    router.push({ pathname: '/client/tasks/task-editor', params: params as any });
+  }, [router]);
 
   const renderItem = useCallback(
-    ({ item }: { item: TodoItem }) => (
+    ({ item }: { item: UserTask }) => (
       <TaskRow
         item={item}
-        onToggle={() => toggleItem(item.id)}
-        onRemove={() => removeItem(item.id)}
+        onToggle={() => toggleComplete(item)}
+        onPressTitle={() => startInlineEdit(item)}
+        isEditing={editingTaskId === item.id}
+        draftTitle={editingTaskId === item.id ? draftTitle : ''}
+        onChangeDraftTitle={setDraftTitle}
+        onSubmitTitle={saveInlineEdit}
+        onCancelEdit={cancelInlineEdit}
+        onPressInfo={() => router.push({ pathname: '/client/tasks/details', params: { taskId: item.id.toString() } })}
+        inputRef={editingTaskId === item.id ? editInputRef : undefined}
         textColor={headerText}
         textMuted={headerSubtitle}
         primary={primary}
         borderColor={border}
+        isTeam={!!currentUserId && item.creator_id !== currentUserId}
       />
     ),
-    [toggleItem, removeItem, headerText, headerSubtitle, primary, border]
+    [toggleComplete, startInlineEdit, editingTaskId, draftTitle, saveInlineEdit, cancelInlineEdit, headerText, headerSubtitle, primary, border, openTaskEditor, currentUserId]
   );
 
   const ListEmpty = (
@@ -193,180 +350,176 @@ export default function TasksScreen() {
       <MaterialIcons name="assignment" size={48} color={headerSubtitle} />
       <ThemedText style={[styles.emptyTitle, { color: headerText }]}>Нет задач</ThemedText>
       <ThemedText style={[styles.emptySubtitle, { color: headerSubtitle }]}>
-        Создайте задачу в Todo list на главной
+        Создайте новую задачу или измените фильтры
       </ThemedText>
     </View>
   );
 
-  const addButton = (
-    <Pressable
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        setAddDate(formatDateForApi(new Date()));
-        setAddTime('09:00');
-        setAddModalVisible(true);
-      }}
-      style={({ pressed }) => [styles.headerAddBtn, { opacity: pressed ? 0.8 : 1 }]}
-    >
-      <MaterialIcons name="add" size={24} color={primary} />
-    </Pressable>
+  const headerViewToggle = (
+    <View style={[styles.viewToggle, { borderColor: border, backgroundColor: cardBg }]}>
+      <Pressable
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setViewMode('list');
+        }}
+        style={[styles.viewBtn, viewMode === 'list' && { backgroundColor: `${primary}25` }]}
+        hitSlop={8}
+      >
+        <MaterialIcons name="format-list-bulleted" size={20} color={viewMode === 'list' ? primary : headerSubtitle} />
+      </Pressable>
+      <Pressable
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setViewMode('calendar');
+        }}
+        style={[styles.viewBtn, viewMode === 'calendar' && { backgroundColor: `${primary}25` }]}
+        hitSlop={8}
+      >
+        <MaterialIcons name="calendar-month" size={20} color={viewMode === 'calendar' ? primary : headerSubtitle} />
+      </Pressable>
+    </View>
   );
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
-      <ScreenHeader title="Все задачи" rightSlot={addButton} />
-      <View style={[styles.searchRow, { backgroundColor: cardBg, borderColor: border }]}>
-        <MaterialIcons name="search" size={20} color={headerSubtitle} />
-        <RNTextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Поиск задач..."
-          placeholderTextColor={headerSubtitle}
-          style={[styles.searchInput, { color: headerText }]}
-        />
-        {searchQuery.length > 0 && (
-          <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-            <MaterialIcons name="close" size={20} color={headerSubtitle} />
-          </Pressable>
-        )}
-      </View>
-      <View style={[styles.filters, { borderBottomColor: border }]}>
-        <View style={styles.filterRow}>
-          <ThemedText style={[styles.filterLabel, { color: headerSubtitle }]}>Статус</ThemedText>
-          <View style={styles.selectWrap}>
-            <Select
-              value={filterStatus}
-              options={STATUS_OPTIONS}
-              onValueChange={setFilterStatus}
-              placeholder="Все"
-            />
-          </View>
-        </View>
-        <View style={styles.filterRow}>
-          <ThemedText style={[styles.filterLabel, { color: headerSubtitle }]}>Дата</ThemedText>
-          <View style={styles.selectWrap}>
-            <Select
-              value={filterDate}
-              options={DATE_OPTIONS}
-              onValueChange={setFilterDate}
-              placeholder="Все даты"
-            />
-          </View>
-        </View>
-      </View>
-      <FlatList
-        data={filteredItems}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
-        ListEmptyComponent={ListEmpty}
-        showsVerticalScrollIndicator={false}
-      />
+      <ScreenHeader title="Задачи" inlineTitle hideBackLabel rightSlot={headerViewToggle} />
 
-      <Modal
-        visible={addModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAddModalVisible(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setAddModalVisible(false)}
+      {viewMode === 'list' && (
+        <View style={styles.topBar}>
+          <View style={styles.filterPills}>
+            {FILTER_OPTIONS.map((opt) => (
+              <Pressable
+                key={opt.value}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setFilterDate(opt.value);
+                }}
+                style={[
+                  styles.pill,
+                  {
+                    borderColor: border,
+                    backgroundColor: opt.value === filterDate ? `${primary}25` : 'transparent',
+                  },
+                ]}
+              >
+                <ThemedText style={{ color: opt.value === filterDate ? primary : headerSubtitle, fontSize: 13, fontWeight: '600' }}>
+                  {opt.label}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      )}
+      {viewMode === 'calendar' ? (
+        <View style={styles.calendarWrap}>
+          <CalendarTab />
+        </View>
+      ) : loadingTasks ? (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color={primary} />
+        </View>
+      ) : (
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.modalKeyboard}
+          <FlatList
+            ref={(r) => {
+              listRef.current = r;
+            }}
+            data={filteredTasks}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={[styles.listContent, { paddingBottom: 40 + insets.bottom }]}
+            ListEmptyComponent={ListEmpty}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onScrollToIndexFailed={() => {
+              // retry after layout
+              setTimeout(() => scrollToActiveInput(), 50);
+            }}
+            ListFooterComponent={
+              creating ? (
+                <View style={[styles.createRow, { borderColor: border }]}>
+                  <View style={[styles.checkbox, { borderColor: border }]} />
+                  <RNTextInput
+                    ref={createInputRef}
+                    value={createDraftTitle}
+                    onChangeText={setCreateDraftTitle}
+                    placeholder="Новая задача"
+                    placeholderTextColor={headerSubtitle}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={saveInlineCreate}
+                    onBlur={cancelInlineCreate}
+                    style={[styles.createInput, { color: headerText }]}
+                  />
+                </View>
+              ) : (
+                <View style={{ height: 24 }} />
+              )
+            }
+          />
+        </KeyboardAvoidingView>
+      )}
+
+      {viewMode === 'list' && (
+        <>
+          <Pressable
+            onPress={openInlineCreate}
+            style={[
+              styles.fab,
+              { backgroundColor: primary, right: 16, bottom: insets.bottom + 16 },
+            ]}
           >
-            <Pressable
-              style={[styles.modalContent, { backgroundColor: cardBg }]}
-              onPress={(e) => e.stopPropagation()}
-            >
-              <ThemedText style={[styles.modalTitle, { color: headerText }]}>Новая задача</ThemedText>
-              <RNTextInput
-                value={addInputText}
-                onChangeText={setAddInputText}
-                placeholder="Введите задачу..."
-                placeholderTextColor={headerSubtitle}
-                onSubmitEditing={handleAddTask}
-                returnKeyType="done"
-                autoFocus
-                style={[styles.modalInput, { color: headerText, borderColor: border }]}
-              />
-              <View style={styles.modalRow}>
-                <View style={styles.modalField}>
-                  <ThemedText style={[styles.modalLabel, { color: headerSubtitle }]}>Дата</ThemedText>
-                  <Select
-                    value={addDate}
-                    onValueChange={setAddDate}
-                    options={dateOptions}
-                    placeholder="Дата"
-                  />
-                </View>
-                <View style={styles.modalField}>
-                  <ThemedText style={[styles.modalLabel, { color: headerSubtitle }]}>Время</ThemedText>
-                  <Select
-                    value={addTime}
-                    onValueChange={setAddTime}
-                    options={TIME_SLOTS}
-                    placeholder="Время"
-                  />
-                </View>
-              </View>
-              <View style={styles.modalActions}>
-                <Button
-                  title="Отмена"
-                  variant="secondary"
-                  onPress={() => setAddModalVisible(false)}
-                />
-                <Button
-                  title="Добавить"
-                  onPress={handleAddTask}
-                  disabled={!addInputText.trim()}
-                />
-              </View>
-            </Pressable>
-          </KeyboardAvoidingView>
-        </Pressable>
-      </Modal>
+            <MaterialIcons name="add" size={26} color="#FFFFFF" />
+          </Pressable>
+        </>
+      )}
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerAddBtn: {
-    padding: 8,
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchRow: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 8,
-  },
-  searchInput: { flex: 1, fontSize: 16, paddingVertical: 4 },
-  filters: {
+    justifyContent: 'flex-start',
+    gap: 10,
     paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
-  filterRow: {
+  filterPills: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
+    gap: 6,
+    paddingVertical: 2,
   },
-  filterLabel: { fontSize: 14, marginRight: 12, minWidth: 70 },
-  selectWrap: { flex: 1 },
+  pill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  viewBtn: {
+    width: 38,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   listContent: { paddingHorizontal: 16, paddingTop: 16 },
+  calendarWrap: {
+    flex: 1,
+    paddingTop: 8,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -375,7 +528,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 12,
     marginBottom: 8,
-    borderBottomWidth: 0,
   },
   checkbox: {
     width: 24,
@@ -390,39 +542,58 @@ const styles = StyleSheet.create({
   rowText: { fontSize: 16 },
   textCompleted: { textDecorationLine: 'line-through' },
   rowDate: { fontSize: 12, marginTop: 4 },
-  removeBtn: { padding: 4 },
+  inlineInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    fontSize: 16,
+  },
+  inlineSaveBtn: {
+    paddingLeft: 8,
+    paddingVertical: 6,
+  },
+  infoBtn: {
+    paddingLeft: 10,
+    paddingVertical: 6,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
   empty: {
     alignItems: 'center',
     paddingVertical: 48,
   },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginTop: 16 },
   emptySubtitle: { fontSize: 14, marginTop: 4 },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalKeyboard: { width: '100%' },
-  modalContent: {
-    borderRadius: 16,
-    padding: 20,
-  },
-  modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 16 },
-  modalRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
-  modalField: { flex: 1 },
-  modalLabel: { fontSize: 14, marginBottom: 6 },
-  modalInput: {
-    fontSize: 16,
-    paddingHorizontal: 14,
+  createRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 20,
+    marginTop: 8,
   },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'flex-end',
+  createInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 6,
+  },
+  fab: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
 });

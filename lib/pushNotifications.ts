@@ -10,6 +10,36 @@ const DEFAULT_CHANNEL_ID = 'default';
 /** Последний токен, отправленный на бэкенд — нужен для удаления при выходе (сам device token при смене аккаунта не меняется). */
 let lastRegisteredPushToken: string | null = null;
 
+const TASK_REMINDER_CATEGORY_ID = 'task_reminder';
+
+/**
+ * Регистрирует категорию task_reminder с кнопками действий для пушей.
+ * Вызывать при старте приложения (вместе с setNotificationHandler).
+ */
+export async function setupTaskReminderCategory(): Promise<void> {
+  try {
+    await Notifications.setNotificationCategoryAsync(TASK_REMINDER_CATEGORY_ID, [
+      {
+        identifier: 'in_1h',
+        buttonTitle: 'Через 1 час',
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: 'tomorrow',
+        buttonTitle: 'Завтра',
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: 'off',
+        buttonTitle: 'Выключить',
+        options: { opensAppToForeground: false },
+      },
+    ]);
+  } catch (e) {
+    console.warn('[Push] setupTaskReminderCategory failed:', e);
+  }
+}
+
 /**
  * Настройка обработчика уведомлений (показ в foreground).
  * Вызывать один раз при старте приложения (например в _layout).
