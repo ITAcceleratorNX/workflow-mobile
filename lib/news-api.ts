@@ -236,3 +236,62 @@ export async function unhideNews(id: number): Promise<
 > {
   return authRequest<ApiNewsItem>(`/news/admin/${id}/unhide`, { method: 'PATCH' });
 }
+
+/** Редактирование новости (multipart/form-data) */
+export async function updateNews(
+  id: number,
+  params: {
+    title: string;
+    content: string;
+    notification_type?: NotificationType;
+    image?: { uri: string; name?: string; type?: string } | null;
+  }
+): Promise<{ ok: true; data: ApiNewsItem } | { ok: false; error: string }> {
+  const formData = new FormData();
+  formData.append('title', params.title.trim());
+  formData.append('content', params.content.trim());
+  formData.append('notification_type', params.notification_type ?? 'none');
+
+  if (params.image?.uri) {
+    const img = params.image;
+    const fileName = img.name ?? `image_${Date.now()}.jpg`;
+    const mimeType = img.type ?? 'image/jpeg';
+    formData.append('image', {
+      uri: img.uri,
+      name: fileName,
+      type: mimeType,
+    } as unknown as Blob);
+  }
+
+  const token = useAuthStore.getState().token;
+  const headers: HeadersInit = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  try {
+    const res = await fetch(`${apiBaseUrl}/news/admin/${id}`, {
+      method: 'PATCH',
+      headers,
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = extractError(data);
+      console.warn('[news-api] updateNews error:', res.status, data);
+      return { ok: false, error: err };
+    }
+    return { ok: true, data: data as ApiNewsItem };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Сетевая ошибка';
+    return { ok: false, error: msg };
+  }
+}
+
+/** Удаление новости */
+export async function deleteNews(id: number): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const result = await authRequest<unknown>(`/news/admin/${id}`, { method: 'DELETE' });
+  if (!result.ok) return result;
+  return { ok: true };
+}
