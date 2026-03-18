@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { ErrorBoundary } from '@/components/error-boundary';
+import { SleepSurveyGate } from '@/components/sleep-survey-gate';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { registerBackgroundStepsTask } from '@/lib/background-steps-sync';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
@@ -48,6 +49,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <ToastProvider>
+          <SleepSurveyGate />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="login/index" />
