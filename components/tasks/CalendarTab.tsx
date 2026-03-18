@@ -1,14 +1,14 @@
-import { useState, useMemo, useCallback } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useCalendarTasks } from '@/hooks/use-calendar-tasks';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
-import { PageLoader } from '@/components/ui';
+import { formatTimeOnly } from '@/lib/dateTimeUtils';
+import { toAppDateKey } from '@/lib/taskDateTime';
 import type { CalendarTask } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -193,7 +193,7 @@ export function CalendarTab() {
                     {task.title}
                   </ThemedText>
                   <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
-                    {formatTimeOnly(task.scheduled_at)} • {formatDateForApi(new Date(task.scheduled_at))}
+                    {formatTimeOnly(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
                   </ThemedText>
                   {isTeam && (
                     <View style={[styles.teamPill, { borderColor: border }]}>
@@ -224,7 +224,7 @@ export function CalendarTab() {
                     {task.title}
                   </ThemedText>
                   <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
-                    {formatTimeOnly(task.scheduled_at)} • {formatDateForApi(new Date(task.scheduled_at))}
+                    {formatTimeOnly(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
                   </ThemedText>
                   {isTeam && (
                     <View style={[styles.teamPill, { borderColor: border }]}>

@@ -671,11 +671,8 @@ export default function CreateRequestScreen() {
       <View style={[styles.header, { paddingTop: 12 + insets.top, borderBottomColor: borderColor }]}>
         <Pressable onPress={goBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color={textColor} />
-          <ThemedText style={[styles.backLabel, { color: textColor }]}>Назад</ThemedText>
         </Pressable>
-        <ThemedText style={[styles.headerTitle, { color: textColor }]}>
-          Создать заявку
-        </ThemedText>
+        <ThemedText style={[styles.headerTitle, { color: textColor }]}>Создать заявку</ThemedText>
       </View>
 
       <KeyboardAvoidingView
@@ -1528,9 +1525,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     padding: 8,
     marginRight: 8,
-  },
-  backLabel: {
-    fontSize: 16,
   },
   headerTitle: {
     fontSize: 18,

@@ -570,7 +570,6 @@ export default function RequestDetailScreen() {
       <ThemedView style={styles.container}>
         <Pressable onPress={goBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color={textColor} />
-          <ThemedText style={{ color: textColor, marginLeft: 8 }}>Назад</ThemedText>
         </Pressable>
         <View style={styles.centered}>
           <ThemedText style={[styles.errorText, { color: mutedColor }]}>
@@ -606,7 +605,6 @@ export default function RequestDetailScreen() {
       >
         <Pressable onPress={goBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color={textColor} />
-          <ThemedText style={[styles.backLabel, { color: textColor }]}>Назад</ThemedText>
         </Pressable>
         <ThemedText style={[styles.headerTitle, { color: textColor }]}>
           Заявка #{request.id}
@@ -1135,9 +1133,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     padding: 8,
     marginRight: 8,
-  },
-  backLabel: {
-    fontSize: 16,
   },
   headerTitle: {
     fontSize: 18,

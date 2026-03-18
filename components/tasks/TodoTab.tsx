@@ -1,21 +1,22 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
+import { useCallback } from 'react';
+import {
+    ActivityIndicator,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    View,
+} from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { useTodoList } from '@/hooks/use-todo-list';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useTodoList } from '@/hooks/use-todo-list';
+import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
+import { toAppDateKey } from '@/lib/taskDateTime';
 import { getDeadlineStatus } from '@/lib/taskDeadlineUtils';
 import type { UserTask } from '@/lib/user-tasks-api';
-import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
@@ -53,7 +54,7 @@ function TaskRow({
 }) {
   const status = getDeadlineStatus(task.deadline_to, task.deadline_time);
   const scheduledStr = task.scheduled_at
-    ? `${formatDateForApi(new Date(task.scheduled_at))} ${formatTimeOnly(task.scheduled_at)}`
+    ? `${toAppDateKey(task.scheduled_at)} ${formatTimeOnly(task.scheduled_at)}`
     : null;
   const hasScheduled = !!task.scheduled_at;
 

@@ -1,22 +1,23 @@
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useCallback, useEffect, useRef, useState } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, Switch, TextInput as RNTextInput, Platform, Modal, KeyboardAvoidingView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Haptics from 'expo-haptics';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput as RNTextInput, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
-import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
+import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
+import { toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/taskDateTime';
 import { useAuthStore } from '@/stores/auth-store';
 
 function isoForDateTime(dateKey: string, time: string) {
-  return `${dateKey}T${time}:00.000Z`;
+  return toUtcIsoFromAppDateTime(dateKey, time);
 }
 
 const TIME_SLOTS: { value: string; label: string }[] = (() => {
@@ -155,7 +156,7 @@ export default function TaskDetailsScreen() {
     const scheduledBase = task.scheduled_at ? new Date(task.scheduled_at) : new Date();
     const deadlineBase =
       task.deadline_to || task.deadline_from
-        ? new Date(`${(task.deadline_to ?? task.deadline_from)!}T${task.deadline_time ?? '17:00'}:00.000Z`)
+        ? new Date(toUtcIsoFromAppDateTime((task.deadline_to ?? task.deadline_from)!, task.deadline_time ?? '17:00'))
         : new Date();
 
     const value =
@@ -202,7 +203,7 @@ export default function TaskDetailsScreen() {
 
   const updateScheduleTimeAndroid = useCallback(async (time: string) => {
     if (!task) return;
-    const dateKey = task.scheduled_at ? formatDateForApi(new Date(task.scheduled_at)) : formatDateForApi(new Date());
+    const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : formatDateForApi(new Date());
     await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
   }, [task, updateTask]);
 
@@ -284,7 +285,7 @@ export default function TaskDetailsScreen() {
     );
   }
 
-  const scheduledDateLabel = task.scheduled_at ? formatDateForApi(new Date(task.scheduled_at)) : '—';
+  const scheduledDateLabel = task.scheduled_at ? toAppDateKey(task.scheduled_at) : '—';
   const scheduledTimeLabel = task.scheduled_at ? formatTimeOnly(task.scheduled_at) : '—';
   const deadlineFromLabel = task.deadline_from ?? '—';
   const deadlineToLabel = task.deadline_to ?? '—';

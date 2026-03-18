@@ -21,6 +21,7 @@ import { NEWS_ITEMS } from '@/constants/news';
 import { getNewsAll } from '@/lib/news-api';
 import type { NewsDisplayItem } from '@/lib/news-api';
 import { formatDateForApi } from '@/lib/dateTimeUtils';
+import { NewsListItem } from '@/components/news/news-list-item';
 
 const DATE_OPTIONS = [
   { value: 'all', label: 'Все даты' },
@@ -29,58 +30,11 @@ const DATE_OPTIONS = [
   { value: 'month', label: 'За месяц' },
 ];
 
-const NEWS_IMAGE_SIZE = 100;
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 function formatNewsDate(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function NewsRow({
-  item,
-  onPress,
-  textColor,
-  textMuted,
-  primary,
-}: {
-  item: NewsDisplayItem;
-  onPress: () => void;
-  textColor: string;
-  textMuted: string;
-  primary: string;
-}) {
-  const dateLabel = item.date ? formatNewsDate(item.date) : null;
-  return (
-    <Pressable
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onPress();
-      }}
-      style={({ pressed }) => [styles.row, { opacity: pressed ? 0.9 : 1 }]}
-    >
-      <Image
-        source={{ uri: item.image || 'https://via.placeholder.com/100' }}
-        style={styles.rowImage}
-        contentFit="cover"
-      />
-      <View style={styles.rowContent}>
-        <View style={[styles.tag, { backgroundColor: primary }]}>
-          <ThemedText style={styles.tagText}>{item.tag}</ThemedText>
-        </View>
-        <ThemedText style={[styles.rowTitle, { color: textColor }]} numberOfLines={2}>
-          {item.title}
-        </ThemedText>
-        <ThemedText style={[styles.rowDesc, { color: textMuted }]} numberOfLines={2}>
-          {item.desc}
-        </ThemedText>
-        {dateLabel && (
-          <ThemedText style={[styles.rowDate, { color: textMuted }]}>{dateLabel}</ThemedText>
-        )}
-      </View>
-      <MaterialIcons name="chevron-right" size={24} color={textMuted} />
-    </Pressable>
-  );
 }
 
 export default function NewsScreen() {
@@ -141,15 +95,20 @@ export default function NewsScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: NewsDisplayItem }) => (
-      <NewsRow
-        item={item}
-        onPress={() => setSelectedItem(item)}
-        textColor={headerText}
-        textMuted={headerSubtitle}
-        primary={primary}
+      <NewsListItem
+        title={item.title}
+        tag={item.tag}
+        dateLabel={item.date ? formatNewsDate(item.date) : null}
+        description={item.desc}
+        imageUrl={item.image}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setSelectedItem(item);
+        }}
+        rightSlot={<MaterialIcons name="chevron-right" size={24} color={headerSubtitle} />}
       />
     ),
-    [headerText, headerSubtitle, primary]
+    [headerSubtitle]
   );
 
   return (
@@ -194,7 +153,7 @@ export default function NewsScreen() {
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 24 }]}
-          ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: border }]} />}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListEmptyComponent={
             <View style={styles.empty}>
               <ThemedText style={[styles.emptyText, { color: headerSubtitle }]}>Нет новостей</ThemedText>
@@ -285,31 +244,8 @@ const styles = StyleSheet.create({
   },
   filterLabel: { fontSize: 14, marginRight: 12, minWidth: 50 },
   selectWrap: { flex: 1 },
-  listContent: { paddingHorizontal: 16, paddingTop: 16 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  rowImage: {
-    width: NEWS_IMAGE_SIZE,
-    height: NEWS_IMAGE_SIZE,
-    borderRadius: 12,
-    marginRight: 14,
-  },
-  rowContent: { flex: 1, minWidth: 0 },
-  tag: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 6,
-  },
-  tagText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
-  rowTitle: { fontSize: 16, fontWeight: '600', marginBottom: 4 },
-  rowDesc: { fontSize: 14, lineHeight: 20 },
-  rowDate: { fontSize: 12, marginTop: 4 },
-  separator: { height: StyleSheet.hairlineWidth },
+  listContent: { paddingHorizontal: 16, paddingTop: 16, gap: 12 },
+  separator: { height: 12 },
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, paddingVertical: 48 },
   loadingText: { fontSize: 16 },
   empty: { paddingVertical: 48, alignItems: 'center' },

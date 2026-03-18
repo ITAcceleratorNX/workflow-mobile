@@ -13,6 +13,7 @@ import { useTodoList } from '@/hooks/use-todo-list';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import type { UserTask } from '@/lib/user-tasks-api';
 import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
+import { toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/taskDateTime';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import { getDeadlineStatus } from '@/lib/taskDeadlineUtils';
 
@@ -112,8 +113,7 @@ export default function TaskEditorScreen() {
         setCurrentTask(task);
         setTitle(task.title);
         if (task.scheduled_at) {
-          const d = new Date(task.scheduled_at);
-          setScheduledDate(formatDateForApi(d));
+          setScheduledDate(toAppDateKey(task.scheduled_at));
           setScheduledTime(formatTimeOnly(task.scheduled_at));
         } else {
           setScheduledDate(null);
@@ -184,7 +184,7 @@ export default function TaskEditorScreen() {
   const handleSave = useCallback(async () => {
     if (!title.trim()) return;
     setSaving(true);
-    const scheduledAtIso = scheduledDate ? `${scheduledDate}T${scheduledTime}:00.000Z` : null;
+    const scheduledAtIso = scheduledDate ? toUtcIsoFromAppDateTime(scheduledDate, scheduledTime) : null;
     const assigneeIds = selectedAssignees.length > 0 ? selectedAssignees.map((a) => a.id) : undefined;
 
     if (isCreate) {
