@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -24,6 +25,8 @@ import { useToast } from '@/context/toast-context';
 import {
   getNewsAdminList,
   createNews,
+  updateNews,
+  deleteNews,
   hideNews,
   archiveNews,
   unhideNews,
@@ -74,7 +77,10 @@ export default function AdminWorkerNewsScreen() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'active' | 'hidden' | 'archived' | ''>('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [editingImageUrl, setEditingImageUrl] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
@@ -93,13 +99,32 @@ export default function AdminWorkerNewsScreen() {
   }, [loadList]);
 
   const openCreate = useCallback(() => {
+    setFormMode('create');
+    setEditingId(null);
     setForm(INITIAL_FORM);
+    setEditingImageUrl(null);
+    setFormError(null);
+    setModalVisible(true);
+  }, []);
+
+  const openEdit = useCallback((item: NewsDisplayItem) => {
+    setFormMode('edit');
+    setEditingId(item.id);
+    setForm({
+      title: item.title,
+      content: item.desc,
+      notification_type: 'none',
+      image: null,
+    });
+    setEditingImageUrl(item.image);
     setFormError(null);
     setModalVisible(true);
   }, []);
 
   const closeModal = useCallback(() => {
     setModalVisible(false);
+    setEditingId(null);
+    setEditingImageUrl(null);
     setFormError(null);
   }, []);
 
@@ -124,7 +149,7 @@ export default function AdminWorkerNewsScreen() {
     }
   }, [show]);
 
-  const handleCreate = useCallback(async () => {
+  const handleSave = useCallback(async () => {
     setFormError(null);
     const { title, content } = form;
     if (!title.trim()) {
@@ -136,22 +161,61 @@ export default function AdminWorkerNewsScreen() {
       return;
     }
     setSubmitting(true);
-    const res = await createNews({
+    const params = {
       title: title.trim(),
       content: content.trim(),
       notification_type: form.notification_type,
       image: form.image ?? undefined,
-    });
+    };
+    const res =
+      formMode === 'edit' && editingId
+        ? await updateNews(parseInt(editingId, 10), params)
+        : await createNews(params);
     setSubmitting(false);
     if (res.ok) {
-      show({ title: 'Создано', description: 'Новость добавлена', variant: 'success' });
+      show({
+        title: formMode === 'edit' ? 'Сохранено' : 'Создано',
+        description: formMode === 'edit' ? 'Новость обновлена' : 'Новость добавлена',
+        variant: 'success',
+      });
       closeModal();
       loadList();
     } else {
       setFormError(res.error);
       show({ title: 'Ошибка', description: res.error, variant: 'destructive' });
     }
-  }, [form, show, closeModal, loadList]);
+  }, [form, formMode, editingId, show, closeModal, loadList]);
+
+  const handleDelete = useCallback(
+    (item: NewsDisplayItem) => {
+      Alert.alert(
+        'Удалить новость?',
+        `«${item.title}» будет удалена безвозвратно.`,
+        [
+          { text: 'Отмена', style: 'cancel' },
+          {
+            text: 'Удалить',
+            style: 'destructive',
+            onPress: async () => {
+              const numId = parseInt(item.id, 10);
+              if (isNaN(numId)) return;
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setActionId(item.id);
+              const res = await deleteNews(numId);
+              setActionId(null);
+              if (res.ok) {
+                show({ title: 'Удалено', description: 'Новость удалена', variant: 'success' });
+                loadList();
+              } else {
+                show({ title: 'Ошибка', description: res.error, variant: 'destructive' });
+              }
+            },
+          },
+        ]
+      );
+    },
+    [show, loadList]
+  );
 
   const handleHide = useCallback(
     async (id: string) => {
@@ -241,6 +305,16 @@ export default function AdminWorkerNewsScreen() {
             )}
           </View>
           <View style={styles.rowActions}>
+            <Pressable
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); openEdit(item); }}
+              disabled={isBusy}
+              style={styles.actionBtn}
+            >
+              <MaterialIcons name="edit" size={20} color={primary} />
+            </Pressable>
+            <Pressable onPress={() => handleDelete(item)} disabled={isBusy} style={styles.actionBtn}>
+              <MaterialIcons name="delete-outline" size={20} color="#F87171" />
+            </Pressable>
             {status === 'active' && (
               <Pressable onPress={() => handleHide(item.id)} disabled={isBusy} style={styles.actionBtn}>
                 {isBusy ? <ActivityIndicator size="small" color={textMuted} /> : <MaterialIcons name="visibility-off" size={20} color={textMuted} />}
@@ -260,7 +334,7 @@ export default function AdminWorkerNewsScreen() {
         </View>
       );
     },
-    [text, textMuted, primary, gray600, border, handleHide, handleArchive, handleUnhide, actionId]
+    [text, textMuted, primary, gray600, border, openEdit, handleDelete, handleHide, handleArchive, handleUnhide, actionId]
   );
 
   return (
@@ -321,7 +395,7 @@ export default function AdminWorkerNewsScreen() {
           <Pressable style={[styles.modalContent, { backgroundColor: cardBg }]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
               <ThemedText type="title" style={[styles.modalTitle, { color: text }]}>
-                Новая новость
+                {formMode === 'edit' ? 'Редактировать новость' : 'Новая новость'}
               </ThemedText>
               <Pressable onPress={closeModal}>
                 <MaterialIcons name="close" size={24} color={textMuted} />
@@ -374,6 +448,11 @@ export default function AdminWorkerNewsScreen() {
                 <Pressable style={[styles.imagePicker, { borderColor: border }]} onPress={pickImage}>
                   {form.image ? (
                     <Image source={{ uri: form.image.uri }} style={styles.pickedImage} contentFit="cover" />
+                  ) : formMode === 'edit' && editingImageUrl ? (
+                    <View style={styles.pickedImageWrap}>
+                      <Image source={{ uri: editingImageUrl }} style={styles.pickedImage} contentFit="cover" />
+                      <ThemedText style={[styles.imageHint, { color: textMuted }]}>Нажмите, чтобы заменить</ThemedText>
+                    </View>
                   ) : (
                     <>
                       <MaterialIcons name="add-photo-alternate" size={40} color={textMuted} />
@@ -384,8 +463,8 @@ export default function AdminWorkerNewsScreen() {
               </View>
               <View style={styles.modalActions}>
                 <Button
-                  title={submitting ? 'Создание...' : 'Создать'}
-                  onPress={handleCreate}
+                  title={submitting ? (formMode === 'edit' ? 'Сохранение...' : 'Создание...') : (formMode === 'edit' ? 'Сохранить' : 'Создать')}
+                  onPress={handleSave}
                   disabled={submitting}
                 />
                 <Pressable onPress={closeModal} style={styles.cancelBtn}>
@@ -529,6 +608,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pickedImage: { width: '100%', height: 120, borderRadius: 12 },
+  pickedImageWrap: { width: '100%', position: 'relative' },
+  imageHint: { fontSize: 12, marginTop: 4, textAlign: 'center' },
   imagePickerText: { fontSize: 14 },
   formError: { fontSize: 14, marginBottom: 12 },
   modalActions: { marginTop: 8, gap: 12 },
