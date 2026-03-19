@@ -338,6 +338,7 @@ function WaterIntakeCard() {
   const [showPortionModal, setShowPortionModal] = useState(false);
   const todayKey = useMemo(() => formatDateForApi(new Date()), []);
   const stepsToday = useStepsStore((s) => s.stepsToday);
+  const heightCm = useStepsStore((s) => s.settings.heightCm);
   const weightKg = useStepsStore((s) => s.settings.weightKg);
   const todaySleepRating = useSleepStore(
     (s) => s.dayRecords[todayKey]?.rating ?? null
@@ -353,6 +354,7 @@ function WaterIntakeCard() {
   }, [todayKey, ensureDateSync]);
 
   const goalMl = getTodayGoalMl({
+    heightCm,
     weightKg,
     stepsToday,
     sleepRating: todaySleepRating,
@@ -393,7 +395,7 @@ function WaterIntakeCard() {
         </ThemedText>
       </View>
       <ThemedText style={[styles.waterSubtext, { color: COLORS.textSecondary }]}>
-        из цели {formatLiters(goalMl)} (шаги, сон, вес)
+        из цели {formatLiters(goalMl)} (рост, вес, шаги, сон)
       </ThemedText>
       <View style={[styles.progressTrack, { backgroundColor: COLORS.trackGray }]}>
         <View
