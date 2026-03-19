@@ -83,7 +83,8 @@ export function useTodoList(filter: TaskFilter = 'all') {
       title: string,
       scheduledAt?: string | null,
       deadline?: { from?: string | null; to?: string | null; time?: string | null },
-      assigneeIds?: number[]
+      assigneeIds?: number[],
+      remindersDisabled?: boolean
     ) => {
       if (!token || isGuest) {
         show({ title: 'Недоступно', description: 'Нужно войти в аккаунт, чтобы создавать задачи', variant: 'destructive' });
@@ -101,7 +102,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
         deadline_to: deadline?.to ?? null,
         deadline_time: deadline?.time ?? null,
         remind_at: null,
-        reminders_disabled: false,
+        reminders_disabled: remindersDisabled ?? false,
         created_at: nowIso(),
         updated_at: nowIso(),
         assignee_ids: assigneeIds?.length ? assigneeIds : [],
@@ -118,6 +119,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
         deadline_to: deadline?.to ?? null,
         deadline_time: deadline?.time ?? null,
         assignee_ids: assigneeIds?.length ? assigneeIds : undefined,
+        reminders_disabled: remindersDisabled,
       });
       if (res.ok) {
         setTasks((prev) => prev.map((t) => (t.id === optimisticId ? res.data : t)));

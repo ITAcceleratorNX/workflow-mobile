@@ -13,23 +13,9 @@ import {
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
-import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
-import { toAppDateKey } from '@/lib/taskDateTime';
+import { formatTaskTime, toAppDateKey } from '@/lib/taskDateTime';
 import { getDeadlineStatus } from '@/lib/taskDeadlineUtils';
 import type { UserTask } from '@/lib/user-tasks-api';
-
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-
-function formatTaskDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00'); // Hack to avoid timezone issues
-  const today = new Date();
-  const todayKey = formatDateForApi(today);
-  if (dateStr === todayKey) return 'Сегодня';
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (dateStr === formatDateForApi(yesterday)) return 'Вчера';
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-}
 
 interface TodoTabProps {
   filter?: 'all' | 'overdue';
@@ -54,7 +40,7 @@ function TaskRow({
 }) {
   const status = getDeadlineStatus(task.deadline_to, task.deadline_time);
   const scheduledStr = task.scheduled_at
-    ? `${toAppDateKey(task.scheduled_at)} ${formatTimeOnly(task.scheduled_at)}`
+    ? `${toAppDateKey(task.scheduled_at)} ${formatTaskTime(task.scheduled_at)}`
     : null;
   const hasScheduled = !!task.scheduled_at;
 
@@ -107,6 +93,12 @@ function TaskRow({
           {status === 'expiring' && !task.completed && (
             <View style={[styles.badge, { backgroundColor: '#F59E0B' }]}>
               <ThemedText style={styles.badgeText}>Истекает срок</ThemedText>
+            </View>
+          )}
+          {task.reminders_disabled && (
+            <View style={styles.remindersOffWrap}>
+              <MaterialIcons name="notifications-off" size={14} color={textMuted} />
+              <ThemedText style={[styles.remindersOffText, { color: textMuted }]}>Без напоминаний</ThemedText>
             </View>
           )}
         </View>
@@ -240,6 +232,15 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '600',
+  },
+  remindersOffWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  remindersOffText: {
+    fontSize: 11,
   },
   menuBtn: {
     padding: 4,

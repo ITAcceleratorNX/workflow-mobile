@@ -12,14 +12,14 @@ import { Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
-import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
-import { toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/taskDateTime';
+import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/taskDateTime';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
 
 function isoForDateTime(dateKey: string, time: string) {
   return toUtcIsoFromAppDateTime(dateKey, time);
 }
+
 
 const TIME_SLOTS: { value: string; label: string }[] = (() => {
   const slots: { value: string; label: string }[] = [];
@@ -40,7 +40,7 @@ function getDateOptions(): { value: string; label: string }[] {
   for (let i = -7; i <= 60; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
-    const key = formatDateForApi(d);
+    const key = toAppDateKey(d);
     let label = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
     if (i === 0) label = 'Сегодня';
     if (i === 1) label = 'Завтра';
@@ -139,7 +139,7 @@ export default function TaskDetailsScreen() {
       await updateTask(task, { scheduled_at: null });
       return;
     }
-    const todayKey = formatDateForApi(new Date());
+    const todayKey = toAppDateKey(new Date());
     await updateTask(task, { scheduled_at: isoForDateTime(todayKey, '09:00') });
   }, [task, updateTask]);
 
@@ -150,9 +150,15 @@ export default function TaskDetailsScreen() {
       await updateTask(task, { deadline_from: null, deadline_to: null, deadline_time: null });
       return;
     }
-    const todayKey = formatDateForApi(new Date());
+    const todayKey = toAppDateKey(new Date());
     await updateTask(task, { deadline_from: todayKey, deadline_to: todayKey, deadline_time: '17:00' });
   }, [task, updateTask]);
+
+  const handleToggleReminders = useCallback(async () => {
+    if (!task || !canEditDetails) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await updateTask(task, { reminders_disabled: !task.reminders_disabled });
+  }, [task, canEditDetails, updateTask]);
 
   const openIosPicker = useCallback((mode: 'schedule-date' | 'schedule-time' | 'deadline-from' | 'deadline-to' | 'deadline-time') => {
     if (!task) return;
@@ -177,22 +183,22 @@ export default function TaskDetailsScreen() {
     const next = iosPicker.value;
 
     if (mode === 'schedule-date' || mode === 'schedule-time') {
-      const dateKey = formatDateForApi(next);
-      const time = formatTimeOnly(next);
+      const dateKey = toAppDateKey(next);
+      const time = formatTaskTime(next);
       await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
       return;
     }
 
     if (mode === 'deadline-time') {
-      const time = formatTimeOnly(next);
-      const baseFrom = task.deadline_from ?? task.deadline_to ?? formatDateForApi(new Date());
+      const time = formatTaskTime(next);
+      const baseFrom = task.deadline_from ?? task.deadline_to ?? toAppDateKey(new Date());
       const baseTo = task.deadline_to ?? task.deadline_from ?? baseFrom;
       const { from, to } = clampDeadlineRange(baseFrom, baseTo);
       await updateTask(task, { deadline_from: from, deadline_to: to, deadline_time: time });
       return;
     }
 
-    const pickedDateKey = formatDateForApi(next);
+    const pickedDateKey = toAppDateKey(next);
     const baseFrom = mode === 'deadline-from' ? pickedDateKey : (task.deadline_from ?? pickedDateKey);
     const baseTo = mode === 'deadline-to' ? pickedDateKey : (task.deadline_to ?? pickedDateKey);
     const { from, to } = clampDeadlineRange(baseFrom, baseTo);
@@ -201,13 +207,13 @@ export default function TaskDetailsScreen() {
 
   const updateScheduleDateAndroid = useCallback(async (dateKey: string) => {
     if (!task) return;
-    const currentTime = task.scheduled_at ? formatTimeOnly(task.scheduled_at) : '09:00';
+    const currentTime = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '09:00';
     await updateTask(task, { scheduled_at: isoForDateTime(dateKey, currentTime) });
   }, [task, updateTask]);
 
   const updateScheduleTimeAndroid = useCallback(async (time: string) => {
     if (!task) return;
-    const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : formatDateForApi(new Date());
+    const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : toAppDateKey(new Date());
     await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
   }, [task, updateTask]);
 
@@ -227,7 +233,7 @@ export default function TaskDetailsScreen() {
 
   const updateDeadlineTimeAndroid = useCallback(async (time: string) => {
     if (!task) return;
-    const baseFrom = task.deadline_from ?? task.deadline_to ?? formatDateForApi(new Date());
+    const baseFrom = task.deadline_from ?? task.deadline_to ?? toAppDateKey(new Date());
     const baseTo = task.deadline_to ?? task.deadline_from ?? baseFrom;
     const { from, to } = clampDeadlineRange(baseFrom, baseTo);
     await updateTask(task, { deadline_from: from, deadline_to: to, deadline_time: time });
@@ -290,7 +296,7 @@ export default function TaskDetailsScreen() {
   }
 
   const scheduledDateLabel = task.scheduled_at ? toAppDateKey(task.scheduled_at) : '—';
-  const scheduledTimeLabel = task.scheduled_at ? formatTimeOnly(task.scheduled_at) : '—';
+  const scheduledTimeLabel = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '—';
   const deadlineFromLabel = task.deadline_from ?? '—';
   const deadlineToLabel = task.deadline_to ?? '—';
   const deadlineTimeLabel = task.deadline_time ?? '—';
@@ -397,7 +403,7 @@ export default function TaskDetailsScreen() {
           {Platform.OS === 'android' && scheduledEnabled ? (
             <View style={styles.pickersBlock}>
               <Select
-                value={scheduledDateLabel === '—' ? formatDateForApi(new Date()) : scheduledDateLabel}
+                value={scheduledDateLabel === '—' ? toAppDateKey(new Date()) : scheduledDateLabel}
                 onValueChange={updateScheduleDateAndroid}
                 options={dateOptions}
                 placeholder="Дата"
@@ -461,13 +467,13 @@ export default function TaskDetailsScreen() {
           {Platform.OS === 'android' && deadlineEnabled ? (
             <View style={styles.pickersBlock}>
               <Select
-                value={task.deadline_from ?? task.deadline_to ?? formatDateForApi(new Date())}
+                value={task.deadline_from ?? task.deadline_to ?? toAppDateKey(new Date())}
                 onValueChange={updateDeadlineFromAndroid}
                 options={dateOptions}
                 placeholder="Дата с"
               />
               <Select
-                value={task.deadline_to ?? task.deadline_from ?? formatDateForApi(new Date())}
+                value={task.deadline_to ?? task.deadline_from ?? toAppDateKey(new Date())}
                 onValueChange={updateDeadlineToAndroid}
                 options={dateOptions}
                 placeholder="Дата по"
@@ -554,6 +560,30 @@ export default function TaskDetailsScreen() {
                 ))}
               </View>
             ) : null}
+          </View>
+        </View>
+
+        <View style={{ height: 16 }} />
+
+        <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Напоминания</ThemedText>
+        <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <MaterialIcons name="notifications" size={20} color={textMuted} />
+              <ThemedText style={[styles.rowTitle, { color: text }]}>Включить напоминания</ThemedText>
+            </View>
+            <Switch
+              value={!task.reminders_disabled}
+              onValueChange={handleToggleReminders}
+              disabled={!canEditDetails}
+              trackColor={{ false: border, true: primary }}
+              thumbColor="#fff"
+            />
+          </View>
+          <View style={[styles.remindersHintWrap, { borderColor: border }]}>
+            <ThemedText style={[styles.remindersHint, { color: textMuted }]}>
+              Пуш по времени в календаре, дедлайну или по кнопке в уведомлении
+            </ThemedText>
           </View>
         </View>
 
@@ -788,6 +818,16 @@ const styles = StyleSheet.create({
   },
   assigneeChipRemove: {
     padding: 2,
+  },
+  remindersHintWrap: {
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    paddingTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  remindersHint: {
+    fontSize: 12,
+    lineHeight: 18,
   },
   pickerBackdrop: {
     flex: 1,

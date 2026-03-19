@@ -7,8 +7,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { ThemedText } from '@/components/themed-text';
 import { useCalendarTasks } from '@/hooks/use-calendar-tasks';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { formatTimeOnly } from '@/lib/dateTimeUtils';
-import { toAppDateKey } from '@/lib/taskDateTime';
+import { formatTaskTime, getAlmatyHour, toAppDateKey } from '@/lib/taskDateTime';
 import type { CalendarTask } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -93,12 +92,12 @@ export function CalendarTab() {
   const tasksByHour = useMemo(() => {
     const map: Record<number, CalendarTask[]> = {};
     for (let h = 0; h < 24; h++) map[h] = [];
-    const dateKey = formatDateForApi(selectedDate);
+    const dateKey = toAppDateKey(selectedDate);
     for (const t of tasks) {
       const d = new Date(t.scheduled_at);
-      if (formatDateForApi(d) !== dateKey) continue;
-      const hour = d.getHours();
-      if (map[hour]) map[hour].push(t);
+      if (toAppDateKey(d) !== dateKey) continue;
+      const hour = getAlmatyHour(d);
+      if (map[hour] != null) map[hour].push(t);
     }
     return map;
   }, [tasks, selectedDate]);
@@ -166,7 +165,7 @@ export function CalendarTab() {
                       </ThemedText>
                       <View style={styles.taskChipMeta}>
                         <ThemedText style={[styles.taskChipTime, { color: textMuted }]}>
-                          {formatTimeOnly(task.scheduled_at)}
+                          {formatTaskTime(task.scheduled_at)}
                         </ThemedText>
                         {isTeam && <ThemedText style={styles.teamBadge}>Командный</ThemedText>}
                       </View>
@@ -194,7 +193,7 @@ export function CalendarTab() {
                     {task.title}
                   </ThemedText>
                   <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
-                    {formatTimeOnly(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
+                    {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
                   </ThemedText>
                   {isTeam && (
                     <View style={[styles.teamPill, { borderColor: border }]}>
@@ -225,7 +224,7 @@ export function CalendarTab() {
                     {task.title}
                   </ThemedText>
                   <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
-                    {formatTimeOnly(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
+                    {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
                   </ThemedText>
                   {isTeam && (
                     <View style={[styles.teamPill, { borderColor: border }]}>

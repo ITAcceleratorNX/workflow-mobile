@@ -100,6 +100,7 @@ export async function createUserTask(body: {
   deadline_to?: string | null;
   deadline_time?: string | null;
   assignee_ids?: number[];
+  reminders_disabled?: boolean;
 }): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
   const result = await request<UserTask>('/user-tasks', {
     method: 'POST',
@@ -119,6 +120,8 @@ export async function updateUserTask(
     deadline_to: string | null;
     deadline_time: string | null;
     assignee_ids: number[];
+    reminders_disabled: boolean;
+    remind_at: string | null;
   }>
 ): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
   const result = await request<UserTask>(`/user-tasks/${id}`, {

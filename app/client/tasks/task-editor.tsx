@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { View, ScrollView, Pressable, StyleSheet, TextInput as RNTextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard } from 'react-native';
+import { View, ScrollView, Pressable, StyleSheet, TextInput as RNTextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard, Switch } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,8 +12,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import type { UserTask } from '@/lib/user-tasks-api';
-import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
-import { toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/taskDateTime';
+import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/taskDateTime';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import { getDeadlineStatus } from '@/lib/taskDeadlineUtils';
 
@@ -36,7 +35,7 @@ function getDateOptions(): { value: string; label: string }[] {
   for (let i = -7; i <= 60; i++) { // Расширенный диапазон дат для редактирования
     const d = new Date(today);
     d.setDate(today.getDate() + i);
-    const key = formatDateForApi(d);
+    const key = toAppDateKey(d);
     let label = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
     if (i === 0) label = 'Сегодня';
     if (i === 1) label = 'Завтра';
@@ -101,6 +100,7 @@ export default function TaskEditorScreen() {
   const [assigneeSearch, setAssigneeSearch] = useState('');
   const [assigneeResults, setAssigneeResults] = useState<UserSearchItem[]>([]);
   const [assigneeSearching, setAssigneeSearching] = useState(false);
+  const [remindersDisabled, setRemindersDisabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -114,7 +114,7 @@ export default function TaskEditorScreen() {
         setTitle(task.title);
         if (task.scheduled_at) {
           setScheduledDate(toAppDateKey(task.scheduled_at));
-          setScheduledTime(formatTimeOnly(task.scheduled_at));
+          setScheduledTime(formatTaskTime(task.scheduled_at));
         } else {
           setScheduledDate(null);
           setScheduledTime('09:00');
@@ -122,6 +122,7 @@ export default function TaskEditorScreen() {
         setDeadlineFrom(task.deadline_from);
         setDeadlineTo(task.deadline_to);
         setDeadlineTime(task.deadline_time || '17:00');
+        setRemindersDisabled(task.reminders_disabled ?? false);
         setSelectedAssignees(task.assignees || []);
       } else if (!loadingTasks) { // If not found and not loading, it might be a new task or error
         // Optionally navigate back or show error
@@ -130,7 +131,8 @@ export default function TaskEditorScreen() {
     } else if (isCreate && initialDate) {
       setScheduledDate(initialDate);
     } else if (isCreate) {
-      setScheduledDate(formatDateForApi(new Date()));
+      setScheduledDate(toAppDateKey(new Date()));
+      setRemindersDisabled(false);
     }
   }, [isCreate, taskId, tasks, loadingTasks, initialDate]);
 
@@ -192,7 +194,7 @@ export default function TaskEditorScreen() {
         from: deadlineFrom,
         to: deadlineTo,
         time: deadlineTime,
-      }, assigneeIds);
+      }, assigneeIds, remindersDisabled);
     } else if (currentTask) {
       await updateTask(currentTask, {
         title,
@@ -201,6 +203,7 @@ export default function TaskEditorScreen() {
         deadline_to: deadlineTo,
         deadline_time: deadlineTo ? deadlineTime : null,
         assignee_ids: assigneeIds,
+        reminders_disabled: remindersDisabled,
       });
     }
     setSaving(false);
@@ -208,7 +211,7 @@ export default function TaskEditorScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Keyboard.dismiss();
     router.back();
-  }, [title, scheduledDate, scheduledTime, deadlineFrom, deadlineTo, deadlineTime, selectedAssignees, isCreate, currentTask, addTask, updateTask, bumpTasks]);
+  }, [title, scheduledDate, scheduledTime, deadlineFrom, deadlineTo, deadlineTime, selectedAssignees, remindersDisabled, isCreate, currentTask, addTask, updateTask, bumpTasks]);
 
   const handleDelete = useCallback(async () => {
     if (!currentTask) return;
@@ -374,6 +377,26 @@ export default function TaskEditorScreen() {
             )}
             </View>
 
+            <View style={[styles.remindersRow, { borderColor: border }]}>
+              <ThemedText style={[styles.remindersLabel, { color: headerText }]}>
+                Напоминания
+              </ThemedText>
+              <ThemedText style={[styles.remindersHint, { color: headerSubtitle }]}>
+                Пуш-уведомления по времени в календаре, дедлайну или по кнопке «Напомнить» в пуше
+              </ThemedText>
+              <View style={[styles.switchRow, { borderColor: border }]}>
+                <ThemedText style={[styles.switchLabel, { color: headerText }]}>
+                  Включить напоминания
+                </ThemedText>
+                <Switch
+                  value={!remindersDisabled}
+                  onValueChange={(v) => setRemindersDisabled(!v)}
+                  trackColor={{ false: border, true: primary }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </View>
+
             {!isCreate && currentTask && (
               <View style={styles.actionsContainer}>
                 <Pressable onPress={handleToggleComplete} style={styles.actionButton}>
@@ -482,6 +505,31 @@ const styles = StyleSheet.create({
   },
   assigneeChipRemove: {
     marginLeft: 4,
+  },
+  remindersRow: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    gap: 8,
+  },
+  remindersLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  remindersHint: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  switchLabel: {
+    fontSize: 16,
+    fontWeight: '500',
   },
   actionsContainer: {
     marginTop: 24,

@@ -1,12 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 
+import { addDaysToDateKey, toAppDateKey } from '@/lib/taskDateTime';
 import { getUserTasksCalendar, type CalendarTask } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
-
-function toDateKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
 
 export function useCalendarTasks(startDate: Date, endDate: Date) {
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
@@ -27,8 +24,10 @@ export function useCalendarTasks(startDate: Date, endDate: Date) {
     setLoading(true);
     setError(null);
 
-    const startStr = toDateKey(startDate);
-    const endStr = toDateKey(endDate);
+    const startKey = toAppDateKey(startDate);
+    const endKey = toAppDateKey(endDate);
+    const startStr = addDaysToDateKey(startKey, -1);
+    const endStr = addDaysToDateKey(endKey, 1);
 
     const res = await getUserTasksCalendar(startStr, endStr);
 
