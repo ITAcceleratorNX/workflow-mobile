@@ -29,7 +29,7 @@ import {
   verifyEmail,
 } from '@/lib/profile-api';
 import { formatPhone } from '@/lib';
-import { unregisterPushTokenFromBackend } from '@/lib/pushNotifications';
+import { unregisterPushTokenFromBackend, clearBadge } from '@/lib/pushNotifications';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 
 export default function ProfileScreen() {
@@ -83,6 +83,10 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (tab === 'notifications') setActiveTab('notifications');
   }, [tab]);
+
+  useEffect(() => {
+    if (activeTab === 'notifications') void clearBadge();
+  }, [activeTab]);
 
   useEffect(() => {
     if (user?.email) setEmail(user.email);

@@ -47,6 +47,22 @@ export async function setupTaskReminderCategory(): Promise<void> {
 }
 
 /**
+ * Сбрасывает бейдж иконки приложения (число на иконке iOS/Android).
+ * Вызывать при открытии раздела уведомлений или при нажатии на пуш.
+ */
+export async function clearBadge(): Promise<void> {
+  await Notifications.setBadgeCountAsync(0);
+}
+
+/**
+ * Уменьшает бейдж на 1 (когда пользователь отмечает уведомление прочитанным).
+ */
+export async function decrementBadge(): Promise<void> {
+  const count = await Notifications.getBadgeCountAsync();
+  await Notifications.setBadgeCountAsync(Math.max(0, count - 1));
+}
+
+/**
  * Настройка обработчика уведомлений (показ в foreground).
  * Вызывать один раз при старте приложения (например в _layout).
  */

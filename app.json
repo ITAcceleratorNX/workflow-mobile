@@ -9,11 +9,11 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "buildNumber": "9",
+      "buildNumber": "11",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "NSMotionUsageDescription": "Приложение использует датчики движения для отслеживания активности (сидение/стояние) и health-напоминаний.",
+        "NSMotionUsageDescription": "Приложение использует датчики движения для подсчёта шагов и отслеживания вашей активности.",
         "NSLocationWhenInUseUsageDescription": "Доступ к геолокации нужен, чтобы привязывать заявки к вашему текущему адресу и находить ближайший офис обслуживания.",
         "NSUserNotificationUsageDescription": "Уведомления нужны, чтобы сообщать о статусе ваших заявок и важных событиях в системе.",
         "NSPhotoLibraryUsageDescription": "Доступ к фотографиям нужен, чтобы прикреплять изображения и документы к заявкам.",
@@ -67,6 +67,22 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Доступ к геолокации нужен, чтобы привязывать заявки к вашему текущему адресу и находить ближайший офис обслуживания.",
+          "locationAlwaysPermission": false,
+          "locationAlwaysAndWhenInUsePermission": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Доступ к камере нужен, чтобы делать фотографии и сканы для заявок.",
+          "microphonePermission": false
+        }
+      ],
       "./plugins/withFirebaseAppDelegate",
       [
         "expo-splash-screen",
@@ -97,7 +113,8 @@
           "mode": "production"
         }
       ],
-      "expo-background-task"
+      "expo-background-task",
+      "./plugins/withStripUnwantedInfoPlist"
     ],
     "experiments": {
       "typedRoutes": true,

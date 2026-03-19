@@ -3,7 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 
 import { useAuthStore } from '@/stores/auth-store';
-import { setNotificationHandler, setupTaskReminderCategory, registerPushTokenWithBackend } from '@/lib/pushNotifications';
+import { setNotificationHandler, setupTaskReminderCategory, registerPushTokenWithBackend,clearBadge } from '@/lib/pushNotifications';
 import { remindUserTask } from '@/lib/user-tasks-api';
 
 /**
@@ -66,6 +66,7 @@ export function usePushNotifications(): void {
       if (id != null && !Number.isNaN(id)) {
         router.push(`/(tabs)/requests/${id}` as const);
       }
+      void clearBadge();
     });
     return () => sub.remove();
   }, [router]);

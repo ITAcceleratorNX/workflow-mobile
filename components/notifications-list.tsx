@@ -17,6 +17,7 @@ import {
   markNotificationRead,
   type Notification,
 } from '@/lib/profile-api';
+import { decrementBadge } from '@/lib/pushNotifications';
 import { getContentSegmentsWithRequestIds } from '@/lib/notificationUtils';
 import { formatTimeAgo } from '@/lib/dateTimeUtils';
 
@@ -99,6 +100,7 @@ export function NotificationsList() {
           setSelectedNotification((n) =>
             n?.id === notification.id ? { ...n, is_read: true } : n
           );
+          void decrementBadge();
         }
       }
     },
