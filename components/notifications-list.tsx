@@ -7,6 +7,8 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 
 import { Button, PageLoader } from '@/components/ui';
@@ -36,8 +38,8 @@ export function NotificationsList() {
 
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
-  const border = useThemeColor({}, 'border');
   const background = useThemeColor({}, 'background');
+  const border = useThemeColor({}, 'border');
   const primary = useThemeColor({}, 'primary');
 
   const loadNotifications = useCallback(
@@ -120,13 +122,23 @@ export function NotificationsList() {
     [router]
   );
 
-  return (
-    <View style={[styles.card, { borderColor: border }]}>
-      <ThemedText style={styles.title}>Все уведомления</ThemedText>
-      <ThemedText style={[styles.subtitle, { color: textMuted }]}>
-        Нажмите на уведомление, чтобы открыть. Номер заявки (№ …) откроет заявку в разделе «Заявки».
-      </ThemedText>
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (loadingMore || page >= totalPages) return;
+      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      const paddingToBottom = 80;
+      if (
+        layoutMeasurement.height + contentOffset.y >=
+        contentSize.height - paddingToBottom
+      ) {
+        handleLoadMore();
+      }
+    },
+    [handleLoadMore, loadingMore, page, totalPages]
+  );
 
+  return (
+    <View style={[styles.card, { backgroundColor: background }]}>
       {loading && notifications.length === 0 ? (
         <View style={styles.centered}>
           <PageLoader size={80} />
@@ -159,6 +171,8 @@ export function NotificationsList() {
             style={styles.list}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
           >
             {notifications.map((n) => (
               <Pressable
@@ -166,48 +180,40 @@ export function NotificationsList() {
                 onPress={() => handleNotificationPress(n)}
                 style={({ pressed }) => [
                   styles.item,
-                  { borderColor: border },
-                  !n.is_read && { borderLeftWidth: 4, borderLeftColor: primary },
+                  !n.is_read && { backgroundColor: `${primary}22` },
                   pressed && styles.itemPressed,
                 ]}
               >
-                <View style={styles.itemHeader}>
+                <View style={styles.rowLeft}>
+                  <View style={[styles.avatar, { backgroundColor: `${primary}33` }]}>
+                    <MaterialIcons name="notifications" size={20} color={primary} />
+                  </View>
+                </View>
+                <View style={styles.rowCenter}>
                   <ThemedText
                     style={[styles.itemTitle, { color: text }]}
                     numberOfLines={2}
                   >
                     {n.title}
                   </ThemedText>
-                  {!n.is_read && (
-                    <View style={[styles.newBadge, { backgroundColor: `${primary}33` }]}>
-                      <ThemedText style={[styles.newBadgeText, { color: primary }]}>Новое</ThemedText>
-                    </View>
-                  )}
+                  <ThemedText
+                    style={[styles.itemContent, { color: textMuted }]}
+                    numberOfLines={2}
+                  >
+                    {n.content}
+                  </ThemedText>
                 </View>
-                <ThemedText
-                  style={[styles.itemContent, { color: textMuted }]}
-                  numberOfLines={2}
-                >
-                  {n.content}
-                </ThemedText>
-                <View style={styles.itemFooter}>
-                  <MaterialIcons name="schedule" size={14} color={textMuted} />
+                <View style={styles.rowRight}>
                   <ThemedText style={[styles.itemTime, { color: textMuted }]}>
                     {formatTimeAgo(n.created_at)}
                   </ThemedText>
+                  {!n.is_read && (
+                    <View style={[styles.newDot, { backgroundColor: primary }]} />
+                  )}
                 </View>
               </Pressable>
             ))}
           </ScrollView>
-
-          {page < totalPages && (
-            <Button
-              title={loadingMore ? 'Загрузка...' : 'Загрузить ещё'}
-              onPress={handleLoadMore}
-              disabled={loadingMore}
-              variant="secondary"
-            />
-          )}
 
           <Modal
             visible={!!selectedNotification}
@@ -291,17 +297,10 @@ export function NotificationsList() {
 
 const styles = StyleSheet.create({
   card: {
-    padding: 20,
+    paddingHorizontal: 0,
+    paddingTop: 4,
     borderRadius: 12,
-    borderWidth: 1,
     gap: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  subtitle: {
-    fontSize: 14,
   },
   centered: {
     paddingVertical: 32,
@@ -322,49 +321,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   list: {
-    maxHeight: 400,
+    flexGrow: 1,
   },
   item: {
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 10,
-    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   itemPressed: {
     opacity: 0.9,
   },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  rowLeft: {
+    marginRight: 12,
+  },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowCenter: {
+    flex: 1,
+    gap: 2,
+  },
+  rowRight: {
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: 8,
+    marginLeft: 8,
   },
   itemTitle: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  newBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  newBadgeText: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '600',
   },
   itemContent: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  itemFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    fontSize: 13,
+    lineHeight: 18,
   },
   itemTime: {
-    fontSize: 12,
+    fontSize: 11,
+  },
+  newDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   modalOverlay: {
     flex: 1,

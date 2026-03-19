@@ -3,11 +3,10 @@ import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 're
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
-export type ProfileTab = 'profile' | 'password' | 'notifications' | 'logs';
+export type ProfileTab = 'profile' | 'password' | 'logs';
 
 const BASE_TABS: { key: ProfileTab; label: string }[] = [
   { key: 'profile', label: 'Профиль' },
-  { key: 'notifications', label: 'Уведомления' },
 ];
 
 const LOGS_TAB: { key: ProfileTab; label: string } = { key: 'logs', label: 'Логи' };
@@ -28,6 +27,10 @@ export function ProfileTabs({ activeTab, onTabChange, role }: ProfileTabsProps) 
 
   const showLogs = role && ROLES_WITH_LOGS.includes(role);
   const tabs = showLogs ? [...BASE_TABS, LOGS_TAB] : BASE_TABS;
+
+  if (tabs.length <= 1) {
+    return null;
+  }
 
   const tabCount = tabs.length;
   const minTabWidth = 72;
