@@ -49,7 +49,7 @@ export function usePedometer() {
           return;
         }
 
-        // На Android без разрешения ACTIVITY_RECOGNITION шаги не приходят — запрашиваем при старте.
+        // На не-iOS платформах без разрешения шаги не приходят — запрашиваем при старте.
         const { status } = await Pedometer.requestPermissionsAsync();
         if (cancelled) return;
         if (status !== 'granted') {

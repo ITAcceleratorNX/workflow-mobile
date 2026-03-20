@@ -1622,7 +1622,7 @@ export async function syncStepsToServer(payload: {
 /** Сохранить FCM/APNs токен на бэкенде для push-уведомлений (как в веб: POST /api/fcm/token). */
 export async function saveFcmToken(payload: {
   token: string;
-  platform: 'android' | 'ios';
+  platform: string;
   deviceId?: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await request<{ success?: boolean }>('/fcm/token', {

@@ -1,7 +1,7 @@
 /**
  * Фоновая задача: синк шагов на сервер для пуш-уведомлений.
  * Работает когда приложение в фоне или закрыто (система периодически будит).
- * iOS: BGTaskScheduler, Android: WorkManager.
+ * iOS: BGTaskScheduler, прочие платформы: нативные фоновые механизмы.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as BackgroundTask from 'expo-background-task';
@@ -45,7 +45,7 @@ async function fetchStepsToday(): Promise<number> {
     const result = await Pedometer.getStepCountAsync(start, end);
     return result?.steps ?? 0;
   }
-  // Android: getStepCountAsync тоже поддерживается
+  // Фолбэк: используем getStepCountAsync и на других платформах.
   try {
     const start = startOfDay(new Date());
     const end = new Date();

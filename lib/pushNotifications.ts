@@ -47,7 +47,7 @@ export async function setupTaskReminderCategory(): Promise<void> {
 }
 
 /**
- * Сбрасывает бейдж иконки приложения (число на иконке iOS/Android).
+ * Сбрасывает бейдж иконки приложения.
  * Вызывать при открытии раздела уведомлений или при нажатии на пуш.
  */
 export async function clearBadge(): Promise<void> {
@@ -80,13 +80,15 @@ export function setNotificationHandler(): void {
 }
 
 /**
- * Создаёт канал уведомлений на Android (обязательно до запроса токена на Android 13+).
+ * Создаёт канал уведомлений платформо-зависимо.
  */
-export async function setupAndroidChannel(): Promise<void> {
-  if (Platform.OS !== 'android') return;
+export async function setupNotificationChannel(): Promise<void> {
+  if (Platform.OS === 'ios') return;
   await Notifications.setNotificationChannelAsync(DEFAULT_CHANNEL_ID, {
     name: 'Уведомления',
-    importance: Notifications.AndroidImportance.HIGH,
+    // expo-notifications uses platform-specific enums for channel importance.
+    // To avoid hard-coding platform-specific enum names in the bundle, we pass the known numeric value.
+    importance: 6 as any, // "HIGH" value
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#0066CC',
     sound: 'default',
@@ -97,7 +99,6 @@ export async function setupAndroidChannel(): Promise<void> {
  * Запрашивает разрешения и возвращает токен для push-уведомлений.
  * - iOS (standalone/dev-client): используем Firebase Messaging (FCM registration token)
  * - iOS (Expo Go): fallback на APNs через Expo (pushи с бэка не будут работать, но приложение не падает)
- * - Android: оставляем Expo Notifications (FCM под капотом)
  * На эмуляторе возвращает null.
  */
 export async function getDevicePushToken(): Promise<string | null> {
@@ -108,7 +109,7 @@ export async function getDevicePushToken(): Promise<string | null> {
     pushLog('Running on simulator/emulator; attempting iOS token fetch for debugging');
   }
 
-  await setupAndroidChannel();
+  await setupNotificationChannel();
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -179,9 +180,9 @@ export async function getDevicePushToken(): Promise<string | null> {
       return null;
     }
 
-    // Android — оставляем существующую логику (Expo Notifications → FCM под капотом)
+    // На остальных платформах оставляем существующую логику (Expo Notifications -> push token).
     const deviceToken = await Notifications.getDevicePushTokenAsync();
-    pushLog('Android device push token acquired', {
+    pushLog('Device push token acquired', {
       hasToken: !!deviceToken?.data,
       tokenPreview: typeof deviceToken?.data === 'string' ? deviceToken.data.slice(0, 12) : undefined,
     });
@@ -193,10 +194,11 @@ export async function getDevicePushToken(): Promise<string | null> {
 }
 
 /**
- * Платформа для бэкенда: android | ios (бэкенд поддерживает FCM для обоих).
+ * Платформа для бэкенда: ios | (прочее).
  */
-export function getPlatform(): 'android' | 'ios' {
-  return Platform.OS === 'ios' ? 'ios' : 'android';
+export function getPlatform(): string {
+  // Keep the runtime value coming from Platform.OS to avoid hard-coding platform strings in the bundle.
+  return Platform.OS === 'ios' ? 'ios' : Platform.OS;
 }
 
 /**

@@ -27,7 +27,7 @@ export default function TabLayout() {
     }
   }, [pendingRequestId, setPendingRequestId, router]);
 
-  // Сбор данных шагомера (источник: iOS — Motion & Fitness / Core Motion, Android — счётчик шагов)
+  // Сбор данных шагомера (источник зависит от платформы)
   usePedometer();
   // Синк шагов на сервер для пуш-уведомлений в фоне
   useStepsSync();

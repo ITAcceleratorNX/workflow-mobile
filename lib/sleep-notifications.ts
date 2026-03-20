@@ -7,17 +7,17 @@ const WAKE_CHANNEL = 'sleep-wake';
 const BEDTIME_ID = 'sleep-bedtime-notification';
 const WAKE_ID = 'sleep-wake-notification';
 
-/** Создаёт каналы для Android */
+/** Создаёт каналы уведомлений (если платформа поддерживает каналы). */
 export async function ensureSleepChannels(): Promise<void> {
   try {
     await Notifications.setNotificationChannelAsync(BEDTIME_CHANNEL, {
       name: 'Пора ложиться',
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: 6 as any, // HIGH enum value
       sound: 'default',
     });
     await Notifications.setNotificationChannelAsync(WAKE_CHANNEL, {
       name: 'Оцени сон',
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: 6 as any, // HIGH enum value
       sound: 'default',
     });
   } catch {

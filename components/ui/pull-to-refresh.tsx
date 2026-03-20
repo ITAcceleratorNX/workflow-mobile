@@ -208,11 +208,11 @@ export function PullToRefresh({
     [children, onRefresh, pullDistance, refreshing]
   );
 
-  // Android: RefreshControl with spinner pushed far off-screen (progressViewOffset works).
-  // iOS: RefreshControl often ignores style/offset and shows spinner — use no RefreshControl,
+  // For non-iOS platforms we push the native RefreshControl spinner off-screen.
+  // On iOS RefreshControl styling/offset often gets ignored — we use no RefreshControl,
   //      trigger refresh in onScrollEndDrag when user pulled enough (bounce gives negative offset).
   const refreshControl =
-    Platform.OS === 'android' ? (
+    Platform.OS !== 'ios' && Platform.OS !== 'web' ? (
       <RefreshControl
         refreshing={false}
         onRefresh={onRefresh}

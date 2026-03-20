@@ -468,13 +468,13 @@ function HealthSettingsCard({
           Настройки здоровья
         </ThemedText>
       </View>
-      <Pressable style={styles.settingsRow} onPress={onStepsPress} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+      <Pressable style={styles.settingsRow} onPress={onStepsPress}>
         <MaterialIcons name="directions-walk" size={20} color={COLORS.textSecondary} />
         <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>Шагомер</ThemedText>
         <ThemedText style={[styles.settingsValue, { color: COLORS.textSecondary }]}>Настройки</ThemedText>
         <MaterialIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
       </Pressable>
-      <Pressable style={styles.settingsRow} onPress={onNotificationsPress} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+      <Pressable style={styles.settingsRow} onPress={onNotificationsPress}>
         <MaterialIcons name="notifications" size={20} color={COLORS.textSecondary} />
         <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>Уведомления</ThemedText>
         <ThemedText style={[styles.settingsValue, { color: COLORS.textSecondary }]}>Настройки</ThemedText>

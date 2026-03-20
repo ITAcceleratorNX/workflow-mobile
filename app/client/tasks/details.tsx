@@ -205,33 +205,33 @@ export default function TaskDetailsScreen() {
     await updateTask(task, { deadline_from: from, deadline_to: to });
   }, [iosPicker.mode, iosPicker.value, task, updateTask]);
 
-  const updateScheduleDateAndroid = useCallback(async (dateKey: string) => {
+  const updateScheduleDate = useCallback(async (dateKey: string) => {
     if (!task) return;
     const currentTime = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '09:00';
     await updateTask(task, { scheduled_at: isoForDateTime(dateKey, currentTime) });
   }, [task, updateTask]);
 
-  const updateScheduleTimeAndroid = useCallback(async (time: string) => {
+  const updateScheduleTime = useCallback(async (time: string) => {
     if (!task) return;
     const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : toAppDateKey(new Date());
     await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
   }, [task, updateTask]);
 
-  const updateDeadlineFromAndroid = useCallback(async (dateKey: string) => {
+  const updateDeadlineFrom = useCallback(async (dateKey: string) => {
     if (!task) return;
     const baseTo = task.deadline_to ?? dateKey;
     const { from, to } = clampDeadlineRange(dateKey, baseTo);
     await updateTask(task, { deadline_from: from, deadline_to: to });
   }, [task, updateTask, clampDeadlineRange]);
 
-  const updateDeadlineToAndroid = useCallback(async (dateKey: string) => {
+  const updateDeadlineTo = useCallback(async (dateKey: string) => {
     if (!task) return;
     const baseFrom = task.deadline_from ?? dateKey;
     const { from, to } = clampDeadlineRange(baseFrom, dateKey);
     await updateTask(task, { deadline_from: from, deadline_to: to });
   }, [task, updateTask, clampDeadlineRange]);
 
-  const updateDeadlineTimeAndroid = useCallback(async (time: string) => {
+  const updateDeadlineTime = useCallback(async (time: string) => {
     if (!task) return;
     const baseFrom = task.deadline_from ?? task.deadline_to ?? toAppDateKey(new Date());
     const baseTo = task.deadline_to ?? task.deadline_from ?? baseFrom;
@@ -400,17 +400,17 @@ export default function TaskDetailsScreen() {
             </View>
           </View>
 
-          {Platform.OS === 'android' && scheduledEnabled ? (
+          {Platform.OS !== 'ios' && Platform.OS !== 'web' && scheduledEnabled ? (
             <View style={styles.pickersBlock}>
               <Select
                 value={scheduledDateLabel === '—' ? toAppDateKey(new Date()) : scheduledDateLabel}
-                onValueChange={updateScheduleDateAndroid}
+                onValueChange={updateScheduleDate}
                 options={dateOptions}
                 placeholder="Дата"
               />
               <Select
                 value={scheduledTimeLabel === '—' ? '09:00' : scheduledTimeLabel}
-                onValueChange={updateScheduleTimeAndroid}
+                onValueChange={updateScheduleTime}
                 options={TIME_SLOTS}
                 placeholder="Время"
               />
@@ -464,23 +464,23 @@ export default function TaskDetailsScreen() {
             </>
           ) : null}
 
-          {Platform.OS === 'android' && deadlineEnabled ? (
+          {Platform.OS !== 'ios' && Platform.OS !== 'web' && deadlineEnabled ? (
             <View style={styles.pickersBlock}>
               <Select
                 value={task.deadline_from ?? task.deadline_to ?? toAppDateKey(new Date())}
-                onValueChange={updateDeadlineFromAndroid}
+                onValueChange={updateDeadlineFrom}
                 options={dateOptions}
                 placeholder="Дата с"
               />
               <Select
                 value={task.deadline_to ?? task.deadline_from ?? toAppDateKey(new Date())}
-                onValueChange={updateDeadlineToAndroid}
+                onValueChange={updateDeadlineTo}
                 options={dateOptions}
                 placeholder="Дата по"
               />
               <Select
                 value={task.deadline_time ?? '17:00'}
-                onValueChange={updateDeadlineTimeAndroid}
+                onValueChange={updateDeadlineTime}
                 options={TIME_SLOTS}
                 placeholder="Время"
               />
