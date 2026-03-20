@@ -13,7 +13,7 @@ import {
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
-import { formatTaskTime, toAppDateKey } from '@/lib/taskDateTime';
+import { formatTaskTime, toAppDateKey } from '@/lib/dateTimeUtils';
 import { getDeadlineStatus } from '@/lib/taskDeadlineUtils';
 import type { UserTask } from '@/lib/user-tasks-api';
 

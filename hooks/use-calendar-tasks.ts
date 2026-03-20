@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 
-import { addDaysToDateKey, toAppDateKey } from '@/lib/taskDateTime';
+import { addDaysToDateKey, toAppDateKey } from '@/lib/dateTimeUtils';
 import { getUserTasksCalendar, type CalendarTask } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';

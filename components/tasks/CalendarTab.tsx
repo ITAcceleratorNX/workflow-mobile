@@ -7,8 +7,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { ThemedText } from '@/components/themed-text';
 import { useCalendarTasks } from '@/hooks/use-calendar-tasks';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { formatTaskTime, getAlmatyHour } from '@/lib/taskDateTime';
-import { formatDateForApi } from '@/lib/dateTimeUtils';
+import { formatTaskTime, getAlmatyHour, toAppDateKey } from '@/lib/dateTimeUtils';
 import type { CalendarTask } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -93,10 +92,10 @@ export function CalendarTab() {
   const tasksByHour = useMemo(() => {
     const map: Record<number, CalendarTask[]> = {};
     for (let h = 0; h < 24; h++) map[h] = [];
-    const dateKey = formatDateForApi(selectedDate);
+    const dateKey = toAppDateKey(selectedDate);
     for (const t of tasks) {
       const d = new Date(t.scheduled_at);
-      if (formatDateForApi(d) !== dateKey) continue;
+      if (toAppDateKey(d) !== dateKey) continue;
       const hour = getAlmatyHour(d);
       if (map[hour] != null) map[hour].push(t);
     }
