@@ -12,6 +12,7 @@ export interface UserTask {
   deadline_time: string | null;
   remind_at: string | null;
   reminders_disabled: boolean;
+  remind_before_minutes: number | null;
   created_at: string;
   updated_at: string;
   assignee_ids: number[];
@@ -101,6 +102,7 @@ export async function createUserTask(body: {
   deadline_time?: string | null;
   assignee_ids?: number[];
   reminders_disabled?: boolean;
+  remind_before_minutes?: number | null;
 }): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
   const result = await request<UserTask>('/user-tasks', {
     method: 'POST',
@@ -122,6 +124,7 @@ export async function updateUserTask(
     assignee_ids: number[];
     reminders_disabled: boolean;
     remind_at: string | null;
+    remind_before_minutes: number | null;
   }>
 ): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
   const result = await request<UserTask>(`/user-tasks/${id}`, {

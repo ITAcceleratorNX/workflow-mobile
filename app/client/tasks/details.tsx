@@ -16,6 +16,13 @@ import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/dat
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
 
+const REMIND_BEFORE_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'По умолчанию' },
+  { value: 5, label: '5 мин' },
+  { value: 15, label: '15 мин' },
+  { value: 30, label: '30 мин' },
+];
+
 function isoForDateTime(dateKey: string, time: string) {
   return toUtcIsoFromAppDateTime(dateKey, time);
 }
@@ -91,6 +98,7 @@ export default function TaskDetailsScreen() {
   const [assigneeResults, setAssigneeResults] = useState<UserSearchItem[]>([]);
   const [assigneeSearching, setAssigneeSearching] = useState(false);
   const [selectedAssignees, setSelectedAssignees] = useState<{ id: number; full_name: string }[]>([]);
+  const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
 
   const clampDeadlineRange = useCallback((fromKey: string | null, toKey: string | null) => {
     if (!fromKey || !toKey) return { from: fromKey, to: toKey };
@@ -102,7 +110,8 @@ export default function TaskDetailsScreen() {
   useEffect(() => {
     if (!task) return;
     setTitleDraft(task.title ?? '');
-  }, [task?.id, task?.title]);
+    setRemindBeforeMinutes(task.remind_before_minutes ?? null);
+  }, [task?.id, task?.title, task?.remind_before_minutes]);
 
   useEffect(() => {
     if (!task) return;
@@ -139,8 +148,10 @@ export default function TaskDetailsScreen() {
       await updateTask(task, { scheduled_at: null });
       return;
     }
-    const todayKey = toAppDateKey(new Date());
-    await updateTask(task, { scheduled_at: isoForDateTime(todayKey, '09:00') });
+    const nowPlus15Min = new Date(Date.now() + 15 * 60 * 1000);
+    await updateTask(task, {
+      scheduled_at: isoForDateTime(toAppDateKey(nowPlus15Min), formatTaskTime(nowPlus15Min)),
+    });
   }, [task, updateTask]);
 
   const handleToggleDeadline = useCallback(async () => {
@@ -238,6 +249,13 @@ export default function TaskDetailsScreen() {
     const { from, to } = clampDeadlineRange(baseFrom, baseTo);
     await updateTask(task, { deadline_from: from, deadline_to: to, deadline_time: time });
   }, [task, updateTask, clampDeadlineRange]);
+
+  const handleRemindBeforeChange = useCallback(async (value: number | null) => {
+    if (!task || !canEditDetails) return;
+    setRemindBeforeMinutes(value);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await updateTask(task, { remind_before_minutes: value });
+  }, [task, canEditDetails, updateTask]);
 
   const saveTitle = useCallback(async () => {
     if (!task) return;
@@ -581,11 +599,48 @@ export default function TaskDetailsScreen() {
             />
           </View>
           <View style={[styles.remindersHintWrap, { borderColor: border }]}>
-            <ThemedText style={[styles.remindersHint, { color: textMuted }]}>
-              Пуш по времени в календаре, дедлайну или по кнопке в уведомлении
-            </ThemedText>
+              <ThemedText style={[styles.remindersHint, { color: textMuted }]}>
+                Пуш по времени в календаре, дедлайну или по кнопке в уведомлении
+              </ThemedText>
+            </View>
+            <View style={[styles.divider, { backgroundColor: border }]} />
+            <View style={styles.remindBeforeSection}>
+              <View style={styles.rowLeft}>
+                <MaterialIcons name="alarm" size={20} color={textMuted} />
+                <ThemedText style={[styles.rowTitle, { color: text }]}>
+                  Когда напомнить
+                </ThemedText>
+              </View>
+              <View style={styles.remindBeforeBlocks}>
+                {REMIND_BEFORE_OPTIONS.map((o) => {
+                  const isSelected = (o.value === null && remindBeforeMinutes === null) || (o.value !== null && remindBeforeMinutes === o.value);
+                  const disabled = !canEditDetails || task.reminders_disabled;
+                  return (
+                    <Pressable
+                      key={o.value ?? 'default'}
+                      onPress={() => !disabled && handleRemindBeforeChange(o.value)}
+                      disabled={disabled}
+                      style={[
+                        styles.remindBeforeBlock,
+                        { borderColor: border, backgroundColor: cardBg },
+                        isSelected && { borderColor: primary, backgroundColor: `${primary}18` },
+                        disabled && { opacity: 0.6 },
+                      ]}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.remindBeforeBlockText,
+                          { color: isSelected ? primary : text },
+                        ]}
+                      >
+                        {o.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
           </View>
-        </View>
 
         <View style={{ height: 16 }} />
 
@@ -828,6 +883,28 @@ const styles = StyleSheet.create({
   remindersHint: {
     fontSize: 12,
     lineHeight: 18,
+  },
+  remindBeforeSection: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  remindBeforeBlocks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 8,
+  },
+  remindBeforeBlock: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    minWidth: 72,
+  },
+  remindBeforeBlockText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   pickerBackdrop: {
     flex: 1,

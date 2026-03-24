@@ -45,6 +45,13 @@ function getDateOptions(): { value: string; label: string }[] {
   return options;
 }
 
+const REMIND_BEFORE_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'По умолчанию' },
+  { value: 5, label: '5 мин' },
+  { value: 15, label: '15 мин' },
+  { value: 30, label: '30 мин' },
+];
+
 interface AssigneeChipProps {
   user: { id: number; full_name: string };
   onRemove: (id: number) => void;
@@ -101,6 +108,7 @@ export default function TaskEditorScreen() {
   const [assigneeResults, setAssigneeResults] = useState<UserSearchItem[]>([]);
   const [assigneeSearching, setAssigneeSearching] = useState(false);
   const [remindersDisabled, setRemindersDisabled] = useState(false);
+  const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -123,16 +131,20 @@ export default function TaskEditorScreen() {
         setDeadlineTo(task.deadline_to);
         setDeadlineTime(task.deadline_time || '17:00');
         setRemindersDisabled(task.reminders_disabled ?? false);
+        setRemindBeforeMinutes(task.remind_before_minutes ?? null);
         setSelectedAssignees(task.assignees || []);
       } else if (!loadingTasks) { // If not found and not loading, it might be a new task or error
         // Optionally navigate back or show error
         // router.back();
       }
-    } else if (isCreate && initialDate) {
-      setScheduledDate(initialDate);
     } else if (isCreate) {
-      setScheduledDate(toAppDateKey(new Date()));
+      const nowPlus15Min = new Date(Date.now() + 15 * 60 * 1000);
+      const nextDateKey = initialDate || toAppDateKey(nowPlus15Min);
+      const nextTime = formatTaskTime(nowPlus15Min);
+      setScheduledDate(nextDateKey);
+      setScheduledTime(nextTime);
       setRemindersDisabled(false);
+      setRemindBeforeMinutes(null);
     }
   }, [isCreate, taskId, tasks, loadingTasks, initialDate]);
 
@@ -194,7 +206,7 @@ export default function TaskEditorScreen() {
         from: deadlineFrom,
         to: deadlineTo,
         time: deadlineTime,
-      }, assigneeIds, remindersDisabled);
+      }, assigneeIds, remindersDisabled, remindBeforeMinutes);
     } else if (currentTask) {
       await updateTask(currentTask, {
         title,
@@ -204,6 +216,7 @@ export default function TaskEditorScreen() {
         deadline_time: deadlineTo ? deadlineTime : null,
         assignee_ids: assigneeIds,
         reminders_disabled: remindersDisabled,
+        remind_before_minutes: remindBeforeMinutes,
       });
     }
     setSaving(false);
@@ -211,7 +224,7 @@ export default function TaskEditorScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Keyboard.dismiss();
     router.back();
-  }, [title, scheduledDate, scheduledTime, deadlineFrom, deadlineTo, deadlineTime, selectedAssignees, remindersDisabled, isCreate, currentTask, addTask, updateTask, bumpTasks]);
+  }, [title, scheduledDate, scheduledTime, deadlineFrom, deadlineTo, deadlineTime, selectedAssignees, remindersDisabled, remindBeforeMinutes, isCreate, currentTask, addTask, updateTask, bumpTasks]);
 
   const handleDelete = useCallback(async () => {
     if (!currentTask) return;
@@ -279,20 +292,22 @@ export default function TaskEditorScreen() {
             >
               <ThemedText style={[styles.label, { color: headerSubtitle }]}>Назначить в календарь (опционально)</ThemedText>
             <View style={styles.row}>
-              <Select
-                value={scheduledDate || ''}
-                onValueChange={(v) => setScheduledDate(v || null)}
-                options={dateOptions}
-                placeholder="Дата"
-                containerStyle={styles.selectContainer}
-              />
-              <Select
-                value={scheduledTime}
-                onValueChange={setScheduledTime}
-                options={TIME_SLOTS}
-                placeholder="Время"
-                containerStyle={styles.selectContainer}
-              />
+              <View style={styles.selectContainer}>
+                <Select
+                  value={scheduledDate || ''}
+                  onValueChange={(v) => setScheduledDate(v || null)}
+                  options={dateOptions}
+                  placeholder="Дата"
+                />
+              </View>
+              <View style={styles.selectContainer}>
+                <Select
+                  value={scheduledTime}
+                  onValueChange={setScheduledTime}
+                  options={TIME_SLOTS}
+                  placeholder="Время"
+                />
+              </View>
             </View>
             </View>
 
@@ -305,27 +320,30 @@ export default function TaskEditorScreen() {
             >
               <ThemedText style={[styles.label, { color: headerSubtitle }]}>Срок (опционально)</ThemedText>
             <View style={styles.row}>
-              <Select
-                value={deadlineFrom || ''}
-                onValueChange={(v) => setDeadlineFrom(v || null)}
-                options={dateOptions}
-                placeholder="Дата с"
-                containerStyle={styles.selectContainer}
-              />
-              <Select
-                value={deadlineTo || ''}
-                onValueChange={(v) => setDeadlineTo(v || null)}
-                options={dateOptions}
-                placeholder="Дата по"
-                containerStyle={styles.selectContainer}
-              />
-              <Select
-                value={deadlineTime}
-                onValueChange={setDeadlineTime}
-                options={TIME_SLOTS}
-                placeholder="Время"
-                containerStyle={styles.selectContainer}
-              />
+              <View style={styles.selectContainer}>
+                <Select
+                  value={deadlineFrom || ''}
+                  onValueChange={(v) => setDeadlineFrom(v || null)}
+                  options={dateOptions}
+                  placeholder="Дата с"
+                />
+              </View>
+              <View style={styles.selectContainer}>
+                <Select
+                  value={deadlineTo || ''}
+                  onValueChange={(v) => setDeadlineTo(v || null)}
+                  options={dateOptions}
+                  placeholder="Дата по"
+                />
+              </View>
+              <View style={styles.selectContainer}>
+                <Select
+                  value={deadlineTime}
+                  onValueChange={setDeadlineTime}
+                  options={TIME_SLOTS}
+                  placeholder="Время"
+                />
+              </View>
             </View>
             </View>
 
@@ -395,6 +413,39 @@ export default function TaskEditorScreen() {
                   thumbColor="#fff"
                 />
               </View>
+
+              {!remindersDisabled && (
+                <View style={styles.remindBeforeContainer}>
+                  <ThemedText style={[styles.label, { color: headerSubtitle, marginTop: 12 }]}>
+                    Когда напомнить
+                  </ThemedText>
+                  <View style={styles.remindBeforeBlocks}>
+                    {REMIND_BEFORE_OPTIONS.map((o) => {
+                      const isSelected = (o.value === null && remindBeforeMinutes === null) || (o.value !== null && remindBeforeMinutes === o.value);
+                      return (
+                        <Pressable
+                          key={o.value ?? 'default'}
+                          onPress={() => setRemindBeforeMinutes(o.value)}
+                          style={[
+                            styles.remindBeforeBlock,
+                            { borderColor: border, backgroundColor: cardBg },
+                            isSelected && { borderColor: primary, backgroundColor: `${primary}18` },
+                          ]}
+                        >
+                          <ThemedText
+                            style={[
+                              styles.remindBeforeBlockText,
+                              { color: isSelected ? primary : headerText },
+                            ]}
+                          >
+                            {o.label}
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
             </View>
 
             {!isCreate && currentTask && (
@@ -520,6 +571,26 @@ const styles = StyleSheet.create({
   remindersHint: {
     fontSize: 12,
     lineHeight: 18,
+  },
+  remindBeforeContainer: {
+    marginTop: 10,
+  },
+  remindBeforeBlocks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 8,
+  },
+  remindBeforeBlock: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    minWidth: 72,
+  },
+  remindBeforeBlockText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   switchRow: {
     flexDirection: 'row',

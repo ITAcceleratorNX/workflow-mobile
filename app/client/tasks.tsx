@@ -21,7 +21,7 @@ import { ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { useAuthStore } from '@/stores/auth-store';
-import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
+import { formatDateForApi, formatTimeOnly, toAppDateKey, formatTaskTime, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
 import { getDeadlineStatus } from '@/lib/taskDeadlineUtils';
 import type { UserTask } from '@/lib/user-tasks-api';
 import { CalendarTab } from '@/components/tasks/CalendarTab';
@@ -297,7 +297,12 @@ export default function TasksScreen() {
       Keyboard.dismiss();
       return;
     }
-    const scheduledAtIso = filterDate === 'today' ? `${todayKey}T09:00:00.000Z` : null;
+    const scheduledAtIso = filterDate === 'today'
+      ? toUtcIsoFromAppDateTime(
+          toAppDateKey(new Date(Date.now() + 15 * 60 * 1000)),
+          formatTaskTime(new Date(Date.now() + 15 * 60 * 1000))
+        )
+      : null;
     await addTask(trimmed, scheduledAtIso);
     setCreating(false);
     setCreateDraftTitle('');
