@@ -13,6 +13,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
+import type { UserTask } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
 
@@ -25,6 +26,38 @@ const REMIND_BEFORE_OPTIONS: { value: number | null; label: string }[] = [
 
 function isoForDateTime(dateKey: string, time: string) {
   return toUtcIsoFromAppDateTime(dateKey, time);
+}
+
+function pad2(n: number) {
+  return n.toString().padStart(2, '0');
+}
+
+function utcTimeFromDate(d: Date) {
+  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+}
+
+function utcDateKeyFromDate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+function getDeadlineUtcDateKey(task: { deadline_to: string | null; deadline_from: string | null } | null) {
+  if (!task) return null;
+  return task.deadline_to ?? task.deadline_from ?? null;
+}
+
+function getDeadlineUtcInstant(task: UserTask | null) {
+  if (!task) return null;
+  const dateKeyUtc = getDeadlineUtcDateKey(task);
+  if (!dateKeyUtc) return null;
+  const timeUtc = task.deadline_time;
+  if (!timeUtc) return null;
+  return new Date(`${dateKeyUtc}T${timeUtc}:00.000Z`);
+}
+
+function getDeadlineAppTime(task: UserTask | null) {
+  const instantUtc = getDeadlineUtcInstant(task);
+  if (!instantUtc) return null;
+  return formatTaskTime(instantUtc);
 }
 
 
@@ -161,8 +194,12 @@ export default function TaskDetailsScreen() {
       await updateTask(task, { deadline_from: null, deadline_to: null, deadline_time: null });
       return;
     }
-    const todayKey = toAppDateKey(new Date());
-    await updateTask(task, { deadline_from: todayKey, deadline_to: todayKey, deadline_time: '17:00' });
+    const appTodayKey = toAppDateKey(new Date());
+    const defaultAppTime = '17:00';
+    const utcIso = toUtcIsoFromAppDateTime(appTodayKey, defaultAppTime);
+    const utcDateKey = utcDateKeyFromDate(new Date(utcIso));
+    const utcTime = utcTimeFromDate(new Date(utcIso));
+    await updateTask(task, { deadline_from: utcDateKey, deadline_to: utcDateKey, deadline_time: utcTime });
   }, [task, updateTask]);
 
   const handleToggleReminders = useCallback(async () => {
@@ -177,7 +214,16 @@ export default function TaskDetailsScreen() {
     const scheduledBase = task.scheduled_at ? new Date(task.scheduled_at) : new Date();
     const deadlineBase =
       task.deadline_to || task.deadline_from
-        ? new Date(toUtcIsoFromAppDateTime((task.deadline_to ?? task.deadline_from)!, task.deadline_time ?? '17:00'))
+        ? (() => {
+            const dateKeyUtc = task.deadline_to ?? task.deadline_from;
+            if (task.deadline_time) {
+              return new Date(`${dateKeyUtc}T${task.deadline_time}:00.000Z`);
+            }
+            // Fallback: treat default time as app time, then convert to UTC instant
+            const appDateKey = toAppDateKey(new Date(`${dateKeyUtc}T00:00:00.000Z`));
+            const utcIso = toUtcIsoFromAppDateTime(appDateKey, '17:00');
+            return new Date(utcIso);
+          })()
         : new Date();
 
     const value =
@@ -201,18 +247,25 @@ export default function TaskDetailsScreen() {
     }
 
     if (mode === 'deadline-time') {
-      const time = formatTaskTime(next);
-      const baseFrom = task.deadline_from ?? task.deadline_to ?? toAppDateKey(new Date());
-      const baseTo = task.deadline_to ?? task.deadline_from ?? baseFrom;
-      const { from, to } = clampDeadlineRange(baseFrom, baseTo);
-      await updateTask(task, { deadline_from: from, deadline_to: to, deadline_time: time });
+      const timeUtc = utcTimeFromDate(next);
+      const utcDateKey = utcDateKeyFromDate(next);
+      const baseFromUtc = task.deadline_from ?? task.deadline_to ?? utcDateKey;
+      const { from, to } = clampDeadlineRange(baseFromUtc, utcDateKey);
+      await updateTask(task, { deadline_from: from, deadline_to: to, deadline_time: timeUtc });
       return;
     }
 
-    const pickedDateKey = toAppDateKey(next);
-    const baseFrom = mode === 'deadline-from' ? pickedDateKey : (task.deadline_from ?? pickedDateKey);
-    const baseTo = mode === 'deadline-to' ? pickedDateKey : (task.deadline_to ?? pickedDateKey);
-    const { from, to } = clampDeadlineRange(baseFrom, baseTo);
+    const pickedAppDateKey = toAppDateKey(next);
+    const dateKeyUtcForTime = getDeadlineUtcDateKey(task);
+    const currentAppDeadlineTime = dateKeyUtcForTime && task.deadline_time
+      ? formatTaskTime(new Date(`${dateKeyUtcForTime}T${task.deadline_time}:00.000Z`))
+      : '17:00';
+    const utcIso = toUtcIsoFromAppDateTime(pickedAppDateKey, currentAppDeadlineTime);
+    const pickedUtcDateKey = utcDateKeyFromDate(new Date(utcIso));
+
+    const baseFromUtc = mode === 'deadline-from' ? pickedUtcDateKey : (task.deadline_from ?? pickedUtcDateKey);
+    const baseToUtc = mode === 'deadline-to' ? pickedUtcDateKey : (task.deadline_to ?? pickedUtcDateKey);
+    const { from, to } = clampDeadlineRange(baseFromUtc, baseToUtc);
     await updateTask(task, { deadline_from: from, deadline_to: to });
   }, [iosPicker.mode, iosPicker.value, task, updateTask]);
 
@@ -230,24 +283,43 @@ export default function TaskDetailsScreen() {
 
   const updateDeadlineFrom = useCallback(async (dateKey: string) => {
     if (!task) return;
-    const baseTo = task.deadline_to ?? dateKey;
-    const { from, to } = clampDeadlineRange(dateKey, baseTo);
+    const dateKeyUtcForTime = getDeadlineUtcDateKey(task);
+    const currentAppDeadlineTime = dateKeyUtcForTime && task.deadline_time
+      ? formatTaskTime(new Date(`${dateKeyUtcForTime}T${task.deadline_time}:00.000Z`))
+      : '17:00';
+    const utcIso = toUtcIsoFromAppDateTime(dateKey, currentAppDeadlineTime);
+    const pickedUtcDateKey = utcDateKeyFromDate(new Date(utcIso));
+    const baseToUtc = task.deadline_to ?? pickedUtcDateKey;
+    const { from, to } = clampDeadlineRange(pickedUtcDateKey, baseToUtc);
     await updateTask(task, { deadline_from: from, deadline_to: to });
   }, [task, updateTask, clampDeadlineRange]);
 
   const updateDeadlineTo = useCallback(async (dateKey: string) => {
     if (!task) return;
-    const baseFrom = task.deadline_from ?? dateKey;
-    const { from, to } = clampDeadlineRange(baseFrom, dateKey);
+    const dateKeyUtcForTime = getDeadlineUtcDateKey(task);
+    const currentAppDeadlineTime = dateKeyUtcForTime && task.deadline_time
+      ? formatTaskTime(new Date(`${dateKeyUtcForTime}T${task.deadline_time}:00.000Z`))
+      : '17:00';
+    const utcIso = toUtcIsoFromAppDateTime(dateKey, currentAppDeadlineTime);
+    const pickedUtcDateKey = utcDateKeyFromDate(new Date(utcIso));
+    const baseFromUtc = task.deadline_from ?? pickedUtcDateKey;
+    const { from, to } = clampDeadlineRange(baseFromUtc, pickedUtcDateKey);
     await updateTask(task, { deadline_from: from, deadline_to: to });
   }, [task, updateTask, clampDeadlineRange]);
 
   const updateDeadlineTime = useCallback(async (time: string) => {
     if (!task) return;
-    const baseFrom = task.deadline_from ?? task.deadline_to ?? toAppDateKey(new Date());
-    const baseTo = task.deadline_to ?? task.deadline_from ?? baseFrom;
-    const { from, to } = clampDeadlineRange(baseFrom, baseTo);
-    await updateTask(task, { deadline_from: from, deadline_to: to, deadline_time: time });
+    const deadlineUtcDateKey = task.deadline_to ?? task.deadline_from ?? utcDateKeyFromDate(new Date());
+    const deadlineUtcInstant = getDeadlineUtcInstant(task) ?? new Date(`${deadlineUtcDateKey}T17:00:00.000Z`);
+    const baseAppDateKey = toAppDateKey(deadlineUtcInstant);
+
+    const utcIso = toUtcIsoFromAppDateTime(baseAppDateKey, time);
+    const pickedUtcDateKey = utcDateKeyFromDate(new Date(utcIso));
+    const pickedUtcTime = utcTimeFromDate(new Date(utcIso));
+
+    const baseFromUtc = task.deadline_from ?? task.deadline_to ?? pickedUtcDateKey;
+    const { from, to } = clampDeadlineRange(baseFromUtc, pickedUtcDateKey);
+    await updateTask(task, { deadline_from: from, deadline_to: to, deadline_time: pickedUtcTime });
   }, [task, updateTask, clampDeadlineRange]);
 
   const handleRemindBeforeChange = useCallback(async (value: number | null) => {
@@ -315,9 +387,11 @@ export default function TaskDetailsScreen() {
 
   const scheduledDateLabel = task.scheduled_at ? toAppDateKey(task.scheduled_at) : '—';
   const scheduledTimeLabel = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '—';
-  const deadlineFromLabel = task.deadline_from ?? '—';
-  const deadlineToLabel = task.deadline_to ?? '—';
-  const deadlineTimeLabel = task.deadline_time ?? '—';
+  const deadlineFromAppKey = task.deadline_from ? toAppDateKey(new Date(`${task.deadline_from}T00:00:00.000Z`)) : null;
+  const deadlineToAppKey = task.deadline_to ? toAppDateKey(new Date(`${task.deadline_to}T00:00:00.000Z`)) : null;
+  const deadlineTimeLabel = getDeadlineAppTime(task) ?? '—';
+  const deadlineFromLabel = deadlineFromAppKey ?? '—';
+  const deadlineToLabel = deadlineToAppKey ?? '—';
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
@@ -485,19 +559,19 @@ export default function TaskDetailsScreen() {
           {Platform.OS !== 'ios' && Platform.OS !== 'web' && deadlineEnabled ? (
             <View style={styles.pickersBlock}>
               <Select
-                value={task.deadline_from ?? task.deadline_to ?? toAppDateKey(new Date())}
+                value={deadlineFromAppKey ?? deadlineToAppKey ?? toAppDateKey(new Date())}
                 onValueChange={updateDeadlineFrom}
                 options={dateOptions}
                 placeholder="Дата с"
               />
               <Select
-                value={task.deadline_to ?? task.deadline_from ?? toAppDateKey(new Date())}
+                value={deadlineToAppKey ?? deadlineFromAppKey ?? toAppDateKey(new Date())}
                 onValueChange={updateDeadlineTo}
                 options={dateOptions}
                 placeholder="Дата по"
               />
               <Select
-                value={task.deadline_time ?? '17:00'}
+                value={deadlineTimeLabel === '—' ? '17:00' : deadlineTimeLabel}
                 onValueChange={updateDeadlineTime}
                 options={TIME_SLOTS}
                 placeholder="Время"
