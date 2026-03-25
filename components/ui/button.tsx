@@ -11,6 +11,8 @@ export interface ButtonProps {
   variant?: Variant;
   disabled?: boolean;
   style?: ViewStyle;
+  /** Доп. стили контейнера (например flex для ряда кнопок) */
+  containerStyle?: ViewStyle;
   /** Переопределить цвет текста (например, '#FFFFFF' для контраста на оранжевом) */
   labelColor?: string;
 }
@@ -21,6 +23,7 @@ export function Button({
   variant = 'primary',
   disabled = false,
   style,
+  containerStyle,
   labelColor,
 }: ButtonProps) {
   const primary = useThemeColor({}, 'primary');
@@ -53,6 +56,7 @@ export function Button({
           opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
         },
         style,
+        containerStyle,
       ]}
     >
       {labelColor != null ? (
@@ -64,7 +68,6 @@ export function Button({
           ]}
           numberOfLines={2}
           allowFontScaling
-          includeFontPadding={false}
         >
           {title}
         </Text>

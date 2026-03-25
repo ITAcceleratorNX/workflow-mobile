@@ -29,6 +29,19 @@ import Animated, {
 
 import { PageLoader } from './page-loader';
 
+type ScrollableChildProps = {
+  refreshControl?: React.ReactNode;
+  contentContainerStyle?: object | object[];
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onScrollBeginDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onScrollEndDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  scrollEventThrottle?: number;
+};
+
+function scrollableProps(el: React.ReactElement): ScrollableChildProps {
+  return el.props as ScrollableChildProps;
+}
+
 export interface PullToRefreshProps {
   refreshing: boolean;
   onRefresh: () => void;
@@ -196,8 +209,9 @@ export function PullToRefresh({
 
   const onScrollEndDrag = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (typeof children.props.onScrollEndDrag === 'function') {
-        children.props.onScrollEndDrag(event);
+      const p = scrollableProps(children);
+      if (typeof p.onScrollEndDrag === 'function') {
+        p.onScrollEndDrag(event);
       }
       if (refreshing) return;
       if (minOffsetRef.current < -pullDistance) {
@@ -224,8 +238,7 @@ export function PullToRefresh({
       />
     ) : null;
 
-  const existingContentStyle = (children as React.ReactElement<{ contentContainerStyle?: object | object[] }>).props
-    ?.contentContainerStyle;
+  const existingContentStyle = scrollableProps(children).contentContainerStyle;
   const showRefreshZone = isVisible || refreshing;
   const contentContainerStyle = useMemo(() => {
     if (!showRefreshZone) return undefined;
@@ -238,34 +251,30 @@ export function PullToRefresh({
   }, [existingContentStyle, showRefreshZone, refreshZoneHeight, topOffset]);
 
   const child = isValidElement(children)
-    ? cloneElement(
-        children as React.ReactElement<{
-          refreshControl?: React.ReactNode;
-          contentContainerStyle?: object | object[];
-          onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-          onScrollBeginDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-          onScrollEndDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
-          scrollEventThrottle?: number;
-        }>,
-        {
-          refreshControl,
-          ...(contentContainerStyle != null && { contentContainerStyle }),
-          scrollEventThrottle: 16,
-          onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-            if (typeof children.props.onScroll === 'function') {
-              children.props.onScroll(event);
-            }
-            onChildScroll(event);
-          },
-          onScrollBeginDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-            if (typeof children.props.onScrollBeginDrag === 'function') {
-              children.props.onScrollBeginDrag(event);
-            }
-            onScrollBeginDrag();
-          },
-          onScrollEndDrag,
-        }
-      )
+    ? (() => {
+        const prev = scrollableProps(children);
+        return cloneElement(
+          children as React.ReactElement<ScrollableChildProps>,
+          {
+            refreshControl,
+            ...(contentContainerStyle != null && { contentContainerStyle }),
+            scrollEventThrottle: 16,
+            onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+              if (typeof prev.onScroll === 'function') {
+                prev.onScroll(event);
+              }
+              onChildScroll(event);
+            },
+            onScrollBeginDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+              if (typeof prev.onScrollBeginDrag === 'function') {
+                prev.onScrollBeginDrag(event);
+              }
+              onScrollBeginDrag();
+            },
+            onScrollEndDrag,
+          } satisfies Partial<ScrollableChildProps>
+        );
+      })()
     : children;
 
   const indicatorAnimatedStyle = useAnimatedStyle(() => ({

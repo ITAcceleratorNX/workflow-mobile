@@ -41,6 +41,7 @@ import {
   toggleLongTermRequest,
   uploadRequestPhotos,
   type AcceptSubRequestPayload,
+  type ExecutorInCategory,
   type RequestGroup,
   type SubRequest,
 } from '@/lib/api';
@@ -129,9 +130,7 @@ export default function RequestDetailScreen() {
   const [subForAssign, setSubForAssign] = useState<SubRequest | null>(null);
 
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
-  const [executors, setExecutors] = useState<
-    Array<{ id: number; user?: { full_name?: string }; specialty?: string }>
-  >([]);
+  const [executors, setExecutors] = useState<ExecutorInCategory[]>([]);
 
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectError, setRejectError] = useState<string | null>(null);
@@ -1267,6 +1266,20 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     maxHeight: '80%',
     borderTopWidth: 1,
+  },
+  /** Полоска «ручка» внизу модалки */
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(120,120,128,0.32)',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  actionsList: {
+    flexGrow: 0,
+    maxHeight: 420,
   },
   rejectGroupContent: {
     borderRadius: 16,

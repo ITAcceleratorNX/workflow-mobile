@@ -9,7 +9,7 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "buildNumber": "11",
+      "buildNumber": "12",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -114,7 +114,8 @@
         }
       ],
       "expo-background-task",
-      "./plugins/withStripUnwantedInfoPlist"
+      "./plugins/withStripUnwantedInfoPlist",
+      "./plugins/withIosPodfileHermesAlignment"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -75,7 +75,7 @@ export function PageLoader({ size = 80, style, variant = 'default' }: PageLoader
   }));
 
   return (
-    <View style={[styles.wrapper, size && { width: size, height: size }, style]}>
+    <View style={[styles.wrapper, size ? { width: size, height: size } : null, style]}>
       <Animated.View style={[styles.container, containerStyle]}>
         {/** Ghost layer — контур, адаптируется к теме или фиксированный для overlay */}
         <View style={[styles.logoLayer, { width: size, height: size }]}>

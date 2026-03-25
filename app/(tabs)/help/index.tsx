@@ -312,7 +312,11 @@ export default function HelpScreen() {
         setSupportFormValue('');
         router.push(`/(tabs)/help/chat/${ticket.id}` as const);
       } else {
-        setSupportError(result.error ?? 'Не удалось создать обращение. Попробуйте ещё раз.');
+        const message =
+          !result.ok
+            ? (result.error ?? 'Не удалось создать обращение. Попробуйте ещё раз.')
+            : 'Не удалось создать обращение. Попробуйте ещё раз.';
+        setSupportError(message);
       }
       setSupportFormSubmitting(false);
     },

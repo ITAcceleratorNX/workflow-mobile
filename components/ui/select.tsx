@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   View,
+  type ViewStyle,
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -21,6 +22,8 @@ export interface SelectProps {
   onValueChange: (value: string) => void;
   options: SelectOption[];
   placeholder?: string;
+  /** Стили обёртки (например flex в ряду) */
+  containerStyle?: ViewStyle;
 }
 
 export function Select({
@@ -28,6 +31,7 @@ export function Select({
   onValueChange,
   options,
   placeholder = 'Выберите',
+  containerStyle,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
   const text = useThemeColor({}, 'text');
@@ -45,7 +49,7 @@ export function Select({
   };
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, containerStyle]}>
       <Pressable
         onPress={() => setOpen(true)}
         style={[styles.trigger, { borderColor: border }]}
