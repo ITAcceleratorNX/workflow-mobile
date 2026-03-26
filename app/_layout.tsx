@@ -9,8 +9,8 @@ import 'react-native-reanimated';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { SleepSurveyGate } from '@/components/sleep-survey-gate';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { PushNotificationsHost } from '@/components/push-notifications-host';
 import { registerBackgroundStepsTask } from '@/lib/background-steps-sync';
-import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { ToastProvider } from '@/context/toast-context';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
 import { parseRequestDeepLinkUrl } from '@/lib/shareRequest';
@@ -19,8 +19,6 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
-
-  usePushNotifications();
 
   useEffect(() => {
     registerBackgroundStepsTask();
@@ -49,6 +47,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <ToastProvider>
+            <PushNotificationsHost />
             <SleepSurveyGate />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />

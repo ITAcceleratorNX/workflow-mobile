@@ -24,21 +24,28 @@ const TASK_REMINDER_CATEGORY_ID = 'task_reminder';
  */
 export async function setupTaskReminderCategory(): Promise<void> {
   try {
+    // Порядок: первое действие чаще показывается заметнее в шторке (особенно iOS).
+    // opensAppToForeground: true — чтобы после холодного старта успел восстановиться JWT и fetch дошёл до API.
     await Notifications.setNotificationCategoryAsync(TASK_REMINDER_CATEGORY_ID, [
       {
+        identifier: 'complete',
+        buttonTitle: 'Выполнено',
+        options: { opensAppToForeground: true },
+      },
+      {
         identifier: 'in_1h',
-        buttonTitle: 'Через 1 час',
-        options: { opensAppToForeground: false },
+        buttonTitle: 'Напомнить через 1 час',
+        options: { opensAppToForeground: true },
       },
       {
         identifier: 'tomorrow',
-        buttonTitle: 'Завтра',
-        options: { opensAppToForeground: false },
+        buttonTitle: 'Напомнить завтра',
+        options: { opensAppToForeground: true },
       },
       {
         identifier: 'off',
-        buttonTitle: 'Выключить',
-        options: { opensAppToForeground: false },
+        buttonTitle: 'Выключить напоминания для задачи',
+        options: { opensAppToForeground: true },
       },
     ]);
   } catch (e) {
