@@ -1,8 +1,15 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  type LayoutChangeEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useCalendarTasks } from '@/hooks/use-calendar-tasks';
@@ -102,6 +109,35 @@ export function CalendarTab() {
     return map;
   }, [tasks, selectedDate]);
 
+  const firstHourWithTasks = useMemo(() => {
+    for (let h = 0; h < 24; h++) {
+      if (tasksByHour[h]?.length > 0) return h;
+    }
+    return null;
+  }, [tasksByHour]);
+
+  const dayScrollRef = useRef<ScrollView>(null);
+  const hourRowYRef = useRef<number[]>([]);
+
+  const onHourRowLayout = useCallback((hour: number, e: LayoutChangeEvent) => {
+    hourRowYRef.current[hour] = e.nativeEvent.layout.y;
+  }, []);
+
+  useEffect(() => {
+    if (loading || viewMode !== 'day') return;
+    const t = setTimeout(() => {
+      if (firstHourWithTasks === null) {
+        dayScrollRef.current?.scrollTo({ y: 0, animated: false });
+        return;
+      }
+      const measured = hourRowYRef.current[firstHourWithTasks];
+      const fallbackY = firstHourWithTasks * 56;
+      const y = typeof measured === 'number' && !Number.isNaN(measured) ? measured : fallbackY;
+      dayScrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: false });
+    }, 64);
+    return () => clearTimeout(t);
+  }, [loading, viewMode, selectedDate, firstHourWithTasks, tasks]);
+
   return (
     <View style={styles.container}>
       <View style={[styles.nav, { borderBottomColor: border }]}>
@@ -144,9 +180,17 @@ export function CalendarTab() {
           <ActivityIndicator size="large" color={primary} />
         </View>
       ) : viewMode === 'day' ? (
-        <ScrollView style={styles.grid} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          ref={dayScrollRef}
+          style={styles.grid}
+          showsVerticalScrollIndicator={false}
+        >
           {HOURS.map((hour) => (
-            <View key={hour} style={[styles.hourRow, { borderBottomColor: border }]}>
+            <View
+              key={hour}
+              onLayout={(e) => onHourRowLayout(hour, e)}
+              style={[styles.hourRow, { borderBottomColor: border }]}
+            >
               <ThemedText style={[styles.hourLabel, { color: textMuted }]}>
                 {hour.toString().padStart(2, '0')}:00
               </ThemedText>

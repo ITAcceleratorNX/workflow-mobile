@@ -14,7 +14,6 @@ import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { formatTaskTime, toAppDateKey } from '@/lib/dateTimeUtils';
-import { getDeadlineStatus } from '@/lib/taskDeadlineUtils';
 import type { UserTask } from '@/lib/user-tasks-api';
 
 interface TodoTabProps {
@@ -38,7 +37,6 @@ function TaskRow({
   primary: string;
   borderColor: string;
 }) {
-  const status = getDeadlineStatus(task.deadline_to, task.deadline_time);
   const scheduledStr = task.scheduled_at
     ? `${toAppDateKey(task.scheduled_at)} ${formatTaskTime(task.scheduled_at)}`
     : null;
@@ -85,16 +83,6 @@ function TaskRow({
               <ThemedText style={styles.badgeText}>Командная</ThemedText>
             </View>
           )}
-          {status === 'overdue' && !task.completed && (
-            <View style={[styles.badge, { backgroundColor: '#EF4444' }]}>
-              <ThemedText style={styles.badgeText}>Просрочено</ThemedText>
-            </View>
-          )}
-          {status === 'expiring' && !task.completed && (
-            <View style={[styles.badge, { backgroundColor: '#F59E0B' }]}>
-              <ThemedText style={styles.badgeText}>Истекает срок</ThemedText>
-            </View>
-          )}
           {task.reminders_disabled && (
             <View style={styles.remindersOffWrap}>
               <MaterialIcons name="notifications-off" size={14} color={textMuted} />
@@ -122,7 +110,7 @@ export function TodoTab({ filter = 'all' }: TodoTabProps) {
   const handleEditTask = useCallback((task: UserTask) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (task?.id == null) return;
-    router.push({ pathname: '/client/tasks/task-editor', params: { mode: 'edit', taskId: String(task.id) } });
+    router.push({ pathname: '/client/tasks/details', params: { taskId: String(task.id) } });
   }, [router]);
 
   return (

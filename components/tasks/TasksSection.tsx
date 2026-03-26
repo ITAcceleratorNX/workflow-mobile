@@ -18,7 +18,7 @@ export function TasksSection() {
       <TasksTodayCard
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          router.push({ pathname: '/client/tasks', params: { view: 'list' } });
+          router.push({ pathname: '/client/tasks', params: { view: 'list', tab: 'today' } });
         }}
       />
     </View>

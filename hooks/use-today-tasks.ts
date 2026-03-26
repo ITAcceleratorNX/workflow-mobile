@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 import {
   getUserTasks,
@@ -45,9 +45,29 @@ export function useTodayTasks() {
     if (statsRes.ok) setStats(statsRes.data);
   }, [token, isGuest]);
 
+  const silentRefresh = useCallback(async () => {
+    if (!token || isGuest) return;
+    const [tasksRes, statsRes] = await Promise.all([
+      getUserTasks({ filter: 'today' }),
+      getTodayStats(),
+    ]);
+    if (tasksRes.ok) setTasks(tasksRes.data.tasks);
+    if (statsRes.ok) setStats(statsRes.data);
+  }, [token, isGuest]);
+
   useEffect(() => {
     refresh();
-  }, [refresh, version]);
+  }, [refresh]);
+
+  const skipVersionSyncRef = useRef(true);
+  useEffect(() => {
+    if (skipVersionSyncRef.current) {
+      skipVersionSyncRef.current = false;
+      return;
+    }
+    if (version === 0) return;
+    silentRefresh();
+  }, [version, silentRefresh]);
 
   const toggleComplete = useCallback(
     async (task: UserTask) => {
@@ -57,10 +77,9 @@ export function useTodayTasks() {
           prev.map((t) => (t.id === task.id ? { ...t, completed: !t.completed } : t))
         );
         bump();
-        refresh();
       }
     },
-    [refresh, bump]
+    [bump]
   );
 
   return {

@@ -13,7 +13,6 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
-import type { UserTask } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
 
@@ -27,39 +26,6 @@ const REMIND_BEFORE_OPTIONS: { value: number | null; label: string }[] = [
 function isoForDateTime(dateKey: string, time: string) {
   return toUtcIsoFromAppDateTime(dateKey, time);
 }
-
-function pad2(n: number) {
-  return n.toString().padStart(2, '0');
-}
-
-function utcTimeFromDate(d: Date) {
-  return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
-}
-
-function utcDateKeyFromDate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-function getDeadlineUtcDateKey(task: { deadline_to: string | null; deadline_from: string | null } | null) {
-  if (!task) return null;
-  return task.deadline_to ?? task.deadline_from ?? null;
-}
-
-function getDeadlineUtcInstant(task: UserTask | null) {
-  if (!task) return null;
-  const dateKeyUtc = getDeadlineUtcDateKey(task);
-  if (!dateKeyUtc) return null;
-  const timeUtc = task.deadline_time;
-  if (!timeUtc) return null;
-  return new Date(`${dateKeyUtc}T${timeUtc}:00.000Z`);
-}
-
-function getDeadlineAppTime(task: UserTask | null) {
-  const instantUtc = getDeadlineUtcInstant(task);
-  if (!instantUtc) return null;
-  return formatTaskTime(instantUtc);
-}
-
 
 const TIME_SLOTS: { value: string; label: string }[] = (() => {
   const slots: { value: string; label: string }[] = [];
@@ -115,7 +81,6 @@ export default function TaskDetailsScreen() {
   const canEditDetails = !!task && !!currentUserId && task.creator_id === currentUserId;
 
   const scheduledEnabled = !!task?.scheduled_at;
-  const deadlineEnabled = !!task?.deadline_to;
   const [titleDraft, setTitleDraft] = useState('');
   const dateOptions = useMemo(() => getDateOptions(), []);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -123,7 +88,7 @@ export default function TaskDetailsScreen() {
 
   const [iosPicker, setIosPicker] = useState<{
     open: boolean;
-    mode: 'schedule-date' | 'schedule-time' | 'deadline-from' | 'deadline-to' | 'deadline-time';
+    mode: 'schedule-date' | 'schedule-time';
     value: Date;
   }>({ open: false, mode: 'schedule-date', value: new Date() });
 
@@ -132,13 +97,6 @@ export default function TaskDetailsScreen() {
   const [assigneeSearching, setAssigneeSearching] = useState(false);
   const [selectedAssignees, setSelectedAssignees] = useState<{ id: number; full_name: string }[]>([]);
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
-
-  const clampDeadlineRange = useCallback((fromKey: string | null, toKey: string | null) => {
-    if (!fromKey || !toKey) return { from: fromKey, to: toKey };
-    // Compare as YYYY-MM-DD strings (lexicographically safe)
-    if (fromKey <= toKey) return { from: fromKey, to: toKey };
-    return { from: toKey, to: fromKey };
-  }, []);
 
   useEffect(() => {
     if (!task) return;
@@ -187,87 +145,25 @@ export default function TaskDetailsScreen() {
     });
   }, [task, updateTask]);
 
-  const handleToggleDeadline = useCallback(async () => {
-    if (!task) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (task.deadline_to) {
-      await updateTask(task, { deadline_from: null, deadline_to: null, deadline_time: null });
-      return;
-    }
-    const appTodayKey = toAppDateKey(new Date());
-    const defaultAppTime = '17:00';
-    const utcIso = toUtcIsoFromAppDateTime(appTodayKey, defaultAppTime);
-    const utcDateKey = utcDateKeyFromDate(new Date(utcIso));
-    const utcTime = utcTimeFromDate(new Date(utcIso));
-    await updateTask(task, { deadline_from: utcDateKey, deadline_to: utcDateKey, deadline_time: utcTime });
-  }, [task, updateTask]);
-
   const handleToggleReminders = useCallback(async () => {
     if (!task || !canEditDetails) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await updateTask(task, { reminders_disabled: !task.reminders_disabled });
   }, [task, canEditDetails, updateTask]);
 
-  const openIosPicker = useCallback((mode: 'schedule-date' | 'schedule-time' | 'deadline-from' | 'deadline-to' | 'deadline-time') => {
+  const openIosPicker = useCallback((mode: 'schedule-date' | 'schedule-time') => {
     if (!task) return;
-
     const scheduledBase = task.scheduled_at ? new Date(task.scheduled_at) : new Date();
-    const deadlineBase =
-      task.deadline_to || task.deadline_from
-        ? (() => {
-            const dateKeyUtc = task.deadline_to ?? task.deadline_from;
-            if (task.deadline_time) {
-              return new Date(`${dateKeyUtc}T${task.deadline_time}:00.000Z`);
-            }
-            // Fallback: treat default time as app time, then convert to UTC instant
-            const appDateKey = toAppDateKey(new Date(`${dateKeyUtc}T00:00:00.000Z`));
-            const utcIso = toUtcIsoFromAppDateTime(appDateKey, '17:00');
-            return new Date(utcIso);
-          })()
-        : new Date();
-
-    const value =
-      mode === 'schedule-date' || mode === 'schedule-time'
-        ? scheduledBase
-        : deadlineBase;
-
-    setIosPicker({ open: true, mode, value });
+    setIosPicker({ open: true, mode, value: scheduledBase });
   }, [task]);
 
   const applyIosPicker = useCallback(async () => {
     if (!task) return;
-    const mode = iosPicker.mode;
     const next = iosPicker.value;
-
-    if (mode === 'schedule-date' || mode === 'schedule-time') {
-      const dateKey = toAppDateKey(next);
-      const time = formatTaskTime(next);
-      await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
-      return;
-    }
-
-    if (mode === 'deadline-time') {
-      const timeUtc = utcTimeFromDate(next);
-      const utcDateKey = utcDateKeyFromDate(next);
-      const baseFromUtc = task.deadline_from ?? task.deadline_to ?? utcDateKey;
-      const { from, to } = clampDeadlineRange(baseFromUtc, utcDateKey);
-      await updateTask(task, { deadline_from: from, deadline_to: to, deadline_time: timeUtc });
-      return;
-    }
-
-    const pickedAppDateKey = toAppDateKey(next);
-    const dateKeyUtcForTime = getDeadlineUtcDateKey(task);
-    const currentAppDeadlineTime = dateKeyUtcForTime && task.deadline_time
-      ? formatTaskTime(new Date(`${dateKeyUtcForTime}T${task.deadline_time}:00.000Z`))
-      : '17:00';
-    const utcIso = toUtcIsoFromAppDateTime(pickedAppDateKey, currentAppDeadlineTime);
-    const pickedUtcDateKey = utcDateKeyFromDate(new Date(utcIso));
-
-    const baseFromUtc = mode === 'deadline-from' ? pickedUtcDateKey : (task.deadline_from ?? pickedUtcDateKey);
-    const baseToUtc = mode === 'deadline-to' ? pickedUtcDateKey : (task.deadline_to ?? pickedUtcDateKey);
-    const { from, to } = clampDeadlineRange(baseFromUtc, baseToUtc);
-    await updateTask(task, { deadline_from: from, deadline_to: to });
-  }, [iosPicker.mode, iosPicker.value, task, updateTask]);
+    const dateKey = toAppDateKey(next);
+    const time = formatTaskTime(next);
+    await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
+  }, [iosPicker.value, task, updateTask]);
 
   const updateScheduleDate = useCallback(async (dateKey: string) => {
     if (!task) return;
@@ -280,47 +176,6 @@ export default function TaskDetailsScreen() {
     const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : toAppDateKey(new Date());
     await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
   }, [task, updateTask]);
-
-  const updateDeadlineFrom = useCallback(async (dateKey: string) => {
-    if (!task) return;
-    const dateKeyUtcForTime = getDeadlineUtcDateKey(task);
-    const currentAppDeadlineTime = dateKeyUtcForTime && task.deadline_time
-      ? formatTaskTime(new Date(`${dateKeyUtcForTime}T${task.deadline_time}:00.000Z`))
-      : '17:00';
-    const utcIso = toUtcIsoFromAppDateTime(dateKey, currentAppDeadlineTime);
-    const pickedUtcDateKey = utcDateKeyFromDate(new Date(utcIso));
-    const baseToUtc = task.deadline_to ?? pickedUtcDateKey;
-    const { from, to } = clampDeadlineRange(pickedUtcDateKey, baseToUtc);
-    await updateTask(task, { deadline_from: from, deadline_to: to });
-  }, [task, updateTask, clampDeadlineRange]);
-
-  const updateDeadlineTo = useCallback(async (dateKey: string) => {
-    if (!task) return;
-    const dateKeyUtcForTime = getDeadlineUtcDateKey(task);
-    const currentAppDeadlineTime = dateKeyUtcForTime && task.deadline_time
-      ? formatTaskTime(new Date(`${dateKeyUtcForTime}T${task.deadline_time}:00.000Z`))
-      : '17:00';
-    const utcIso = toUtcIsoFromAppDateTime(dateKey, currentAppDeadlineTime);
-    const pickedUtcDateKey = utcDateKeyFromDate(new Date(utcIso));
-    const baseFromUtc = task.deadline_from ?? pickedUtcDateKey;
-    const { from, to } = clampDeadlineRange(baseFromUtc, pickedUtcDateKey);
-    await updateTask(task, { deadline_from: from, deadline_to: to });
-  }, [task, updateTask, clampDeadlineRange]);
-
-  const updateDeadlineTime = useCallback(async (time: string) => {
-    if (!task) return;
-    const deadlineUtcDateKey = task.deadline_to ?? task.deadline_from ?? utcDateKeyFromDate(new Date());
-    const deadlineUtcInstant = getDeadlineUtcInstant(task) ?? new Date(`${deadlineUtcDateKey}T17:00:00.000Z`);
-    const baseAppDateKey = toAppDateKey(deadlineUtcInstant);
-
-    const utcIso = toUtcIsoFromAppDateTime(baseAppDateKey, time);
-    const pickedUtcDateKey = utcDateKeyFromDate(new Date(utcIso));
-    const pickedUtcTime = utcTimeFromDate(new Date(utcIso));
-
-    const baseFromUtc = task.deadline_from ?? task.deadline_to ?? pickedUtcDateKey;
-    const { from, to } = clampDeadlineRange(baseFromUtc, pickedUtcDateKey);
-    await updateTask(task, { deadline_from: from, deadline_to: to, deadline_time: pickedUtcTime });
-  }, [task, updateTask, clampDeadlineRange]);
 
   const handleRemindBeforeChange = useCallback(async (value: number | null) => {
     if (!task || !canEditDetails) return;
@@ -369,7 +224,7 @@ export default function TaskDetailsScreen() {
       <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
         <Stack.Screen options={{ headerShown: false, presentation: 'modal' }} />
         <View style={styles.grabberWrap} pointerEvents="none">
-          <View style={[styles.grabber, { backgroundColor: border }]} />
+          <View style={[styles.grabber, { backgroundColor: primary }]} />
         </View>
         <View style={styles.header}>
           <Pressable onPress={handleClose} hitSlop={12} style={styles.headerBtn}>
@@ -387,18 +242,13 @@ export default function TaskDetailsScreen() {
 
   const scheduledDateLabel = task.scheduled_at ? toAppDateKey(task.scheduled_at) : '—';
   const scheduledTimeLabel = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '—';
-  const deadlineFromAppKey = task.deadline_from ? toAppDateKey(new Date(`${task.deadline_from}T00:00:00.000Z`)) : null;
-  const deadlineToAppKey = task.deadline_to ? toAppDateKey(new Date(`${task.deadline_to}T00:00:00.000Z`)) : null;
-  const deadlineTimeLabel = getDeadlineAppTime(task) ?? '—';
-  const deadlineFromLabel = deadlineFromAppKey ?? '—';
-  const deadlineToLabel = deadlineToAppKey ?? '—';
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
       <Stack.Screen options={{ headerShown: false, presentation: 'modal' }} />
 
       <View style={styles.grabberWrap} pointerEvents="none">
-        <View style={[styles.grabber, { backgroundColor: border }]} />
+        <View style={[styles.grabber, { backgroundColor: primary }]} />
       </View>
       <View style={styles.header}>
         <Pressable onPress={handleClose} hitSlop={12} style={styles.headerBtn}>
@@ -440,8 +290,9 @@ export default function TaskDetailsScreen() {
                 duration: 3500,
               });
             }}
-            returnKeyType="done"
-            placeholder="Название задачи"
+            returnKeyType="default"
+            multiline
+            placeholder="Название и описание"
             placeholderTextColor={textMuted}
             style={[styles.titleInput, { color: canEditDetails ? text : textMuted }]}
           />
@@ -450,47 +301,68 @@ export default function TaskDetailsScreen() {
         <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Дата и время</ThemedText>
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
           <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <MaterialIcons name="event" size={20} color={textMuted} />
-              <ThemedText style={[styles.rowTitle, { color: text }]}>Дата</ThemedText>
-            </View>
-            <View style={styles.rowRight}>
-              <Pressable
-                disabled={!scheduledEnabled}
-                onPress={() => {
-                  if (!scheduledEnabled) return;
-                  if (Platform.OS === 'ios') openIosPicker('schedule-date');
-                }}
-                hitSlop={8}
+            <Pressable
+              disabled={!scheduledEnabled}
+              onPress={() => {
+                if (!scheduledEnabled) return;
+                if (Platform.OS === 'ios') openIosPicker('schedule-date');
+              }}
+              style={({ pressed }) => [
+                styles.rowPressable,
+                pressed && scheduledEnabled && styles.rowPressablePressed,
+              ]}
+            >
+              <View style={styles.rowLeft}>
+                <MaterialIcons name="event" size={20} color={textMuted} />
+                <ThemedText style={[styles.rowTitle, { color: text }]}>Дата</ThemedText>
+              </View>
+              <ThemedText
+                style={[
+                  styles.rowValue,
+                  {
+                    color: textMuted,
+                    textDecorationLine: Platform.OS === 'ios' && scheduledEnabled ? 'underline' : 'none',
+                  },
+                ]}
               >
-                <ThemedText style={[styles.rowValue, { color: scheduledEnabled ? textMuted : textMuted, textDecorationLine: Platform.OS === 'ios' && scheduledEnabled ? 'underline' : 'none' }]}>
-                  {scheduledDateLabel}
-                </ThemedText>
-              </Pressable>
-              <Switch value={scheduledEnabled} onValueChange={handleToggleSchedule} />
-            </View>
+                {scheduledDateLabel}
+              </ThemedText>
+            </Pressable>
+            <Switch
+              value={scheduledEnabled}
+              onValueChange={handleToggleSchedule}
+              trackColor={{ false: border, true: primary }}
+              thumbColor="#fff"
+            />
           </View>
           <View style={[styles.divider, { backgroundColor: border }]} />
-          <View style={styles.row}>
+          <Pressable
+            disabled={!scheduledEnabled}
+            onPress={() => {
+              if (!scheduledEnabled) return;
+              if (Platform.OS === 'ios') openIosPicker('schedule-time');
+            }}
+            style={({ pressed }) => [
+              styles.row,
+              pressed && scheduledEnabled && styles.rowPressablePressed,
+            ]}
+          >
             <View style={styles.rowLeft}>
               <MaterialIcons name="schedule" size={20} color={textMuted} />
               <ThemedText style={[styles.rowTitle, { color: text }]}>Время</ThemedText>
             </View>
-            <View style={styles.rowRight}>
-              <Pressable
-                disabled={!scheduledEnabled}
-                onPress={() => {
-                  if (!scheduledEnabled) return;
-                  if (Platform.OS === 'ios') openIosPicker('schedule-time');
-                }}
-                hitSlop={8}
-              >
-                <ThemedText style={[styles.rowValue, { color: textMuted, textDecorationLine: Platform.OS === 'ios' && scheduledEnabled ? 'underline' : 'none' }]}>
-                  {scheduledTimeLabel}
-                </ThemedText>
-              </Pressable>
-            </View>
-          </View>
+            <ThemedText
+              style={[
+                styles.rowValue,
+                {
+                  color: textMuted,
+                  textDecorationLine: Platform.OS === 'ios' && scheduledEnabled ? 'underline' : 'none',
+                },
+              ]}
+            >
+              {scheduledTimeLabel}
+            </ThemedText>
+          </Pressable>
 
           {Platform.OS !== 'ios' && Platform.OS !== 'web' && scheduledEnabled ? (
             <View style={styles.pickersBlock}>
@@ -503,76 +375,6 @@ export default function TaskDetailsScreen() {
               <Select
                 value={scheduledTimeLabel === '—' ? '09:00' : scheduledTimeLabel}
                 onValueChange={updateScheduleTime}
-                options={TIME_SLOTS}
-                placeholder="Время"
-              />
-            </View>
-          ) : null}
-        </View>
-
-        <View style={{ height: 16 }} />
-
-        <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Дедлайн</ThemedText>
-        <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <MaterialIcons name="flag" size={20} color={textMuted} />
-              <ThemedText style={[styles.rowTitle, { color: text }]}>Срок</ThemedText>
-            </View>
-            <View style={styles.rowRight}>
-              <Pressable
-                disabled={!deadlineEnabled}
-                onPress={() => {
-                  if (!deadlineEnabled) return;
-                  if (Platform.OS === 'ios') openIosPicker('deadline-to');
-                }}
-                hitSlop={8}
-              >
-                <ThemedText style={[styles.rowValue, { color: textMuted, textDecorationLine: Platform.OS === 'ios' && deadlineEnabled ? 'underline' : 'none' }]}>
-                  {deadlineEnabled ? `${deadlineFromLabel} → ${deadlineToLabel}` : '—'}
-                </ThemedText>
-              </Pressable>
-              <Switch value={deadlineEnabled} onValueChange={handleToggleDeadline} />
-            </View>
-          </View>
-
-          {Platform.OS === 'ios' && deadlineEnabled ? (
-            <>
-              <View style={[styles.divider, { backgroundColor: border }]} />
-              <Pressable onPress={() => openIosPicker('deadline-from')} style={styles.linkRow}>
-                <ThemedText style={[styles.linkText, { color: primary }]}>Дата с</ThemedText>
-                <MaterialIcons name="chevron-right" size={22} color={textMuted} />
-              </Pressable>
-              <View style={[styles.divider, { backgroundColor: border }]} />
-              <Pressable onPress={() => openIosPicker('deadline-to')} style={styles.linkRow}>
-                <ThemedText style={[styles.linkText, { color: primary }]}>Дата по</ThemedText>
-                <MaterialIcons name="chevron-right" size={22} color={textMuted} />
-              </Pressable>
-              <View style={[styles.divider, { backgroundColor: border }]} />
-              <Pressable onPress={() => openIosPicker('deadline-time')} style={styles.linkRow}>
-                <ThemedText style={[styles.linkText, { color: primary }]}>Время</ThemedText>
-                <ThemedText style={[styles.rowValue, { color: textMuted }]}>{deadlineTimeLabel}</ThemedText>
-              </Pressable>
-            </>
-          ) : null}
-
-          {Platform.OS !== 'ios' && Platform.OS !== 'web' && deadlineEnabled ? (
-            <View style={styles.pickersBlock}>
-              <Select
-                value={deadlineFromAppKey ?? deadlineToAppKey ?? toAppDateKey(new Date())}
-                onValueChange={updateDeadlineFrom}
-                options={dateOptions}
-                placeholder="Дата с"
-              />
-              <Select
-                value={deadlineToAppKey ?? deadlineFromAppKey ?? toAppDateKey(new Date())}
-                onValueChange={updateDeadlineTo}
-                options={dateOptions}
-                placeholder="Дата по"
-              />
-              <Select
-                value={deadlineTimeLabel === '—' ? '17:00' : deadlineTimeLabel}
-                onValueChange={updateDeadlineTime}
                 options={TIME_SLOTS}
                 placeholder="Время"
               />
@@ -674,7 +476,7 @@ export default function TaskDetailsScreen() {
           </View>
           <View style={[styles.remindersHintWrap, { borderColor: border }]}>
               <ThemedText style={[styles.remindersHint, { color: textMuted }]}>
-                Пуш по времени в календаре, дедлайну или по кнопке в уведомлении
+                Пуш по времени в календаре или по кнопке в уведомлении
               </ThemedText>
             </View>
             <View style={[styles.divider, { backgroundColor: border }]} />
@@ -755,41 +557,58 @@ export default function TaskDetailsScreen() {
           animationType="fade"
           onRequestClose={() => setIosPicker((p) => ({ ...p, open: false }))}
         >
-          <Pressable
-            style={styles.pickerBackdrop}
-            onPress={() => setIosPicker((p) => ({ ...p, open: false }))}
-          >
-            <Pressable style={[styles.pickerSheet, { backgroundColor: cardBg, borderColor: border }]} onPress={() => {}}>
-              <View style={styles.pickerHeader}>
+          <View style={styles.pickerRoot}>
+            <Pressable
+              style={styles.pickerBackdropDim}
+              onPress={() => setIosPicker((p) => ({ ...p, open: false }))}
+              accessibilityRole="button"
+              accessibilityLabel="Закрыть"
+            />
+            <View
+              style={[
+                styles.pickerSheet,
+                {
+                  backgroundColor: cardBg,
+                  paddingBottom: Math.max(insets.bottom, 18),
+                },
+              ]}
+            >
+              <View style={[styles.pickerHeader, { borderBottomColor: border }]}>
                 <Pressable
                   onPress={() => setIosPicker((p) => ({ ...p, open: false }))}
                   hitSlop={10}
+                  style={styles.pickerHeaderSide}
                 >
-                  <ThemedText style={{ color: primary, fontWeight: '700' }}>Отмена</ThemedText>
+                  <ThemedText style={{ color: primary, fontSize: 17 }}>Отмена</ThemedText>
                 </Pressable>
+                <ThemedText style={[styles.pickerHeaderTitle, { color: text }]}>
+                  {iosPicker.mode === 'schedule-time' ? 'Время' : 'Дата'}
+                </ThemedText>
                 <Pressable
                   onPress={async () => {
                     await applyIosPicker();
                     setIosPicker((p) => ({ ...p, open: false }));
                   }}
                   hitSlop={10}
+                  style={[styles.pickerHeaderSide, { alignItems: 'flex-end' }]}
                 >
-                  <ThemedText style={{ color: primary, fontWeight: '800' }}>Готово</ThemedText>
+                  <ThemedText style={{ color: primary, fontSize: 17, fontWeight: '700' }}>Готово</ThemedText>
                 </Pressable>
               </View>
-
-              <DateTimePicker
-                value={iosPicker.value}
-                mode={iosPicker.mode.endsWith('time') ? 'time' : 'date'}
-                display="spinner"
-                onChange={(_, d) => {
-                  if (!d) return;
-                  setIosPicker((p) => ({ ...p, value: d }));
-                }}
-                style={{ backgroundColor: 'transparent' }}
-              />
-            </Pressable>
-          </Pressable>
+              <View style={styles.pickerWheelWrap}>
+                <DateTimePicker
+                  value={iosPicker.value}
+                  mode={iosPicker.mode === 'schedule-time' ? 'time' : 'date'}
+                  display="spinner"
+                  onChange={(_, d) => {
+                    if (!d) return;
+                    setIosPicker((p) => ({ ...p, value: d }));
+                  }}
+                  style={styles.pickerWheel}
+                />
+              </View>
+            </View>
+          </View>
         </Modal>
       ) : null}
     </ThemedView>
@@ -800,14 +619,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   grabberWrap: {
     alignItems: 'center',
-    paddingTop: 6,
-    paddingBottom: 2,
+    paddingTop: 2,
+    paddingBottom: 0,
   },
   grabber: {
-    width: 40,
+    width: 42,
     height: 5,
-    borderRadius: 999,
-    opacity: 0.45,
+    borderRadius: 2.5,
+    opacity: 0.95,
   },
   header: {
     flexDirection: 'row',
@@ -848,6 +667,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingVertical: 0,
     paddingHorizontal: 0,
+    minHeight: 72,
+    textAlignVertical: 'top',
   },
   sectionLabel: {
     marginTop: 18,
@@ -868,6 +689,18 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 10,
   },
+  rowPressable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: 0,
+    gap: 10,
+    marginRight: 4,
+  },
+  rowPressablePressed: {
+    opacity: 0.65,
+  },
   rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -878,11 +711,6 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 15,
     fontWeight: '600',
-  },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
   },
   rowValue: {
     fontSize: 13,
@@ -980,23 +808,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  pickerBackdrop: {
+  pickerRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
+  },
+  pickerBackdropDim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   pickerSheet: {
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
-    borderWidth: 1,
-    paddingBottom: 18,
+    overflow: 'hidden',
   },
   pickerHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerHeaderSide: {
+    flex: 1,
+  },
+  pickerHeaderTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  pickerWheelWrap: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  pickerWheel: {
+    width: '100%',
+    maxWidth: 320,
+    height: 216,
+    backgroundColor: 'transparent',
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

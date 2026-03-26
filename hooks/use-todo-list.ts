@@ -29,20 +29,6 @@ export function useTodoList(filter: TaskFilter = 'all') {
     tasksRef.current = tasks;
   }, [tasks]);
 
-  const reconcileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleReconcile = useCallback(() => {
-    if (reconcileTimerRef.current) clearTimeout(reconcileTimerRef.current);
-    reconcileTimerRef.current = setTimeout(() => {
-      reconcileTimerRef.current = null;
-      // Do not flip loading state: keep UI stable
-      getUserTasks({ filter, pageSize: 100 }).then((res) => {
-        if (!res.ok) return;
-        setTasks(res.data.tasks);
-        setTotal(res.data.total);
-      });
-    }, 600);
-  }, [filter]);
-
   const refresh = useCallback(async () => {
     if (!token || isGuest) {
       setTasks([]);
@@ -66,9 +52,28 @@ export function useTodoList(filter: TaskFilter = 'all') {
     }
   }, [token, isGuest, filter]);
 
+  /** Синхронизация с сервером без лоадера (после мутаций и bump из других экранов). */
+  const silentRefresh = useCallback(async () => {
+    if (!token || isGuest) return;
+    const res = await getUserTasks({ filter, pageSize: 100 });
+    if (!res.ok) return;
+    setTasks(res.data.tasks);
+    setTotal(res.data.total);
+  }, [token, isGuest, filter]);
+
   useEffect(() => {
     refresh();
-  }, [refresh, version]);
+  }, [refresh]);
+
+  const skipVersionSyncRef = useRef(true);
+  useEffect(() => {
+    if (skipVersionSyncRef.current) {
+      skipVersionSyncRef.current = false;
+      return;
+    }
+    if (version === 0) return;
+    silentRefresh();
+  }, [version, silentRefresh]);
 
   const tempIdSeedRef = useRef(-1);
   const nextTempId = useCallback(() => {
@@ -82,9 +87,8 @@ export function useTodoList(filter: TaskFilter = 'all') {
     async (
       title: string,
       scheduledAt?: string | null,
-      deadline?: { from?: string | null; to?: string | null; time?: string | null },
-      assigneeIds?: number[],
-      remindersDisabled?: boolean
+      remindersDisabled?: boolean,
+      remindBeforeMinutes?: number | null
     ) => {
       if (!token || isGuest) {
         show({ title: 'Недоступно', description: 'Нужно войти в аккаунт, чтобы создавать задачи', variant: 'destructive' });
@@ -98,14 +102,15 @@ export function useTodoList(filter: TaskFilter = 'all') {
         completed: false,
         completed_at: null,
         scheduled_at: scheduledAt ?? null,
-        deadline_from: deadline?.from ?? null,
-        deadline_to: deadline?.to ?? null,
-        deadline_time: deadline?.time ?? null,
+        deadline_from: null,
+        deadline_to: null,
+        deadline_time: null,
         remind_at: null,
         reminders_disabled: remindersDisabled ?? false,
+        remind_before_minutes: remindBeforeMinutes ?? null,
         created_at: nowIso(),
         updated_at: nowIso(),
-        assignee_ids: assigneeIds?.length ? assigneeIds : [],
+        assignee_ids: [],
         assignees: [],
       };
 
@@ -115,16 +120,20 @@ export function useTodoList(filter: TaskFilter = 'all') {
       const res = await createUserTask({
         title,
         scheduled_at: scheduledAt ?? null,
-        deadline_from: deadline?.from ?? null,
-        deadline_to: deadline?.to ?? null,
-        deadline_time: deadline?.time ?? null,
-        assignee_ids: assigneeIds?.length ? assigneeIds : undefined,
+        deadline_from: null,
+        deadline_to: null,
+        deadline_time: null,
+        assignee_ids: undefined,
         reminders_disabled: remindersDisabled,
+        remind_before_minutes: remindBeforeMinutes ?? null,
       });
       if (res.ok) {
-        setTasks((prev) => prev.map((t) => (t.id === optimisticId ? res.data : t)));
+        const merged: UserTask = {
+          ...res.data,
+          title: res.data.title ?? title,
+        };
+        setTasks((prev) => prev.map((t) => (t.id === optimisticId ? merged : t)));
         bump();
-        scheduleReconcile();
         return res.data;
       }
       // rollback
@@ -132,7 +141,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
       show({ title: 'Не удалось создать задачу', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
     },
-    [token, isGuest, bump, nextTempId, scheduleReconcile, show, nowIso]
+    [token, isGuest, bump, nextTempId, show, nowIso]
   );
 
   const toggleComplete = useCallback(
@@ -151,14 +160,13 @@ export function useTodoList(filter: TaskFilter = 'all') {
           prev.map((t) => (t.id === task.id ? { ...t, ...res.data } : t))
         );
         bump();
-        scheduleReconcile();
         return;
       }
       // rollback
       setTasks(before);
       show({ title: 'Не удалось обновить задачу', description: res.error, variant: 'destructive', duration: 4000 });
     },
-    [token, isGuest, bump, scheduleReconcile, show]
+    [token, isGuest, bump, show]
   );
 
   const removeTask = useCallback(
@@ -173,14 +181,13 @@ export function useTodoList(filter: TaskFilter = 'all') {
       const res = await deleteUserTask(task.id);
       if (res.ok) {
         bump();
-        scheduleReconcile();
         return;
       }
       // rollback
       setTasks(before);
       show({ title: 'Не удалось удалить задачу', description: res.error, variant: 'destructive', duration: 4000 });
     },
-    [token, isGuest, bump, scheduleReconcile, show]
+    [token, isGuest, bump, show]
   );
 
   const updateTask = useCallback(
@@ -198,7 +205,6 @@ export function useTodoList(filter: TaskFilter = 'all') {
           prev.map((t) => (t.id === task.id ? { ...t, ...res.data } : t))
         );
         bump();
-        scheduleReconcile();
         return res.data;
       }
       // rollback
@@ -206,7 +212,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
       show({ title: 'Не удалось сохранить изменения', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
     },
-    [token, isGuest, bump, scheduleReconcile, show]
+    [token, isGuest, bump, show]
   );
 
   return {

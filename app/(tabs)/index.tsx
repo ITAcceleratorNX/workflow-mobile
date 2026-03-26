@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,7 +6,6 @@ import {
   Pressable,
   Dimensions,
   Modal,
-  TextInput as RNTextInput,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,19 +14,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 
-import { PageLoader, PullToRefresh, Select } from '@/components/ui';
+import { PageLoader, PullToRefresh } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { TasksSection } from '@/components/tasks/TasksSection';
 import { useAuthStore } from '@/stores/auth-store';
-import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
-import { useTodoStore, type TodoItem, getTaskDate, getTaskTime } from '@/stores/todo-store';
-import { TIME_SLOTS, getDateOptions } from '@/constants/task-form';
 import { useToast } from '@/context/toast-context';
-import { getRequestGroups, getMyBookings, type RequestGroup, type MeetingRoomBooking } from '@/lib/api';
-import {   formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
 import { NEWS_ITEMS } from '@/constants/news';
 import { getNewsMain } from '@/lib/news-api';
 import type { NewsDisplayItem } from '@/lib/news-api';
@@ -455,61 +449,6 @@ export default function ClientDashboardScreen() {
 const INSIGHT_CARD_WIDTH = width * 0.88;
 const INSIGHT_CARD_HEIGHT = 260;
 
-const WEEK_DAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-const TASK_COLOR_REQUEST = '#3B82F6';
-const TASK_COLOR_BOOKING = CARD_ORANGE;
-
-function TodoRowInline({
-  item,
-  onToggle,
-  onRemove,
-  textColor,
-  textMuted,
-  primary,
-  borderColor,
-}: {
-  item: TodoItem;
-  onToggle: () => void;
-  onRemove: () => void;
-  textColor: string;
-  textMuted: string;
-  primary: string;
-  borderColor: string;
-}) {
-  return (
-    <Pressable
-      onPress={() => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onToggle();
-      }}
-      style={styles.todoRow}
-    >
-      <View style={[styles.todoCheckbox, { borderColor: item.completed ? primary : borderColor }, item.completed && { backgroundColor: primary }]}>
-        {item.completed && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
-      </View>
-      <View style={styles.todoRowContent}>
-        <ThemedText
-          style={[styles.todoRowText, { color: item.completed ? textMuted : textColor }, item.completed && styles.todoTextCompleted]}
-          numberOfLines={2}
-        >
-          {item.text}
-        </ThemedText>
-        <ThemedText style={[styles.todoRowTime, { color: textMuted }]}>{getTaskTime(item)}</ThemedText>
-      </View>
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          onRemove();
-        }}
-        hitSlop={12}
-        style={styles.todoRemoveBtn}
-      >
-        <MaterialIcons name="close" size={20} color={textMuted} />
-      </Pressable>
-    </Pressable>
-  );
-}
-
 /** Контент главной только для роли client. Вынесен в отдельный компонент, чтобы не нарушать правила хуков (одинаковое количество хуков при любом рендере). */
 function ClientDashboardContent() {
   const insets = useSafeAreaInsets();
@@ -522,25 +461,10 @@ function ClientDashboardContent() {
   const headerText = useThemeColor({}, 'text');
   const headerSubtitle = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
-  const screenBg = useThemeColor({}, 'screenBackgroundDark');
   const cardBg = useThemeColor({}, 'cardBackground');
-  const border = useThemeColor({}, 'border');
 
-  const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
-  const [showTodoList, setShowTodoList] = useState(false);
-  const [todoInputText, setTodoInputText] = useState('');
-  const [todoAddDate, setTodoAddDate] = useState(() => formatDateForApi(new Date()));
-  const [todoAddTime, setTodoAddTime] = useState('09:00');
   const [hasNotifications] = useState(true);
   const [selectedInsight, setSelectedInsight] = useState<NewsDisplayItem | null>(null);
-  const [requests, setRequests] = useState<RequestGroup[]>([]);
-  const [bookings, setBookings] = useState<MeetingRoomBooking[]>([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
-
-  const isGuest = useAuthStore((state) => state.isGuest);
-  const guestBookings = useGuestDemoStore((state) => state.bookings);
-  const guestRequests = useGuestDemoStore((state) => state.requests);
-  const { items: todoItems, addItem: addTodoItem, removeItem: removeTodoItem, toggleItem: toggleTodoItem, clearCompleted: clearTodoCompleted } = useTodoStore();
   const [insightItems, setInsightItems] = useState<NewsDisplayItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
@@ -555,151 +479,16 @@ function ClientDashboardContent() {
     return () => { cancelled = true; };
   }, []);
 
-  // Неделя, содержащая selectedDate (Пн–Вс)
-  const weekDates = (() => {
-    const d = new Date(selectedDate);
-    const dayOfWeek = d.getDay(); // 0=Вс, 1=Пн, ...
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(d);
-    monday.setDate(d.getDate() + mondayOffset);
-    const today = new Date();
-    const days: { date: Date; label: string; isToday: boolean; isSelected: boolean }[] = [];
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(monday);
-      day.setDate(monday.getDate() + i);
-      days.push({
-        date: day,
-        label: `${WEEK_DAYS[day.getDay()]} ${day.getDate()}`,
-        isToday: day.toDateString() === today.toDateString(),
-        isSelected: day.toDateString() === selectedDate.toDateString(),
-      });
-    }
-    return days;
-  })();
-
-  // Задачи на выбранную дату: заявки + брони
-  const tasksForSelectedDate = (() => {
-    const dateKey = formatDateForApi(selectedDate);
-    const dayStart = new Date(selectedDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(selectedDate);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const items: { id: string; time: string; title: string; color: string; requestId?: number; bookingId?: number; taskId?: string }[] = [];
-
-    // Личные задачи (из Todo list) — только активные, выполненные скрыты
-    const TASK_COLOR_TODO = '#10B981';
-    for (const item of todoItems) {
-      if (item.completed) continue;
-      const itemDate = getTaskDate(item);
-      if (itemDate !== dateKey) continue;
-      items.push({
-        id: `task-${item.id}`,
-        time: getTaskTime(item),
-        title: item.text,
-        color: TASK_COLOR_TODO,
-        taskId: item.id,
-      });
-    }
-
-    // Заявки: created_date или planned_date
-    const reqList = isGuest ? guestRequests : requests;
-    for (const rg of reqList) {
-      const dateStr = ('planned_date' in rg ? rg.planned_date : null) || rg.created_date;
-      if (!dateStr) continue;
-      const itemDate = new Date(dateStr);
-      if (itemDate < dayStart || itemDate > dayEnd) continue;
-      const dateOnly = dateStr.slice(0, 10);
-      if (dateOnly !== dateKey) continue;
-      const title = rg.requests?.[0]?.title || rg.location_detail || 'Заявка';
-      items.push({
-        id: `req-${rg.id}`,
-        time: formatTimeOnly(dateStr),
-        title,
-        color: TASK_COLOR_REQUEST,
-        requestId: rg.id,
-      });
-    }
-
-    // Брони: start_time
-    const bookList = isGuest ? guestBookings : bookings;
-    for (const b of bookList) {
-      const startStr = b.start_time;
-      if (!startStr) continue;
-      const itemDate = new Date(startStr);
-      if (itemDate < dayStart || itemDate > dayEnd) continue;
-      const bDateKey = formatDateForApi(itemDate);
-      if (bDateKey !== dateKey) continue;
-      const roomName = (b as MeetingRoomBooking).meetingRoom?.name || (b as MeetingRoomBooking).meeting_room?.name || 'Переговорная';
-      items.push({
-        id: `book-${b.id}`,
-        time: formatTimeOnly(startStr),
-        title: roomName,
-        color: TASK_COLOR_BOOKING,
-        bookingId: b.id,
-      });
-    }
-
-    items.sort((a, b) => a.time.localeCompare(b.time));
-    return items;
-  })();
-
-  const loadTasks = useCallback(async () => {
-    if (isGuest) return;
-    setTasksLoading(true);
-    const [reqRes, bookRes] = await Promise.all([
-      getRequestGroups(1, 100, 'client'),
-      getMyBookings({ page: 1, pageSize: 100 }),
-    ]);
-    setTasksLoading(false);
-    if (reqRes.ok) setRequests(reqRes.data);
-    if (bookRes.ok) setBookings(bookRes.data);
-  }, [isGuest]);
-
-  useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     const newsPromise = getNewsMain().then((res) => {
       if (res.ok) setInsightItems(res.data);
       else setInsightItems(NEWS_ITEMS.map((i) => ({ id: i.id, tag: i.tag || 'Новость', title: i.title, desc: i.desc, image: i.image, date: i.date })));
     });
-    const tasksPromise = isGuest ? Promise.resolve() : loadTasks();
     bumpTasks();
-    await Promise.all([newsPromise, tasksPromise]);
+    await newsPromise;
     setRefreshing(false);
-  }, [isGuest, loadTasks, bumpTasks]);
-
-  const formatDateNav = () => {
-    const d = selectedDate;
-    const today = new Date();
-    const dateStr = `${d.getDate()} ${['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'][d.getMonth()]}`;
-    if (d.toDateString() === today.toDateString()) return `Сегодня – ${dateStr}`;
-    return dateStr;
-  };
-
-  const formatDateShort = () => {
-    const d = selectedDate;
-    const today = new Date();
-    if (d.toDateString() === today.toDateString()) return 'сегодня';
-    return `${d.getDate()} ${['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'][d.getMonth()]}`;
-  };
-
-  const handlePrevDay = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() - 1);
-    setSelectedDate(d);
-  };
-
-  const handleNextDay = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + 1);
-    setSelectedDate(d);
-  };
+  }, [bumpTasks]);
 
   const handleSmartHome = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -710,31 +499,6 @@ function ClientDashboardContent() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.push('/client/health-screen');
   };
-
-  const handleAllTasks = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/client/tasks');
-  };
-
-  const handleToggleView = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setShowTodoList((prev) => {
-      if (!prev) {
-        setTodoAddDate(formatDateForApi(selectedDate));
-      }
-      return !prev;
-    });
-  };
-
-  const handleAddTodo = useCallback(() => {
-    addTodoItem(todoInputText, todoAddDate, todoAddTime);
-    setTodoInputText('');
-  }, [todoInputText, todoAddDate, todoAddTime, addTodoItem]);
-
-  const todoDateOptions = useMemo(() => getDateOptions(), []);
-
-  const todoActiveItems = useMemo(() => todoItems.filter((i) => !i.completed), [todoItems]);
-  const todoCompletedCount = todoItems.filter((i) => i.completed).length;
 
   // Если роль еще загружается - показываем загрузку
   if (!effectiveRole) {

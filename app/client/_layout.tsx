@@ -9,7 +9,6 @@ export default function ClientLayout() {
       <Stack.Screen name="todo-list" />
       <Stack.Screen name="tasks" />
       <Stack.Screen name="news" />
-      <Stack.Screen name="tasks/task-editor" options={{ presentation: 'card' }} />
       <Stack.Screen name="tasks/details" options={{ presentation: 'modal' }} />
     </Stack>
   );

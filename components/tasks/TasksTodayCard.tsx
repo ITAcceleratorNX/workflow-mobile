@@ -61,7 +61,7 @@ export function TasksTodayCard({ onPress }: TasksTodayCardProps) {
       </View>
 
       <ThemedText style={[styles.hint, { color: textMuted }]}>
-        Нажмите, чтобы открыть календарь
+        Нажмите, чтобы открыть задачи (Сегодня)
       </ThemedText>
     </Pressable>
   );
