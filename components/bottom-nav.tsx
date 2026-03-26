@@ -22,7 +22,7 @@ const NAV_ITEMS: { key: string; routeName: string; label: string; icon: 'home' |
 export function BottomNav({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
-  const barBottom = NAV_BAR_MARGIN + bottomInset;
+  const barBottom = bottomInset - NAV_BAR_MARGIN;
 
   const currentRouteName = state.routes[state.index]?.name ?? 'index';
   const currentTabRoute = state.routes[state.index];
