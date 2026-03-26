@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BOTTOM_NAV_ROW_HEIGHT, bottomNavBottomInset } from '@/components/bottom-nav';
 import { Button, TextInput } from '@/components/ui';
 import { LogsViewer } from '@/components/logs-viewer';
 import { NotificationsList } from '@/components/notifications-list';
@@ -28,9 +29,11 @@ import {
   updateProfile,
   verifyEmail,
 } from '@/lib/profile-api';
+import { calculateDeskHeights } from '@/lib/desk-height-utils';
 import { formatPhone } from '@/lib';
 import { unregisterPushTokenFromBackend } from '@/lib/pushNotifications';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
+import { useStepsStore } from '@/stores/steps-store';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -79,6 +82,13 @@ export default function ProfileScreen() {
   const [isSavingNotifications, setIsSavingNotifications] = useState(false);
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const heightCm = useStepsStore((s) => s.settings.heightCm);
+  const weightKg = useStepsStore((s) => s.settings.weightKg);
+  const deskHeights = useMemo(() => {
+    if (heightCm == null) return null;
+    return calculateDeskHeights(heightCm, weightKg);
+  }, [heightCm, weightKg]);
 
   useEffect(() => {
     if (tab === 'notifications') setActiveTab('notifications');
@@ -372,9 +382,12 @@ export default function ProfileScreen() {
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingTop: 20 + insets.top,
-              paddingHorizontal: 20,
-              paddingBottom: 24 + insets.bottom,
+              paddingTop: 12 + insets.top,
+              paddingHorizontal: 18,
+              paddingBottom:
+                18 +
+                BOTTOM_NAV_ROW_HEIGHT +
+                bottomNavBottomInset(insets.bottom),
             },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -443,6 +456,74 @@ export default function ProfileScreen() {
                         #{user?.id}
                       </ThemedText>
                     </View>
+                  </View>
+
+                  <View style={[styles.deskSection, { borderColor: border }]}>
+                    <View style={styles.deskSectionHeader}>
+                      <MaterialIcons name="event-seat" size={22} color={textMuted} />
+                      <ThemedText style={[styles.deskSectionTitle, { color: text }]}>
+                        Высота рабочего стола
+                      </ThemedText>
+                    </View>
+                    {deskHeights ? (
+                      <>
+                        <ThemedText style={[styles.deskMeta, { color: textMuted }]}>
+                          По данным из «Шаги»: рост {heightCm} см
+                          {weightKg != null ? `, вес ${weightKg} кг` : ''}
+                          {weightKg == null
+                            ? '. Вес необязателен — с ним точнее высота для работы стоя.'
+                            : '.'}
+                        </ThemedText>
+                        <View style={styles.deskHeightsRow}>
+                          <View style={[styles.deskHeightCard, { borderColor: border }]}>
+                            <ThemedText style={[styles.deskHeightLabel, { color: textMuted }]}>Сидя</ThemedText>
+                            <ThemedText style={[styles.deskHeightValue, { color: text }]}>
+                              {deskHeights.sitting} см
+                            </ThemedText>
+                          </View>
+                          <View style={[styles.deskHeightCard, { borderColor: border }]}>
+                            <ThemedText style={[styles.deskHeightLabel, { color: textMuted }]}>Стоя</ThemedText>
+                            <ThemedText style={[styles.deskHeightValue, { color: text }]}>
+                              {deskHeights.standing} см
+                            </ThemedText>
+                          </View>
+                        </View>
+                        <Pressable
+                          onPress={() => router.push('/steps')}
+                          style={({ pressed }) => [
+                            styles.deskStepsLink,
+                            { borderColor: border },
+                            pressed && styles.buttonPressed,
+                          ]}
+                        >
+                          <ThemedText style={[styles.deskStepsLinkText, { color: primary }]}>
+                            Изменить рост и вес в «Шаги»
+                          </ThemedText>
+                          <MaterialIcons name="chevron-right" size={20} color={primary} />
+                        </Pressable>
+                      </>
+                    ) : (
+                      <>
+                        <ThemedText style={[styles.deskMeta, { color: textMuted }]}>
+                          {heightCm != null
+                            ? 'Рост должен быть в диапазоне 100–250 см. Исправьте значение в настройках «Шаги».'
+                            : 'Укажите рост (и при желании вес) в экране «Шаги» — здесь появятся рекомендуемые высоты стола сидя и стоя.'}
+                        </ThemedText>
+                        <Pressable
+                          onPress={() => router.push('/steps')}
+                          style={({ pressed }) => [
+                            styles.deskStepsLink,
+                            { borderColor: border },
+                            pressed && styles.buttonPressed,
+                          ]}
+                        >
+                          <ThemedText style={[styles.deskStepsLinkText, { color: primary }]}>
+                            Открыть «Шаги»
+                          </ThemedText>
+                          <MaterialIcons name="chevron-right" size={20} color={primary} />
+                        </Pressable>
+                      </>
+                    )}
                   </View>
 
                   <Pressable
@@ -724,7 +805,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    gap: 28,
+    gap: 22,
     flexGrow: 1,
   },
   headerRow: {
@@ -763,6 +844,60 @@ const styles = StyleSheet.create({
   profileBlock: {
     width: '100%',
     marginTop: 4,
+  },
+  deskSection: {
+    width: '100%',
+    marginTop: 8,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 12,
+  },
+  deskSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  deskSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deskMeta: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  deskHeightsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  deskHeightCard: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 4,
+  },
+  deskHeightLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  deskHeightValue: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  deskStepsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  deskStepsLinkText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   infoRow: {
     flexDirection: 'row',

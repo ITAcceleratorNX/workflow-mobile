@@ -276,19 +276,28 @@ function SimpleSlider({
 
   const percent = max > 0 ? (value / max) * 100 : 0;
 
+  const thumbHalf = 13;
+  const trackH = 22;
+  const shellPad = 4;
+  const thumbTop = shellPad + (trackH - thumbHalf * 2) / 2;
+
   return (
     <GestureDetector gesture={composedGesture}>
       <View style={styles.sliderTouchArea}>
-        <View ref={trackRef} style={styles.sliderTrack} onLayout={onLayout}>
-          <View style={[styles.sliderFill, { width: `${percent}%` }]} />
+        <View style={styles.sliderTrackShell}>
+          <View ref={trackRef} style={styles.sliderTrack} onLayout={onLayout}>
+            <View style={[styles.sliderFill, { width: `${percent}%` }]} />
+          </View>
           <View
             style={[
               styles.sliderThumb,
               {
                 left: `${Math.min(percent, 98)}%`,
-                marginLeft: -14,
+                marginLeft: -thumbHalf,
+                top: thumbTop,
               },
             ]}
+            pointerEvents="none"
           />
         </View>
       </View>
@@ -340,16 +349,20 @@ export function MoodCheckInCard() {
 
       {step === 1 && (
         <>
-          <View style={styles.faceWrap}>
-            <MoodFace value={moodValue} />
-            <ThemedText style={[styles.stepTitle, styles.stepTitleInFace, { color: COLORS.textPrimary }]}>
-              Как вы себя чувствуете?
-            </ThemedText>
-            <ThemedText
-              style={[styles.moodLabel, { color: getMoodColor(moodValue) }]}
-            >
-              {getMoodLabel(moodValue)}
-            </ThemedText>
+          <View style={styles.stepMainColumn}>
+            <View style={styles.stepVisualArea}>
+              <MoodFace value={moodValue} />
+            </View>
+            <View style={styles.stepTextBlock}>
+              <ThemedText style={[styles.stepTitle, styles.stepTitleInFace, { color: COLORS.textPrimary }]}>
+                Как вы себя чувствуете?
+              </ThemedText>
+              <ThemedText
+                style={[styles.moodLabel, { color: getMoodColor(moodValue) }]}
+              >
+                {getMoodLabel(moodValue)}
+              </ThemedText>
+            </View>
           </View>
           <View style={styles.sliderSection}>
             <SimpleSlider value={moodValue} onValueChange={setMoodValue} />
@@ -370,14 +383,18 @@ export function MoodCheckInCard() {
 
       {step === 2 && (
         <>
-          <View style={styles.iconWrap}>
-            <EnergyIconCircle energy={energy} />
-            <ThemedText style={[styles.stepTitle, { color: COLORS.textPrimary }]}>
-              Уровень энергии
-            </ThemedText>
-            <ThemedText style={[styles.stepSubtitle, { color: COLORS.textMuted }]}>
-              {energyOptions[energy].label}
-            </ThemedText>
+          <View style={styles.stepMainColumn}>
+            <View style={styles.stepVisualArea}>
+              <EnergyIconCircle energy={energy} />
+            </View>
+            <View style={styles.stepTextBlock}>
+              <ThemedText style={[styles.stepTitle, styles.stepTitleNoExtraMb, { color: COLORS.textPrimary }]}>
+                Уровень энергии
+              </ThemedText>
+              <ThemedText style={[styles.stepSubtitle, styles.stepSubtitleTight, { color: COLORS.textMuted }]}>
+                {energyOptions[energy].label}
+              </ThemedText>
+            </View>
           </View>
           <View style={styles.sliderSection}>
             <SimpleSlider
@@ -412,14 +429,18 @@ export function MoodCheckInCard() {
 
       {step === 3 && (
         <>
-          <View style={styles.iconWrap}>
-            <StressIconCircle stress={stress} />
-            <ThemedText style={[styles.stepTitle, { color: COLORS.textPrimary }]}>
-              Уровень стресса
-            </ThemedText>
-            <ThemedText style={[styles.stepSubtitle, { color: COLORS.textMuted }]}>
-              {stressOptions[stress].label}
-            </ThemedText>
+          <View style={styles.stepMainColumn}>
+            <View style={styles.stepVisualArea}>
+              <StressIconCircle stress={stress} />
+            </View>
+            <View style={styles.stepTextBlock}>
+              <ThemedText style={[styles.stepTitle, styles.stepTitleNoExtraMb, { color: COLORS.textPrimary }]}>
+                Уровень стресса
+              </ThemedText>
+              <ThemedText style={[styles.stepSubtitle, styles.stepSubtitleTight, { color: COLORS.textMuted }]}>
+                {stressOptions[stress].label}
+              </ThemedText>
+            </View>
           </View>
           <View style={styles.sliderSection}>
             <SimpleSlider
@@ -522,14 +543,30 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   stepTitleInFace: { marginBottom: 8 },
+  stepTitleNoExtraMb: { marginBottom: 6 },
   stepSubtitle: {
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,
   },
-  faceWrap: {
+  stepSubtitleTight: { marginBottom: 0 },
+  /** Общая высота шагов 1–3: визуал + текст */
+  stepMainColumn: {
+    minHeight: 252,
+    marginBottom: 4,
+  },
+  stepVisualArea: {
+    minHeight: 160,
+    width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+  },
+  stepTextBlock: {
+    minHeight: 88,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
   },
   moodLabel: {
     fontSize: 14,
@@ -537,14 +574,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sliderTouchArea: {
-    paddingVertical: 24,
+    paddingVertical: 14,
     marginHorizontal: -4,
   },
-  sliderTrack: {
-    height: 24,
-    backgroundColor: COLORS.trackBg,
-    borderRadius: 12,
+  /** Ползунок снаружи overflow трека — круг не обрезается */
+  sliderTrackShell: {
+    position: 'relative',
+    paddingVertical: 4,
     marginBottom: 8,
+  },
+  sliderTrack: {
+    height: 22,
+    backgroundColor: COLORS.trackBg,
+    borderRadius: 11,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -554,14 +596,13 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     backgroundColor: COLORS.accent,
-    borderRadius: 12,
+    borderRadius: 11,
   },
   sliderThumb: {
     position: 'absolute',
-    top: -4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: COLORS.textPrimary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -598,14 +639,12 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: { fontSize: 16, fontWeight: '500', color: COLORS.textPrimary },
   btnRow: { flexDirection: 'row', gap: 12 },
-  iconWrap: { alignItems: 'center', marginBottom: 20 },
   iconCircle: {
     width: 96,
     height: 96,
     borderRadius: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
   },
   energyBar: {
     position: 'absolute',
@@ -626,7 +665,6 @@ const styles = StyleSheet.create({
     height: 144,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
   },
   stressCircleInner: {
     width: 96,
