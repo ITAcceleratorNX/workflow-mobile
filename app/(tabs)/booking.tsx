@@ -48,7 +48,6 @@ import { useRouter } from 'expo-router';
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
 const CARD_ORANGE = '#E25B21';
-const HEIGHT_OPTIONS = [150, 155, 160, 165, 170, 175, 180, 185, 190, 195, 200];
 
 /**
  * URL первого фото комнаты — как в браузере: используем photos[0] или photo как есть.
@@ -79,7 +78,6 @@ for (let hour = 9; hour < 24; hour++) {
 
 type Step = 'offices' | 'rooms' | 'form';
 type BookingTab = 'book' | 'my-bookings';
-type SubTab = 'offices' | 'calculator';
 type MyBookingsFilter = 'active' | 'completed' | 'cancelled';
 
 function getBookingStatusText(status?: string): string {
@@ -113,12 +111,8 @@ export default function BookingScreen() {
 
   const [activeTab, setActiveTab] = useState<BookingTab>('book');
   const [step, setStep] = useState<Step>('offices');
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('offices');
   const [selectedOffice, setSelectedOffice] = useState<Office | null>(null);
   const [selectedRoom, setSelectedRoom] = useState<MeetingRoom | null>(null);
-  const [deskHeight, setDeskHeight] = useState('');
-  const [deskWeight, setDeskWeight] = useState('');
-  const [calculatedHeight, setCalculatedHeight] = useState<{ sitting: number; standing: number } | null>(null);
 
   const [offices, setOffices] = useState<Office[]>([]);
   const [rooms, setRooms] = useState<MeetingRoom[]>([]);
@@ -361,27 +355,6 @@ export default function BookingScreen() {
       setStep('offices');
     }
   }, [step]);
-
-  const updateCalculatedHeight = useCallback((heightStr: string, weightStr: string) => {
-    const h = parseFloat(heightStr);
-    if (isNaN(h) || h < 100 || h > 250) {
-      setCalculatedHeight(null);
-      return;
-    }
-    let sitting = Math.round(h * 0.29 + 20);
-    let standing = Math.round(h * 0.62 - 2);
-    const w = parseFloat(weightStr);
-    if (!isNaN(w) && w > 0) {
-      let adj = 0;
-      if (w <= 64) adj = -2;
-      else if (w <= 69) adj = -1;
-      else if (w <= 79) adj = 0;
-      else if (w <= 89) adj = 1;
-      else adj = 2;
-      standing += adj;
-    }
-    setCalculatedHeight({ sitting, standing });
-  }, []);
 
   const handleSelectOffice = useCallback((office: Office) => {
     setSelectedOffice(office);
@@ -801,27 +774,7 @@ export default function BookingScreen() {
 
         {activeTab === 'book' && (
           <>
-            <View style={styles.subTabsRow}>
-              {(['offices', 'calculator'] as const).map((tab) => (
-                <Pressable
-                  key={tab}
-                  onPress={() => setActiveSubTab(tab)}
-                  style={styles.subTab}
-                >
-                  <ThemedText
-                    style={[
-                      styles.subTabText,
-                      activeSubTab === tab && styles.subTabTextActive,
-                    ]}
-                  >
-                    {tab === 'offices' ? 'Офисы' : 'Калькулятор высоты стола'}
-                  </ThemedText>
-                  <View style={[styles.subTabUnderline, activeSubTab === tab && styles.subTabUnderlineActive]} />
-                </Pressable>
-              ))}
-            </View>
-
-            {activeSubTab === 'offices' && !selectedOffice && (
+            {!selectedOffice && (
               <>
                 <ThemedText style={styles.stepHintWhite}>
                   Выберите офис для просмотра переговорных комнат
@@ -885,7 +838,7 @@ export default function BookingScreen() {
               </>
             )}
 
-            {activeSubTab === 'offices' && selectedOffice && (
+            {selectedOffice && (
               <>
                 <Pressable style={styles.backRowWhite} onPress={() => setSelectedOffice(null)}>
                   <MaterialIcons name="arrow-back" size={24} color="#fff" />
@@ -966,68 +919,6 @@ export default function BookingScreen() {
               </>
             )}
 
-            {activeSubTab === 'calculator' && (
-              <ScrollView style={styles.calculatorScroll} contentContainerStyle={styles.calculatorContent}>
-                <ThemedText style={styles.calculatorDesc}>
-                  Введите ваш рост и вес (опционально), чтобы получить рекомендации по высоте стола
-                </ThemedText>
-                <ThemedText style={styles.calculatorLabel}>Ваш рост (см)</ThemedText>
-                <TextInput
-                  value={deskHeight}
-                  onChangeText={(t) => {
-                    setDeskHeight(t);
-                    updateCalculatedHeight(t, deskWeight);
-                  }}
-                  placeholder="175"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
-                  keyboardType="number-pad"
-                  style={styles.calculatorInput}
-                />
-                <View style={styles.heightOptionsWrap}>
-                  {HEIGHT_OPTIONS.map((opt) => (
-                    <Pressable
-                      key={opt}
-                      onPress={() => {
-                        setDeskHeight(String(opt));
-                        updateCalculatedHeight(String(opt), deskWeight);
-                      }}
-                      style={[styles.heightOptionChip, deskHeight === String(opt) && styles.heightOptionChipActive]}
-                    >
-                      <ThemedText style={[styles.heightOptionText, deskHeight === String(opt) && styles.heightOptionTextActive]}>
-                        {opt} см
-                      </ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-                <ThemedText style={styles.calculatorLabel}>Ваш вес (кг), опционально</ThemedText>
-                <TextInput
-                  value={deskWeight}
-                  onChangeText={(t) => {
-                    setDeskWeight(t);
-                    updateCalculatedHeight(deskHeight, t);
-                  }}
-                  placeholder="70"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
-                  keyboardType="number-pad"
-                  style={styles.calculatorInput}
-                />
-                <ThemedText style={styles.calculatorHint}>
-                  Укажите вес для более точного расчёта высоты стола в положении стоя
-                </ThemedText>
-                {calculatedHeight && (
-                  <View style={styles.calculatorResults}>
-                    <View style={styles.calculatorResultCard}>
-                      <ThemedText style={styles.calculatorResultLabel}>Сидя</ThemedText>
-                      <ThemedText style={styles.calculatorResultValue}>{calculatedHeight.sitting} см</ThemedText>
-                    </View>
-                    <View style={styles.calculatorResultCard}>
-                      <ThemedText style={styles.calculatorResultLabel}>Стоя</ThemedText>
-                      <ThemedText style={styles.calculatorResultValue}>{calculatedHeight.standing} см</ThemedText>
-                    </View>
-                  </View>
-                )}
-              </ScrollView>
-            )}
           </>
         )}
 
@@ -1197,32 +1088,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  subTabsRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    gap: 4,
-  },
-  subTab: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  subTabText: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.6)',
-  },
-  subTabTextActive: {
-    color: '#FE7F47',
-    fontWeight: '600',
-  },
-  subTabUnderline: {
-    height: 2,
-    width: '100%',
-    marginTop: 4,
-    backgroundColor: 'transparent',
-  },
-  subTabUnderlineActive: {
-    backgroundColor: '#F35713',
-  },
   stepHint: {
     fontSize: 14,
     marginBottom: 12,
@@ -1375,86 +1240,6 @@ const styles = StyleSheet.create({
   roomCardMetaWhite: {
     fontSize: 10,
     color: 'rgba(255,255,255,0.7)',
-  },
-  calculatorScroll: {
-    flex: 1,
-  },
-  calculatorContent: {
-    paddingBottom: 24,
-  },
-  calculatorDesc: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  calculatorLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 6,
-  },
-  calculatorInput: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#fff',
-    marginBottom: 12,
-  },
-  calculatorHint: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.6)',
-    marginBottom: 16,
-  },
-  heightOptionsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  heightOptionChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  heightOptionChipActive: {
-    backgroundColor: 'rgba(243,87,19,0.4)',
-    borderColor: '#F35713',
-  },
-  heightOptionText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  heightOptionTextActive: {
-    color: '#F35713',
-    fontWeight: '600',
-  },
-  calculatorResults: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  calculatorResultCard: {
-    flex: 1,
-    backgroundColor: CARD_ORANGE,
-    borderRadius: 10,
-    padding: 16,
-  },
-  calculatorResultLabel: {
-    fontSize: 14,
-    color: '#fff',
-    marginBottom: 4,
-  },
-  calculatorResultValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
   },
   formTitleWhite: {
     marginBottom: 8,
