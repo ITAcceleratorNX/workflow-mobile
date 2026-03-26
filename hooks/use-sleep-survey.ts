@@ -16,6 +16,9 @@ export function useSleepSurvey() {
     const rating = state.dayRecords[dateKey]?.rating;
     if (rating) return;
 
+    // Автопоказ не чаще одного раза за календарный день (кнопка «Оценить сон» не трогает это)
+    if (state.lastSleepSurveyAutoPromptDate === dateKey) return;
+
     const { wakeHour, wakeMinute } = state.settings;
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -23,7 +26,10 @@ export function useSleepSurvey() {
 
     // Показываем после времени пробуждения или после 12:00 в течение дня
     const show = currentMinutes >= wakeMinutes || now.getHours() >= 12;
-    if (show) setVisible(true);
+    if (show) {
+      useSleepStore.getState().markSleepSurveyAutoPromptShown(dateKey);
+      setVisible(true);
+    }
   }, []);
 
   useEffect(() => {
