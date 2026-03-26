@@ -372,9 +372,9 @@ export default function ProfileScreen() {
           contentContainerStyle={[
             styles.scrollContent,
             {
-              paddingTop: 20 + insets.top,
-              paddingHorizontal: 20,
-              paddingBottom: 24 + insets.bottom,
+              paddingTop: 12 + insets.top,
+              paddingHorizontal: 18,
+              paddingBottom: 18 + insets.bottom,
             },
           ]}
           keyboardShouldPersistTaps="handled"
@@ -724,7 +724,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    gap: 28,
+    gap: 22,
     flexGrow: 1,
   },
   headerRow: {

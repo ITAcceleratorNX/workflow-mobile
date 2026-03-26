@@ -4,21 +4,18 @@ import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BottomNav } from '@/components/bottom-nav';
+import { BottomNav, BOTTOM_NAV_ROW_HEIGHT, bottomNavBottomInset } from '@/components/bottom-nav';
 import { usePedometer } from '@/hooks/use-pedometer';
 import { useSleepNotifications } from '@/hooks/use-sleep-notifications';
 import { useStepsSync } from '@/hooks/use-steps-sync';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
-
-const NAV_BAR_HEIGHT = 70;
-const NAV_BAR_MARGIN = 12;
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pendingRequestId = useDeepLinkStore((s) => s.pendingRequestId);
   const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
-  const contentPaddingBottom = NAV_BAR_HEIGHT + NAV_BAR_MARGIN + insets.bottom;
+  const contentPaddingBottom = BOTTOM_NAV_ROW_HEIGHT + bottomNavBottomInset(insets.bottom);
 
   useEffect(() => {
     if (pendingRequestId != null) {

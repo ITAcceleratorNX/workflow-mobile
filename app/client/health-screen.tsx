@@ -514,7 +514,7 @@ export default function ClientHealthScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.titleRow}>
@@ -548,15 +548,15 @@ export default function ClientHealthScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 8 },
+  header: { paddingHorizontal: 16, paddingBottom: 6 },
   backButton: { flexDirection: 'row', alignItems: 'center', minWidth: 44, minHeight: 44 },
   backLabel: { fontSize: 16, marginLeft: 4 },
-  content: { paddingHorizontal: 16, paddingTop: 20 },
+  content: { paddingHorizontal: 16, paddingTop: 12 },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   titleBlock: { flex: 1 },
   title: { fontSize: 28, fontWeight: 'bold', lineHeight: 36 },

@@ -4,9 +4,15 @@ import * as Haptics from 'expo-haptics';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const NAV_BAR_HEIGHT = 70;
-const NAV_BAR_RADIUS = 25;
-const NAV_BAR_MARGIN = 12;
+/** Отступ сверху + высота блока иконка+подпись (без safe area). Для `(tabs)/_layout`. */
+export const BOTTOM_NAV_TOP_PAD = 10;
+export const BOTTOM_NAV_ROW_HEIGHT = BOTTOM_NAV_TOP_PAD + 42;
+/** Чуть уменьшаем системный inset снизу — меньше «воздуха» над жестовой зоной. */
+export const BOTTOM_NAV_INSET_TRIM_PX = 8;
+
+export function bottomNavBottomInset(insetBottom: number) {
+  return Math.max(insetBottom - BOTTOM_NAV_INSET_TRIM_PX, 0);
+}
 const ACTIVE_COLOR = '#FFFFFF';
 const INACTIVE_COLOR = 'rgba(255, 255, 255, 0.55)';
 const BAR_BACKGROUND = '#F35713';
@@ -21,8 +27,6 @@ const NAV_ITEMS: { key: string; routeName: string; label: string; icon: 'home' |
 
 export function BottomNav({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const bottomInset = insets.bottom;
-  const barBottom = bottomInset - NAV_BAR_MARGIN;
 
   const currentRouteName = state.routes[state.index]?.name ?? 'index';
   const currentTabRoute = state.routes[state.index];
@@ -42,57 +46,52 @@ export function BottomNav({ state, navigation }: BottomTabBarProps) {
     return null;
   }
 
+  const bottomPad = bottomNavBottomInset(insets.bottom);
+
   return (
     <View
-        style={[
-          styles.bar,
-          {
-            left: NAV_BAR_MARGIN,
-            right: NAV_BAR_MARGIN,
-            bottom: barBottom,
-            height: NAV_BAR_HEIGHT,
-          },
-        ]}
-      >
-        {NAV_ITEMS.map((item) => {
-          const isActive = currentRouteName === item.routeName;
-          const color = isActive ? ACTIVE_COLOR : INACTIVE_COLOR;
-          return (
-            <Pressable
-              key={item.key}
-              onPress={() => handlePress(item.routeName)}
-              style={styles.item}
-            >
-              <MaterialIcons name={item.icon} size={24} color={color} />
-              <Text style={[styles.label, { color }]}>{item.label}</Text>
-            </Pressable>
-          );
-        })}
+      style={[
+        styles.shell,
+        { paddingBottom: bottomPad, paddingTop: BOTTOM_NAV_TOP_PAD },
+      ]}
+    >
+      {NAV_ITEMS.map((item) => {
+        const isActive = currentRouteName === item.routeName;
+        const color = isActive ? ACTIVE_COLOR : INACTIVE_COLOR;
+        return (
+          <Pressable
+            key={item.key}
+            onPress={() => handlePress(item.routeName)}
+            style={styles.item}
+          >
+            <MaterialIcons name={item.icon} size={24} color={color} />
+            <Text style={[styles.label, { color }]}>{item.label}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: {
+  shell: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
+    bottom: 0,
     zIndex: 50,
+    backgroundColor: BAR_BACKGROUND,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: BAR_BACKGROUND,
-    borderRadius: NAV_BAR_RADIUS,
+    alignItems: 'flex-end',
+    paddingHorizontal: 8,
   },
   item: {
     flex: 1,
     flexDirection: 'column',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   label: {
     fontSize: 10,
