@@ -49,19 +49,18 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <ToastProvider>
-            <SleepSurveyGate />
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="login/index" />
-              <Stack.Screen name="register/index" />
-              <Stack.Screen name="reset-password/index" />
-              <Stack.Screen name="privacy/index" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="client" options={{ presentation: 'card' }} />
-              <Stack.Screen name="steps" />
-              <Stack.Screen name="notifications" />
-            </Stack>
-            <StatusBar style="auto" />
+          <SleepSurveyGate />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="login/index" />
+            <Stack.Screen name="register/index" />
+            <Stack.Screen name="reset-password/index" />
+            <Stack.Screen name="privacy/index" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="client" options={{ presentation: 'card' }} />
+            <Stack.Screen name="steps" />
+          </Stack>
+          <StatusBar style="auto" />
           </ToastProvider>
         </ThemeProvider>
       </GestureHandlerRootView>

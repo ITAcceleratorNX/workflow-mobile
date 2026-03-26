@@ -33,6 +33,7 @@ import {
   useSleepStore,
 } from '@/stores/sleep-store';
 import { useWaterStore, WATER_PORTIONS } from '@/stores/water-store';
+import { MoodCheckInCard } from '@/components/mood-check-in-card';
 
 const { width, height } = Dimensions.get('window');
 const ADVICE_MODAL_HEIGHT = Math.floor(height * 0.85);
@@ -468,30 +469,18 @@ function HealthSettingsCard({
           Настройки здоровья
         </ThemedText>
       </View>
-      <Pressable style={styles.settingsRow} onPress={onStepsPress}>
+      <Pressable style={styles.settingsRow} onPress={onStepsPress} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
         <MaterialIcons name="directions-walk" size={20} color={COLORS.textSecondary} />
         <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>Шагомер</ThemedText>
         <ThemedText style={[styles.settingsValue, { color: COLORS.textSecondary }]}>Настройки</ThemedText>
         <MaterialIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
       </Pressable>
-      <Pressable style={styles.settingsRow} onPress={onNotificationsPress}>
+      <Pressable style={styles.settingsRow} onPress={onNotificationsPress} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
         <MaterialIcons name="notifications" size={20} color={COLORS.textSecondary} />
         <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>Уведомления</ThemedText>
         <ThemedText style={[styles.settingsValue, { color: COLORS.textSecondary }]}>Настройки</ThemedText>
         <MaterialIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
       </Pressable>
-      <View style={styles.settingsRow}>
-        <MaterialIcons name="apple" size={20} color={COLORS.textSecondary} />
-        <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>Apple Health</ThemedText>
-        <ThemedText style={[styles.settingsValue, { color: COLORS.textSecondary }]}>Подключено</ThemedText>
-        <MaterialIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-      </View>
-      <View style={styles.settingsRow}>
-        <MaterialIcons name="straighten" size={20} color={COLORS.textSecondary} />
-        <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>Единицы</ThemedText>
-        <ThemedText style={[styles.settingsValue, { color: COLORS.textSecondary }]}>Метрические</ThemedText>
-        <MaterialIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-      </View>
     </View>
   );
 }
@@ -524,6 +513,7 @@ export default function ClientHealthScreen() {
       </View>
 
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
@@ -542,6 +532,7 @@ export default function ClientHealthScreen() {
 
         <StepsCard stepsToday={stepsToday} stepsGoal={stepsGoal} animateTrigger={animateTrigger} />
         <RecommendationCard onPress={goToSleep} />
+        <MoodCheckInCard />
         <LastNightSleepCard onPress={goToSleep} />
         <SleepScheduleCard onPress={goToSleep} />
         <WaterIntakeCard />
@@ -556,10 +547,11 @@ export default function ClientHealthScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 4 },
+  scroll: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingBottom: 8 },
   backButton: { flexDirection: 'row', alignItems: 'center', minWidth: 44, minHeight: 44 },
   backLabel: { fontSize: 16, marginLeft: 4 },
-  content: { paddingHorizontal: 16, paddingTop: 12 },
+  content: { paddingHorizontal: 16, paddingTop: 20 },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

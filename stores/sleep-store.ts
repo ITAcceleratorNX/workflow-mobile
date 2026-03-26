@@ -49,6 +49,8 @@ interface SleepState {
   dayRecords: Record<string, SleepDayRecord>;
   /** Принудительный показ опроса (кнопка «Оценить сон») */
   forceShowSurvey: boolean;
+  /** Дата (YYYY-MM-DD), когда опрос уже показывали автоматически — не чаще раза в день */
+  lastSleepSurveyAutoPromptDate: string | null;
   /** Данные сна из Apple Health: минуты за прошлую ночь (null = нет данных) */
   lastNightSleepMinutes: number | null;
   /** Среднее за 7 дней в минутах (null = нет данных) */
@@ -65,6 +67,7 @@ interface SleepState {
   setHealthAccess: (granted: boolean | null) => void;
   requestSurveyShow: () => void;
   clearForceShowSurvey: () => void;
+  markSleepSurveyAutoPromptShown: (dateKey: string) => void;
 }
 
 /** Краткие советы по оценке */
@@ -146,6 +149,7 @@ export const useSleepStore = create<SleepState>()(
       settings: initialSettings,
       dayRecords: {},
       forceShowSurvey: false,
+      lastSleepSurveyAutoPromptDate: null,
       lastNightSleepMinutes: null,
       avgSleep7DaysMinutes: null,
       healthAccessGranted: null,
@@ -182,6 +186,8 @@ export const useSleepStore = create<SleepState>()(
       setHealthAccess: (granted) => set({ healthAccessGranted: granted }),
       requestSurveyShow: () => set({ forceShowSurvey: true }),
       clearForceShowSurvey: () => set({ forceShowSurvey: false }),
+      markSleepSurveyAutoPromptShown: (dateKey) =>
+        set({ lastSleepSurveyAutoPromptDate: dateKey }),
     }),
     {
       name: 'sleep-storage',
@@ -191,6 +197,7 @@ export const useSleepStore = create<SleepState>()(
         dayRecords: state.dayRecords,
         lastNightSleepMinutes: state.lastNightSleepMinutes,
         avgSleep7DaysMinutes: state.avgSleep7DaysMinutes,
+        lastSleepSurveyAutoPromptDate: state.lastSleepSurveyAutoPromptDate,
         // forceShowSurvey не персистим
       }),
     }

@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, TextInput } from '@/components/ui';
 import { LogsViewer } from '@/components/logs-viewer';
+import { NotificationsList } from '@/components/notifications-list';
 import { ProfileTabs, type ProfileTab } from '@/components/profile-tabs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -28,7 +29,7 @@ import {
   verifyEmail,
 } from '@/lib/profile-api';
 import { formatPhone } from '@/lib';
-import { unregisterPushTokenFromBackend, clearBadge } from '@/lib/pushNotifications';
+import { unregisterPushTokenFromBackend } from '@/lib/pushNotifications';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 
 export default function ProfileScreen() {
@@ -48,6 +49,7 @@ export default function ProfileScreen() {
   const success = useThemeColor({}, 'success');
   const { show: showToast } = useToast();
 
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<ProfileTab>('profile');
 
   // Profile tab state
@@ -77,6 +79,10 @@ export default function ProfileScreen() {
   const [isSavingNotifications, setIsSavingNotifications] = useState(false);
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    if (tab === 'notifications') setActiveTab('notifications');
+  }, [tab]);
 
   useEffect(() => {
     if (user?.email) setEmail(user.email);
@@ -695,6 +701,15 @@ export default function ProfileScreen() {
             <LogsViewer userRole={role} />
           )}
 
+          {activeTab === 'notifications' && (
+            <>
+              <ThemedText style={styles.sectionTitle}>Уведомления</ThemedText>
+              <ThemedText style={[styles.sectionSubtitle, { color: textMuted }]}>
+                История последних уведомлений
+              </ThemedText>
+              <NotificationsList />
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </ThemedView>

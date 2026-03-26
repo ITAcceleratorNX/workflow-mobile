@@ -7,17 +7,17 @@ const WAKE_CHANNEL = 'sleep-wake';
 const BEDTIME_ID = 'sleep-bedtime-notification';
 const WAKE_ID = 'sleep-wake-notification';
 
-/** Создаёт каналы уведомлений (если платформа поддерживает каналы). */
+/** Создаёт каналы для Android */
 export async function ensureSleepChannels(): Promise<void> {
   try {
     await Notifications.setNotificationChannelAsync(BEDTIME_CHANNEL, {
       name: 'Пора ложиться',
-      importance: 6 as any, // HIGH enum value
+      importance: Notifications.AndroidImportance.HIGH,
       sound: 'default',
     });
     await Notifications.setNotificationChannelAsync(WAKE_CHANNEL, {
       name: 'Оцени сон',
-      importance: 6 as any, // HIGH enum value
+      importance: Notifications.AndroidImportance.HIGH,
       sound: 'default',
     });
   } catch {
@@ -52,6 +52,7 @@ export async function scheduleSleepNotifications(settings: SleepSettings): Promi
         title: 'Пора ложиться',
         body: 'Время отхода ко сну по расписанию',
         sound: 'default',
+        channelId: BEDTIME_CHANNEL,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -67,6 +68,7 @@ export async function scheduleSleepNotifications(settings: SleepSettings): Promi
         title: 'Оцени сон',
         body: 'Как спал?',
         sound: 'default',
+        channelId: WAKE_CHANNEL,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
