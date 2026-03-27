@@ -43,8 +43,9 @@ import {
 } from '@/lib/api';
 import { findNearestOffice } from '@/lib/nearest-office';
 import { useAuthStore } from '@/stores/auth-store';
+import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
 const CARD_ORANGE = '#E25B21';
@@ -143,6 +144,19 @@ export default function BookingScreen() {
   const [bookedSlots, setBookedSlots] = useState<Set<string>>(new Set());
   const [roomImageFailedIds, setRoomImageFailedIds] = useState<Set<number>>(new Set());
   const [formRoomImageFailed, setFormRoomImageFailed] = useState(false);
+
+  const setHideBottomNavForBookingForm = useBookingTabUiStore(
+    (s) => s.setHideBottomNavForBookingForm
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      setHideBottomNavForBookingForm(step === 'form');
+      return () => {
+        setHideBottomNavForBookingForm(false);
+      };
+    }, [step, setHideBottomNavForBookingForm])
+  );
 
   const loadOffices = useCallback(async () => {
     setLoadingOffices(true);

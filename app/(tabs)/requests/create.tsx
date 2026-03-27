@@ -22,7 +22,7 @@ import {
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { getPrimaryPhotoUri } from '@/lib/image-uri';
-import { Button, PageLoader, Select } from '@/components/ui';
+import { PageLoader, Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
@@ -74,9 +74,11 @@ const KCELL = {
   gradientTo: '#B8400E',
 } as const;
 
-const BOTTOM_BAR_MARGIN = 12;
-const BOTTOM_BAR_RADIUS = 25;
-const BOTTOM_BAR_HEIGHT = 64;
+const BOTTOM_BAR_RADIUS = 20;
+/** Резерв под нижнюю панель действий (кнопки + отступы), чтобы контент не уезжал под футер */
+const FOOTER_BTN_MIN_HEIGHT = 52;
+const FOOTER_BAR_PADDING_V = 12;
+const FOOTER_SCROLL_GAP = 24;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_GAP = 8;
@@ -686,7 +688,10 @@ export default function CreateRequestScreen() {
             styles.scrollContent,
             {
               paddingBottom:
-                BOTTOM_BAR_HEIGHT + BOTTOM_BAR_MARGIN * 2 + 24 + insets.bottom,
+                FOOTER_BAR_PADDING_V * 2 +
+                FOOTER_BTN_MIN_HEIGHT +
+                FOOTER_SCROLL_GAP +
+                insets.bottom,
             },
           ]}
           showsVerticalScrollIndicator={false}
@@ -1448,47 +1453,86 @@ export default function CreateRequestScreen() {
         style={[
           styles.actionsFooterWrap,
           themeStyles.actionsFooterWrap,
-          { paddingBottom: BOTTOM_BAR_MARGIN + insets.bottom },
+          { paddingBottom: insets.bottom },
         ]}
       >
         <View style={[styles.actionsFooterBar, themeStyles.actionsFooterBar]}>
           {step < 4 ? (
             <>
-              <Button
-                title={step === 1 ? 'Отмена' : 'Назад'}
+              <Pressable
                 onPress={step === 1 ? () => router.back() : goBack}
-                variant="ghost"
-                style={styles.backBtn}
-              />
-              <Button
-                title="Дальше"
+                style={({ pressed }) => [
+                  styles.footerBtn,
+                  styles.footerBtnSecondary,
+                  { borderColor: borderColor, backgroundColor: cardBackground },
+                  pressed && styles.footerBtnPressed,
+                ]}
+              >
+                <ThemedText style={[styles.footerBtnLabel, { color: textColor }]}>
+                  {step === 1 ? 'Отмена' : 'Назад'}
+                </ThemedText>
+              </Pressable>
+              <Pressable
                 onPress={() => setStep((s) => s + 1)}
-                variant="primary"
-                labelColor="#FFFFFF"
                 disabled={
                   (step === 1 && !canProceedStep1) ||
                   (step === 2 && !canProceedStep2) ||
                   (step === 3 && !canProceedStep3)
                 }
-                style={styles.primaryBtn}
-              />
+                style={({ pressed }) => [
+                  styles.footerBtn,
+                  { backgroundColor: primaryColor },
+                  ((step === 1 && !canProceedStep1) ||
+                    (step === 2 && !canProceedStep2) ||
+                    (step === 3 && !canProceedStep3)) &&
+                    styles.footerBtnDisabled,
+                  pressed &&
+                    !(
+                      (step === 1 && !canProceedStep1) ||
+                      (step === 2 && !canProceedStep2) ||
+                      (step === 3 && !canProceedStep3)
+                    ) &&
+                    styles.footerBtnPressed,
+                ]}
+              >
+                <ThemedText style={[styles.footerBtnLabel, styles.footerBtnLabelOnPrimary]}>
+                  Дальше
+                </ThemedText>
+              </Pressable>
             </>
           ) : (
             <>
-              <Button
-                title="Назад"
+              <Pressable
                 onPress={goBack}
-                variant="ghost"
-                style={styles.backBtn}
-              />
-              <Button
-                title={submitting ? 'Отправка...' : 'Создать заявку'}
+                style={({ pressed }) => [
+                  styles.footerBtn,
+                  styles.footerBtnSecondary,
+                  { borderColor: borderColor, backgroundColor: cardBackground },
+                  pressed && styles.footerBtnPressed,
+                ]}
+              >
+                <ThemedText style={[styles.footerBtnLabel, { color: textColor }]}>
+                  Назад
+                </ThemedText>
+              </Pressable>
+              <Pressable
                 onPress={handleSubmit}
-                variant="primary"
-                labelColor="#FFFFFF"
                 disabled={!canSubmit || submitting}
-                style={styles.primaryBtn}
-              />
+                style={({ pressed }) => [
+                  styles.footerBtn,
+                  { backgroundColor: primaryColor },
+                  (!canSubmit || submitting) && styles.footerBtnDisabled,
+                  pressed && canSubmit && !submitting && styles.footerBtnPressed,
+                ]}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <ThemedText style={[styles.footerBtnLabel, styles.footerBtnLabelOnPrimary]}>
+                    Создать заявку
+                  </ThemedText>
+                )}
+              </Pressable>
             </>
           )}
         </View>
@@ -1832,26 +1876,37 @@ const styles = StyleSheet.create({
   },
   actionsFooterBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     gap: 12,
-    paddingLeft: 16,
-    paddingRight: 16,
-    paddingVertical: 10,
-    height: BOTTOM_BAR_HEIGHT,
+    paddingHorizontal: 16,
+    paddingTop: FOOTER_BAR_PADDING_V,
+    paddingBottom: FOOTER_BAR_PADDING_V,
     borderTopLeftRadius: BOTTOM_BAR_RADIUS,
     borderTopRightRadius: BOTTOM_BAR_RADIUS,
-    borderWidth: 0,
   },
-  backBtn: {
-    paddingHorizontal: 4,
-  },
-  primaryBtn: {
+  footerBtn: {
     flex: 1,
-    borderRadius: 18,
-    minHeight: 44,
-    paddingVertical: 10,
-    alignSelf: 'stretch',
+    minHeight: FOOTER_BTN_MIN_HEIGHT,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  footerBtnSecondary: {
+    borderWidth: 1,
+  },
+  footerBtnLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  footerBtnLabelOnPrimary: {
+    color: '#FFFFFF',
+  },
+  footerBtnPressed: {
+    opacity: 0.88,
+  },
+  footerBtnDisabled: {
+    opacity: 0.45,
   },
 });

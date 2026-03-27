@@ -37,8 +37,9 @@ export default function TabLayout() {
       screenOptions={({ route }) => {
         const nestedRoute = getFocusedRouteNameFromRoute(route) ?? route.name;
         const isCreateRequest = route.name === 'requests' && nestedRoute === 'create';
+        const isRequestDetail = route.name === 'requests' && nestedRoute === '[id]';
         const paddingBottom =
-          route.name === 'help' ? 0 : isCreateRequest ? 0 : contentPaddingBottom;
+          route.name === 'help' ? 0 : isCreateRequest || isRequestDetail ? 0 : contentPaddingBottom;
         return {
           headerShown: false,
             tabBarShowLabel: false,

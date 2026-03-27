@@ -4,6 +4,8 @@ import * as Haptics from 'expo-haptics';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
+
 /** Отступ сверху + высота блока иконка+подпись (без safe area). Для `(tabs)/_layout`. */
 export const BOTTOM_NAV_TOP_PAD = 10;
 export const BOTTOM_NAV_ROW_HEIGHT = BOTTOM_NAV_TOP_PAD + 42;
@@ -27,13 +29,18 @@ const NAV_ITEMS: { key: string; routeName: string; label: string; icon: 'home' |
 
 export function BottomNav({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const hideBookingForm = useBookingTabUiStore((s) => s.hideBottomNavForBookingForm);
 
   const currentRouteName = state.routes[state.index]?.name ?? 'index';
   const currentTabRoute = state.routes[state.index];
   const nestedState = currentTabRoute?.state as { routes: { name: string }[]; index: number } | undefined;
   const nestedRouteName = nestedState?.routes?.[nestedState.index]?.name ?? null;
-  const isHelpChatScreen = currentTabRoute?.name === 'help' && nestedRouteName?.startsWith('chat/') === true;
+  /** Вся вкладка «Сообщение» (чат-бот, техподдержка, чат с поддержкой) — без нижней панели, как drill-down. */
+  const isHelpTabScreen = currentTabRoute?.name === 'help';
   const isCreateRequestScreen = currentTabRoute?.name === 'requests' && nestedRouteName === 'create';
+  /** Имя экрана в nested stack из `requests/_layout.tsx`: `<Stack.Screen name="[id]" />` */
+  const isRequestDetailScreen = currentTabRoute?.name === 'requests' && nestedRouteName === '[id]';
+  const isBookingFormStep = currentTabRoute?.name === 'booking' && hideBookingForm;
 
   const handlePress = (routeName: string) => {
     if (Platform.OS === 'ios') {
@@ -42,7 +49,12 @@ export function BottomNav({ state, navigation }: BottomTabBarProps) {
     navigation.navigate(routeName);
   };
 
-  if (isHelpChatScreen || isCreateRequestScreen) {
+  if (
+    isHelpTabScreen ||
+    isCreateRequestScreen ||
+    isRequestDetailScreen ||
+    isBookingFormStep
+  ) {
     return null;
   }
 
