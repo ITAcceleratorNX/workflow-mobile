@@ -204,9 +204,13 @@ export default function RequestDetailScreen() {
     }
   }, [role]);
 
-  // Всегда переходим в список заявок, чтобы при открытии из уведомления (Профиль) вкладка «Заявки» не застревала на экране заявки
+  /** Как системный свайп «назад»: pop стека. Без истории (deep link и т.п.) — на список заявок. */
   const goBack = useCallback(() => {
-    router.replace('/(tabs)/requests');
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/requests');
+    }
   }, [router]);
 
   const handleStartTask = useCallback(

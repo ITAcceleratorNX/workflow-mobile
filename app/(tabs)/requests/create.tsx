@@ -74,11 +74,11 @@ const KCELL = {
   gradientTo: '#B8400E',
 } as const;
 
-const BOTTOM_BAR_RADIUS = 20;
 /** Резерв под нижнюю панель действий (кнопки + отступы), чтобы контент не уезжал под футер */
 const FOOTER_BTN_MIN_HEIGHT = 52;
-const FOOTER_BAR_PADDING_V = 12;
-const FOOTER_SCROLL_GAP = 24;
+const FOOTER_BAR_PADDING_V = 10;
+/** Небольшой зазор между последним контентом и панелью кнопок */
+const FOOTER_SCROLL_GAP = 12;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_GAP = 8;
@@ -102,6 +102,8 @@ export default function CreateRequestScreen() {
   const backgroundColor = useThemeColor({}, 'background');
   const cardBackground = useThemeColor({}, 'cardBackground');
   const insets = useSafeAreaInsets();
+  /** Минимум 8 — чтобы на устройствах без home indicator кнопки не прилипали к краю */
+  const footerBottomInset = Math.max(insets.bottom, 8);
 
   const themeStyles = useMemo(
     () => ({
@@ -123,14 +125,14 @@ export default function CreateRequestScreen() {
       officeCardImage: { backgroundColor: borderColor },
       toggleRow: { backgroundColor: cardBackground },
       summaryCard: { backgroundColor: cardBackground },
-      actionsFooterBar: { backgroundColor: cardBackground },
-      actionsFooterWrap: { borderTopWidth: 1, borderTopColor: borderColor },
+      /** Фон на всю ширину до нижнего края экрана (включая safe area), иначе под кнопками «пустая» полоса */
+      actionsFooterWrap: {
+        backgroundColor: backgroundColor,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: borderColor,
+      },
     }),
-    [
-      borderColor,
-      primaryColor,
-      cardBackground,
-    ]
+    [borderColor, primaryColor, cardBackground, backgroundColor]
   );
 
   const [step, setStep] = useState(1);
@@ -690,8 +692,8 @@ export default function CreateRequestScreen() {
               paddingBottom:
                 FOOTER_BAR_PADDING_V * 2 +
                 FOOTER_BTN_MIN_HEIGHT +
-                FOOTER_SCROLL_GAP +
-                insets.bottom,
+                footerBottomInset +
+                FOOTER_SCROLL_GAP,
             },
           ]}
           showsVerticalScrollIndicator={false}
@@ -1453,10 +1455,10 @@ export default function CreateRequestScreen() {
         style={[
           styles.actionsFooterWrap,
           themeStyles.actionsFooterWrap,
-          { paddingBottom: insets.bottom },
+          { paddingBottom: footerBottomInset },
         ]}
       >
-        <View style={[styles.actionsFooterBar, themeStyles.actionsFooterBar]}>
+        <View style={styles.actionsFooterBar}>
           {step < 4 ? (
             <>
               <Pressable
@@ -1464,7 +1466,7 @@ export default function CreateRequestScreen() {
                 style={({ pressed }) => [
                   styles.footerBtn,
                   styles.footerBtnSecondary,
-                  { borderColor: borderColor, backgroundColor: cardBackground },
+                  { borderColor: borderColor },
                   pressed && styles.footerBtnPressed,
                 ]}
               >
@@ -1507,7 +1509,7 @@ export default function CreateRequestScreen() {
                 style={({ pressed }) => [
                   styles.footerBtn,
                   styles.footerBtnSecondary,
-                  { borderColor: borderColor, backgroundColor: cardBackground },
+                  { borderColor: borderColor },
                   pressed && styles.footerBtnPressed,
                 ]}
               >
@@ -1881,8 +1883,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: FOOTER_BAR_PADDING_V,
     paddingBottom: FOOTER_BAR_PADDING_V,
-    borderTopLeftRadius: BOTTOM_BAR_RADIUS,
-    borderTopRightRadius: BOTTOM_BAR_RADIUS,
   },
   footerBtn: {
     flex: 1,
@@ -1893,7 +1893,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   footerBtnSecondary: {
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    backgroundColor: 'transparent',
   },
   footerBtnLabel: {
     fontSize: 16,
