@@ -5,14 +5,14 @@ import {
   ScrollView,
   Pressable,
   Dimensions,
-  Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 
 import { PageLoader, PullToRefresh } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
@@ -158,7 +158,7 @@ const EXECUTOR_CABINET_CARDS: {
   },
 ];
 
-function AdminWorkerManagementScreen() {
+function AdminWorkerManagementScreen({ hasNotifications }: { hasNotifications: boolean }) {
   const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -201,9 +201,21 @@ function AdminWorkerManagementScreen() {
       style={[styles.adminContainer, { paddingTop: insets.top + 16, backgroundColor: background }]}
     >
       <ScrollView contentContainerStyle={styles.adminContent}>
-        <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
-          Управление системой
-        </ThemedText>
+        <View style={styles.adminHeaderRow}>
+          <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
+            Управление системой
+          </ThemedText>
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            style={styles.adminNotificationButton}
+            hitSlop={8}
+          >
+            <MaterialIcons name="notifications" size={24} color={text} />
+            {hasNotifications && (
+              <View style={[styles.notificationDot, { backgroundColor: primary }]} />
+            )}
+          </Pressable>
+        </View>
         <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
           Выберите раздел для управления
         </ThemedText>
@@ -245,8 +257,10 @@ function AdminWorkerManagementScreen() {
 /** Главная страница «Управление» для исполнителя (department-head, manager) — аналог management в workflow-web */
 function ExecutorManagementScreen({
   role: executorRole,
+  hasNotifications,
 }: {
   role: 'department-head' | 'manager';
+  hasNotifications: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
@@ -292,9 +306,21 @@ function ExecutorManagementScreen({
       style={[styles.adminContainer, { paddingTop: insets.top + 16, backgroundColor: background }]}
     >
       <ScrollView contentContainerStyle={styles.adminContent}>
-        <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
-          Управление
-        </ThemedText>
+        <View style={styles.adminHeaderRow}>
+          <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
+            Управление
+          </ThemedText>
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            style={styles.adminNotificationButton}
+            hitSlop={8}
+          >
+            <MaterialIcons name="notifications" size={24} color={text} />
+            {hasNotifications && (
+              <View style={[styles.notificationDot, { backgroundColor: primary }]} />
+            )}
+          </Pressable>
+        </View>
         <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
           Выберите раздел
         </ThemedText>
@@ -334,7 +360,7 @@ function ExecutorManagementScreen({
 }
 
 /** Главная «Мой кабинет» для роли executor — аналог executor/management в workflow-web */
-function ExecutorCabinetScreen() {
+function ExecutorCabinetScreen({ hasNotifications }: { hasNotifications: boolean }) {
   const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -356,9 +382,21 @@ function ExecutorCabinetScreen() {
       style={[styles.adminContainer, { paddingTop: insets.top + 16, backgroundColor: background }]}
     >
       <ScrollView contentContainerStyle={styles.adminContent}>
-        <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
-          Мой кабинет
-        </ThemedText>
+        <View style={styles.adminHeaderRow}>
+          <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
+            Мой кабинет
+          </ThemedText>
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            style={styles.adminNotificationButton}
+            hitSlop={8}
+          >
+            <MaterialIcons name="notifications" size={24} color={text} />
+            {hasNotifications && (
+              <View style={[styles.notificationDot, { backgroundColor: primary }]} />
+            )}
+          </Pressable>
+        </View>
         <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
           Выберите раздел
         </ThemedText>
@@ -404,6 +442,22 @@ export default function ClientDashboardScreen() {
   const role = useAuthStore((state) => state.role);
   const { show } = useToast();
 
+  const [hasNotifications, setHasNotifications] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      Notifications.getBadgeCountAsync()
+        .then((count) => {
+          if (active) setHasNotifications(count > 0);
+        })
+        .catch(() => {});
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
   // Определяем эффективную роль
   const effectiveRole = role || user?.role;
   const isClient = effectiveRole?.toLowerCase() === 'client';
@@ -428,29 +482,30 @@ export default function ClientDashboardScreen() {
   }, [effectiveRole, isClient, isAdminWorker, isDepartmentHead, isManager, isExecutor, router]);
 
   if (isAdminWorker) {
-    return <AdminWorkerManagementScreen />;
+    return <AdminWorkerManagementScreen hasNotifications={hasNotifications} />;
   }
 
   if (isExecutor) {
-    return <ExecutorCabinetScreen />;
+    return <ExecutorCabinetScreen hasNotifications={hasNotifications} />;
   }
 
   if (isDepartmentHead || isManager) {
     return (
       <ExecutorManagementScreen
         role={isDepartmentHead ? 'department-head' : 'manager'}
+        hasNotifications={hasNotifications}
       />
     );
   }
 
-  return <ClientDashboardContent />;
+  return <ClientDashboardContent hasNotifications={hasNotifications} />;
 }
 
 const INSIGHT_CARD_WIDTH = width * 0.88;
 const INSIGHT_CARD_HEIGHT = 260;
 
 /** Контент главной только для роли client. Вынесен в отдельный компонент, чтобы не нарушать правила хуков (одинаковое количество хуков при любом рендере). */
-function ClientDashboardContent() {
+function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolean }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -462,9 +517,6 @@ function ClientDashboardContent() {
   const headerSubtitle = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
   const cardBg = useThemeColor({}, 'cardBackground');
-
-  const [hasNotifications] = useState(true);
-  const [selectedInsight, setSelectedInsight] = useState<NewsDisplayItem | null>(null);
   const [insightItems, setInsightItems] = useState<NewsDisplayItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
@@ -550,7 +602,7 @@ function ClientDashboardContent() {
         <View style={styles.insightsHeader}>
           <View style={styles.insightsHeaderRow}>
             <ThemedText style={[styles.insightsTitle, { color: headerText }]}>Обзор дня</ThemedText>
-            <Pressable onPress={() => router.push('/(tabs)/profile?tab=notifications')} style={styles.notificationButton}>
+            <Pressable onPress={() => router.push('/notifications')} style={styles.notificationButton}>
               <MaterialIcons name="notifications" size={26} color={headerText} />
               {hasNotifications && <View style={[styles.notificationDot, { backgroundColor: primary }]} />}
             </Pressable>
@@ -576,7 +628,7 @@ function ClientDashboardContent() {
               key={item.id}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setSelectedInsight(item);
+                router.push(`/client/news/${item.id}`);
               }}
               style={styles.insightCard}
             >
@@ -624,43 +676,6 @@ function ClientDashboardContent() {
         <TasksSection />
       </ScrollView>
       </PullToRefresh>
-
-      <Modal
-        visible={!!selectedInsight}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedInsight(null)}
-      >
-        <Pressable
-          style={styles.insightModalOverlay}
-          onPress={() => setSelectedInsight(null)}
-        >
-          <Pressable style={[styles.insightModalContent, { backgroundColor: cardBg }]} onPress={(e) => e.stopPropagation()}>
-            {selectedInsight && (
-              <>
-                <Image
-                  source={{ uri: selectedInsight.image }}
-                  style={styles.insightModalImage}
-                  contentFit="cover"
-                />
-                <View style={styles.insightModalBody}>
-                  <View style={[styles.insightTag, { marginBottom: 12 }]}>
-                    <ThemedText style={styles.insightTagText}>{selectedInsight.tag}</ThemedText>
-                  </View>
-                  <ThemedText style={[styles.insightModalTitle, { color: headerText }]}>{selectedInsight.title}</ThemedText>
-                  <ThemedText style={[styles.insightModalDesc, { color: headerSubtitle }]}>{selectedInsight.desc}</ThemedText>
-                </View>
-                <Pressable
-                  onPress={() => setSelectedInsight(null)}
-                  style={[styles.insightModalClose, { backgroundColor: primary }]}
-                >
-                  <ThemedText style={styles.insightModalCloseText}>Закрыть</ThemedText>
-                </Pressable>
-              </>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
     </ThemedView>
   );
 }
@@ -731,6 +746,16 @@ const styles = StyleSheet.create({
     right: 12,
     bottom: 12,
   },
+  adminHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  adminNotificationButton: {
+    padding: 4,
+    position: 'relative',
+  },
   scrollView: {
     flex: 1,
   },
@@ -789,36 +814,6 @@ const styles = StyleSheet.create({
   insightTagText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
   insightTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 6 },
   insightDesc: { fontSize: 15, color: 'rgba(255,255,255,0.9)', lineHeight: 22 },
-  // Insight modal
-  insightModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  insightModalContent: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  insightModalImage: {
-    width: '100%',
-    height: 200,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  insightModalBody: { padding: 20 },
-  insightModalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 12 },
-  insightModalDesc: { fontSize: 16, lineHeight: 24 },
-  insightModalClose: {
-    margin: 20,
-    marginTop: 0,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  insightModalCloseText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
   // Smart Control
   section: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 24, marginTop: 8 },
   sectionTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
