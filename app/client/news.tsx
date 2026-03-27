@@ -4,14 +4,13 @@ import {
   View,
   FlatList,
   Pressable,
-  Modal,
   TextInput as RNTextInput,
   ActivityIndicator,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -39,6 +38,7 @@ function formatNewsDate(dateStr: string): string {
 
 export default function NewsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const background = useThemeColor({}, 'background');
   const headerText = useThemeColor({}, 'text');
   const headerSubtitle = useThemeColor({}, 'textMuted');
@@ -48,7 +48,6 @@ export default function NewsScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('all');
-  const [selectedItem, setSelectedItem] = useState<NewsDisplayItem | null>(null);
   const [newsList, setNewsList] = useState<NewsDisplayItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -103,12 +102,12 @@ export default function NewsScreen() {
         imageUrl={item.image}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          setSelectedItem(item);
+          router.push(`/client/news/${item.id}`);
         }}
         rightSlot={<MaterialIcons name="chevron-right" size={24} color={headerSubtitle} />}
       />
     ),
-    [headerSubtitle]
+    [headerSubtitle, router]
   );
 
   return (
@@ -162,57 +161,6 @@ export default function NewsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-
-      <Modal
-        visible={!!selectedItem}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedItem(null)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setSelectedItem(null)}
-        >
-          <Pressable
-            style={[styles.modalContent, { backgroundColor: cardBg }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {selectedItem && (
-              <>
-                <Image
-                  source={{ uri: selectedItem.image }}
-                  style={styles.modalImage}
-                  contentFit="cover"
-                />
-                <View style={styles.modalBody}>
-                  <View style={styles.modalMeta}>
-                    <View style={[styles.modalTag, { backgroundColor: primary }]}>
-                      <ThemedText style={styles.modalTagText}>{selectedItem.tag}</ThemedText>
-                    </View>
-                    {selectedItem.date && (
-                      <ThemedText style={[styles.modalDate, { color: headerSubtitle }]}>
-                        {formatNewsDate(selectedItem.date)}
-                      </ThemedText>
-                    )}
-                  </View>
-                  <ThemedText style={[styles.modalTitle, { color: headerText }]}>
-                    {selectedItem.title}
-                  </ThemedText>
-                  <ThemedText style={[styles.modalDesc, { color: headerSubtitle }]}>
-                    {selectedItem.desc}
-                  </ThemedText>
-                </View>
-                <Pressable
-                  onPress={() => setSelectedItem(null)}
-                  style={[styles.modalClose, { backgroundColor: primary }]}
-                >
-                  <ThemedText style={styles.modalCloseText}>Закрыть</ThemedText>
-                </Pressable>
-              </>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
     </ThemedView>
   );
 }
@@ -250,37 +198,4 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 16 },
   empty: { paddingVertical: 48, alignItems: 'center' },
   emptyText: { fontSize: 16 },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  modalImage: {
-    width: '100%',
-    height: 200,
-  },
-  modalBody: { padding: 20 },
-  modalMeta: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  modalTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  modalDate: { fontSize: 14 },
-  modalTagText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 12 },
-  modalDesc: { fontSize: 16, lineHeight: 24 },
-  modalClose: {
-    margin: 20,
-    marginTop: 0,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  modalCloseText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
 });

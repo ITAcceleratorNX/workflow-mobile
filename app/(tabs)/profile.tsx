@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BOTTOM_NAV_ROW_HEIGHT, bottomNavBottomInset } from '@/components/bottom-nav';
 import { Button, TextInput } from '@/components/ui';
 import { LogsViewer } from '@/components/logs-viewer';
-import { NotificationsList } from '@/components/notifications-list';
 import { ProfileTabs, type ProfileTab } from '@/components/profile-tabs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -25,7 +23,6 @@ import { useToast } from '@/context/toast-context';
 import {
   changePassword,
   sendEmailVerificationCode,
-  updateNotificationsSettings,
   updateProfile,
   verifyEmail,
 } from '@/lib/profile-api';
@@ -52,7 +49,6 @@ export default function ProfileScreen() {
   const success = useThemeColor({}, 'success');
   const { show: showToast } = useToast();
 
-  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<ProfileTab>('profile');
 
   // Profile tab state
@@ -76,11 +72,6 @@ export default function ProfileScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // Notifications tab state
-  const [notificationError, setNotificationError] = useState('');
-  const [notificationSuccess, setNotificationSuccess] = useState('');
-  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
-
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const heightCm = useStepsStore((s) => s.settings.heightCm);
@@ -89,10 +80,6 @@ export default function ProfileScreen() {
     if (heightCm == null) return null;
     return calculateDeskHeights(heightCm, weightKg);
   }, [heightCm, weightKg]);
-
-  useEffect(() => {
-    if (tab === 'notifications') setActiveTab('notifications');
-  }, [tab]);
 
   useEffect(() => {
     if (user?.email) setEmail(user.email);
@@ -311,45 +298,6 @@ export default function ProfileScreen() {
       variant: 'success',
     });
   }, [oldPassword, newPassword, confirmPassword, handleUnauthorized, isGuest, showToast]);
-
-  const handleSaveNotifications = useCallback(async () => {
-    if (!user) return;
-
-    // В демо-режиме только локальное изменение без запроса
-    if (isGuest) {
-      setNotificationSuccess('Демо: настройки уведомлений сохранены локально.');
-      showToast({
-        title: 'Демо режим',
-        description: 'Настройки не отправляются на сервер.',
-        variant: 'success',
-      });
-      return;
-    }
-
-    setIsSavingNotifications(true);
-    setNotificationError('');
-    setNotificationSuccess('');
-    const result = await updateNotificationsSettings({
-      emailNotifications: user.email_notifications,
-      securityNotifications: user.security_notifications,
-      marketingNotifications: user.marketing_notifications,
-    });
-    setIsSavingNotifications(false);
-
-    if (!result.ok) {
-      if (result.unauthorized) {
-        handleUnauthorized();
-        return;
-      }
-      setNotificationError(result.error);
-      return;
-    }
-    setNotificationSuccess('Настройки уведомлений сохранены');
-    showToast({
-      title: 'Настройки уведомлений сохранены',
-      variant: 'success',
-    });
-  }, [user, handleUnauthorized, isGuest, showToast]);
 
   const handleLogout = useCallback(async () => {
     setIsLoggingOut(true);
@@ -781,16 +729,6 @@ export default function ProfileScreen() {
           {activeTab === 'logs' && role && ['admin-worker', 'department-head', 'manager'].includes(role) && (
             <LogsViewer userRole={role} />
           )}
-
-          {activeTab === 'notifications' && (
-            <>
-              <ThemedText style={styles.sectionTitle}>Уведомления</ThemedText>
-              <ThemedText style={[styles.sectionSubtitle, { color: textMuted }]}>
-                История последних уведомлений
-              </ThemedText>
-              <NotificationsList />
-            </>
-          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </ThemedView>
@@ -1061,19 +999,6 @@ const styles = StyleSheet.create({
   idValue: {
     fontSize: 14,
     fontFamily: 'monospace',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  switchLabel: {
-    fontSize: 16,
-    fontWeight: '500',
   },
   errorText: {
     fontSize: 14,

@@ -95,6 +95,21 @@ export default function NotificationSettingsScreen() {
 
         <View style={[styles.row, { borderColor: border }]}>
           <View style={styles.rowText}>
+            <ThemedText style={styles.rowTitle}>Безопасность</ThemedText>
+            <ThemedText style={[styles.rowSubtitle, { color: muted }]}>
+              Входы, подозрительная активность
+            </ThemedText>
+          </View>
+          <Switch
+            value={user.security_notifications ?? false}
+            onValueChange={(v) => handleToggle('security_notifications', v)}
+            trackColor={{ false: border, true: primary }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        <View style={[styles.row, { borderColor: border }]}>
+          <View style={styles.rowText}>
             <ThemedText style={styles.rowTitle}>Маркетинг</ThemedText>
             <ThemedText style={[styles.rowSubtitle, { color: muted }]}>
               Новости и предложения
