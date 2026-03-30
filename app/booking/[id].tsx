@@ -11,7 +11,11 @@ import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { getPublicBooking, type MeetingRoomBooking } from '@/lib/api';
-import { formatDisplayDateFromIso, formatTimeOnly } from '@/lib/dateTimeUtils';
+import {
+  formatBookingDurationRu,
+  formatDisplayDateFromIso,
+  formatTimeOnly,
+} from '@/lib/dateTimeUtils';
 
 export default function BookingQrScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -102,6 +106,7 @@ export default function BookingQrScreen() {
 
   const office = booking.office || booking.meetingRoom?.office || booking.meeting_room?.office;
   const room = booking.meetingRoom || booking.meeting_room;
+  const durationLabel = formatBookingDurationRu(booking.start_time, booking.end_time);
   const appUrl = `https://app.tmk-workflow.kz/booking/${booking.id}`;
   const qrPayload = JSON.stringify({
     bookingId: booking.id,
@@ -161,6 +166,11 @@ export default function BookingQrScreen() {
           <ThemedText style={[styles.cardSubtitle, { color: textColor }]}>
             {formatTimeOnly(booking.start_time)} – {formatTimeOnly(booking.end_time)}
           </ThemedText>
+          {durationLabel != null && (
+            <ThemedText style={[styles.cardSubtitle, { color: mutedColor }]}>
+              Продолжительность: {durationLabel}
+            </ThemedText>
+          )}
           {'tables_remaining' in booking && (booking as any).tables_remaining != null && (
             <ThemedText style={[styles.tablesRemaining, { color: textColor }]}>
               Столов осталось: {(booking as any).tables_remaining}

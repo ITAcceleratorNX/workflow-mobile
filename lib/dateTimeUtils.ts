@@ -109,19 +109,36 @@ export function getAlmatySlotKey(iso: string): string {
 
 // --- Относительное время ---
 
-/** "только что" / "N мин назад" / "N ч назад" / "N дн назад" / или DD.MM.YYYY */
+/** Длительность брони: «45 мин» или «2 ч» / «1 ч 30 мин» (если больше часа — часы, не сотни минут). */
+export function formatBookingDurationRu(startIso: string, endIso: string): string | null {
+  const start = toDate(startIso);
+  const end = toDate(endIso);
+  if (!start || !end || end.getTime() <= start.getTime()) return null;
+  const totalMin = Math.round((end.getTime() - start.getTime()) / 60000);
+  if (totalMin <= 0) return null;
+  if (totalMin < 60) return `${totalMin} мин`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (m === 0) return `${h} ч`;
+  return `${h} ч ${m} мин`;
+}
+
+/** "только что" / "N мин назад" / от часа — "N ч назад" или "N ч M мин назад" / "N дн назад" / или DD.MM.YYYY */
 export function formatTimeAgo(dateStr: string): string {
   const date = toDate(dateStr);
   if (!date) return dateStr;
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const totalMinutes = Math.floor(diffMs / (1000 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffMinutes < 1) return 'только что';
-  if (diffMinutes < 60) return `${diffMinutes} мин назад`;
-  if (diffHours < 24) return `${diffHours} ч назад`;
+  if (totalMinutes < 1) return 'только что';
+  if (totalMinutes < 60) return `${totalMinutes} мин назад`;
+  if (totalMinutes < 60 * 24) {
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return m === 0 ? `${h} ч назад` : `${h} ч ${m} мин назад`;
+  }
   if (diffDays < 7) return `${diffDays} дн назад`;
 
   return formatDateOnly(date) || dateStr;
