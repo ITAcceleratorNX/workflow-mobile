@@ -44,20 +44,50 @@ export function getInboxTasks(tasks: UserTask[]): UserTask[] {
 
 /** Today view: tasks scheduled for today. */
 export function getTodaySections(tasks: UserTask[], todayKey: string): TaskSection[] {
+  const overdue: UserTask[] = [];
   const todayScheduled: UserTask[] = [];
 
   for (const t of tasks) {
     if (t.completed) continue;
-    if (t.scheduled_at && formatDateForApi(new Date(t.scheduled_at)) === todayKey) {
+    if (!t.scheduled_at) continue;
+    const key = formatDateForApi(new Date(t.scheduled_at));
+    if (key < todayKey) {
+      overdue.push(t);
+      continue;
+    }
+    if (key === todayKey) {
       todayScheduled.push(t);
     }
   }
 
+  overdue.sort(sortByScheduleThenTitle);
   todayScheduled.sort(sortByScheduleThenTitle);
 
   const sections: TaskSection[] = [];
+  if (overdue.length > 0) {
+    sections.push({ id: 'overdue', title: 'Просрочено', tasks: overdue });
+  }
   if (todayScheduled.length > 0) {
     sections.push({ id: 'today', title: 'Сегодня', tasks: todayScheduled });
+  }
+  return sections;
+}
+
+/** Overdue: tasks scheduled strictly before today. */
+export function getOverdueSections(tasks: UserTask[], todayKey: string): TaskSection[] {
+  const overdue: UserTask[] = [];
+
+  for (const t of tasks) {
+    if (t.completed || !t.scheduled_at) continue;
+    const key = formatDateForApi(new Date(t.scheduled_at));
+    if (key < todayKey) overdue.push(t);
+  }
+
+  overdue.sort(sortByScheduleThenTitle);
+
+  const sections: TaskSection[] = [];
+  if (overdue.length > 0) {
+    sections.push({ id: 'overdue', title: 'Просрочено', tasks: overdue });
   }
   return sections;
 }

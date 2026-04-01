@@ -118,6 +118,7 @@ export interface TaskAddSheetProps {
   mainView: TaskMainView;
   todayKey: string;
   tomorrowKey: string;
+  defaultDateKey?: string | null;
   addTask: (
     title: string,
     scheduledAt?: string | null,
@@ -132,6 +133,7 @@ export function TaskAddSheet({
   mainView,
   todayKey,
   tomorrowKey,
+  defaultDateKey,
   addTask,
 }: TaskAddSheetProps) {
   const insets = useSafeAreaInsets();
@@ -185,8 +187,8 @@ export function TaskAddSheet({
     setRemindBeforeMinutes(null);
     if (mainView === 'inbox' || mainView === 'completed') setScheduledDate(null);
     else if (mainView === 'today') setScheduledDate(todayKey);
-    else setScheduledDate(tomorrowKey);
-  }, [visible, mainView, todayKey, tomorrowKey]);
+    else setScheduledDate(defaultDateKey ?? tomorrowKey);
+  }, [visible, mainView, todayKey, tomorrowKey, defaultDateKey]);
 
   useEffect(() => {
     if (!visible) setSubModal(null);

@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -41,6 +41,20 @@ const VIEW_TABS: { value: TaskMainView; label: string }[] = [
 ];
 
 type TaskSectionRow = { title: string; data: UserTask[] };
+type CalendarStripDay = { key: string; dayNumber: number; weekdayLabel: string };
+
+const WEEKDAY_SHORT_RU = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+const MONTH_SHORT_RU = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+const UPCOMING_CALENDAR_DAYS_BACK = 0;
+const UPCOMING_CALENDAR_DAYS_FORWARD = 180;
+const UPCOMING_DAY_ITEM_WIDTH = 50;
+
+function addDays(base: Date, amount: number): Date {
+  const d = new Date(base);
+  d.setDate(d.getDate() + amount);
+  return d;
+}
 
 function parseMainView(params: {
   tab?: string | string[];
@@ -85,6 +99,9 @@ export default function TasksScreen() {
     parseMainView({ tab: paramTab, filter: paramFilter, date: paramDate })
   );
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>(paramView === 'calendar' ? 'calendar' : 'list');
+  const [upcomingDate, setUpcomingDate] = useState<string | null>(null);
+  const [upcomingVisibleDateKey, setUpcomingVisibleDateKey] = useState<string | null>(null);
+  const upcomingScrollRef = useRef<ScrollView | null>(null);
 
   const [addSheetOpen, setAddSheetOpen] = useState(false);
 
@@ -104,6 +121,45 @@ export default function TasksScreen() {
     return formatDateForApi(d);
   }, []);
 
+  useEffect(() => {
+    if (upcomingDate) return;
+    setUpcomingDate(tomorrowKey);
+  }, [upcomingDate, tomorrowKey]);
+
+  useEffect(() => {
+    if (upcomingVisibleDateKey) return;
+    setUpcomingVisibleDateKey(upcomingDate ?? tomorrowKey);
+  }, [upcomingVisibleDateKey, upcomingDate, tomorrowKey]);
+
+  const upcomingStripDays = useMemo((): CalendarStripDay[] => {
+    const start = addDays(new Date(`${todayKey}T12:00:00`), -UPCOMING_CALENDAR_DAYS_BACK);
+    return Array.from({ length: UPCOMING_CALENDAR_DAYS_BACK + UPCOMING_CALENDAR_DAYS_FORWARD + 1 }, (_, idx) => {
+      const d = addDays(start, idx);
+      return {
+        key: formatDateForApi(d),
+        dayNumber: d.getDate(),
+        weekdayLabel: WEEKDAY_SHORT_RU[d.getDay()],
+      };
+    });
+  }, [todayKey]);
+
+  useEffect(() => {
+    if (mainView !== 'upcoming') return;
+    const activeKey = upcomingDate ?? tomorrowKey;
+    const idx = upcomingStripDays.findIndex((d) => d.key === activeKey);
+    if (idx < 0) return;
+    const x = Math.max(0, idx * UPCOMING_DAY_ITEM_WIDTH - 80);
+    requestAnimationFrame(() => {
+      upcomingScrollRef.current?.scrollTo({ x, animated: false });
+    });
+    setUpcomingVisibleDateKey(activeKey);
+  }, [mainView, upcomingDate, tomorrowKey, upcomingStripDays]);
+
+  const upcomingMonthLabel = useMemo(() => {
+    const selected = new Date(`${upcomingVisibleDateKey ?? upcomingDate ?? tomorrowKey}T12:00:00`);
+    return `${MONTH_SHORT_RU[selected.getMonth()]}. ${selected.getFullYear()}`;
+  }, [upcomingVisibleDateKey, upcomingDate, tomorrowKey]);
+
   const sections = useMemo((): TaskSectionRow[] => {
     if (mainView === 'completed') {
       const done = getCompletedTasks(tasks);
@@ -121,11 +177,17 @@ export default function TasksScreen() {
         data: s.tasks,
       }));
     }
-    return getUpcomingSections(tasks, todayKey).map((s) => ({
-      title: s.title,
-      data: s.tasks,
-    }));
-  }, [tasks, mainView, todayKey]);
+    const allUpcoming = getUpcomingSections(tasks, todayKey);
+    if (!upcomingDate) {
+      return allUpcoming.map((s) => ({
+        title: s.title,
+        data: s.tasks,
+      }));
+    }
+    const selectedSection = allUpcoming.find((s) => s.id === `day-${upcomingDate}`);
+    if (!selectedSection) return [];
+    return [{ title: selectedSection.title, data: selectedSection.tasks }];
+  }, [tasks, mainView, todayKey, upcomingDate]);
 
   const openAddSheet = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -256,6 +318,65 @@ export default function TasksScreen() {
               </Pressable>
             ))}
           </ScrollView>
+          {mainView === 'upcoming' && (
+            <View style={styles.upcomingCalendarInline}>
+              <View style={styles.upcomingCalendarHeader}>
+                <ThemedText style={[styles.upcomingMonthTitle, { color: headerText }]}>
+                  {upcomingMonthLabel}
+                </ThemedText>
+              </View>
+              <ScrollView
+                ref={upcomingScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.upcomingStripRow}
+                keyboardShouldPersistTaps="handled"
+                onScroll={(e) => {
+                  const x = e.nativeEvent.contentOffset.x;
+                  const idx = Math.max(
+                    0,
+                    Math.min(
+                      upcomingStripDays.length - 1,
+                      Math.round((x + 60) / UPCOMING_DAY_ITEM_WIDTH)
+                    )
+                  );
+                  const visibleKey = upcomingStripDays[idx]?.key ?? null;
+                  if (visibleKey && visibleKey !== upcomingVisibleDateKey) {
+                    setUpcomingVisibleDateKey(visibleKey);
+                  }
+                }}
+                scrollEventThrottle={16}
+              >
+                {upcomingStripDays.map((d) => {
+                  const isSelected = d.key === upcomingDate;
+                  return (
+                    <Pressable
+                      key={d.key}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setUpcomingDate(d.key);
+                      }}
+                      style={styles.upcomingDayCell}
+                    >
+                      <ThemedText style={[styles.upcomingWeekday, { color: isSelected ? primary : headerSubtitle }]}>
+                        {d.weekdayLabel}
+                      </ThemedText>
+                      <View
+                        style={[
+                          styles.upcomingDayCircle,
+                          isSelected && { backgroundColor: primary },
+                        ]}
+                      >
+                        <ThemedText style={{ color: isSelected ? '#fff' : headerText, fontWeight: isSelected ? '700' : '500' }}>
+                          {d.dayNumber}
+                        </ThemedText>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
         </View>
       )}
 
@@ -316,6 +437,7 @@ export default function TasksScreen() {
         mainView={mainView}
         todayKey={todayKey}
         tomorrowKey={tomorrowKey}
+        defaultDateKey={mainView === 'upcoming' ? upcomingDate : null}
         addTask={addTask}
       />
     </ThemedView>
@@ -338,6 +460,41 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 2,
     paddingRight: 8,
+  },
+  upcomingCalendarInline: {
+    marginTop: 10,
+  },
+  upcomingCalendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  upcomingMonthTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  upcomingStripRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 16,
+  },
+  upcomingDayCell: {
+    width: 42,
+    alignItems: 'center',
+    gap: 6,
+  },
+  upcomingWeekday: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  upcomingDayCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pill: {
     borderRadius: 999,
