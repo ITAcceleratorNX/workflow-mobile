@@ -26,6 +26,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { formatDateForApi, formatTaskTime, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
 import type { TaskMainView } from '@/lib/task-views';
+import type { TaskPriority } from '@/lib/user-tasks-api';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
@@ -110,6 +111,12 @@ const REMIND_BEFORE_OPTIONS: { value: number | null; label: string }[] = [
   { value: 30, label: '30 мин' },
 ];
 
+const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
+  { value: 'low', label: 'Низкий' },
+  { value: 'medium', label: 'Средний' },
+  { value: 'high', label: 'Высокий' },
+];
+
 type SubModalId = 'schedule' | null;
 
 export interface TaskAddSheetProps {
@@ -123,7 +130,8 @@ export interface TaskAddSheetProps {
     title: string,
     scheduledAt?: string | null,
     remindersDisabled?: boolean,
-    remindBeforeMinutes?: number | null
+    remindBeforeMinutes?: number | null,
+    priority?: TaskPriority
   ) => Promise<unknown>;
 }
 
@@ -148,6 +156,7 @@ export function TaskAddSheet({
   const titleInputRef = useRef<RNTextInput>(null);
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
   const [scheduledTime, setScheduledTime] = useState('09:00');
+  const [priority, setPriority] = useState<TaskPriority>('medium');
   const [remindersDisabled, setRemindersDisabled] = useState(false);
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -183,6 +192,7 @@ export function TaskAddSheet({
     setTitle('');
     const nowPlus15 = new Date(Date.now() + 15 * 60 * 1000);
     setScheduledTime(formatTaskTime(nowPlus15));
+    setPriority('medium');
     setRemindersDisabled(false);
     setRemindBeforeMinutes(null);
     if (mainView === 'inbox' || mainView === 'completed') setScheduledDate(null);
@@ -320,7 +330,7 @@ export function TaskAddSheet({
       scheduledDate != null && scheduledDate !== ''
         ? toUtcIsoFromAppDateTime(scheduledDate, scheduledTime)
         : null;
-    const created = await addTask(trimmed, scheduledAtIso, remindersDisabled, remindBeforeMinutes);
+    const created = await addTask(trimmed, scheduledAtIso, remindersDisabled, remindBeforeMinutes, priority);
     setSaving(false);
     if (created) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -332,6 +342,7 @@ export function TaskAddSheet({
     scheduledTime,
     remindersDisabled,
     remindBeforeMinutes,
+    priority,
     saving,
     addTask,
     onClose,
@@ -420,6 +431,30 @@ export function TaskAddSheet({
               </View>
 
               <View style={[styles.inlineBlock, { borderTopColor: border }]}>
+                <ThemedText style={[styles.inlineBlockTitle, { color: headerSubtitle }]}>Приоритет</ThemedText>
+                <View style={styles.remindRow}>
+                  {PRIORITY_OPTIONS.map((o) => {
+                    const selected = priority === o.value;
+                    return (
+                      <Pressable
+                        key={o.value}
+                        onPress={() => setPriority(o.value)}
+                        style={[
+                          styles.remindChip,
+                          { borderColor: border },
+                          selected && { borderColor: primary, backgroundColor: `${primary}18` },
+                        ]}
+                      >
+                        <ThemedText
+                          style={{ color: selected ? primary : headerText, fontSize: 13, fontWeight: '600' }}
+                        >
+                          {o.label}
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <View style={{ height: 8 }} />
                 <ThemedText style={[styles.inlineBlockTitle, { color: headerSubtitle }]}>Напоминания</ThemedText>
                 <View style={styles.subSwitchRow}>
                   <ThemedText style={{ color: headerText }}>Пуш-уведомления</ThemedText>

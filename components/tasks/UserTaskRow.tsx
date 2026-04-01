@@ -40,6 +40,8 @@ export function UserTaskRow({
   const firstLine = (titleRaw.split('\n')[0] ?? '').trim() || 'Без названия';
   const dateStr = item.scheduled_at ? formatDateForApi(new Date(item.scheduled_at)) : null;
   const timeStr = item.scheduled_at ? formatTimeOnly(item.scheduled_at) : null;
+  const priorityLabel = item.priority === 'high' ? 'Высокий' : item.priority === 'low' ? 'Низкий' : 'Средний';
+  const priorityColor = item.priority === 'high' ? '#EF4444' : item.priority === 'low' ? '#22C55E' : '#F59E0B';
 
   return (
     <View style={[styles.row, { backgroundColor: cardBackground, borderColor }]}>
@@ -69,13 +71,17 @@ export function UserTaskRow({
           >
             {firstLine}
           </ThemedText>
-          {(dateStr || timeStr || isTeam) && (
-            <ThemedText style={[styles.meta, { color: textMuted }]}>
-              {dateStr && `${formatSectionDateLabel(dateStr, todayKey)}`}
-              {timeStr && ` • ${timeStr}`}
-              {isTeam && ' • Командный'}
-            </ThemedText>
-          )}
+          <View style={styles.metaRow}>
+            <MaterialIcons name="flag" size={12} color={priorityColor} />
+            <ThemedText style={[styles.meta, { color: textMuted }]}>{priorityLabel}</ThemedText>
+            {(dateStr || timeStr || isTeam) && (
+              <ThemedText style={[styles.meta, { color: textMuted }]}>
+                {dateStr && ` • ${formatSectionDateLabel(dateStr, todayKey)}`}
+                {timeStr && ` • ${timeStr}`}
+                {isTeam && ' • Командный'}
+              </ThemedText>
+            )}
+          </View>
         </View>
         <MaterialIcons name="chevron-right" size={22} color={textMuted} />
       </Pressable>
@@ -106,5 +112,6 @@ const styles = StyleSheet.create({
   rowContent: { flex: 1, minWidth: 0 },
   title: { fontSize: 16, lineHeight: 22 },
   textCompleted: { textDecorationLine: 'line-through' },
-  meta: { fontSize: 12, marginTop: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4, flexWrap: 'wrap' },
+  meta: { fontSize: 12, marginTop: 0 },
 });

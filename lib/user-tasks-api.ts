@@ -1,5 +1,7 @@
 import { request } from './api';
 
+export type TaskPriority = 'low' | 'medium' | 'high';
+
 export interface UserTask {
   id: number;
   creator_id: number;
@@ -11,6 +13,7 @@ export interface UserTask {
   deadline_to: string | null;
   deadline_time: string | null;
   remind_at: string | null;
+  priority: TaskPriority;
   reminders_disabled: boolean;
   remind_before_minutes: number | null;
   created_at: string;
@@ -96,6 +99,7 @@ export async function getUserTask(
 
 export async function createUserTask(body: {
   title: string;
+  priority?: TaskPriority;
   scheduled_at?: string | null;
   deadline_from?: string | null;
   deadline_to?: string | null;
@@ -116,6 +120,7 @@ export async function updateUserTask(
   id: number,
   body: Partial<{
     title: string;
+    priority: TaskPriority;
     completed: boolean;
     scheduled_at: string | null;
     deadline_from: string | null;

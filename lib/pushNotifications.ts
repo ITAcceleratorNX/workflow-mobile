@@ -6,6 +6,7 @@ import Constants from 'expo-constants';
 import { saveFcmToken, deleteFcmToken } from '@/lib/api';
 
 const DEFAULT_CHANNEL_ID = 'default';
+const HIGH_PRIORITY_CHANNEL_ID = 'high_priority';
 
 /** Последний токен, отправленный на бэкенд — нужен для удаления при выходе (сам device token при смене аккаунта не меняется). */
 let lastRegisteredPushToken: string | null = null;
@@ -98,6 +99,13 @@ export async function setupNotificationChannel(): Promise<void> {
     importance: 6 as any, // "HIGH" value
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#0066CC',
+    sound: 'default',
+  });
+  await Notifications.setNotificationChannelAsync(HIGH_PRIORITY_CHANNEL_ID, {
+    name: 'Срочные уведомления',
+    importance: 6 as any,
+    vibrationPattern: [0, 300, 200, 300],
+    lightColor: '#EF4444',
     sound: 'default',
   });
 }

@@ -41,6 +41,8 @@ function TaskRow({
     ? `${toAppDateKey(task.scheduled_at)} ${formatTaskTime(task.scheduled_at)}`
     : null;
   const hasScheduled = !!task.scheduled_at;
+  const priorityLabel = task.priority === 'high' ? 'Высокий' : task.priority === 'low' ? 'Низкий' : 'Средний';
+  const priorityColor = task.priority === 'high' ? '#EF4444' : task.priority === 'low' ? '#22C55E' : '#F59E0B';
 
   return (
     <View style={[styles.taskRow, { borderBottomColor: borderColor }]}>
@@ -77,6 +79,10 @@ function TaskRow({
           {scheduledStr && (
             <ThemedText style={[styles.taskMeta, { color: textMuted }]}>{scheduledStr}</ThemedText>
           )}
+          <View style={styles.priorityRow}>
+            <MaterialIcons name="flag" size={12} color={priorityColor} />
+            <ThemedText style={[styles.taskMeta, { color: textMuted }]}>{priorityLabel}</ThemedText>
+          </View>
           {task.assignee_ids?.length > 0 && (
             <View style={[styles.badge, styles.badgeRow, { backgroundColor: primary }]}>
               <MaterialIcons name="group" size={12} color="#FFFFFF" style={styles.badgeIcon} />
@@ -201,6 +207,12 @@ const styles = StyleSheet.create({
   taskMeta: {
     fontSize: 12,
     marginTop: 2,
+  },
+  priorityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
   },
   badge: {
     alignSelf: 'flex-start',

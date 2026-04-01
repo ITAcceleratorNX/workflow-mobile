@@ -13,6 +13,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
+import type { TaskPriority } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
 
@@ -21,6 +22,12 @@ const REMIND_BEFORE_OPTIONS: { value: number | null; label: string }[] = [
   { value: 5, label: '5 мин' },
   { value: 15, label: '15 мин' },
   { value: 30, label: '30 мин' },
+];
+
+const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
+  { value: 'low', label: 'Низкий' },
+  { value: 'medium', label: 'Средний' },
+  { value: 'high', label: 'Высокий' },
 ];
 
 function isoForDateTime(dateKey: string, time: string) {
@@ -97,12 +104,14 @@ export default function TaskDetailsScreen() {
   const [assigneeSearching, setAssigneeSearching] = useState(false);
   const [selectedAssignees, setSelectedAssignees] = useState<{ id: number; full_name: string }[]>([]);
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
+  const [priority, setPriority] = useState<TaskPriority>('medium');
 
   useEffect(() => {
     if (!task) return;
     setTitleDraft(task.title ?? '');
     setRemindBeforeMinutes(task.remind_before_minutes ?? null);
-  }, [task?.id, task?.title, task?.remind_before_minutes]);
+    setPriority(task.priority ?? 'medium');
+  }, [task?.id, task?.title, task?.remind_before_minutes, task?.priority]);
 
   useEffect(() => {
     if (!task) return;
@@ -182,6 +191,13 @@ export default function TaskDetailsScreen() {
     setRemindBeforeMinutes(value);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await updateTask(task, { remind_before_minutes: value });
+  }, [task, canEditDetails, updateTask]);
+
+  const handlePriorityChange = useCallback(async (value: TaskPriority) => {
+    if (!task || !canEditDetails) return;
+    setPriority(value);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await updateTask(task, { priority: value });
   }, [task, canEditDetails, updateTask]);
 
   const saveTitle = useCallback(async () => {
@@ -454,6 +470,46 @@ export default function TaskDetailsScreen() {
                 ))}
               </View>
             ) : null}
+          </View>
+        </View>
+
+        <View style={{ height: 16 }} />
+
+        <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Приоритет</ThemedText>
+        <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
+          <View style={styles.remindBeforeSection}>
+            <View style={styles.rowLeft}>
+              <MaterialIcons name="flag" size={20} color={textMuted} />
+              <ThemedText style={[styles.rowTitle, { color: text }]}>Уровень</ThemedText>
+            </View>
+            <View style={styles.remindBeforeBlocks}>
+              {PRIORITY_OPTIONS.map((o) => {
+                const isSelected = priority === o.value;
+                const disabled = !canEditDetails;
+                return (
+                  <Pressable
+                    key={o.value}
+                    onPress={() => !disabled && handlePriorityChange(o.value)}
+                    disabled={disabled}
+                    style={[
+                      styles.remindBeforeBlock,
+                      { borderColor: border, backgroundColor: cardBg },
+                      isSelected && { borderColor: primary, backgroundColor: `${primary}18` },
+                      disabled && { opacity: 0.6 },
+                    ]}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.remindBeforeBlockText,
+                        { color: isSelected ? primary : text },
+                      ]}
+                    >
+                      {o.label}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         </View>
 

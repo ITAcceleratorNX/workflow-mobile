@@ -6,6 +6,7 @@ import {
   updateUserTask,
   deleteUserTask,
   type UserTask,
+  type TaskPriority,
   type TaskFilter,
 } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
@@ -88,7 +89,8 @@ export function useTodoList(filter: TaskFilter = 'all') {
       title: string,
       scheduledAt?: string | null,
       remindersDisabled?: boolean,
-      remindBeforeMinutes?: number | null
+      remindBeforeMinutes?: number | null,
+      priority: TaskPriority = 'medium'
     ) => {
       if (!token || isGuest) {
         show({ title: 'Недоступно', description: 'Нужно войти в аккаунт, чтобы создавать задачи', variant: 'destructive' });
@@ -106,6 +108,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
         deadline_to: null,
         deadline_time: null,
         remind_at: null,
+        priority,
         reminders_disabled: remindersDisabled ?? false,
         remind_before_minutes: remindBeforeMinutes ?? null,
         created_at: nowIso(),
@@ -124,6 +127,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
         deadline_to: null,
         deadline_time: null,
         assignee_ids: undefined,
+        priority,
         reminders_disabled: remindersDisabled,
         remind_before_minutes: remindBeforeMinutes ?? null,
       });
@@ -131,6 +135,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
         const merged: UserTask = {
           ...res.data,
           title: res.data.title ?? title,
+          priority: res.data.priority ?? priority,
         };
         setTasks((prev) => prev.map((t) => (t.id === optimisticId ? merged : t)));
         bump();

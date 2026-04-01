@@ -17,6 +17,11 @@ export interface TaskSection {
 }
 
 function sortByScheduleThenTitle(a: UserTask, b: UserTask): number {
+  const priorityWeight = (p?: string) => (p === 'high' ? 3 : p === 'medium' ? 2 : 1);
+  const pa = priorityWeight(a.priority);
+  const pb = priorityWeight(b.priority);
+  if (pa !== pb) return pb - pa;
+
   const ta = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0;
   const tb = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0;
   if (ta !== tb) return ta - tb;
@@ -36,10 +41,16 @@ export function getCompletedTasks(tasks: UserTask[]): UserTask[] {
 
 /** Inbox: unscheduled tasks. */
 export function getInboxTasks(tasks: UserTask[]): UserTask[] {
+  const priorityWeight = (p?: string) => (p === 'high' ? 3 : p === 'medium' ? 2 : 1);
   return tasks
     .filter((t) => !t.scheduled_at)
     .filter((t) => !t.completed)
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    .sort((a, b) => {
+      const pa = priorityWeight(a.priority);
+      const pb = priorityWeight(b.priority);
+      if (pa !== pb) return pb - pa;
+      return b.updated_at.localeCompare(a.updated_at);
+    });
 }
 
 /** Today view: tasks scheduled for today. */
