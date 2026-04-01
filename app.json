@@ -9,6 +9,7 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
+      "version": "1.0.1",
       "buildNumber": "13",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
@@ -58,7 +59,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 6,
+      "versionCode": 7,
       "package": "com.workflow.kz"
     },
     "web": {
@@ -84,6 +85,8 @@
         }
       ],
       "./plugins/withFirebaseAppDelegate",
+      "./plugins/withFirebaseMetaFix",
+      "./plugins/withAsyncStorageAndroidMavenRepo",
       [
         "expo-splash-screen",
         {
