@@ -1,12 +1,12 @@
 # Deep Links: открытие заявки в приложении
 
-Чтобы ссылки вида `http://localhost:3001?requestId=123` открывались в мобильном приложении (а не в браузере), нужна **двусторонняя верификация** между сайтом и приложением.
+Чтобы ссылки вида `https://app.tmk-workflow.kz?requestId=123` открывались в мобильном приложении (а не в браузере), нужна **двусторонняя верификация** между сайтом и приложением.
 
 ## Что уже сделано в приложении (workflow-mobile)
 
 - В **app.json** настроены:
   - **iOS**: `associatedDomains: ["applinks:app.tmk-workflow.kz"]`
-  - **Android**: `intentFilters` с `autoVerify: true` для `http://localhost:3001`
+  - **Android**: `intentFilters` с `autoVerify: true` для `https://app.tmk-workflow.kz`
 - При открытии ссылки приложение парсит `requestId` и открывает экран заявки `/(tabs)/requests/[id]`.
 
 ## Что нужно сделать на сайте (app.tmk-workflow.kz / kcell-service-front)
@@ -15,7 +15,7 @@
 
 На домене **app.tmk-workflow.kz** должен быть доступен файл:
 
-**URL:** `http://localhost:3001/.well-known/apple-app-site-association`  
+**URL:** `https://workflow-back-zpk4.onrender.com/.well-known/apple-app-site-association`  
 (без расширения, Content-Type: `application/json`)
 
 В **kcell-service-front** файл создан:  
@@ -23,13 +23,13 @@
 
 **Важно:** замените `TEAM_ID` на ваш **Apple Team ID** (например из Apple Developer → Membership). Итоговая строка: `"appID": "XXXXXXXXXX.com.workflow.kz"`.
 
-После деплоя проверьте: https://branch.io/resources/aasa-validator/ (введите `http://localhost:3001`).
+После деплоя проверьте: https://branch.io/resources/aasa-validator/ (введите `https://workflow-back-zpk4.onrender.com`).
 
 ### 2. Android — App Links
 
 На домене должен быть доступен файл:
 
-**URL:** `http://localhost:3001/.well-known/assetlinks.json`  
+**URL:** `https://workflow-back-zpk4.onrender.com/.well-known/assetlinks.json`  
 (Content-Type: `application/json`)
 
 В **kcell-service-front** файл создан:  
