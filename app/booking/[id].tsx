@@ -107,7 +107,7 @@ export default function BookingQrScreen() {
   const office = booking.office || booking.meetingRoom?.office || booking.meeting_room?.office;
   const room = booking.meetingRoom || booking.meeting_room;
   const durationLabel = formatBookingDurationRu(booking.start_time, booking.end_time);
-  const appUrl = `https://app.tmk-workflow.kz/booking/${booking.id}`;
+  const appUrl = `http://localhost:3001/booking/${booking.id}`;
   const qrPayload = JSON.stringify({
     bookingId: booking.id,
     roomId: booking.meeting_room_id,

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { StyleSheet, View, Text, Pressable, Animated } from 'react-native';
+import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
 interface Toast {
@@ -81,58 +81,74 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ show, hide }}>
       {children}
-      <View style={styles.container} pointerEvents="box-none">
-        {toasts.map((toast) => {
-          const anim = animations.get(toast.id);
-          const backgroundColor = getToastColor(toast.variant);
-          const icon = getToastIcon(toast.variant);
+      {/*
+        Отдельный Modal — иначе z-index не перекрывает другие Modal (шиты задач, пикеры).
+        box-none: тапы мимо баннера уходят на контент под этим слоем.
+      */}
+      <Modal
+        visible={toasts.length > 0}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        presentationStyle="overFullScreen"
+        onRequestClose={() => {
+          const last = toasts[toasts.length - 1];
+          if (last) hide(last.id);
+        }}
+      >
+        <View style={styles.modalRoot} pointerEvents="box-none">
+          {toasts.map((toast) => {
+            const anim = animations.get(toast.id);
+            const backgroundColor = getToastColor(toast.variant);
+            const icon = getToastIcon(toast.variant);
 
-          return (
-            <Animated.View
-              key={toast.id}
-              style={[
-                styles.toast,
-                {
-                  backgroundColor,
-                  opacity: anim ?? 1,
-                  transform: [
-                    {
-                      translateY: anim
-                        ? anim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [-100, 0],
-                          })
-                        : 0,
-                    },
-                  ],
-                },
-              ]}
-            >
-              <View style={styles.toastContent}>
-                <MaterialIcons
-                  name={icon}
-                  size={24}
-                  color="#FFFFFF"
-                  style={styles.icon}
-                />
-                <View style={styles.textContainer}>
-                  <Text style={styles.title}>{toast.title}</Text>
-                  {toast.description && (
-                    <Text style={styles.description}>{toast.description}</Text>
-                  )}
-                </View>
-              </View>
-              <Pressable
-                onPress={() => hide(toast.id)}
-                style={styles.closeButton}
-                hitSlop={8}
+            return (
+              <Animated.View
+                key={toast.id}
+                style={[
+                  styles.toast,
+                  {
+                    backgroundColor,
+                    opacity: anim ?? 1,
+                    transform: [
+                      {
+                        translateY: anim
+                          ? anim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [-100, 0],
+                            })
+                          : 0,
+                      },
+                    ],
+                  },
+                ]}
               >
-                <MaterialIcons name="close" size={20} color="#FFFFFF" />
-              </Pressable>
-            </Animated.View>
-          );
-        })}
-      </View>
+                <View style={styles.toastContent}>
+                  <MaterialIcons
+                    name={icon}
+                    size={24}
+                    color="#FFFFFF"
+                    style={styles.icon}
+                  />
+                  <View style={styles.textContainer}>
+                    <Text style={styles.title}>{toast.title}</Text>
+                    {toast.description && (
+                      <Text style={styles.description}>{toast.description}</Text>
+                    )}
+                  </View>
+                </View>
+                <Pressable
+                  onPress={() => hide(toast.id)}
+                  style={styles.closeButton}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="close" size={20} color="#FFFFFF" />
+                </Pressable>
+              </Animated.View>
+            );
+          })}
+        </View>
+      </Modal>
     </ToastContext.Provider>
   );
 }
@@ -146,9 +162,8 @@ export function useToast() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 9999,
+  modalRoot: {
+    flex: 1,
     pointerEvents: 'box-none',
   },
   toast: {
@@ -156,6 +171,7 @@ const styles = StyleSheet.create({
     top: 60,
     left: 16,
     right: 16,
+    zIndex: 1,
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
@@ -165,7 +181,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 5,
+    elevation: 24,
   },
   toastContent: {
     flexDirection: 'row',

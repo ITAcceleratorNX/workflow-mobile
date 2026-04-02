@@ -10,6 +10,8 @@ export default function ClientLayout() {
       <Stack.Screen name="tasks" />
       <Stack.Screen name="news" />
       <Stack.Screen name="tasks/details" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="teams/create" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="teams/[id]" options={{ presentation: 'modal' }} />
     </Stack>
   );
 }

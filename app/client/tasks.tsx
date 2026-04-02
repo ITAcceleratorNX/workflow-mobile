@@ -1,13 +1,14 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  SectionList,
+  ScrollView,
   StyleSheet,
   View,
-  ScrollView,
-  SectionList,
-  Pressable,
-  ActivityIndicator,
-  Platform,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -19,6 +20,7 @@ import { ThemedView } from '@/components/themed-view';
 import { ScreenHeader } from '@/components/ui';
 import { UserTaskRow } from '@/components/tasks/UserTaskRow';
 import { TaskAddSheet } from '@/components/tasks/TaskAddSheet';
+import { TeamsInboxPanel } from '@/components/tasks/TeamsInboxPanel';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { useAuthStore } from '@/stores/auth-store';
@@ -80,7 +82,7 @@ export default function TasksScreen() {
     tab?: string;
     filter?: string;
     date?: string;
-    view?: 'list' | 'calendar';
+    view?: 'list' | 'calendar' | 'board';
   }>();
   const paramTab = params.tab;
   const paramFilter = params.filter;
@@ -98,12 +100,16 @@ export default function TasksScreen() {
   const [mainView, setMainView] = useState<TaskMainView>(() =>
     parseMainView({ tab: paramTab, filter: paramFilter, date: paramDate })
   );
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>(paramView === 'calendar' ? 'calendar' : 'list');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>(() =>
+    paramView === 'calendar' ? 'calendar' : 'list'
+  );
   const [upcomingDate, setUpcomingDate] = useState<string | null>(null);
   const [upcomingVisibleDateKey, setUpcomingVisibleDateKey] = useState<string | null>(null);
   const upcomingScrollRef = useRef<ScrollView | null>(null);
 
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [teamsPanelOpen, setTeamsPanelOpen] = useState(false);
+  const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
 
   useEffect(() => {
     setMainView(parseMainView({ tab: paramTab, filter: paramFilter, date: paramDate }));
@@ -111,8 +117,11 @@ export default function TasksScreen() {
 
   useEffect(() => {
     if (paramView === 'calendar') setViewMode('calendar');
-    if (paramView === 'list') setViewMode('list');
-  }, [paramView]);
+    else setViewMode('list');
+    if (paramView === 'board') {
+      router.setParams({ view: 'list' });
+    }
+  }, [paramView, router]);
 
   const todayKey = formatDateForApi(new Date());
   const tomorrowKey = useMemo(() => {
@@ -194,6 +203,36 @@ export default function TasksScreen() {
     setAddSheetOpen(true);
   }, []);
 
+  const openTeamsPanel = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTeamsPanelOpen(true);
+  }, []);
+
+  const openDisplayMenu = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDisplayMenuOpen(true);
+  }, []);
+
+  const closeDisplayMenu = useCallback(() => {
+    setDisplayMenuOpen(false);
+  }, []);
+
+  const applyLayout = useCallback(
+    (mode: 'list' | 'calendar') => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setViewMode(mode);
+      router.setParams({ view: mode });
+      setDisplayMenuOpen(false);
+    },
+    [router]
+  );
+
+  const openTeamsFromDisplayMenu = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDisplayMenuOpen(false);
+    setTeamsPanelOpen(true);
+  }, []);
+
   const renderItem = useCallback(
     ({ item }: { item: UserTask }) => (
       <UserTaskRow
@@ -209,7 +248,8 @@ export default function TasksScreen() {
         primary={primary}
         borderColor={border}
         cardBackground={cardBg}
-        isTeam={!!currentUserId && item.creator_id !== currentUserId}
+        isTeam={item.team_id != null}
+        currentUserId={currentUserId}
       />
     ),
     [toggleComplete, headerText, headerSubtitle, primary, border, cardBg, currentUserId, todayKey, router]
@@ -252,34 +292,21 @@ export default function TasksScreen() {
     </View>
   );
 
-  const headerViewToggle = (
-    <View style={[styles.viewToggle, { borderColor: border, backgroundColor: cardBg }]}>
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          setViewMode('list');
-        }}
-        style={[styles.viewBtn, viewMode === 'list' && { backgroundColor: `${primary}25` }]}
-        hitSlop={8}
-      >
-        <MaterialIcons name="format-list-bulleted" size={20} color={viewMode === 'list' ? primary : headerSubtitle} />
-      </Pressable>
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          setViewMode('calendar');
-        }}
-        style={[styles.viewBtn, viewMode === 'calendar' && { backgroundColor: `${primary}25` }]}
-        hitSlop={8}
-      >
-        <MaterialIcons name="calendar-month" size={20} color={viewMode === 'calendar' ? primary : headerSubtitle} />
-      </Pressable>
-    </View>
+  const headerRight = (
+    <Pressable
+      onPress={openDisplayMenu}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityLabel="Вид, календарь и команды"
+      style={({ pressed }) => [styles.moreMenuBtn, pressed && { opacity: 0.65 }]}
+    >
+      <MaterialIcons name="more-horiz" size={26} color={primary} />
+    </Pressable>
   );
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
-      <ScreenHeader title="Задачи" inlineTitle hideBackLabel rightSlot={headerViewToggle} />
+      <ScreenHeader title="Задачи" inlineTitle hideBackLabel rightSlot={headerRight} />
 
       {viewMode === 'list' && (
         <View style={styles.topBar}>
@@ -431,6 +458,134 @@ export default function TasksScreen() {
           </Pressable>
         </View>
       )}
+
+      <Modal
+        visible={displayMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeDisplayMenu}
+      >
+        <View style={styles.displayModalRoot}>
+          <Pressable style={styles.displayModalBackdrop} onPress={closeDisplayMenu} />
+          <View
+            style={[
+              styles.displaySheet,
+              {
+                backgroundColor: background,
+                paddingBottom: Math.max(insets.bottom, 20),
+              },
+            ]}
+          >
+            <View style={[styles.displaySheetHeader, { borderBottomColor: border }]}>
+              <View style={[styles.displayHeaderSide, { justifyContent: 'flex-start' }]}>
+                <Pressable
+                  onPress={closeDisplayMenu}
+                  hitSlop={12}
+                  style={[styles.displayHeaderIconBtn, { backgroundColor: cardBg }]}
+                  accessibilityLabel="Закрыть"
+                >
+                  <MaterialIcons name="close" size={22} color={headerText} />
+                </Pressable>
+              </View>
+              <ThemedText style={[styles.displaySheetTitle, { color: headerText }]}>Вид и команды</ThemedText>
+              <View style={[styles.displayHeaderSide, { justifyContent: 'flex-end' }]}>
+                <Pressable
+                  onPress={closeDisplayMenu}
+                  hitSlop={12}
+                  style={[styles.displayHeaderIconBtn, { backgroundColor: primary }]}
+                  accessibilityLabel="Готово"
+                >
+                  <MaterialIcons name="check" size={22} color="#fff" />
+                </Pressable>
+              </View>
+            </View>
+
+            <ThemedText style={[styles.displaySectionLabel, { color: headerSubtitle }]}>Раскладка</ThemedText>
+            <View style={[styles.layoutRow, styles.layoutRowTwo, { backgroundColor: cardBg, borderColor: border }]}>
+              <Pressable
+                onPress={() => applyLayout('list')}
+                style={styles.layoutCell}
+              >
+                <View
+                  style={[
+                    styles.layoutIconFrame,
+                    { borderColor: viewMode === 'list' ? primary : border },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="format-list-bulleted"
+                    size={26}
+                    color={viewMode === 'list' ? primary : headerSubtitle}
+                  />
+                </View>
+                <View
+                  style={[
+                    styles.layoutLabelPill,
+                    viewMode === 'list' && { backgroundColor: primary },
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.layoutLabelText,
+                      { color: viewMode === 'list' ? '#fff' : headerSubtitle },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    Список
+                  </ThemedText>
+                </View>
+              </Pressable>
+
+              <Pressable onPress={() => applyLayout('calendar')} style={styles.layoutCell}>
+                <View
+                  style={[
+                    styles.layoutIconFrame,
+                    { borderColor: viewMode === 'calendar' ? primary : border },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="calendar-month"
+                    size={26}
+                    color={viewMode === 'calendar' ? primary : headerSubtitle}
+                  />
+                </View>
+                <View
+                  style={[
+                    styles.layoutLabelPill,
+                    viewMode === 'calendar' && { backgroundColor: primary },
+                  ]}
+                >
+                  <ThemedText
+                    style={[
+                      styles.layoutLabelText,
+                      { color: viewMode === 'calendar' ? '#fff' : headerSubtitle },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    Календарь
+                  </ThemedText>
+                </View>
+              </Pressable>
+            </View>
+
+            <ThemedText style={[styles.displaySectionLabel, { color: headerSubtitle, marginTop: 20 }]}>
+              Команды
+            </ThemedText>
+            <Pressable
+              onPress={openTeamsFromDisplayMenu}
+              style={({ pressed }) => [
+                styles.teamsMenuRow,
+                { borderColor: border, backgroundColor: cardBg },
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <MaterialIcons name="groups" size={24} color={primary} />
+              <ThemedText style={[styles.teamsMenuRowLabel, { color: headerText }]}>Команды</ThemedText>
+              <MaterialIcons name="chevron-right" size={24} color={headerSubtitle} />
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <TaskAddSheet
         visible={addSheetOpen}
         onClose={() => setAddSheetOpen(false)}
@@ -440,6 +595,9 @@ export default function TasksScreen() {
         defaultDateKey={mainView === 'upcoming' ? upcomingDate : null}
         addTask={addTask}
       />
+      {teamsPanelOpen ? (
+        <TeamsInboxPanel onClose={() => setTeamsPanelOpen(false)} />
+      ) : null}
     </ThemedView>
   );
 }
@@ -502,17 +660,108 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  viewToggle: {
-    flexDirection: 'row',
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
-  viewBtn: {
-    width: 38,
-    height: 34,
+  moreMenuBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  displayModalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  displayModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  displaySheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  displaySheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 14,
+    marginBottom: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  displayHeaderSide: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  displayHeaderIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  displaySheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    flex: 2,
+    textAlign: 'center',
+  },
+  displaySectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  layoutRow: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    justifyContent: 'space-between',
+  },
+  layoutRowTwo: {
+    justifyContent: 'space-around',
+    gap: 16,
+  },
+  layoutCell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 4,
+  },
+  layoutIconFrame: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  layoutLabelPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    maxWidth: '100%',
+  },
+  layoutLabelText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  teamsMenuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  teamsMenuRowLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
   },
   listWithFab: { flex: 1 },
   listFab: {

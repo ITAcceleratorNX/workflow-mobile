@@ -24,6 +24,8 @@ export interface SelectProps {
   placeholder?: string;
   /** Стили обёртки (например flex в ряду) */
   containerStyle?: ViewStyle;
+  /** Не открывать список и не менять значение */
+  disabled?: boolean;
 }
 
 export function Select({
@@ -32,6 +34,7 @@ export function Select({
   options,
   placeholder = 'Выберите',
   containerStyle,
+  disabled = false,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
   const text = useThemeColor({}, 'text');
@@ -51,8 +54,9 @@ export function Select({
   return (
     <View style={[styles.wrapper, containerStyle]}>
       <Pressable
-        onPress={() => setOpen(true)}
-        style={[styles.trigger, { borderColor: border }]}
+        disabled={disabled}
+        onPress={() => !disabled && setOpen(true)}
+        style={[styles.trigger, { borderColor: border }, disabled && { opacity: 0.55 }]}
       >
         <ThemedText style={[styles.triggerText, { color: displayColor }]}>
           {display}

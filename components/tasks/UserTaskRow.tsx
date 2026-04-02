@@ -2,6 +2,7 @@ import { View, Pressable, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
+import { TaskAssignmentBadges } from '@/components/tasks/TaskAssignmentBadges';
 import { ThemedText } from '@/components/themed-text';
 import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
 import { formatSectionDateLabel } from '@/lib/task-views';
@@ -19,6 +20,7 @@ export interface UserTaskRowProps {
   borderColor: string;
   cardBackground: string;
   isTeam: boolean;
+  currentUserId?: number | null;
 }
 
 /**
@@ -35,6 +37,7 @@ export function UserTaskRow({
   borderColor,
   cardBackground,
   isTeam,
+  currentUserId,
 }: UserTaskRowProps) {
   const titleRaw = item.title ?? '';
   const firstLine = (titleRaw.split('\n')[0] ?? '').trim() || 'Без названия';
@@ -71,6 +74,13 @@ export function UserTaskRow({
           >
             {firstLine}
           </ThemedText>
+          {(dateStr || timeStr) && (
+            <ThemedText style={[styles.meta, { color: textMuted }]}>
+              {dateStr ? formatSectionDateLabel(dateStr, todayKey) : ''}
+              {timeStr ? `${dateStr ? ' • ' : ''}${timeStr}` : ''}
+            </ThemedText>
+          )}
+          <TaskAssignmentBadges task={item} primary={primary} currentUserId={currentUserId} />
           <View style={styles.metaRow}>
             <MaterialIcons name="flag" size={12} color={priorityColor} />
             <ThemedText style={[styles.meta, { color: textMuted }]}>{priorityLabel}</ThemedText>

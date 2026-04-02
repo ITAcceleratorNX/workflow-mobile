@@ -90,6 +90,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
       scheduledAt?: string | null,
       remindersDisabled?: boolean,
       remindBeforeMinutes?: number | null,
+      assignment?: { team_id?: number | null; executor_id?: number | null },
       priority: TaskPriority = 'medium'
     ) => {
       if (!token || isGuest) {
@@ -115,6 +116,8 @@ export function useTodoList(filter: TaskFilter = 'all') {
         updated_at: nowIso(),
         assignee_ids: [],
         assignees: [],
+        team_id: assignment?.team_id ?? null,
+        executor_id: assignment?.executor_id ?? null,
       };
 
       const before = tasksRef.current;
@@ -130,6 +133,8 @@ export function useTodoList(filter: TaskFilter = 'all') {
         priority,
         reminders_disabled: remindersDisabled,
         remind_before_minutes: remindBeforeMinutes ?? null,
+        team_id: assignment?.team_id ?? null,
+        executor_id: assignment?.executor_id ?? null,
       });
       if (res.ok) {
         const merged: UserTask = {

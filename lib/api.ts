@@ -47,6 +47,21 @@ export async function request<T>(
     return { ok: true, data: empty as T };
   }
 
+  if (isGuestToken && path.startsWith('/teams')) {
+    const method = (init.method ?? 'GET').toUpperCase();
+    if (method === 'GET') {
+      if (path === '/teams' || path.startsWith('/teams?')) {
+        return { ok: true, data: { teams: [] } as T };
+      }
+      if (/^\/teams\/\d+$/.test(path)) {
+        return { ok: false, error: 'В демо-режиме недоступно' };
+      }
+    }
+    if (method === 'POST' || method === 'PATCH' || method === 'PUT' || method === 'DELETE') {
+      return { ok: false, error: 'Войдите в аккаунт' };
+    }
+  }
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -927,17 +942,41 @@ export interface UserSearchItem {
   phone?: string;
 }
 
+/** API может отдать full_name, fullName (Sequelize/прокси) или без имени — для чипов в форме команды. */
+export function normalizeUserSearchItem(raw: unknown): UserSearchItem {
+  if (!raw || typeof raw !== 'object') {
+    return { id: 0, full_name: 'Пользователь' };
+  }
+  const o = raw as Record<string, unknown>;
+  const id = Number(o.id);
+  const first = typeof o.first_name === 'string' ? o.first_name.trim() : '';
+  const last = typeof o.last_name === 'string' ? o.last_name.trim() : '';
+  const combined = [first, last].filter(Boolean).join(' ');
+  const name =
+    (typeof o.full_name === 'string' && o.full_name.trim()) ||
+    (typeof o.fullName === 'string' && o.fullName.trim()) ||
+    (typeof o.name === 'string' && o.name.trim()) ||
+    combined ||
+    '';
+  const safeId = Number.isFinite(id) ? id : 0;
+  return {
+    id: safeId,
+    full_name: name || (safeId > 0 ? `Пользователь #${safeId}` : 'Пользователь'),
+    phone: typeof o.phone === 'string' ? o.phone : undefined,
+  };
+}
+
 export async function searchUsersForAssign(query: string): Promise<
   { ok: true; data: UserSearchItem[] } | { ok: false; error: string }
 > {
   const q = query?.trim();
   if (!q || q.length < 2) return { ok: true, data: [] };
-  const result = await request<{ success: boolean; users: UserSearchItem[] }>('/users/search', {
+  const result = await request<{ success: boolean; users: unknown[] }>('/users/search', {
     params: { q, role: 'client' },
   });
   if (!result.ok) return { ok: false, error: result.error };
   const list = Array.isArray(result.data?.users) ? result.data.users : [];
-  return { ok: true, data: list };
+  return { ok: true, data: list.map(normalizeUserSearchItem).filter((u) => u.id > 0) };
 }
 
 export async function changeUserPassword(

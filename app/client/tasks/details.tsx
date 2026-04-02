@@ -3,14 +3,32 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput as RNTextInput, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  TextInput as RNTextInput,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import {
+  collectTeamMemberOptions,
+  TaskExecutorPickerOverlay,
+  TaskTeamPickerOverlay,
+} from '@/components/tasks/task-assignment-pickers';
 import { Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useTeams } from '@/hooks/use-teams';
 import { useTodoList } from '@/hooks/use-todo-list';
+import type { Team } from '@/lib/teams-api';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
 import type { TaskPriority } from '@/lib/user-tasks-api';
@@ -69,7 +87,9 @@ export default function TaskDetailsScreen() {
   const { taskId: taskIdParam } = useLocalSearchParams<{ taskId?: string }>();
   const taskId = taskIdParam ? parseInt(taskIdParam) : null;
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const isGuest = useAuthStore((s) => s.isGuest);
   const { show } = useToast();
+  const { teams, loading: teamsLoading } = useTeams();
 
   const background = useThemeColor({}, 'background');
   const text = useThemeColor({}, 'text');
@@ -86,6 +106,15 @@ export default function TaskDetailsScreen() {
   }, [tasks, taskId]);
 
   const canEditDetails = !!task && !!currentUserId && task.creator_id === currentUserId;
+
+  const notifyCreatorOnly = useCallback(() => {
+    show({
+      title: 'Только создатель может редактировать',
+      description: 'Вы можете менять только статус выполнения.',
+      variant: 'default',
+      duration: 3500,
+    });
+  }, [show]);
 
   const scheduledEnabled = !!task?.scheduled_at;
   const [titleDraft, setTitleDraft] = useState('');
@@ -104,6 +133,7 @@ export default function TaskDetailsScreen() {
   const [assigneeSearching, setAssigneeSearching] = useState(false);
   const [selectedAssignees, setSelectedAssignees] = useState<{ id: number; full_name: string }[]>([]);
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
+  const [pickerSheet, setPickerSheet] = useState<'team' | 'executor' | null>(null);
   const [priority, setPriority] = useState<TaskPriority>('medium');
 
   useEffect(() => {
@@ -111,14 +141,19 @@ export default function TaskDetailsScreen() {
     setTitleDraft(task.title ?? '');
     setRemindBeforeMinutes(task.remind_before_minutes ?? null);
     setPriority(task.priority ?? 'medium');
-  }, [task?.id, task?.title, task?.remind_before_minutes, task?.priority]);
+  }, [task]);
 
   useEffect(() => {
     if (!task) return;
     setSelectedAssignees(task.assignees ?? []);
-  }, [task?.id]);
+  }, [task]);
 
   useEffect(() => {
+    if (!canEditDetails) {
+      setAssigneeResults([]);
+      setAssigneeSearching(false);
+      return;
+    }
     const q = assigneeSearch.trim();
     if (q.length < 2) {
       setAssigneeResults([]);
@@ -134,7 +169,7 @@ export default function TaskDetailsScreen() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [assigneeSearch, currentUserId]);
+  }, [assigneeSearch, currentUserId, canEditDetails]);
 
   const handleClose = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -142,7 +177,7 @@ export default function TaskDetailsScreen() {
   }, [router]);
 
   const handleToggleSchedule = useCallback(async () => {
-    if (!task) return;
+    if (!task || !canEditDetails) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (task.scheduled_at) {
       await updateTask(task, { scheduled_at: null });
@@ -152,7 +187,7 @@ export default function TaskDetailsScreen() {
     await updateTask(task, {
       scheduled_at: isoForDateTime(toAppDateKey(nowPlus15Min), formatTaskTime(nowPlus15Min)),
     });
-  }, [task, updateTask]);
+  }, [task, canEditDetails, updateTask]);
 
   const handleToggleReminders = useCallback(async () => {
     if (!task || !canEditDetails) return;
@@ -160,31 +195,44 @@ export default function TaskDetailsScreen() {
     await updateTask(task, { reminders_disabled: !task.reminders_disabled });
   }, [task, canEditDetails, updateTask]);
 
-  const openIosPicker = useCallback((mode: 'schedule-date' | 'schedule-time') => {
-    if (!task) return;
-    const scheduledBase = task.scheduled_at ? new Date(task.scheduled_at) : new Date();
-    setIosPicker({ open: true, mode, value: scheduledBase });
-  }, [task]);
+  const openIosPicker = useCallback(
+    (mode: 'schedule-date' | 'schedule-time') => {
+      if (!task) return;
+      if (!canEditDetails) {
+        notifyCreatorOnly();
+        return;
+      }
+      const scheduledBase = task.scheduled_at ? new Date(task.scheduled_at) : new Date();
+      setIosPicker({ open: true, mode, value: scheduledBase });
+    },
+    [task, canEditDetails, notifyCreatorOnly]
+  );
 
   const applyIosPicker = useCallback(async () => {
-    if (!task) return;
+    if (!task || !canEditDetails) return;
     const next = iosPicker.value;
     const dateKey = toAppDateKey(next);
     const time = formatTaskTime(next);
     await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
-  }, [iosPicker.value, task, updateTask]);
+  }, [iosPicker.value, task, canEditDetails, updateTask]);
 
-  const updateScheduleDate = useCallback(async (dateKey: string) => {
-    if (!task) return;
-    const currentTime = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '09:00';
-    await updateTask(task, { scheduled_at: isoForDateTime(dateKey, currentTime) });
-  }, [task, updateTask]);
+  const updateScheduleDate = useCallback(
+    async (dateKey: string) => {
+      if (!task || !canEditDetails) return;
+      const currentTime = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '09:00';
+      await updateTask(task, { scheduled_at: isoForDateTime(dateKey, currentTime) });
+    },
+    [task, canEditDetails, updateTask]
+  );
 
-  const updateScheduleTime = useCallback(async (time: string) => {
-    if (!task) return;
-    const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : toAppDateKey(new Date());
-    await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
-  }, [task, updateTask]);
+  const updateScheduleTime = useCallback(
+    async (time: string) => {
+      if (!task || !canEditDetails) return;
+      const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : toAppDateKey(new Date());
+      await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
+    },
+    [task, canEditDetails, updateTask]
+  );
 
   const handleRemindBeforeChange = useCallback(async (value: number | null) => {
     if (!task || !canEditDetails) return;
@@ -201,7 +249,7 @@ export default function TaskDetailsScreen() {
   }, [task, canEditDetails, updateTask]);
 
   const saveTitle = useCallback(async () => {
-    if (!task) return;
+    if (!task || !canEditDetails) return;
     const next = titleDraft.trim();
     if (!next || next === task.title) {
       setTitleDraft(task.title ?? '');
@@ -209,31 +257,107 @@ export default function TaskDetailsScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await updateTask(task, { title: next });
-  }, [task, titleDraft, updateTask]);
+  }, [task, canEditDetails, titleDraft, updateTask]);
 
-  const persistAssignees = useCallback(async (next: { id: number; full_name: string }[]) => {
-    if (!task) return;
-    setSelectedAssignees(next);
-    const ids = next.map((a) => a.id);
-    await updateTask(task, { assignee_ids: ids });
-  }, [task, updateTask]);
+  const persistAssignees = useCallback(
+    async (next: { id: number; full_name: string }[]) => {
+      if (!task || !canEditDetails) return;
+      setSelectedAssignees(next);
+      const ids = next.map((a) => a.id);
+      await updateTask(task, { assignee_ids: ids });
+    },
+    [task, canEditDetails, updateTask]
+  );
 
-  const handleAddAssignee = useCallback(async (user: UserSearchItem) => {
-    if (currentUserId && user.id === currentUserId) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const next = selectedAssignees.some((a) => a.id === user.id)
-      ? selectedAssignees
-      : [...selectedAssignees, { id: user.id, full_name: user.full_name }];
-    setAssigneeSearch('');
-    setAssigneeResults([]);
-    await persistAssignees(next);
-  }, [persistAssignees, selectedAssignees, currentUserId]);
+  const handleAddAssignee = useCallback(
+    async (user: UserSearchItem) => {
+      if (!canEditDetails) return;
+      if (currentUserId && user.id === currentUserId) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const next = selectedAssignees.some((a) => a.id === user.id)
+        ? selectedAssignees
+        : [...selectedAssignees, { id: user.id, full_name: user.full_name }];
+      setAssigneeSearch('');
+      setAssigneeResults([]);
+      await persistAssignees(next);
+    },
+    [canEditDetails, persistAssignees, selectedAssignees, currentUserId]
+  );
 
-  const handleRemoveAssignee = useCallback(async (id: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const next = selectedAssignees.filter((a) => a.id !== id);
-    await persistAssignees(next);
-  }, [persistAssignees, selectedAssignees]);
+  const handleRemoveAssignee = useCallback(
+    async (id: number) => {
+      if (!canEditDetails) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const next = selectedAssignees.filter((a) => a.id !== id);
+      await persistAssignees(next);
+    },
+    [canEditDetails, persistAssignees, selectedAssignees]
+  );
+
+  const teamForExecutor = useMemo((): Team | null => {
+    if (!task?.team_id) return null;
+    const fromList = teams.find((t) => t.id === task.team_id);
+    if (fromList) return fromList;
+    if (task.team && task.team.id === task.team_id) {
+      return {
+        id: task.team.id,
+        name: task.team.name,
+        leader_id: task.team.leader_id,
+        created_by: 0,
+        created_at: '',
+        updated_at: '',
+        leader: task.team.leader,
+        members: task.team.members,
+      };
+    }
+    return null;
+  }, [task, teams]);
+
+  const selectedExecutorForPicker = useMemo(() => {
+    if (!task?.executor_id) return null;
+    return {
+      id: task.executor_id,
+      full_name: task.executor?.full_name ?? 'Пользователь',
+    };
+  }, [task]);
+
+  const applyTeamAndMaybeClearExecutor = useCallback(
+    async (nextTeamId: number | null) => {
+      if (!task || !canEditDetails) return;
+      let nextExecutorId = task.executor_id ?? null;
+      if (nextTeamId != null && nextExecutorId != null) {
+        const tm =
+          teams.find((x) => x.id === nextTeamId) ??
+          (task.team?.id === nextTeamId ? task.team : null);
+        const opts = collectTeamMemberOptions(tm);
+        if (!opts.some((o) => o.id === nextExecutorId)) {
+          nextExecutorId = null;
+        }
+      }
+      await updateTask(task, { team_id: nextTeamId, executor_id: nextExecutorId });
+    },
+    [task, canEditDetails, updateTask, teams]
+  );
+
+  const applyExecutor = useCallback(
+    async (ex: { id: number; full_name: string } | null) => {
+      if (!task || !canEditDetails) return;
+      await updateTask(task, { executor_id: ex?.id ?? null });
+    },
+    [task, canEditDetails, updateTask]
+  );
+
+  const openTeamPicker = useCallback(() => {
+    if (!canEditDetails) return;
+    Keyboard.dismiss();
+    setPickerSheet('team');
+  }, [canEditDetails]);
+
+  const openExecutorPicker = useCallback(() => {
+    if (!canEditDetails) return;
+    Keyboard.dismiss();
+    setPickerSheet('executor');
+  }, [canEditDetails]);
 
   if (!task) {
     return (
@@ -299,12 +423,7 @@ export default function TaskDetailsScreen() {
             editable={canEditDetails}
             onPressIn={() => {
               if (canEditDetails) return;
-              show({
-                title: 'Только создатель может редактировать',
-                description: 'Вы можете менять статус выполнения, но не название задачи.',
-                variant: 'default',
-                duration: 3500,
-              });
+              notifyCreatorOnly();
             }}
             returnKeyType="default"
             multiline
@@ -326,6 +445,7 @@ export default function TaskDetailsScreen() {
               style={({ pressed }) => [
                 styles.rowPressable,
                 pressed && scheduledEnabled && styles.rowPressablePressed,
+                !canEditDetails && scheduledEnabled && { opacity: 0.75 },
               ]}
             >
               <View style={styles.rowLeft}>
@@ -347,6 +467,7 @@ export default function TaskDetailsScreen() {
             <Switch
               value={scheduledEnabled}
               onValueChange={handleToggleSchedule}
+              disabled={!canEditDetails}
               trackColor={{ false: border, true: primary }}
               thumbColor="#fff"
             />
@@ -361,6 +482,7 @@ export default function TaskDetailsScreen() {
             style={({ pressed }) => [
               styles.row,
               pressed && scheduledEnabled && styles.rowPressablePressed,
+              !canEditDetails && scheduledEnabled && { opacity: 0.75 },
             ]}
           >
             <View style={styles.rowLeft}>
@@ -387,12 +509,14 @@ export default function TaskDetailsScreen() {
                 onValueChange={updateScheduleDate}
                 options={dateOptions}
                 placeholder="Дата"
+                disabled={!canEditDetails}
               />
               <Select
                 value={scheduledTimeLabel === '—' ? '09:00' : scheduledTimeLabel}
                 onValueChange={updateScheduleTime}
                 options={TIME_SLOTS}
                 placeholder="Время"
+                disabled={!canEditDetails}
               />
             </View>
           ) : null}
@@ -402,6 +526,67 @@ export default function TaskDetailsScreen() {
 
         <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Организация</ThemedText>
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
+          {!isGuest ? (
+            <>
+              <Pressable
+                onPress={() => {
+                  if (!canEditDetails) {
+                    notifyCreatorOnly();
+                    return;
+                  }
+                  openTeamPicker();
+                }}
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && canEditDetails && styles.rowPressablePressed,
+                  !canEditDetails && { opacity: 0.85 },
+                ]}
+              >
+                <View style={styles.rowLeft}>
+                  <MaterialIcons name="groups" size={20} color={textMuted} />
+                  <ThemedText style={[styles.rowTitle, { color: text }]}>Команда</ThemedText>
+                </View>
+                <View style={styles.rowRight}>
+                  <ThemedText style={[styles.rowValue, { color: textMuted, flexShrink: 1 }]} numberOfLines={1}>
+                    {task.team?.name ?? '—'}
+                  </ThemedText>
+                  {canEditDetails ? (
+                    <MaterialIcons name="chevron-right" size={22} color={textMuted} />
+                  ) : null}
+                </View>
+              </Pressable>
+              <View style={[styles.divider, { backgroundColor: border }]} />
+              <Pressable
+                onPress={() => {
+                  if (!canEditDetails) {
+                    notifyCreatorOnly();
+                    return;
+                  }
+                  openExecutorPicker();
+                }}
+                style={({ pressed }) => [
+                  styles.row,
+                  pressed && canEditDetails && styles.rowPressablePressed,
+                  !canEditDetails && { opacity: 0.85 },
+                ]}
+              >
+                <View style={styles.rowLeft}>
+                  <MaterialIcons name="person-outline" size={20} color={textMuted} />
+                  <ThemedText style={[styles.rowTitle, { color: text }]}>Исполнитель</ThemedText>
+                </View>
+                <View style={styles.rowRight}>
+                  <ThemedText style={[styles.rowValue, { color: textMuted, flexShrink: 1 }]} numberOfLines={1}>
+                    {task.executor?.full_name ?? '—'}
+                  </ThemedText>
+                  {canEditDetails ? (
+                    <MaterialIcons name="chevron-right" size={22} color={textMuted} />
+                  ) : null}
+                </View>
+              </Pressable>
+              <View style={[styles.divider, { backgroundColor: border }]} />
+            </>
+          ) : null}
+
           <View style={styles.row}>
             <View style={styles.rowLeft}>
               <MaterialIcons name="group" size={20} color={textMuted} />
@@ -425,15 +610,24 @@ export default function TaskDetailsScreen() {
             <RNTextInput
               value={assigneeSearch}
               onChangeText={setAssigneeSearch}
+              editable={canEditDetails}
               placeholder="Поиск по имени (минимум 2 символа)"
               placeholderTextColor={textMuted}
+              onPressIn={() => {
+                if (canEditDetails) return;
+                notifyCreatorOnly();
+              }}
               onFocus={() => {
                 const y = anchorY.assignees ?? 0;
                 requestAnimationFrame(() => {
                   scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
                 });
               }}
-              style={[styles.assigneeInput, { color: text, borderColor: border }]}
+              style={[
+                styles.assigneeInput,
+                { color: text, borderColor: border },
+                !canEditDetails && { opacity: 0.75 },
+              ]}
             />
 
             {assigneeSearching ? (
@@ -445,8 +639,13 @@ export default function TaskDetailsScreen() {
                 {assigneeResults.map((u) => (
                   <Pressable
                     key={u.id}
+                    disabled={!canEditDetails}
                     onPress={() => handleAddAssignee(u)}
-                    style={({ pressed }) => [styles.assigneeResultItem, pressed && { opacity: 0.7 }]}
+                    style={({ pressed }) => [
+                      styles.assigneeResultItem,
+                      pressed && canEditDetails && { opacity: 0.7 },
+                      !canEditDetails && { opacity: 0.55 },
+                    ]}
                   >
                     <ThemedText style={{ color: text }} numberOfLines={1}>
                       {u.full_name}
@@ -463,7 +662,12 @@ export default function TaskDetailsScreen() {
                     <ThemedText style={{ color: text }} numberOfLines={1}>
                       {a.full_name}
                     </ThemedText>
-                    <Pressable onPress={() => handleRemoveAssignee(a.id)} hitSlop={10} style={styles.assigneeChipRemove}>
+                    <Pressable
+                      disabled={!canEditDetails}
+                      onPress={() => handleRemoveAssignee(a.id)}
+                      hitSlop={10}
+                      style={styles.assigneeChipRemove}
+                    >
                       <MaterialIcons name="close" size={16} color={primary} />
                     </Pressable>
                   </View>
@@ -590,12 +794,14 @@ export default function TaskDetailsScreen() {
           </Pressable>
           <View style={[styles.divider, { backgroundColor: border }]} />
           <Pressable
+            disabled={!canEditDetails}
             onPress={async () => {
+              if (!canEditDetails) return;
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
               await removeTask(task);
               router.back();
             }}
-            style={styles.linkRow}
+            style={[styles.linkRow, !canEditDetails && { opacity: 0.45 }]}
           >
             <View style={styles.rowLeft}>
               <MaterialIcons name="delete-outline" size={20} color="#EF4444" />
@@ -666,6 +872,28 @@ export default function TaskDetailsScreen() {
             </View>
           </View>
         </Modal>
+      ) : null}
+
+      {!isGuest && task ? (
+        <>
+          <TaskTeamPickerOverlay
+            visible={pickerSheet === 'team'}
+            onClose={() => setPickerSheet(null)}
+            teams={teams}
+            loading={teamsLoading}
+            selectedTeamId={task.team_id ?? null}
+            onSelect={(id) => void applyTeamAndMaybeClearExecutor(id)}
+          />
+          <TaskExecutorPickerOverlay
+            visible={pickerSheet === 'executor'}
+            onClose={() => setPickerSheet(null)}
+            teamScope={task.team_id != null}
+            team={teamForExecutor}
+            teamLoading={task.team_id != null && !teamForExecutor && teamsLoading}
+            selectedExecutor={selectedExecutorForPicker}
+            onSelect={(ex) => void applyExecutor(ex)}
+          />
+        </>
       ) : null}
     </ThemedView>
   );
@@ -744,6 +972,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
     gap: 10,
+  },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+    justifyContent: 'flex-end',
+    minWidth: 0,
   },
   rowPressable: {
     flex: 1,

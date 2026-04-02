@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 
+import { TaskAssignmentBadges } from '@/components/tasks/TaskAssignmentBadges';
 import { ThemedText } from '@/components/themed-text';
 import { useCalendarTasks } from '@/hooks/use-calendar-tasks';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -195,27 +196,23 @@ export function CalendarTab() {
                 {hour.toString().padStart(2, '0')}:00
               </ThemedText>
               <View style={styles.hourContent}>
-                {tasksByHour[hour]?.map((task) => {
-                  const creatorId = (task as any).creator_id as number | undefined;
-                  const isTeam = !!currentUserId && typeof creatorId === 'number' && creatorId !== currentUserId;
-                  return (
-                    <Pressable
-                      key={task.id}
-                      onPress={() => openTaskDetails(task)}
-                      style={[styles.taskChip, { backgroundColor: `${primary}80` }]}
-                    >
-                      <ThemedText style={styles.taskChipTitle} numberOfLines={1}>
-                        {task.title}
+                {tasksByHour[hour]?.map((task) => (
+                  <Pressable
+                    key={task.id}
+                    onPress={() => openTaskDetails(task)}
+                    style={[styles.taskChip, { backgroundColor: `${primary}80` }]}
+                  >
+                    <ThemedText style={styles.taskChipTitle} numberOfLines={1}>
+                      {task.title}
+                    </ThemedText>
+                    <View style={styles.taskChipMeta}>
+                      <ThemedText style={[styles.taskChipTime, { color: textMuted }]}>
+                        {formatTaskTime(task.scheduled_at)}
                       </ThemedText>
-                      <View style={styles.taskChipMeta}>
-                        <ThemedText style={[styles.taskChipTime, { color: textMuted }]}>
-                          {formatTaskTime(task.scheduled_at)}
-                        </ThemedText>
-                        {isTeam && <ThemedText style={styles.teamBadge}>Командный</ThemedText>}
-                      </View>
-                    </Pressable>
-                  );
-                })}
+                    </View>
+                    <TaskAssignmentBadges task={task} primary={primary} currentUserId={currentUserId} compact />
+                  </Pressable>
+                ))}
               </View>
             </View>
           ))}
@@ -224,29 +221,21 @@ export function CalendarTab() {
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {tasks
             .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-            .map((task) => {
-              const creatorId = (task as any).creator_id as number | undefined;
-              const isTeam = !!currentUserId && typeof creatorId === 'number' && creatorId !== currentUserId;
-              return (
-                <Pressable
-                  key={task.id}
-                  onPress={() => openTaskDetails(task)}
-                  style={[styles.weekTask, { backgroundColor: cardBg, borderColor: border }]}
-                >
-                  <ThemedText style={[styles.weekTaskTitle, { color: text }]} numberOfLines={1}>
-                    {task.title}
-                  </ThemedText>
-                  <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
-                    {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
-                  </ThemedText>
-                  {isTeam && (
-                    <View style={[styles.teamPill, { borderColor: border }]}>
-                      <ThemedText style={[styles.teamPillText, { color: textMuted }]}>Командный</ThemedText>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
+            .map((task) => (
+              <Pressable
+                key={task.id}
+                onPress={() => openTaskDetails(task)}
+                style={[styles.weekTask, { backgroundColor: cardBg, borderColor: border }]}
+              >
+                <ThemedText style={[styles.weekTaskTitle, { color: text }]} numberOfLines={1}>
+                  {task.title}
+                </ThemedText>
+                <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
+                  {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
+                </ThemedText>
+                <TaskAssignmentBadges task={task} primary={primary} currentUserId={currentUserId} compact />
+              </Pressable>
+            ))}
           {tasks.length === 0 && (
             <ThemedText style={[styles.empty, { color: textMuted }]}>Нет задач на эту неделю</ThemedText>
           )}
@@ -255,29 +244,21 @@ export function CalendarTab() {
         <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
           {tasks
             .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-            .map((task) => {
-              const creatorId = (task as any).creator_id as number | undefined;
-              const isTeam = !!currentUserId && typeof creatorId === 'number' && creatorId !== currentUserId;
-              return (
-                <Pressable
-                  key={task.id}
-                  onPress={() => openTaskDetails(task)}
-                  style={[styles.weekTask, { backgroundColor: cardBg, borderColor: border }]}
-                >
-                  <ThemedText style={[styles.weekTaskTitle, { color: text }]} numberOfLines={1}>
-                    {task.title}
-                  </ThemedText>
-                  <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
-                    {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
-                  </ThemedText>
-                  {isTeam && (
-                    <View style={[styles.teamPill, { borderColor: border }]}>
-                      <ThemedText style={[styles.teamPillText, { color: textMuted }]}>Командный</ThemedText>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
+            .map((task) => (
+              <Pressable
+                key={task.id}
+                onPress={() => openTaskDetails(task)}
+                style={[styles.weekTask, { backgroundColor: cardBg, borderColor: border }]}
+              >
+                <ThemedText style={[styles.weekTaskTitle, { color: text }]} numberOfLines={1}>
+                  {task.title}
+                </ThemedText>
+                <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
+                  {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
+                </ThemedText>
+                <TaskAssignmentBadges task={task} primary={primary} currentUserId={currentUserId} compact />
+              </Pressable>
+            ))}
           {tasks.length === 0 && (
             <ThemedText style={[styles.empty, { color: textMuted }]}>Нет задач на этот месяц</ThemedText>
           )}
@@ -365,16 +346,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  teamBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    overflow: 'hidden',
-  },
   list: {
     flex: 1,
     padding: 12,
@@ -392,18 +363,6 @@ const styles = StyleSheet.create({
   weekTaskTime: {
     fontSize: 12,
     marginTop: 4,
-  },
-  teamPill: {
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  teamPillText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   empty: {
     textAlign: 'center',

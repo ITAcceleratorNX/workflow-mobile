@@ -4,6 +4,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView as RNScrollView,
   StyleSheet,
   Switch,
   TextInput as RNTextInput,
@@ -23,9 +24,16 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import {
+  collectTeamMemberOptions,
+  TaskExecutorPickerOverlay,
+  TaskTeamPickerOverlay,
+} from '@/components/tasks/task-assignment-pickers';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useTeams } from '@/hooks/use-teams';
 import { formatDateForApi, formatTaskTime, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
 import type { TaskMainView } from '@/lib/task-views';
+import { useAuthStore } from '@/stores/auth-store';
 import type { TaskPriority } from '@/lib/user-tasks-api';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
@@ -117,7 +125,7 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: 'high', label: 'Высокий' },
 ];
 
-type SubModalId = 'schedule' | null;
+type SubModalId = 'schedule' | 'team' | 'executor' | 'priority' | 'reminders' | null;
 
 export interface TaskAddSheetProps {
   visible: boolean;
@@ -131,6 +139,7 @@ export interface TaskAddSheetProps {
     scheduledAt?: string | null,
     remindersDisabled?: boolean,
     remindBeforeMinutes?: number | null,
+    assignment?: { team_id?: number | null; executor_id?: number | null },
     priority?: TaskPriority
   ) => Promise<unknown>;
 }
@@ -152,6 +161,9 @@ export function TaskAddSheet({
   const border = useThemeColor({}, 'border');
   const cardBg = useThemeColor({}, 'cardBackground');
 
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const { teams, loading: teamsLoading } = useTeams();
+
   const [title, setTitle] = useState('');
   const titleInputRef = useRef<RNTextInput>(null);
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
@@ -164,6 +176,9 @@ export function TaskAddSheet({
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
   const [showScheduleTimePicker, setShowScheduleTimePicker] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const [teamId, setTeamId] = useState<number | null>(null);
+  const [executor, setExecutor] = useState<{ id: number; full_name: string } | null>(null);
 
   useEffect(() => {
     const show = Keyboard.addListener(
@@ -198,7 +213,21 @@ export function TaskAddSheet({
     if (mainView === 'inbox' || mainView === 'completed') setScheduledDate(null);
     else if (mainView === 'today') setScheduledDate(todayKey);
     else setScheduledDate(defaultDateKey ?? tomorrowKey);
-  }, [visible, mainView, todayKey, tomorrowKey, defaultDateKey]);
+    setTeamId(null);
+    setExecutor(null);
+  }, [visible, mainView, todayKey, tomorrowKey]);
+
+  useEffect(() => {
+    if (teamId == null) return;
+    const team = teams.find((t) => t.id === teamId);
+    if (!team) return;
+    const opts = collectTeamMemberOptions(team);
+    setExecutor((prev) => {
+      if (!prev) return null;
+      if (opts.some((o) => o.id === prev.id)) return prev;
+      return null;
+    });
+  }, [teamId, teams]);
 
   useEffect(() => {
     if (!visible) setSubModal(null);
@@ -219,6 +248,34 @@ export function TaskAddSheet({
     titleInputRef.current?.blur();
     Keyboard.dismiss();
     setSubModal('schedule');
+  }, []);
+
+  const openTeamModal = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    titleInputRef.current?.blur();
+    Keyboard.dismiss();
+    setSubModal('team');
+  }, []);
+
+  const openExecutorModal = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    titleInputRef.current?.blur();
+    Keyboard.dismiss();
+    setSubModal('executor');
+  }, []);
+
+  const openPriorityModal = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    titleInputRef.current?.blur();
+    Keyboard.dismiss();
+    setSubModal('priority');
+  }, []);
+
+  const openRemindersModal = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    titleInputRef.current?.blur();
+    Keyboard.dismiss();
+    setSubModal('reminders');
   }, []);
 
   const closeSub = useCallback(() => {
@@ -317,6 +374,38 @@ export function TaskAddSheet({
 
   const scheduleChipHighlighted = scheduledDate != null;
 
+  const teamForExecutor = useMemo(
+    () => (teamId != null ? teams.find((t) => t.id === teamId) ?? null : null),
+    [teamId, teams]
+  );
+
+  const teamChipLabel = useMemo(() => {
+    if (teamId == null) return 'Команда';
+    return teams.find((t) => t.id === teamId)?.name ?? 'Команда';
+  }, [teamId, teams]);
+
+  const executorChipLabel = executor?.full_name ?? 'Исполнитель';
+  const teamChipOn = teamId != null;
+  const executorChipOn = executor != null;
+
+  const priorityChipLabel = useMemo(
+    () => PRIORITY_OPTIONS.find((o) => o.value === priority)?.label ?? 'Приоритет',
+    [priority]
+  );
+
+  const remindersChipLabel = useMemo(() => {
+    if (remindersDisabled) return 'Пуш выкл';
+    const opt = REMIND_BEFORE_OPTIONS.find(
+      (o) =>
+        (o.value === null && remindBeforeMinutes === null) ||
+        (o.value !== null && remindBeforeMinutes === o.value)
+    );
+    return opt ? `Пуш · ${opt.label}` : 'Пуш вкл';
+  }, [remindersDisabled, remindBeforeMinutes]);
+
+  const priorityChipHighlighted = priority !== 'medium';
+  const remindersChipHighlighted = !remindersDisabled;
+
   const monthCells = useMemo(
     () => buildMonthCells(calendarMonth.getFullYear(), calendarMonth.getMonth()),
     [calendarMonth]
@@ -330,7 +419,11 @@ export function TaskAddSheet({
       scheduledDate != null && scheduledDate !== ''
         ? toUtcIsoFromAppDateTime(scheduledDate, scheduledTime)
         : null;
-    const created = await addTask(trimmed, scheduledAtIso, remindersDisabled, remindBeforeMinutes, priority);
+    const created = await addTask(trimmed, scheduledAtIso, remindersDisabled, remindBeforeMinutes, {
+      team_id: teamId,
+      executor_id: executor?.id ?? null,
+      priority,
+    });
     setSaving(false);
     if (created) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -346,6 +439,8 @@ export function TaskAddSheet({
     saving,
     addTask,
     onClose,
+    teamId,
+    executor,
   ]);
 
   const canSubmit = title.trim().length > 0 && !saving;
@@ -405,92 +500,136 @@ export function TaskAddSheet({
               </View>
 
               <View style={[styles.toolsRow, { borderTopColor: border }]}>
-                <Pressable
-                  onPress={openScheduleModal}
-                  style={[
-                    styles.quickPill,
-                    { borderColor: border, backgroundColor: cardBg },
-                    scheduleChipHighlighted && { borderColor: primary, backgroundColor: `${primary}18` },
-                  ]}
+                <RNScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                  contentContainerStyle={styles.metaChipsScrollContent}
                 >
-                  <MaterialIcons
-                    name={scheduledDate === todayKey ? 'today' : 'event'}
-                    size={18}
-                    color={scheduleChipHighlighted ? primary : headerSubtitle}
-                  />
-                  <ThemedText
+                  <Pressable
+                    onPress={openScheduleModal}
                     style={[
-                      styles.quickPillText,
-                      { color: scheduleChipHighlighted ? primary : headerText },
+                      styles.quickPill,
+                      { borderColor: border, backgroundColor: cardBg },
+                      scheduleChipHighlighted && { borderColor: primary, backgroundColor: `${primary}18` },
                     ]}
-                    numberOfLines={1}
                   >
-                    {scheduleChipLabel}
-                  </ThemedText>
-                </Pressable>
-              </View>
+                    <MaterialIcons
+                      name={scheduledDate === todayKey ? 'today' : 'event'}
+                      size={18}
+                      color={scheduleChipHighlighted ? primary : headerSubtitle}
+                    />
+                    <ThemedText
+                      style={[
+                        styles.quickPillText,
+                        { color: scheduleChipHighlighted ? primary : headerText },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {scheduleChipLabel}
+                    </ThemedText>
+                  </Pressable>
 
-              <View style={[styles.inlineBlock, { borderTopColor: border }]}>
-                <ThemedText style={[styles.inlineBlockTitle, { color: headerSubtitle }]}>Приоритет</ThemedText>
-                <View style={styles.remindRow}>
-                  {PRIORITY_OPTIONS.map((o) => {
-                    const selected = priority === o.value;
-                    return (
+                  {!isGuest && (
+                    <>
                       <Pressable
-                        key={o.value}
-                        onPress={() => setPriority(o.value)}
+                        onPress={openTeamModal}
                         style={[
-                          styles.remindChip,
-                          { borderColor: border },
-                          selected && { borderColor: primary, backgroundColor: `${primary}18` },
+                          styles.quickPill,
+                          { borderColor: border, backgroundColor: cardBg },
+                          teamChipOn && { borderColor: primary, backgroundColor: `${primary}18` },
                         ]}
                       >
+                        <MaterialIcons
+                          name="groups"
+                          size={18}
+                          color={teamChipOn ? primary : headerSubtitle}
+                        />
                         <ThemedText
-                          style={{ color: selected ? primary : headerText, fontSize: 13, fontWeight: '600' }}
+                          style={[
+                            styles.quickPillText,
+                            { color: teamChipOn ? primary : headerText },
+                          ]}
+                          numberOfLines={1}
                         >
-                          {o.label}
+                          {teamChipLabel}
                         </ThemedText>
                       </Pressable>
-                    );
-                  })}
-                </View>
-                <View style={{ height: 8 }} />
-                <ThemedText style={[styles.inlineBlockTitle, { color: headerSubtitle }]}>Напоминания</ThemedText>
-                <View style={styles.subSwitchRow}>
-                  <ThemedText style={{ color: headerText }}>Пуш-уведомления</ThemedText>
-                  <Switch
-                    value={!remindersDisabled}
-                    onValueChange={(v) => setRemindersDisabled(!v)}
-                    trackColor={{ false: border, true: primary }}
-                    thumbColor="#fff"
-                  />
-                </View>
-                {!remindersDisabled && (
-                  <View style={styles.remindRow}>
-                    {REMIND_BEFORE_OPTIONS.map((o) => {
-                      const selected =
-                        (o.value === null && remindBeforeMinutes === null) ||
-                        (o.value !== null && remindBeforeMinutes === o.value);
-                      return (
-                        <Pressable
-                          key={o.value ?? 'def'}
-                          onPress={() => setRemindBeforeMinutes(o.value)}
+                      <Pressable
+                        onPress={openExecutorModal}
+                        style={[
+                          styles.quickPill,
+                          { borderColor: border, backgroundColor: cardBg },
+                          executorChipOn && { borderColor: primary, backgroundColor: `${primary}18` },
+                        ]}
+                      >
+                        <MaterialIcons
+                          name="person-outline"
+                          size={18}
+                          color={executorChipOn ? primary : headerSubtitle}
+                        />
+                        <ThemedText
                           style={[
-                            styles.remindChip,
-                            { borderColor: border },
-                            selected && { borderColor: primary, backgroundColor: `${primary}18` },
+                            styles.quickPillText,
+                            { color: executorChipOn ? primary : headerText },
                           ]}
+                          numberOfLines={1}
                         >
-                          <ThemedText
-                            style={{ color: selected ? primary : headerText, fontSize: 13, fontWeight: '600' }}
-                          >
-                            {o.label}
-                          </ThemedText>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                )}
+                          {executorChipLabel}
+                        </ThemedText>
+                      </Pressable>
+                    </>
+                  )}
+
+                  <Pressable
+                    onPress={openPriorityModal}
+                    style={[
+                      styles.quickPill,
+                      { borderColor: border, backgroundColor: cardBg },
+                      priorityChipHighlighted && { borderColor: primary, backgroundColor: `${primary}18` },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="flag"
+                      size={18}
+                      color={priorityChipHighlighted ? primary : headerSubtitle}
+                    />
+                    <ThemedText
+                      style={[
+                        styles.quickPillText,
+                        { color: priorityChipHighlighted ? primary : headerText },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {priorityChipLabel}
+                    </ThemedText>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={openRemindersModal}
+                    style={[
+                      styles.quickPill,
+                      { borderColor: border, backgroundColor: cardBg },
+                      remindersChipHighlighted && { borderColor: primary, backgroundColor: `${primary}18` },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="notifications"
+                      size={18}
+                      color={remindersChipHighlighted ? primary : headerSubtitle}
+                    />
+                    <ThemedText
+                      style={[
+                        styles.quickPillText,
+                        { color: remindersChipHighlighted ? primary : headerText },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {remindersChipLabel}
+                    </ThemedText>
+                  </Pressable>
+                </RNScrollView>
               </View>
             </ScrollView>
 
@@ -767,6 +906,182 @@ export function TaskAddSheet({
               </View>
             </View>
           )}
+
+          <TaskTeamPickerOverlay
+            visible={subModal === 'team'}
+            onClose={closeSub}
+            teams={teams}
+            loading={teamsLoading}
+            selectedTeamId={teamId}
+            onSelect={(id) => setTeamId(id)}
+          />
+          <TaskExecutorPickerOverlay
+            visible={subModal === 'executor'}
+            onClose={closeSub}
+            teamScope={teamId != null}
+            team={teamForExecutor}
+            teamLoading={teamId != null && !teamForExecutor && teamsLoading}
+            selectedExecutor={executor}
+            onSelect={(ex) => setExecutor(ex)}
+          />
+
+          {subModal === 'priority' && (
+            <View style={styles.subOverlayRoot}>
+              <Pressable style={styles.subBackdrop} onPress={closeSub} accessibilityLabel="Закрыть" />
+              <View style={styles.subScheduleWrap}>
+                <View
+                  style={[
+                    styles.subScheduleSheet,
+                    {
+                      backgroundColor: background,
+                      paddingBottom: Math.max(insets.bottom, 12),
+                      maxHeight: '72%',
+                    },
+                  ]}
+                >
+                  <View style={styles.sheetHandleHit}>
+                    <View style={[styles.dragGrabber, { backgroundColor: primary }]} />
+                  </View>
+                  <View style={styles.subSheetHeader}>
+                    <Pressable onPress={closeSub} hitSlop={12} style={styles.subSheetHeaderBtn}>
+                      <MaterialIcons name="close" size={24} color={headerText} />
+                    </Pressable>
+                    <ThemedText style={[styles.subSheetHeaderTitle, { color: headerText }]}>Приоритет</ThemedText>
+                    <Pressable onPress={closeSub} hitSlop={12} style={styles.subSheetHeaderBtn}>
+                      <MaterialIcons name="check" size={24} color={primary} />
+                    </Pressable>
+                  </View>
+                  <ScrollView
+                    style={styles.subScheduleScroll}
+                    contentContainerStyle={styles.subSheetScrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {PRIORITY_OPTIONS.map((o) => {
+                      const selected = priority === o.value;
+                      return (
+                        <Pressable
+                          key={o.value}
+                          style={[styles.shortcutRow, { borderBottomColor: border }]}
+                          onPress={() => {
+                            setPriority(o.value);
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          }}
+                        >
+                          <MaterialIcons
+                            name="flag"
+                            size={22}
+                            color={selected ? primary : headerSubtitle}
+                          />
+                          <ThemedText style={[styles.shortcutLabel, { color: headerText }]}>{o.label}</ThemedText>
+                          {selected ? (
+                            <MaterialIcons name="check" size={22} color={primary} />
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {subModal === 'reminders' && (
+            <View style={styles.subOverlayRoot}>
+              <Pressable style={styles.subBackdrop} onPress={closeSub} accessibilityLabel="Закрыть" />
+              <View style={styles.subScheduleWrap}>
+                <View
+                  style={[
+                    styles.subScheduleSheet,
+                    {
+                      backgroundColor: background,
+                      paddingBottom: Math.max(insets.bottom, 12),
+                      maxHeight: '72%',
+                    },
+                  ]}
+                >
+                  <View style={styles.sheetHandleHit}>
+                    <View style={[styles.dragGrabber, { backgroundColor: primary }]} />
+                  </View>
+                  <View style={styles.subSheetHeader}>
+                    <Pressable onPress={closeSub} hitSlop={12} style={styles.subSheetHeaderBtn}>
+                      <MaterialIcons name="close" size={24} color={headerText} />
+                    </Pressable>
+                    <ThemedText style={[styles.subSheetHeaderTitle, { color: headerText }]}>
+                      Напоминания
+                    </ThemedText>
+                    <Pressable onPress={closeSub} hitSlop={12} style={styles.subSheetHeaderBtn}>
+                      <MaterialIcons name="check" size={24} color={primary} />
+                    </Pressable>
+                  </View>
+                  <ScrollView
+                    style={styles.subScheduleScroll}
+                    contentContainerStyle={styles.subSheetScrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                  >
+                    <View
+                      style={[
+                        styles.remindersModalSwitchRow,
+                        { borderBottomColor: border },
+                      ]}
+                    >
+                      <View style={styles.rowLeft}>
+                        <MaterialIcons name="notifications" size={22} color={headerSubtitle} />
+                        <ThemedText style={[styles.shortcutLabel, { color: headerText }]}>
+                          Пуш-уведомления
+                        </ThemedText>
+                      </View>
+                      <Switch
+                        value={!remindersDisabled}
+                        onValueChange={(v) => setRemindersDisabled(!v)}
+                        trackColor={{ false: border, true: primary }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+                    {!remindersDisabled ? (
+                      <View style={styles.remindModalChipsBlock}>
+                        <ThemedText style={[styles.remindModalSectionTitle, { color: headerSubtitle }]}>
+                          Когда напомнить
+                        </ThemedText>
+                        <View style={styles.remindModalChipsRow}>
+                          {REMIND_BEFORE_OPTIONS.map((o) => {
+                            const selected =
+                              (o.value === null && remindBeforeMinutes === null) ||
+                              (o.value !== null && remindBeforeMinutes === o.value);
+                            return (
+                              <Pressable
+                                key={o.value ?? 'def'}
+                                onPress={() => {
+                                  setRemindBeforeMinutes(o.value);
+                                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                }}
+                                style={[
+                                  styles.remindChip,
+                                  { borderColor: border, backgroundColor: cardBg },
+                                  selected && { borderColor: primary, backgroundColor: `${primary}18` },
+                                ]}
+                              >
+                                <ThemedText
+                                  style={{
+                                    color: selected ? primary : headerText,
+                                    fontSize: 13,
+                                    fontWeight: '600',
+                                  }}
+                                >
+                                  {o.label}
+                                </ThemedText>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ) : null}
+                  </ScrollView>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       </GestureHandlerRootView>
     </Modal>
@@ -803,7 +1118,7 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
     opacity: 0.95,
   },
-  scroll: { maxHeight: 380 },
+  scroll: { maxHeight: 460 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 8 },
   sheetFooter: {
     flexDirection: 'row',
@@ -830,11 +1145,46 @@ const styles = StyleSheet.create({
   toolsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingLeft: 16,
-    paddingRight: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+    paddingLeft: 0,
+    paddingRight: 0,
+  },
+  metaChipsScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingLeft: 16,
+    paddingRight: 16,
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  remindersModalSwitchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  remindModalChipsBlock: {
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  remindModalSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  remindModalChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   quickPill: {
     flexDirection: 'row',
@@ -846,19 +1196,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   quickPillText: { fontSize: 13, fontWeight: '600' },
-  inlineBlock: {
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  inlineBlockTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
   subOverlayRoot: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
@@ -973,13 +1310,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.38)',
   },
-  subSwitchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  remindRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   remindChip: {
     paddingVertical: 8,
     paddingHorizontal: 12,

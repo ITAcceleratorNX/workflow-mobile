@@ -2,6 +2,19 @@ import { request } from './api';
 
 export type TaskPriority = 'low' | 'medium' | 'high';
 
+export interface TaskTeamRef {
+  id: number;
+  name: string;
+  leader_id: number;
+  leader?: { id: number; full_name: string };
+  members?: { id: number; full_name: string }[];
+}
+
+export interface TaskExecutorRef {
+  id: number;
+  full_name: string;
+}
+
 export interface UserTask {
   id: number;
   creator_id: number;
@@ -21,6 +34,18 @@ export interface UserTask {
   assignee_ids: number[];
   /** Исполнители с именами (приходит с API при list/getById/create/update) */
   assignees?: { id: number; full_name: string }[];
+  team_id?: number | null;
+  executor_id?: number | null;
+  team?: TaskTeamRef | null;
+  executor?: TaskExecutorRef | null;
+}
+
+function unwrapTaskPayload(raw: unknown): UserTask {
+  if (raw && typeof raw === 'object' && 'task' in raw) {
+    const t = (raw as { task?: UserTask }).task;
+    if (t) return t;
+  }
+  return raw as UserTask;
 }
 
 export interface CalendarTask {
@@ -29,6 +54,11 @@ export interface CalendarTask {
   scheduled_at: string;
   completed: boolean;
   creator_id?: number;
+  assignee_ids?: number[];
+  team_id?: number | null;
+  executor_id?: number | null;
+  team?: TaskTeamRef | null;
+  executor?: TaskExecutorRef | null;
 }
 
 export interface TodayStats {
@@ -92,9 +122,9 @@ export async function getTodayStats(): Promise<
 export async function getUserTask(
   id: number
 ): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
-  const result = await request<UserTask>(`/user-tasks/${id}`);
+  const result = await request<{ task: UserTask }>(`/user-tasks/${id}`);
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, data: result.data };
+  return { ok: true, data: unwrapTaskPayload(result.data) };
 }
 
 export async function createUserTask(body: {
@@ -105,15 +135,17 @@ export async function createUserTask(body: {
   deadline_to?: string | null;
   deadline_time?: string | null;
   assignee_ids?: number[];
+  team_id?: number | null;
+  executor_id?: number | null;
   reminders_disabled?: boolean;
   remind_before_minutes?: number | null;
 }): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
-  const result = await request<UserTask>('/user-tasks', {
+  const result = await request<{ task: UserTask }>('/user-tasks', {
     method: 'POST',
     body: JSON.stringify(body),
   });
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, data: result.data };
+  return { ok: true, data: unwrapTaskPayload(result.data) };
 }
 
 export async function updateUserTask(
@@ -127,17 +159,19 @@ export async function updateUserTask(
     deadline_to: string | null;
     deadline_time: string | null;
     assignee_ids: number[];
+    team_id: number | null;
+    executor_id: number | null;
     reminders_disabled: boolean;
     remind_at: string | null;
     remind_before_minutes: number | null;
   }>
 ): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
-  const result = await request<UserTask>(`/user-tasks/${id}`, {
+  const result = await request<{ task: UserTask }>(`/user-tasks/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
   });
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, data: result.data };
+  return { ok: true, data: unwrapTaskPayload(result.data) };
 }
 
 export async function deleteUserTask(
@@ -151,21 +185,21 @@ export async function deleteUserTask(
 export async function completeUserTask(
   id: number
 ): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
-  const result = await request<UserTask>(`/user-tasks/${id}/complete`, {
+  const result = await request<{ task: UserTask }>(`/user-tasks/${id}/complete`, {
     method: 'PATCH',
   });
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, data: result.data };
+  return { ok: true, data: unwrapTaskPayload(result.data) };
 }
 
 export async function remindUserTask(
   id: number,
   action: 'in_1h' | 'tomorrow' | 'off'
 ): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
-  const result = await request<UserTask>(`/user-tasks/${id}/remind`, {
+  const result = await request<{ task: UserTask }>(`/user-tasks/${id}/remind`, {
     method: 'PATCH',
     body: JSON.stringify({ action }),
   });
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, data: result.data };
+  return { ok: true, data: unwrapTaskPayload(result.data) };
 }

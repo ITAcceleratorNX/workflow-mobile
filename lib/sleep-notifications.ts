@@ -52,7 +52,6 @@ export async function scheduleSleepNotifications(settings: SleepSettings): Promi
         title: 'Пора ложиться',
         body: 'Время отхода ко сну по расписанию',
         sound: 'default',
-        channelId: BEDTIME_CHANNEL,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -68,7 +67,6 @@ export async function scheduleSleepNotifications(settings: SleepSettings): Promi
         title: 'Оцени сон',
         body: 'Как спал?',
         sound: 'default',
-        channelId: WAKE_CHANNEL,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,

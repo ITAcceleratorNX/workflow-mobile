@@ -1,4 +1,4 @@
-import { View, Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 import { ThemedText } from '@/components/themed-text';

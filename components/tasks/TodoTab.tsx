@@ -10,8 +10,10 @@ import {
     View,
 } from 'react-native';
 
+import { TaskAssignmentBadges } from '@/components/tasks/TaskAssignmentBadges';
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useAuthStore } from '@/stores/auth-store';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { formatTaskTime, toAppDateKey } from '@/lib/dateTimeUtils';
 import type { UserTask } from '@/lib/user-tasks-api';
@@ -28,6 +30,7 @@ function TaskRow({
   textMuted,
   primary,
   borderColor,
+  currentUserId,
 }: {
   task: UserTask;
   onToggle: () => void;
@@ -36,6 +39,7 @@ function TaskRow({
   textMuted: string;
   primary: string;
   borderColor: string;
+  currentUserId: number | null;
 }) {
   const scheduledStr = task.scheduled_at
     ? `${toAppDateKey(task.scheduled_at)} ${formatTaskTime(task.scheduled_at)}`
@@ -89,6 +93,7 @@ function TaskRow({
               <ThemedText style={styles.badgeText}>Командная</ThemedText>
             </View>
           )}
+          <TaskAssignmentBadges task={task} primary={primary} currentUserId={currentUserId} compact />
           {task.reminders_disabled && (
             <View style={styles.remindersOffWrap}>
               <MaterialIcons name="notifications-off" size={14} color={textMuted} />
@@ -104,6 +109,7 @@ function TaskRow({
 
 export function TodoTab({ filter = 'all' }: TodoTabProps) {
   const router = useRouter();
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const { tasks, loading, toggleComplete } = useTodoList(
     filter === 'overdue' ? 'overdue' : 'all'
   );
@@ -144,6 +150,7 @@ export function TodoTab({ filter = 'all' }: TodoTabProps) {
               textMuted={textMuted}
               primary={primary}
               borderColor={border}
+              currentUserId={currentUserId}
             />
           ))}
         </ScrollView>
