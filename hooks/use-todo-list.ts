@@ -23,7 +23,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
   const isGuest = useAuthStore((s) => s.isGuest);
   const version = useUserTasksInvalidateStore((s) => s.version);
   const bump = useUserTasksInvalidateStore((s) => s.bump);
-  const { show } = useToast();
+  const { show: showToast } = useToast();
 
   const tasksRef = useRef<UserTask[]>([]);
   useEffect(() => {
@@ -94,7 +94,12 @@ export function useTodoList(filter: TaskFilter = 'all') {
       priority: TaskPriority = 'medium'
     ) => {
       if (!token || isGuest) {
-        show({ title: 'Недоступно', description: 'Нужно войти в аккаунт, чтобы создавать задачи', variant: 'destructive' });
+        showToast({
+          title: 'Недоступно',
+          description: 'Нужно войти в аккаунт, чтобы создавать задачи',
+          variant: 'destructive',
+          duration: 4000,
+        });
         return null;
       }
       const optimisticId = nextTempId();
@@ -148,16 +153,21 @@ export function useTodoList(filter: TaskFilter = 'all') {
       }
       // rollback
       setTasks(before);
-      show({ title: 'Не удалось создать задачу', description: res.error, variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Не удалось создать задачу', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
     },
-    [token, isGuest, bump, nextTempId, show, nowIso]
+    [token, isGuest, bump, nextTempId, showToast, nowIso]
   );
 
   const toggleComplete = useCallback(
     async (task: UserTask) => {
       if (!token || isGuest) {
-        show({ title: 'Недоступно', description: 'Нужно войти в аккаунт, чтобы менять задачи', variant: 'destructive' });
+        showToast({
+          title: 'Недоступно',
+          description: 'Нужно войти в аккаунт, чтобы менять задачи',
+          variant: 'destructive',
+          duration: 4000,
+        });
         return;
       }
       const before = tasksRef.current;
@@ -174,15 +184,20 @@ export function useTodoList(filter: TaskFilter = 'all') {
       }
       // rollback
       setTasks(before);
-      show({ title: 'Не удалось обновить задачу', description: res.error, variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Не удалось обновить задачу', description: res.error, variant: 'destructive', duration: 4000 });
     },
-    [token, isGuest, bump, show]
+    [token, isGuest, bump, showToast]
   );
 
   const removeTask = useCallback(
     async (task: UserTask) => {
       if (!token || isGuest) {
-        show({ title: 'Недоступно', description: 'Нужно войти в аккаунт, чтобы удалять задачи', variant: 'destructive' });
+        showToast({
+          title: 'Недоступно',
+          description: 'Нужно войти в аккаунт, чтобы удалять задачи',
+          variant: 'destructive',
+          duration: 4000,
+        });
         return;
       }
       const before = tasksRef.current;
@@ -195,15 +210,20 @@ export function useTodoList(filter: TaskFilter = 'all') {
       }
       // rollback
       setTasks(before);
-      show({ title: 'Не удалось удалить задачу', description: res.error, variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Не удалось удалить задачу', description: res.error, variant: 'destructive', duration: 4000 });
     },
-    [token, isGuest, bump, show]
+    [token, isGuest, bump, showToast]
   );
 
   const updateTask = useCallback(
     async (task: UserTask, updates: Partial<UserTask>) => {
       if (!token || isGuest) {
-        show({ title: 'Недоступно', description: 'Нужно войти в аккаунт, чтобы редактировать задачи', variant: 'destructive' });
+        showToast({
+          title: 'Недоступно',
+          description: 'Нужно войти в аккаунт, чтобы редактировать задачи',
+          variant: 'destructive',
+          duration: 4000,
+        });
         return null;
       }
       const before = tasksRef.current;
@@ -219,10 +239,10 @@ export function useTodoList(filter: TaskFilter = 'all') {
       }
       // rollback
       setTasks(before);
-      show({ title: 'Не удалось сохранить изменения', description: res.error, variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Не удалось сохранить изменения', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
     },
-    [token, isGuest, bump, show]
+    [token, isGuest, bump, showToast]
   );
 
   return {

@@ -200,7 +200,7 @@ export default function BookingScreen() {
             title: 'Геолокация недоступна',
             description: 'Разрешите доступ к геолокации, чтобы рекомендовать офис.',
             variant: 'destructive',
-            duration: 3000,
+              duration: 4000,
           });
         }
         return;
@@ -218,7 +218,7 @@ export default function BookingScreen() {
           title: 'Офисы не найдены',
           description: 'Нет офисов с координатами для определения ближайшего.',
           variant: 'destructive',
-          duration: 3000,
+            duration: 4000,
         });
         return;
       }
@@ -236,7 +236,7 @@ export default function BookingScreen() {
         title: 'Ошибка геолокации',
         description: 'Не удалось определить ближайший офис.',
         variant: 'destructive',
-        duration: 3000,
+          duration: 4000,
       });
     }
   }, [offices, showToast]);
@@ -384,7 +384,12 @@ export default function BookingScreen() {
 
   const handleSubmitBooking = useCallback(async () => {
     if (!selectedRoom || !selectedDate || !selectedTimeSlot) {
-      showToast({ title: 'Ошибка', description: 'Выберите дату и время', variant: 'destructive' });
+      showToast({
+        title: 'Ошибка',
+        description: 'Выберите дату и время',
+        variant: 'destructive',
+        duration: 4000,
+      });
       return;
     }
     const slot = TIME_SLOTS.find((s) => s.label === selectedTimeSlot);
@@ -397,11 +402,21 @@ export default function BookingScreen() {
     const slotDate = new Date(selectedDate);
     slotDate.setHours(parseInt(h, 10), 0, 0, 0);
     if (isToday && slotDate < now) {
-      showToast({ title: 'Ошибка', description: 'Нельзя бронировать прошедшее время', variant: 'destructive' });
+      showToast({
+        title: 'Ошибка',
+        description: 'Нельзя бронировать прошедшее время',
+        variant: 'destructive',
+        duration: 4000,
+      });
       return;
     }
     if (!isGuest && bookedSlots.has(slot.start)) {
-      showToast({ title: 'Время занято', description: 'Выберите другое время', variant: 'destructive' });
+      showToast({
+        title: 'Время занято',
+        description: 'Выберите другое время',
+        variant: 'destructive',
+        duration: 4000,
+      });
       return;
     }
     setSubmitting(true);
@@ -462,7 +477,12 @@ export default function BookingScreen() {
       setCompanyName('');
       loadMyBookings(myBookingsFilter, 1, false);
     } else {
-      showToast({ title: 'Ошибка', description: res.error, variant: 'destructive' });
+      showToast({
+        title: 'Ошибка',
+        description: res.error,
+        variant: 'destructive',
+        duration: 4000,
+      });
     }
   }, [
     selectedRoom,
@@ -512,7 +532,12 @@ export default function BookingScreen() {
                 });
                 loadMyBookings(myBookingsFilter, 1, false);
               } else {
-                showToast({ title: 'Ошибка', description: res.error, variant: 'destructive' });
+                showToast({
+                  title: 'Ошибка',
+                  description: res.error,
+                  variant: 'destructive',
+                  duration: 4000,
+                });
               }
             },
           },

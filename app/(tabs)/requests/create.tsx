@@ -615,7 +615,7 @@ export default function CreateRequestScreen() {
       if (role === 'executor' && createMode === 'createAndComplete' && afterPhotos.length > 0 && res.data) {
         const { uploadRequestPhotos } = await import('@/lib/api');
         const uploadRes = await uploadRequestPhotos(res.data.id, afterPhotos.map((uri) => ({ uri })), 'after');
-        if (!uploadRes.ok) showToast({ title: uploadRes.error, variant: 'destructive' });
+        if (!uploadRes.ok) showToast({ title: 'Ошибка загрузки', description: uploadRes.error, variant: 'destructive', duration: 4000 });
       }
       showToast({
         title: role === 'executor' && createMode === 'createAndComplete' ? 'Заявка создана и завершена' : 'Заявка создана',

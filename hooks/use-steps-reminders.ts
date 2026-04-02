@@ -28,7 +28,7 @@ function isWithinWorkingHours(startStr: string, endStr: string): boolean {
  * Только в активные часы (рабочее время офиса), ограничение 1–3 «нет активности» в день.
  */
 export function useStepsReminders() {
-  const { show } = useToast();
+  const { show: showToast } = useToast();
   const officeInfoRef = useRef<{ start: string; end: string } | null>(null);
   const lastStepsRef = useRef<number>(0);
   const lastCheckAtRef = useRef<number>(0);
@@ -95,7 +95,7 @@ export function useStepsReminders() {
 
       if (!flags.fiftyPercentSentToday && ratio >= 0.5) {
         state.markFiftyPercentSent();
-        show({
+        showToast({
           title: 'Шаги — 50% цели',
           description: `Вы прошли половину дневной цели: ${steps.toLocaleString()} из ${goal.toLocaleString()} шагов.`,
           variant: 'default',
@@ -105,7 +105,7 @@ export function useStepsReminders() {
 
       if (!flags.almostGoalSentToday && ratio >= ALMOST_GOAL_MIN && ratio <= ALMOST_GOAL_MAX) {
         state.markAlmostGoalSent();
-        show({
+        showToast({
           title: 'Шаги — почти цель',
           description: `Осталось немного до цели: ${steps.toLocaleString()} из ${goal.toLocaleString()} шагов.`,
           variant: 'success',
@@ -120,7 +120,7 @@ export function useStepsReminders() {
         if (lastAt > 0 && now - lastAt >= intervalMs && steps <= lastVal) {
           state.markNoActivitySent();
           state.setLastStepsValueForActivity(steps);
-          show({
+          showToast({
             title: 'Шаги — нет активности',
             description: `За последние ${noActivityHours} ч шаги не изменились. Пора размяться?`,
             variant: 'default',
@@ -154,7 +154,7 @@ export function useStepsReminders() {
     notificationFlags.almostGoalSentToday,
     notificationFlags.noActivityCountToday,
     officeId,
-    show,
+    showToast,
     setLastStepsValueForActivity,
     markFiftyPercentSent,
     markAlmostGoalSent,

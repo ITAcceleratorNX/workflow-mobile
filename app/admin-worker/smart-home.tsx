@@ -52,7 +52,7 @@ function formatExpiresAt(iso: string | null): string {
 export default function AdminWorkerSmartHomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { show } = useToast();
+  const { show: showToast } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
@@ -82,25 +82,25 @@ export default function AdminWorkerSmartHomeScreen() {
     setTokenAction('refresh');
     const result = await refreshYandexTokens();
     if (result.ok) {
-      show({ title: 'Токены обновлены', variant: 'success' });
+      showToast({ title: 'Токены обновлены', variant: 'success' });
       loadTokens();
     } else {
-      show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+      showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
     }
     setTokenAction(null);
-  }, [show, loadTokens]);
+  }, [showToast, loadTokens]);
 
   const handleDeleteTokens = useCallback(async () => {
     setTokenAction('delete');
     const result = await deleteYandexTokens();
     if (result.ok) {
-      show({ title: 'Токены удалены', variant: 'success' });
+      showToast({ title: 'Токены удалены', variant: 'success' });
       setTokensMeta(null);
     } else {
-      show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+      showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
     }
     setTokenAction(null);
-  }, [show]);
+  }, [showToast]);
 
   // ——— Офис (шаг 1, как в браузере) ———
   const [offices, setOffices] = useState<Office[]>([]);
@@ -164,10 +164,10 @@ export default function AdminWorkerSmartHomeScreen() {
     if (result.ok) setYandexDevices(result.data);
     else {
       setYandexDevices([]);
-      show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+      showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
     }
     setDevicesListLoading(false);
-  }, [show]);
+  }, [showToast]);
 
   const handleAddDeviceToRoom = useCallback(async () => {
     if (!selectedRoomId || !selectedDevice) return;
@@ -180,7 +180,7 @@ export default function AdminWorkerSmartHomeScreen() {
       device_type: selectedDevice.type,
     });
     if (result.ok) {
-      show({ title: 'Устройство привязано к комнате', variant: 'success' });
+      showToast({ title: 'Устройство привязано к комнате', variant: 'success' });
       setSelectedRoomId(null);
       setSelectedDevice(null);
       setShowRoomDropdown(false);
@@ -197,14 +197,14 @@ export default function AdminWorkerSmartHomeScreen() {
       setDeletingId(id);
       const result = await deleteRoomDevice(id);
       if (result.ok) {
-        show({ title: 'Устройство отвязано', variant: 'success' });
+        showToast({ title: 'Устройство отвязано', variant: 'success' });
         loadRoomDevices();
       } else {
-        show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+      showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
       }
       setDeletingId(null);
     },
-    [show, loadRoomDevices]
+    [showToast, loadRoomDevices]
   );
 
   // Список привязок только по выбранному офису
@@ -321,7 +321,7 @@ export default function AdminWorkerSmartHomeScreen() {
       meeting_room_id: selectedRoomIdForSub,
     });
     if (result.ok) {
-      show({
+      showToast({
         title: 'Доступ добавлен',
         description: 'Пользователь может управлять умным домом в этой комнате',
         variant: 'success',
@@ -335,21 +335,21 @@ export default function AdminWorkerSmartHomeScreen() {
       setSubError(result.error);
     }
     setIsCreatingSub(false);
-  }, [selectedRoomIdForSub, selectedUserIdForSub, show, loadSubscriptions]);
+  }, [selectedRoomIdForSub, selectedUserIdForSub, showToast, loadSubscriptions]);
 
   const handleDeleteSubscription = useCallback(
     async (id: number) => {
       setDeletingSubId(id);
       const result = await deleteClientRoomSubscription(id);
       if (result.ok) {
-        show({ title: 'Доступ удалён', variant: 'success' });
+        showToast({ title: 'Доступ удалён', variant: 'success' });
         loadSubscriptions();
       } else {
-        show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
       }
       setDeletingSubId(null);
     },
-    [show, loadSubscriptions]
+    [showToast, loadSubscriptions]
   );
 
   return (

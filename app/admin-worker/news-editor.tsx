@@ -30,7 +30,7 @@ type FormState = {
 export default function AdminWorkerNewsEditorScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { show } = useToast();
+  const { show: showToast } = useToast();
 
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -65,7 +65,7 @@ export default function AdminWorkerNewsEditorScreen() {
   const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      show({ title: 'Ошибка', description: 'Нет доступа к галерее', variant: 'destructive' });
+      showToast({ title: 'Ошибка', description: 'Нет доступа к галерее', variant: 'destructive', duration: 4000 });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -81,7 +81,7 @@ export default function AdminWorkerNewsEditorScreen() {
         image: { uri: asset.uri, type: asset.mimeType ?? 'image/jpeg', name: `image_${Date.now()}.jpg` },
       }));
     }
-  }, [show]);
+  }, [showToast]);
 
   const handleSave = useCallback(async () => {
     setFormError(null);
@@ -110,7 +110,7 @@ export default function AdminWorkerNewsEditorScreen() {
     setSubmitting(false);
 
     if (res.ok) {
-      show({
+      showToast({
         title: mode === 'edit' ? 'Сохранено' : 'Создано',
         description: mode === 'edit' ? 'Новость обновлена' : 'Новость добавлена',
         variant: 'success',
@@ -118,9 +118,9 @@ export default function AdminWorkerNewsEditorScreen() {
       router.back();
     } else {
       setFormError(res.error);
-      show({ title: 'Ошибка', description: res.error, variant: 'destructive' });
+      showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
     }
-  }, [form, mode, editingId, router, show]);
+  }, [form, mode, editingId, router, showToast]);
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>

@@ -239,7 +239,12 @@ export default function RequestDetailScreen() {
             'after'
           );
           if (!uploadRes.ok) {
-            showToast({ title: uploadRes.error, variant: 'destructive' });
+            showToast({
+              title: 'Ошибка загрузки',
+              description: uploadRes.error,
+              variant: 'destructive',
+              duration: 4000,
+            });
           }
         }
         if (res.ok) {

@@ -41,7 +41,7 @@ export function usePushNotifications(): void {
   const isGuest = useAuthStore((s) => s.isGuest);
   const router = useRouter();
   const hasRegistered = useRef(false);
-  const toast = useToast();
+  const { show: showToast } = useToast();
   const handledKeys = useRef(new Set<string>());
 
   const handleTaskReminderResponse = useCallback(
@@ -63,10 +63,11 @@ export function usePushNotifications(): void {
         const authToken = useAuthStore.getState().token;
         const guest = useAuthStore.getState().isGuest;
         if (!authToken || guest || authToken === 'guest-demo') {
-          toast.show({
+          showToast({
             title: 'Войдите в аккаунт',
             description: 'Действия с напоминанием доступны после входа.',
             variant: 'destructive',
+            duration: 4000,
           });
           return;
         }
@@ -82,9 +83,14 @@ export function usePushNotifications(): void {
         if (action === 'complete') {
           const result = await completeUserTask(taskId);
           if (!result.ok) {
-            toast.show({ title: 'Не удалось отметить задачу', description: result.error, variant: 'destructive' });
+            showToast({
+              title: 'Не удалось отметить задачу',
+              description: result.error,
+              variant: 'destructive',
+              duration: 4000,
+            });
           } else {
-            toast.show({ title: 'Задача выполнена', variant: 'success' });
+            showToast({ title: 'Задача выполнена', variant: 'success' });
           }
           return;
         }
@@ -92,9 +98,14 @@ export function usePushNotifications(): void {
         if (REMIND_ACTIONS.includes(action as (typeof REMIND_ACTIONS)[number])) {
           const result = await remindUserTask(taskId, action as 'in_1h' | 'tomorrow' | 'off');
           if (!result.ok) {
-            toast.show({ title: 'Не удалось обновить напоминание', description: result.error, variant: 'destructive' });
+            showToast({
+              title: 'Не удалось обновить напоминание',
+              description: result.error,
+              variant: 'destructive',
+              duration: 4000,
+            });
           } else {
-            toast.show({ title: 'Напоминание обновлено', variant: 'success' });
+            showToast({ title: 'Напоминание обновлено', variant: 'success' });
           }
           return;
         }
@@ -111,7 +122,7 @@ export function usePushNotifications(): void {
         }
       }
     },
-    [router, toast]
+    [router, showToast]
   );
 
   useEffect(() => {

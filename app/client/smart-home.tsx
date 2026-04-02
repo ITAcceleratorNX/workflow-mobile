@@ -64,7 +64,7 @@ export default function ClientSmartHomeScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isGuest = useAuthStore((state) => state.isGuest);
-  const { show } = useToast();
+  const { show: showToast } = useToast();
   const background = useThemeColor({}, 'background');
 
   const [subscriptions, setSubscriptions] = useState<ClientRoomSubscription[]>([]);
@@ -91,16 +91,16 @@ export default function ClientSmartHomeScreen() {
           setSubscriptions(subs);
           if (subs.length > 0 && !selectedRoomId) setSelectedRoomId(subs[0].meeting_room_id);
         } else {
-          show({ title: 'Ошибка загрузки', description: result.error, variant: 'destructive', duration: 3000 });
+          showToast({ title: 'Ошибка загрузки', description: result.error, variant: 'destructive', duration: 4000 });
         }
       } catch {
-        show({ title: 'Ошибка', description: 'Не удалось загрузить комнаты', variant: 'destructive', duration: 3000 });
+        showToast({ title: 'Ошибка', description: 'Не удалось загрузить комнаты', variant: 'destructive', duration: 4000 });
       } finally {
         setLoading(false);
       }
     };
     loadSubscriptions();
-  }, [user?.id, show, isGuest]);
+  }, [user?.id, showToast, isGuest]);
 
   useEffect(() => {
     const loadDevices = async () => {
@@ -113,15 +113,15 @@ export default function ClientSmartHomeScreen() {
         setIsLoadingDevices(true);
         const result = await getRoomDevicesForClient(selectedRoomId);
         if (result.ok) setDevices(result.data.devices || []);
-        else show({ title: 'Ошибка загрузки', description: result.error, variant: 'destructive', duration: 3000 });
+        else showToast({ title: 'Ошибка загрузки', description: result.error, variant: 'destructive', duration: 4000 });
       } catch {
-        show({ title: 'Ошибка', description: 'Не удалось загрузить устройства', variant: 'destructive', duration: 3000 });
+        showToast({ title: 'Ошибка', description: 'Не удалось загрузить устройства', variant: 'destructive', duration: 4000 });
       } finally {
         setIsLoadingDevices(false);
       }
     };
     loadDevices();
-  }, [selectedRoomId, show, isGuest]);
+  }, [selectedRoomId, showToast, isGuest]);
 
   const handleControlDevice = useCallback(
     async (device: YandexDevice, value: boolean) => {
@@ -134,11 +134,11 @@ export default function ClientSmartHomeScreen() {
             action_state: { instance: 'on', value },
           });
           if (!result.ok) {
-            show({ title: 'Ошибка', description: 'Не удалось управлять устройством', variant: 'destructive', duration: 2000 });
+            showToast({ title: 'Ошибка', description: 'Не удалось управлять устройством', variant: 'destructive', duration: 4000 });
             return;
           }
         }
-        show({
+        showToast({
           title: 'Успешно',
           description: isGuest ? `(Демо) ${device.name} ${value ? 'включено' : 'выключено'}` : `${device.name} ${value ? 'включено' : 'выключено'}`,
           variant: 'success',
@@ -153,12 +153,12 @@ export default function ClientSmartHomeScreen() {
           })
         );
       } catch {
-        show({ title: 'Ошибка', description: 'Не удалось управлять устройством', variant: 'destructive', duration: 2000 });
+        showToast({ title: 'Ошибка', description: 'Не удалось управлять устройством', variant: 'destructive', duration: 4000 });
       } finally {
         setIsControlling(null);
       }
     },
-    [show, isGuest]
+    [showToast, isGuest]
   );
 
   const getDeviceState = useCallback((device: YandexDevice): boolean | null => {

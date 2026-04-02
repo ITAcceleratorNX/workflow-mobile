@@ -55,7 +55,7 @@ export default function AdminWorkerUsersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
-  const { show } = useToast();
+  const { show: showToast } = useToast();
   const user = useAuthStore((s) => s.user);
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -98,14 +98,14 @@ export default function AdminWorkerUsersScreen() {
       setActionRequestId(requestId);
       const result = await approveRegistrationRequest(requestId);
       if (result.ok) {
-        show({ title: 'Успешно', description: 'Запрос одобрен, пользователь создан', variant: 'success' });
+        showToast({ title: 'Успешно', description: 'Запрос одобрен, пользователь создан', variant: 'success' });
         loadRequests();
       } else {
-        show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
       }
       setActionRequestId(null);
     },
-    [show, loadRequests]
+    [showToast, loadRequests]
   );
 
   const handleReject = useCallback(
@@ -113,14 +113,14 @@ export default function AdminWorkerUsersScreen() {
       setActionRequestId(requestId);
       const result = await rejectRegistrationRequest(requestId);
       if (result.ok) {
-        show({ title: 'Успешно', description: 'Запрос отклонён', variant: 'success' });
+        showToast({ title: 'Успешно', description: 'Запрос отклонён', variant: 'success' });
         loadRequests();
       } else {
-        show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
       }
       setActionRequestId(null);
     },
-    [show, loadRequests]
+    [showToast, loadRequests]
   );
 
   // ——— Управление (офисные пользователи) ———
@@ -170,7 +170,7 @@ export default function AdminWorkerUsersScreen() {
     setIsChangingPassword(true);
     const result = await changeUserPassword(selectedUserId, newPassword);
     if (result.ok) {
-      show({ title: 'Пароль изменён', description: 'Пароль пользователя успешно изменён', variant: 'success' });
+      showToast({ title: 'Пароль изменён', description: 'Пароль пользователя успешно изменён', variant: 'success' });
       setSelectedUserId(null);
       setNewPassword('');
       setConfirmPassword('');
@@ -195,7 +195,7 @@ export default function AdminWorkerUsersScreen() {
     setIsChangingRole(true);
     const result = await updateUserRole(selectedRoleUserId, newRole);
     if (result.ok) {
-      show({ title: 'Роль изменена', description: 'Роль пользователя успешно изменена', variant: 'success' });
+      showToast({ title: 'Роль изменена', description: 'Роль пользователя успешно изменена', variant: 'success' });
       setOfficeUsers((prev) =>
         prev.map((u) => (u.id === selectedRoleUserId ? { ...u, role: newRole } : u))
       );
@@ -248,7 +248,7 @@ export default function AdminWorkerUsersScreen() {
       const msg = result.data?.newHead?.name
         ? `Новый руководитель: ${result.data.newHead.name}`
         : 'Руководитель изменён';
-      show({ title: 'Готово', description: msg, variant: 'success' });
+      showToast({ title: 'Готово', description: msg, variant: 'success' });
       setSelectedCategoryId(null);
       setSelectedExecutorId(null);
       setExecutors([]);

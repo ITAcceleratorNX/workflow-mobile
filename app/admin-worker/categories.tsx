@@ -83,7 +83,7 @@ export default function AdminWorkerCategoriesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
-  const { show } = useToast();
+  const { show: showToast } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
@@ -143,7 +143,7 @@ export default function AdminWorkerCategoriesScreen() {
     setIsAssigningExecutor(true);
     const result = await assignExecutorToCategory(selectedCategoryForAssign, selectedExecutorForAssign);
     if (result.ok) {
-      show({
+      showToast({
         title: 'Исполнитель назначен',
         description: 'Исполнитель успешно привязан к категории',
         variant: 'success',
@@ -156,7 +156,7 @@ export default function AdminWorkerCategoriesScreen() {
       setExecutorManagementError(result.error);
     }
     setIsAssigningExecutor(false);
-  }, [selectedCategoryForAssign, selectedExecutorForAssign, show]);
+  }, [selectedCategoryForAssign, selectedExecutorForAssign, showToast]);
 
   const allSubcategories = useMemo(() => {
     return categories.flatMap((cat) =>
@@ -171,14 +171,14 @@ export default function AdminWorkerCategoriesScreen() {
     setCategoryError(null);
     const result = await createServiceCategory({ name });
     if (result.ok) {
-      show({ title: 'Категория создана', description: `Категория "${name}" успешно создана`, variant: 'success' });
+      showToast({ title: 'Категория создана', description: `Категория "${name}" успешно создана`, variant: 'success' });
       setNewCategoryName('');
       refetch();
     } else {
       setCategoryError(result.error);
     }
     setIsCreatingCategory(false);
-  }, [newCategoryName, show, refetch]);
+  }, [newCategoryName, showToast, refetch]);
 
   const handleDeleteCategory = useCallback(async () => {
     if (categoryToDelete == null) return;
@@ -187,7 +187,7 @@ export default function AdminWorkerCategoriesScreen() {
     setCategoryError(null);
     const result = await deleteServiceCategory(categoryToDelete);
     if (result.ok) {
-      show({ title: 'Категория удалена', description: 'Категория успешно удалена', variant: 'success' });
+      showToast({ title: 'Категория удалена', description: 'Категория успешно удалена', variant: 'success' });
       setCategoryToDelete(null);
       setShowCategoryDropdown(false);
       refetch();
@@ -195,7 +195,7 @@ export default function AdminWorkerCategoriesScreen() {
       setCategoryError(result.error);
     }
     setIsDeletingCategory(false);
-  }, [categoryToDelete, categoriesWithExecutors, show, refetch]);
+  }, [categoryToDelete, categoriesWithExecutors, showToast, refetch]);
 
   const handleCreateSubcategory = useCallback(async () => {
     const name = newSubcategoryName.trim();
@@ -204,7 +204,7 @@ export default function AdminWorkerCategoriesScreen() {
     setSubcategoryError(null);
     const result = await createSubcategory({ name, category_id: selectedCategoryForSub });
     if (result.ok) {
-      show({ title: 'Подкатегория создана', description: `Подкатегория "${name}" успешно создана`, variant: 'success' });
+      showToast({ title: 'Подкатегория создана', description: `Подкатегория "${name}" успешно создана`, variant: 'success' });
       setSelectedCategoryForSub(null);
       setNewSubcategoryName('');
       refetch();
@@ -212,7 +212,7 @@ export default function AdminWorkerCategoriesScreen() {
       setSubcategoryError(result.error);
     }
     setIsCreatingSubcategory(false);
-  }, [newSubcategoryName, selectedCategoryForSub, show, refetch]);
+  }, [newSubcategoryName, selectedCategoryForSub, showToast, refetch]);
 
   const handleDeleteSubcategory = useCallback(async () => {
     if (subcategoryToDelete == null) return;
@@ -220,7 +220,7 @@ export default function AdminWorkerCategoriesScreen() {
     setSubcategoryError(null);
     const result = await deleteSubcategory(subcategoryToDelete);
     if (result.ok) {
-      show({ title: 'Подкатегория удалена', description: 'Подкатегория успешно удалена', variant: 'success' });
+      showToast({ title: 'Подкатегория удалена', description: 'Подкатегория успешно удалена', variant: 'success' });
       setSubcategoryToDelete(null);
       setShowSubcategoryDropdown(false);
       refetch();
@@ -228,7 +228,7 @@ export default function AdminWorkerCategoriesScreen() {
       setSubcategoryError(result.error);
     }
     setIsDeletingSubcategory(false);
-  }, [subcategoryToDelete, show, refetch]);
+  }, [subcategoryToDelete, showToast, refetch]);
 
   const categoryForDeleteLabel = useMemo(() => {
     if (categoryToDelete == null) return null;

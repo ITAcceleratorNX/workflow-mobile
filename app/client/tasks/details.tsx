@@ -4,17 +4,22 @@ import * as Haptics from 'expo-haptics';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
-  TextInput as RNTextInput,
   ScrollView,
   StyleSheet,
   Switch,
+  TextInput as RNTextInput,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -31,7 +36,8 @@ import { useTodoList } from '@/hooks/use-todo-list';
 import type { Team } from '@/lib/teams-api';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
-import type { TaskPriority } from '@/lib/user-tasks-api';
+import type { TaskPriority, UserTaskAttachment } from '@/lib/user-tasks-api';
+import { deleteUserTaskAttachment, getUserTaskAttachments, uploadUserTaskAttachments } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
 
@@ -88,7 +94,7 @@ export default function TaskDetailsScreen() {
   const taskId = taskIdParam ? parseInt(taskIdParam) : null;
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const isGuest = useAuthStore((s) => s.isGuest);
-  const { show } = useToast();
+  const { show: showToast } = useToast();
   const { teams, loading: teamsLoading } = useTeams();
 
   const background = useThemeColor({}, 'background');
@@ -108,13 +114,13 @@ export default function TaskDetailsScreen() {
   const canEditDetails = !!task && !!currentUserId && task.creator_id === currentUserId;
 
   const notifyCreatorOnly = useCallback(() => {
-    show({
+    showToast({
       title: 'Только создатель может редактировать',
       description: 'Вы можете менять только статус выполнения.',
       variant: 'default',
-      duration: 3500,
+      duration: 4000,
     });
-  }, [show]);
+  }, [showToast]);
 
   const scheduledEnabled = !!task?.scheduled_at;
   const [titleDraft, setTitleDraft] = useState('');
@@ -136,6 +142,10 @@ export default function TaskDetailsScreen() {
   const [pickerSheet, setPickerSheet] = useState<'team' | 'executor' | null>(null);
   const [priority, setPriority] = useState<TaskPriority>('medium');
 
+  const [attachments, setAttachments] = useState<UserTaskAttachment[]>([]);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+
   useEffect(() => {
     if (!task) return;
     setTitleDraft(task.title ?? '');
@@ -147,6 +157,31 @@ export default function TaskDetailsScreen() {
     if (!task) return;
     setSelectedAssignees(task.assignees ?? []);
   }, [task]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!task?.id) {
+        setAttachments([]);
+        setAttachmentsLoading(false);
+        return;
+      }
+      setAttachmentsLoading(true);
+      const res = await getUserTaskAttachments(task.id);
+      if (cancelled) return;
+      if (res.ok) {
+        setAttachments(res.data);
+      } else {
+        setAttachments([]);
+        showToast({ title: 'Ошибка загрузки', description: res.error, variant: 'destructive', duration: 4000 });
+      }
+      setAttachmentsLoading(false);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [task?.id, showToast]);
 
   useEffect(() => {
     if (!canEditDetails) {
@@ -258,6 +293,109 @@ export default function TaskDetailsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await updateTask(task, { title: next });
   }, [task, canEditDetails, titleDraft, updateTask]);
+
+  const handlePickMedia = useCallback(async () => {
+    if (!task || !canEditDetails || attachmentsUploading) return;
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showToast({
+        title: 'Нет доступа к фото/видео',
+        description: 'Разрешите доступ к медиатеке в настройках устройства.',
+        variant: 'destructive',
+        duration: 4000,
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (result.canceled) return;
+    const assets = (result as any).assets as Array<{ uri: string; mimeType?: string; fileName?: string }>;
+    if (!Array.isArray(assets) || assets.length === 0) return;
+
+    const extFromUri = (uri: string) => {
+      const m = uri?.match(/\.([a-zA-Z0-9]+)(\?|#|$)/);
+      return m ? `.${m[1].toLowerCase()}` : '';
+    };
+
+    const files = assets.slice(0, 10).map((a, idx) => {
+      const uri = a.uri;
+      const ext = extFromUri(a.fileName ?? uri) || (uri.includes('mp4') ? '.mp4' : '');
+      const name = a.fileName ?? `attachment_${idx}_${Date.now()}${ext}`;
+      const type = a.mimeType ?? (ext === '.mp4' ? 'video/mp4' : 'application/octet-stream');
+      return { uri, name, type };
+    });
+
+    setAttachmentsUploading(true);
+    const res = await uploadUserTaskAttachments(task.id, files);
+    if (res.ok) {
+      setAttachments(res.data);
+      showToast({ title: 'Готово', description: 'Вложения загружены', variant: 'success', duration: 2500 });
+    } else {
+      showToast({ title: 'Ошибка загрузки', description: res.error, variant: 'destructive', duration: 4000 });
+    }
+    setAttachmentsUploading(false);
+  }, [task, canEditDetails, attachmentsUploading, showToast]);
+
+  const handlePickDocuments = useCallback(async () => {
+    if (!task || !canEditDetails || attachmentsUploading) return;
+
+    const result = await DocumentPicker.getDocumentAsync({
+      type: '*/*',
+      multiple: true,
+    });
+
+    // expo-document-picker (SDK 49+) uses { canceled, assets }.
+    if ((result as { canceled?: boolean }).canceled) return;
+
+    const assets = (result as { assets?: Array<{ uri: string; mimeType?: string; name?: string }> }).assets ?? [];
+
+    if (!Array.isArray(assets) || assets.length === 0) return;
+
+    const extFromNameOrUri = (nameOrUri: string) => {
+      const m = nameOrUri?.match(/\.([a-zA-Z0-9]+)(\?|#|$)/);
+      return m ? `.${m[1].toLowerCase()}` : '';
+    };
+
+    const files = assets.slice(0, 10).map((a, idx) => {
+      const ext = extFromNameOrUri(a.name ?? a.uri);
+      const name = a.name ?? `document_${idx}_${Date.now()}${ext}`;
+      return { uri: a.uri, name, type: a.mimeType ?? 'application/octet-stream' };
+    });
+
+    setAttachmentsUploading(true);
+    const res = await uploadUserTaskAttachments(task.id, files);
+    if (res.ok) {
+      setAttachments(res.data);
+      showToast({ title: 'Готово', description: 'Файлы загружены', variant: 'success', duration: 2500 });
+    } else {
+      showToast({ title: 'Ошибка загрузки', description: res.error, variant: 'destructive', duration: 4000 });
+    }
+    setAttachmentsUploading(false);
+  }, [task, canEditDetails, attachmentsUploading, showToast]);
+
+  const handleDeleteAttachment = useCallback(
+    async (attachmentId: number) => {
+      if (!task || !canEditDetails) return;
+
+      const before = attachments;
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+
+      const res = await deleteUserTaskAttachment(task.id, attachmentId);
+      if (res.ok) {
+        return;
+      }
+
+      setAttachments(before);
+      showToast({ title: 'Ошибка удаления', description: res.error, variant: 'destructive', duration: 4000 });
+    },
+    [task, canEditDetails, attachments, showToast]
+  );
 
   const persistAssignees = useCallback(
     async (next: { id: number; full_name: string }[]) => {
@@ -431,6 +569,94 @@ export default function TaskDetailsScreen() {
             placeholderTextColor={textMuted}
             style={[styles.titleInput, { color: canEditDetails ? text : textMuted }]}
           />
+        </View>
+
+        <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Вложения</ThemedText>
+        <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
+          {canEditDetails ? (
+            <View style={styles.attachmentActions}>
+              <Pressable
+                disabled={attachmentsUploading}
+                onPress={handlePickMedia}
+                style={({ pressed }) => [
+                  styles.attachmentActionBtn,
+                  { borderColor: border, backgroundColor: cardBg, opacity: attachmentsUploading ? 0.6 : 1 },
+                  pressed && !attachmentsUploading && { opacity: 0.85 },
+                ]}
+              >
+                <MaterialIcons name="image" size={18} color={primary} />
+                <ThemedText style={[styles.attachmentActionText, { color: primary }]}>Фото/Видео</ThemedText>
+              </Pressable>
+              <Pressable
+                disabled={attachmentsUploading}
+                onPress={handlePickDocuments}
+                style={({ pressed }) => [
+                  styles.attachmentActionBtn,
+                  { borderColor: border, backgroundColor: cardBg, opacity: attachmentsUploading ? 0.6 : 1 },
+                  pressed && !attachmentsUploading && { opacity: 0.85 },
+                ]}
+              >
+                <MaterialIcons name="attach-file" size={18} color={primary} />
+                <ThemedText style={[styles.attachmentActionText, { color: primary }]}>Файлы</ThemedText>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {attachmentsLoading ? (
+            <View style={styles.attachmentLoading}>
+              <ActivityIndicator size="small" color={primary} />
+              <ThemedText style={{ color: textMuted, marginTop: 6, fontSize: 12 }}>Загрузка…</ThemedText>
+            </View>
+          ) : attachments.length === 0 ? (
+            <View style={styles.attachmentEmpty}>
+              <MaterialIcons name="attachment" size={26} color={textMuted} />
+              <ThemedText style={{ color: textMuted, marginTop: 8, textAlign: 'center' }}>Пока нет вложений</ThemedText>
+            </View>
+          ) : (
+            <View style={styles.attachmentList}>
+              {attachments.map((a) => (
+                <View key={a.id} style={styles.attachmentRow}>
+                  <Pressable
+                    onPress={() => Linking.openURL(a.file_url)}
+                    style={styles.attachmentRowLeft}
+                    accessibilityRole="link"
+                  >
+                    {a.file_kind === 'image' ? (
+                      <Image source={{ uri: a.file_url }} style={styles.attachmentThumb} />
+                    ) : (
+                      <View style={[styles.attachmentIconWrap, { borderColor: border }]}>
+                        <MaterialIcons
+                          name={a.file_kind === 'video' ? 'video-library' : 'description'}
+                          size={18}
+                          color={textMuted}
+                        />
+                      </View>
+                    )}
+                    <View style={styles.attachmentMeta}>
+                      <ThemedText style={[styles.attachmentFileName, { color: text }]} numberOfLines={1}>
+                        {a.file_name || (a.file_kind === 'video' ? 'Видео' : a.file_kind === 'image' ? 'Фото' : 'Файл')}
+                      </ThemedText>
+                      <ThemedText style={{ color: textMuted, fontSize: 11, marginTop: 3 }}>
+                        {a.file_kind === 'video' ? 'Видео' : a.file_kind === 'image' ? 'Фото' : 'Документ'}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+
+                  {canEditDetails ? (
+                    <Pressable
+                      onPress={() => handleDeleteAttachment(a.id)}
+                      hitSlop={10}
+                      style={({ pressed }) => [styles.attachmentDeleteBtn, pressed && { opacity: 0.8 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Удалить вложение"
+                    >
+                      <MaterialIcons name="delete-outline" size={20} color="#EF4444" />
+                    </Pressable>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Дата и время</ThemedText>
@@ -1140,6 +1366,83 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     height: 216,
     backgroundColor: 'transparent',
+  },
+  attachmentActions: {
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  attachmentActionBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  attachmentActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  attachmentLoading: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachmentEmpty: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  attachmentList: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 6,
+  },
+  attachmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  attachmentRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  attachmentThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+  },
+  attachmentIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  attachmentMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+  attachmentFileName: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  attachmentDeleteBtn: {
+    padding: 8,
+    borderRadius: 12,
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

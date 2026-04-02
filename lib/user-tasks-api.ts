@@ -1,5 +1,8 @@
 import { request } from './api';
 
+import { config } from '@/lib/config';
+import { useAuthStore } from '@/stores/auth-store';
+
 export type TaskPriority = 'low' | 'medium' | 'high';
 
 export interface TaskTeamRef {
@@ -34,6 +37,8 @@ export interface UserTask {
   assignee_ids: number[];
   /** Исполнители с именами (приходит с API при list/getById/create/update) */
   assignees?: { id: number; full_name: string }[];
+  /** Вложения (приходит с /attachments или может быть подмешано на клиенте) */
+  attachments?: UserTaskAttachment[];
   team_id?: number | null;
   executor_id?: number | null;
   team?: TaskTeamRef | null;
@@ -46,6 +51,19 @@ function unwrapTaskPayload(raw: unknown): UserTask {
     if (t) return t;
   }
   return raw as UserTask;
+}
+
+export type UserTaskAttachmentKind = 'image' | 'video' | 'document';
+
+export interface UserTaskAttachment {
+  id: number;
+  user_task_id: number;
+  uploaded_by_id: number;
+  file_url: string;
+  file_name: string | null;
+  mime_type: string | null;
+  file_kind: UserTaskAttachmentKind;
+  created_at: string;
 }
 
 export interface CalendarTask {
@@ -202,4 +220,60 @@ export async function remindUserTask(
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: unwrapTaskPayload(result.data) };
+}
+
+export async function getUserTaskAttachments(
+  taskId: number
+): Promise<{ ok: true; data: UserTaskAttachment[] } | { ok: false; error: string }> {
+  const result = await request<{ attachments: UserTaskAttachment[] }>(`/user-tasks/${taskId}/attachments`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data.attachments ?? [] };
+}
+
+export async function uploadUserTaskAttachments(
+  taskId: number,
+  files: Array<{ uri: string; name: string; type?: string }>
+): Promise<{ ok: true; data: UserTaskAttachment[] } | { ok: false; error: string }> {
+  const formData = new FormData();
+  files.forEach((f) => {
+    formData.append(
+      'files',
+      {
+        uri: f.uri,
+        name: f.name,
+        type: f.type ?? 'application/octet-stream',
+      } as unknown as Blob
+    );
+  });
+
+  const token = useAuthStore.getState().token;
+  const headers: HeadersInit = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  try {
+    const res = await fetch(`${config.apiBaseUrl}/user-tasks/${taskId}/attachments`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = (data?.error ?? data?.message) || 'Ошибка загрузки вложений';
+      return { ok: false, error: err };
+    }
+    return { ok: true, data: data.attachments ?? [] };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Ошибка загрузки вложений';
+    return { ok: false, error: msg };
+  }
+}
+
+export async function deleteUserTaskAttachment(
+  taskId: number,
+  attachmentId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/user-tasks/${taskId}/attachments/${attachmentId}`, { method: 'DELETE' });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }

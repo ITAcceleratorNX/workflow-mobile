@@ -440,7 +440,7 @@ export default function ClientDashboardScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
-  const { show } = useToast();
+  const { show: showToast } = useToast();
 
   const [hasNotifications, setHasNotifications] = useState(false);
 

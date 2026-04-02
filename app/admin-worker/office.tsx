@@ -57,7 +57,7 @@ function toHHmm(v: string | null | undefined): string {
 export default function AdminWorkerOfficeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { show } = useToast();
+  const { show: showToast } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
@@ -179,7 +179,7 @@ export default function AdminWorkerOfficeScreen() {
         capacity,
       });
       if (result.ok) {
-        show({ title: 'Переговорная добавлена', variant: 'success' });
+        showToast({ title: 'Переговорная добавлена', variant: 'success' });
         setNewRoomName('');
         setNewRoomFloor('');
         setNewRoomCapacity('');
@@ -190,7 +190,7 @@ export default function AdminWorkerOfficeScreen() {
       }
       setIsCreatingRoom(false);
     },
-    [newRoomName, newRoomFloor, newRoomCapacity, show, loadRooms]
+    [newRoomName, newRoomFloor, newRoomCapacity, showToast, loadRooms]
   );
 
   const startEditRoom = useCallback((room: MeetingRoom) => {
@@ -208,27 +208,27 @@ export default function AdminWorkerOfficeScreen() {
     async (roomId: number, officeId: number) => {
       const name = editRoomName.trim();
       if (!name) {
-        show({ title: 'Введите название комнаты', variant: 'destructive' });
+        showToast({ title: 'Введите название комнаты', variant: 'destructive', duration: 4000 });
         return;
       }
       const floor = parseInt(editRoomFloor, 10);
       const capacity = parseInt(editRoomCapacity, 10);
       if (Number.isNaN(floor) || floor < 0 || Number.isNaN(capacity) || capacity < 1) {
-        show({ title: 'Этаж ≥ 0, вместимость ≥ 1', variant: 'destructive' });
+        showToast({ title: 'Этаж ≥ 0, вместимость ≥ 1', variant: 'destructive', duration: 4000 });
         return;
       }
       setSavingRoomId(roomId);
       const result = await updateMeetingRoom(roomId, { name, floor, capacity });
       if (result.ok) {
-        show({ title: 'Данные комнаты сохранены', variant: 'success' });
+        showToast({ title: 'Данные комнаты сохранены', variant: 'success' });
         setEditingRoomId(null);
         await loadRooms(officeId);
       } else {
-        show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
       }
       setSavingRoomId(null);
     },
-    [editRoomName, editRoomFloor, editRoomCapacity, show, loadRooms]
+    [editRoomName, editRoomFloor, editRoomCapacity, showToast, loadRooms]
   );
 
   const handleDeleteRoom = useCallback(
@@ -245,10 +245,10 @@ export default function AdminWorkerOfficeScreen() {
               setDeletingRoomId(room.id);
               const result = await deleteMeetingRoom(room.id);
               if (result.ok) {
-                show({ title: 'Переговорная удалена', variant: 'success' });
+                showToast({ title: 'Переговорная удалена', variant: 'success' });
                 await loadRooms(officeId);
               } else {
-                show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+                showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
               }
               setDeletingRoomId(null);
             },
@@ -256,13 +256,13 @@ export default function AdminWorkerOfficeScreen() {
         ]
       );
     },
-    [show, loadRooms]
+    [showToast, loadRooms]
   );
 
   const pickPhotoForNew = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      show({ title: 'Нет доступа к галерее', variant: 'destructive' });
+      showToast({ title: 'Нет доступа к галерее', variant: 'destructive', duration: 4000 });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -271,12 +271,12 @@ export default function AdminWorkerOfficeScreen() {
       aspect: [4, 3],
     });
     if (!result.canceled) setNewOfficePhoto(result.assets[0]);
-  }, [show]);
+  }, [showToast]);
 
   const pickPhotoForEdit = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      show({ title: 'Нет доступа к галерее', variant: 'destructive' });
+      showToast({ title: 'Нет доступа к галерее', variant: 'destructive', duration: 4000 });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -285,12 +285,12 @@ export default function AdminWorkerOfficeScreen() {
       aspect: [4, 3],
     });
     if (!result.canceled) setEditOfficePhoto(result.assets[0]);
-  }, [show]);
+  }, [showToast]);
 
   const saveOfficeData = useCallback(
     async (officeId: number) => {
       if (!editName.trim()) {
-        show({ title: 'Введите название офиса', variant: 'destructive' });
+        showToast({ title: 'Введите название офиса', variant: 'destructive', duration: 4000 });
         return;
       }
       setSavingDataId(officeId);
@@ -317,7 +317,7 @@ export default function AdminWorkerOfficeScreen() {
         });
       }
       if (result.ok) {
-        show({ title: 'Данные офиса сохранены', variant: 'success' });
+        showToast({ title: 'Данные офиса сохранены', variant: 'success' });
         setOffices((prev) =>
           prev.map((o) =>
             o.id === officeId
@@ -326,11 +326,11 @@ export default function AdminWorkerOfficeScreen() {
           )
         );
       } else {
-        show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
       }
       setSavingDataId(null);
     },
-    [editName, editAddress, editCity, editOfficePhoto, show]
+    [editName, editAddress, editCity, editOfficePhoto, showToast]
   );
 
   const handleCreateOffice = useCallback(async () => {
@@ -362,7 +362,7 @@ export default function AdminWorkerOfficeScreen() {
       });
     }
     if (result.ok) {
-      show({ title: 'Офис создан', variant: 'success' });
+      showToast({ title: 'Офис создан', variant: 'success' });
       setNewName('');
       setNewAddress('');
       setNewCity('');
@@ -373,7 +373,7 @@ export default function AdminWorkerOfficeScreen() {
       setCreateError(result.error);
     }
     setIsCreating(false);
-  }, [newName, newAddress, newCity, newOfficePhoto, show, load]);
+  }, [newName, newAddress, newCity, newOfficePhoto, showToast, load]);
 
   const handleDeleteOffice = useCallback(
     (office: Office) => {
@@ -389,11 +389,11 @@ export default function AdminWorkerOfficeScreen() {
               setDeletingId(office.id);
               const result = await deleteOffice(office.id);
               if (result.ok) {
-                show({ title: 'Офис удалён', variant: 'success' });
+                showToast({ title: 'Офис удалён', variant: 'success' });
                 if (expandedId === office.id) setExpandedId(null);
                 load();
               } else {
-                show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+                showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
               }
               setDeletingId(null);
             },
@@ -401,7 +401,7 @@ export default function AdminWorkerOfficeScreen() {
         ]
       );
     },
-    [show, load, expandedId]
+    [showToast, load, expandedId]
   );
 
   const saveWorkingHours = useCallback(
@@ -409,7 +409,7 @@ export default function AdminWorkerOfficeScreen() {
       const start = toHHmmss(startInput);
       const end = toHHmmss(endInput);
       if (!start || !end) {
-        show({ title: 'Введите начало и конец рабочего дня', variant: 'destructive' });
+        showToast({ title: 'Введите начало и конец рабочего дня', variant: 'destructive', duration: 4000 });
         return;
       }
       setSavingId(officeId);
@@ -419,7 +419,7 @@ export default function AdminWorkerOfficeScreen() {
         auto_track_enabled: autoTrack,
       });
       if (result.ok) {
-        show({ title: 'Часы сохранены', variant: 'success' });
+        showToast({ title: 'Часы сохранены', variant: 'success' });
         setOffices((prev) =>
           prev.map((o) =>
             o.id === officeId
@@ -433,11 +433,11 @@ export default function AdminWorkerOfficeScreen() {
           )
         );
       } else {
-        show({ title: 'Ошибка', description: result.error, variant: 'destructive' });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
       }
       setSavingId(null);
     },
-    [startInput, endInput, autoTrack, show]
+    [startInput, endInput, autoTrack, showToast]
   );
 
   const onRefresh = useCallback(() => load(true), [load]);

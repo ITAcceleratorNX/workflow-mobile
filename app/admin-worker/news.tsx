@@ -44,7 +44,7 @@ const STATUS_OPTIONS = [
 export default function AdminWorkerNewsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { show } = useToast();
+  const { show: showToast } = useToast();
   const textMuted = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
   const gray600 = useThemeColor({}, 'gray600');
@@ -113,17 +113,17 @@ export default function AdminWorkerNewsScreen() {
               const res = await deleteNews(numId);
               setActionId(null);
               if (res.ok) {
-                show({ title: 'Удалено', description: 'Новость удалена', variant: 'success' });
+                showToast({ title: 'Удалено', description: 'Новость удалена', variant: 'success' });
                 loadList();
               } else {
-                show({ title: 'Ошибка', description: res.error, variant: 'destructive' });
+                showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
               }
             },
           },
         ]
       );
     },
-    [show, loadList]
+    [showToast, loadList]
   );
 
   const handleHide = useCallback(
@@ -135,13 +135,13 @@ export default function AdminWorkerNewsScreen() {
       const res = await hideNews(numId);
       setActionId(null);
       if (res.ok) {
-        show({ title: 'Скрыто', description: 'Новость скрыта с главной', variant: 'success' });
+        showToast({ title: 'Скрыто', description: 'Новость скрыта с главной', variant: 'success' });
         loadList();
       } else {
-        show({ title: 'Ошибка', description: res.error, variant: 'destructive' });
+        showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
       }
     },
-    [show, loadList]
+    [showToast, loadList]
   );
 
   const handleArchive = useCallback(
@@ -153,13 +153,13 @@ export default function AdminWorkerNewsScreen() {
       const res = await archiveNews(numId);
       setActionId(null);
       if (res.ok) {
-        show({ title: 'Архивировано', description: 'Новость архивирована', variant: 'success' });
+        showToast({ title: 'Архивировано', description: 'Новость архивирована', variant: 'success' });
         loadList();
       } else {
-        show({ title: 'Ошибка', description: res.error, variant: 'destructive' });
+        showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
       }
     },
-    [show, loadList]
+    [showToast, loadList]
   );
 
   const handleUnhide = useCallback(
@@ -171,13 +171,13 @@ export default function AdminWorkerNewsScreen() {
       const res = await unhideNews(numId);
       setActionId(null);
       if (res.ok) {
-        show({ title: 'Восстановлено', description: 'Новость снова активна', variant: 'success' });
+        showToast({ title: 'Восстановлено', description: 'Новость снова активна', variant: 'success' });
         loadList();
       } else {
-        show({ title: 'Ошибка', description: res.error, variant: 'destructive' });
+        showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
       }
     },
-    [show, loadList]
+    [showToast, loadList]
   );
 
   const sortedItems = [...items].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
