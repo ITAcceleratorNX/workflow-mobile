@@ -129,6 +129,8 @@ export interface Office {
   name: string;
   city?: string;
   address?: string;
+  block?: string;
+  floor?: number;
   lat?: number | null;
   lon?: number | null;
   photo?: string | null;
