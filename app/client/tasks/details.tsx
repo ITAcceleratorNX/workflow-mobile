@@ -334,7 +334,7 @@ export default function TaskDetailsScreen() {
     setAttachmentsUploading(true);
     const res = await uploadUserTaskAttachments(task.id, files);
     if (res.ok) {
-      setAttachments(res.data);
+      setAttachments((prev) => [...res.data, ...prev]);
       showToast({ title: 'Готово', description: 'Вложения загружены', variant: 'success', duration: 2500 });
     } else {
       showToast({ title: 'Ошибка загрузки', description: res.error, variant: 'destructive', duration: 4000 });
@@ -371,7 +371,7 @@ export default function TaskDetailsScreen() {
     setAttachmentsUploading(true);
     const res = await uploadUserTaskAttachments(task.id, files);
     if (res.ok) {
-      setAttachments(res.data);
+      setAttachments((prev) => [...res.data, ...prev]);
       showToast({ title: 'Готово', description: 'Файлы загружены', variant: 'success', duration: 2500 });
     } else {
       showToast({ title: 'Ошибка загрузки', description: res.error, variant: 'destructive', duration: 4000 });
