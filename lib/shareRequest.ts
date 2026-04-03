@@ -51,7 +51,7 @@ export function getWhatsAppShareUrl(params: ShareRequestParams): string {
 /**
  * Извлекает requestId из URL заявки.
  * Поддерживает:
- * - https://workflow-back-zpk4.onrender.com?requestId=123 (Universal/App Links)
+ * - http://localhost:3001?requestId=123 (Universal/App Links)
  * - workflowmobile://...?requestId=123 (custom scheme)
  * - любой URL с query-параметром requestId
  * - путь вида /requests/123 (если есть в pathname)

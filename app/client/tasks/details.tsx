@@ -27,7 +27,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
   collectTeamMemberOptions,
-  TaskExecutorPickerOverlay,
+  TaskAssigneesPickerOverlay,
   TaskTeamPickerOverlay,
 } from '@/components/tasks/task-assignment-pickers';
 import { Select } from '@/components/ui';
@@ -35,9 +35,8 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTeams } from '@/hooks/use-teams';
 import { useTodoList } from '@/hooks/use-todo-list';
 import type { Team } from '@/lib/teams-api';
-import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
-import type { TaskPriority, UserTaskAttachment } from '@/lib/user-tasks-api';
+import type { TaskPriority, UserTask, UserTaskAttachment } from '@/lib/user-tasks-api';
 import { deleteUserTaskAttachment, getUserTaskAttachments, uploadUserTaskAttachments } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
@@ -73,6 +72,24 @@ const TIME_SLOTS: { value: string; label: string }[] = (() => {
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 const TITLE_SAVE_DEBOUNCE_MS = 450;
+
+function mergeAssigneesFromTask(t: UserTask): { id: number; full_name: string }[] {
+  if (t.assignees && t.assignees.length > 0) return t.assignees;
+  if (t.executor_id && t.executor?.full_name) {
+    return [{ id: t.executor_id, full_name: t.executor.full_name }];
+  }
+  if (t.assignee_ids?.length) {
+    return t.assignee_ids.map((id) => ({ id, full_name: `Пользователь #${id}` }));
+  }
+  return [];
+}
+
+function sameAssigneeIds(a: { id: number }[], b: { id: number }[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a.map((x) => x.id)].sort((x, y) => x - y);
+  const sb = [...b.map((x) => x.id)].sort((x, y) => x - y);
+  return sa.every((v, i) => v === sb[i]);
+}
 
 function getDateOptions(): { value: string; label: string }[] {
   const options: { value: string; label: string }[] = [];
@@ -140,7 +157,6 @@ export default function TaskDetailsScreen() {
 
   const dateOptions = useMemo(() => getDateOptions(), []);
   const scrollRef = useRef<ScrollView | null>(null);
-  const [anchorY, setAnchorY] = useState<{ assignees?: number }>({});
 
   const [iosPicker, setIosPicker] = useState<{
     open: boolean;
@@ -148,12 +164,13 @@ export default function TaskDetailsScreen() {
     value: Date;
   }>({ open: false, mode: 'schedule-date', value: new Date() });
 
-  const [assigneeSearch, setAssigneeSearch] = useState('');
-  const [assigneeResults, setAssigneeResults] = useState<UserSearchItem[]>([]);
-  const [assigneeSearching, setAssigneeSearching] = useState(false);
-  const [selectedAssignees, setSelectedAssignees] = useState<{ id: number; full_name: string }[]>([]);
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
-  const [pickerSheet, setPickerSheet] = useState<'team' | 'executor' | null>(null);
+  const [pickerSheet, setPickerSheet] = useState<'team' | 'assignees' | null>(null);
+  /** Черновик исполнителей в модалке (как в TaskAddSheet), коммит при закрытии пикера. */
+  const [assigneesDraft, setAssigneesDraft] = useState<{ id: number; full_name: string }[]>([]);
+  const assigneesDraftRef = useRef<{ id: number; full_name: string }[]>([]);
+  /** Снимок исполнителей на момент открытия модалки — закрытие без изменений не шлёт PATCH (в т.ч. без гонки с async update). */
+  const assigneesSeedAtOpenRef = useRef<{ id: number; full_name: string }[]>([]);
   const [priority, setPriority] = useState<TaskPriority>('medium');
 
   const [attachments, setAttachments] = useState<UserTaskAttachment[]>([]);
@@ -167,11 +184,6 @@ export default function TaskDetailsScreen() {
     setRemindBeforeMinutes(task.remind_before_minutes ?? null);
     setPriority(task.priority ?? 'medium');
   }, [task?.id, task?.title, task?.remind_before_minutes, task?.priority]);
-
-  useEffect(() => {
-    if (!task) return;
-    setSelectedAssignees(task.assignees ?? []);
-  }, [task]);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,29 +209,6 @@ export default function TaskDetailsScreen() {
       cancelled = true;
     };
   }, [task?.id, showToast]);
-
-  useEffect(() => {
-    if (!canEditDetails) {
-      setAssigneeResults([]);
-      setAssigneeSearching(false);
-      return;
-    }
-    const q = assigneeSearch.trim();
-    if (q.length < 2) {
-      setAssigneeResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      setAssigneeSearching(true);
-      const res = await searchUsersForAssign(q);
-      setAssigneeSearching(false);
-      if (res.ok) {
-        const filtered = currentUserId ? res.data.filter((u) => u.id !== currentUserId) : res.data;
-        setAssigneeResults(filtered);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [assigneeSearch, currentUserId, canEditDetails]);
 
   const flushTitleToServer = useCallback(async () => {
     if (titleDebounceRef.current) {
@@ -449,41 +438,6 @@ export default function TaskDetailsScreen() {
     [task, canEditDetails, attachments, showToast]
   );
 
-  const persistAssignees = useCallback(
-    async (next: { id: number; full_name: string }[]) => {
-      if (!task || !canEditDetails) return;
-      setSelectedAssignees(next);
-      const ids = next.map((a) => a.id);
-      await updateTask(task, { assignee_ids: ids });
-    },
-    [task, canEditDetails, updateTask]
-  );
-
-  const handleAddAssignee = useCallback(
-    async (user: UserSearchItem) => {
-      if (!canEditDetails) return;
-      if (currentUserId && user.id === currentUserId) return;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const next = selectedAssignees.some((a) => a.id === user.id)
-        ? selectedAssignees
-        : [...selectedAssignees, { id: user.id, full_name: user.full_name }];
-      setAssigneeSearch('');
-      setAssigneeResults([]);
-      await persistAssignees(next);
-    },
-    [canEditDetails, persistAssignees, selectedAssignees, currentUserId]
-  );
-
-  const handleRemoveAssignee = useCallback(
-    async (id: number) => {
-      if (!canEditDetails) return;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const next = selectedAssignees.filter((a) => a.id !== id);
-      await persistAssignees(next);
-    },
-    [canEditDetails, persistAssignees, selectedAssignees]
-  );
-
   const teamForExecutor = useMemo((): Team | null => {
     if (!task?.team_id) return null;
     const fromList = teams.find((t) => t.id === task.team_id);
@@ -503,36 +457,62 @@ export default function TaskDetailsScreen() {
     return null;
   }, [task, teams]);
 
-  const selectedExecutorForPicker = useMemo(() => {
-    if (!task?.executor_id) return null;
-    return {
-      id: task.executor_id,
-      full_name: task.executor?.full_name ?? 'Пользователь',
-    };
-  }, [task]);
+  const effectiveAssignees = useMemo(
+    () => (task ? mergeAssigneesFromTask(task) : []),
+    [task]
+  );
 
-  const applyTeamAndMaybeClearExecutor = useCallback(
+  const assigneesRowSummary = useMemo(() => {
+    const n = effectiveAssignees.length;
+    if (n === 0) return '—';
+    if (n === 1) return effectiveAssignees[0].full_name;
+    return `${n} исполнителей`;
+  }, [effectiveAssignees]);
+
+  const applyTeamAndFilterAssignees = useCallback(
     async (nextTeamId: number | null) => {
       if (!task || !canEditDetails) return;
-      let nextExecutorId = task.executor_id ?? null;
-      if (nextTeamId != null && nextExecutorId != null) {
+      let next = mergeAssigneesFromTask(task);
+      if (nextTeamId != null) {
         const tm =
           teams.find((x) => x.id === nextTeamId) ??
           (task.team?.id === nextTeamId ? task.team : null);
         const opts = collectTeamMemberOptions(tm);
-        if (!opts.some((o) => o.id === nextExecutorId)) {
-          nextExecutorId = null;
-        }
+        const allowed = new Set(opts.map((o) => o.id));
+        next = next.filter((a) => allowed.has(a.id));
       }
-      await updateTask(task, { team_id: nextTeamId, executor_id: nextExecutorId });
+      await updateTask(task, {
+        team_id: nextTeamId,
+        executor_id: null,
+        assignee_ids: next.map((a) => a.id),
+        assignees: next,
+      });
     },
     [task, canEditDetails, updateTask, teams]
   );
 
-  const applyExecutor = useCallback(
-    async (ex: { id: number; full_name: string } | null) => {
+  const applyAssignees = useCallback(
+    async (next: { id: number; full_name: string }[]) => {
       if (!task || !canEditDetails) return;
-      await updateTask(task, { executor_id: ex?.id ?? null });
+      await updateTask(task, {
+        assignee_ids: next.map((a) => a.id),
+        executor_id: null,
+        assignees: next,
+      });
+    },
+    [task, canEditDetails, updateTask]
+  );
+
+  const removeAssignee = useCallback(
+    async (id: number) => {
+      if (!task || !canEditDetails) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const next = mergeAssigneesFromTask(task).filter((a) => a.id !== id);
+      await updateTask(task, {
+        assignee_ids: next.map((a) => a.id),
+        executor_id: null,
+        assignees: next,
+      });
     },
     [task, canEditDetails, updateTask]
   );
@@ -543,11 +523,33 @@ export default function TaskDetailsScreen() {
     setPickerSheet('team');
   }, [canEditDetails]);
 
-  const openExecutorPicker = useCallback(() => {
-    if (!canEditDetails) return;
+  const openAssigneesPicker = useCallback(() => {
+    if (!canEditDetails || !task) return;
     Keyboard.dismiss();
-    setPickerSheet('executor');
-  }, [canEditDetails]);
+    const initial = mergeAssigneesFromTask(task);
+    assigneesSeedAtOpenRef.current = initial.map((x) => ({ ...x }));
+    assigneesDraftRef.current = initial;
+    setAssigneesDraft(initial);
+    setPickerSheet('assignees');
+  }, [canEditDetails, task]);
+
+  const closeAssigneesPicker = useCallback(() => {
+    if (task && canEditDetails) {
+      const draft = assigneesDraftRef.current;
+      const seed = assigneesSeedAtOpenRef.current;
+      if (sameAssigneeIds(draft, seed)) {
+        setPickerSheet(null);
+        return;
+      }
+      void applyAssignees(draft);
+    }
+    setPickerSheet(null);
+  }, [task, canEditDetails, applyAssignees]);
+
+  const onAssigneesDraftChange = useCallback((next: { id: number; full_name: string }[]) => {
+    assigneesDraftRef.current = next;
+    setAssigneesDraft(next);
+  }, []);
 
   if (!task) {
     return (
@@ -838,7 +840,7 @@ export default function TaskDetailsScreen() {
                     notifyCreatorOnly();
                     return;
                   }
-                  openExecutorPicker();
+                  openAssigneesPicker();
                 }}
                 style={({ pressed }) => [
                   styles.row,
@@ -848,109 +850,45 @@ export default function TaskDetailsScreen() {
               >
                 <View style={styles.rowLeft}>
                   <MaterialIcons name="person-outline" size={20} color={textMuted} />
-                  <ThemedText style={[styles.rowTitle, { color: text }]}>Исполнитель</ThemedText>
+                  <ThemedText style={[styles.rowTitle, { color: text }]}>Исполнители</ThemedText>
                 </View>
                 <View style={styles.rowRight}>
                   <ThemedText style={[styles.rowValue, { color: textMuted, flexShrink: 1 }]} numberOfLines={1}>
-                    {task.executor?.full_name ?? '—'}
+                    {assigneesRowSummary}
                   </ThemedText>
                   {canEditDetails ? (
                     <MaterialIcons name="chevron-right" size={22} color={textMuted} />
                   ) : null}
                 </View>
               </Pressable>
+              {effectiveAssignees.length > 0 ? (
+                <View style={styles.assigneesChipsBlock}>
+                  <View style={styles.assigneesChipsRow}>
+                    {effectiveAssignees.map((a) => (
+                      <View
+                        key={a.id}
+                        style={[styles.assigneeChip, { borderColor: primary, backgroundColor: `${primary}18` }]}
+                      >
+                        <ThemedText style={[styles.assigneeChipText, { color: text }]} numberOfLines={1}>
+                          {a.full_name}
+                        </ThemedText>
+                        {canEditDetails ? (
+                          <Pressable
+                            onPress={() => void removeAssignee(a.id)}
+                            hitSlop={8}
+                            accessibilityLabel="Убрать исполнителя"
+                          >
+                            <MaterialIcons name="close" size={16} color={primary} />
+                          </Pressable>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
               <View style={[styles.divider, { backgroundColor: border }]} />
             </>
           ) : null}
-
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <MaterialIcons name="group" size={20} color={textMuted} />
-              <ThemedText style={[styles.rowTitle, { color: text }]}>Исполнители</ThemedText>
-            </View>
-            <ThemedText style={[styles.rowValue, { color: textMuted }]}>
-              {selectedAssignees.length || '—'}
-            </ThemedText>
-          </View>
-
-          <View style={[styles.divider, { backgroundColor: border }]} />
-
-          <View
-            style={styles.assigneesBlock}
-            onLayout={(e) => {
-              const y = e?.nativeEvent?.layout?.y;
-              if (typeof y !== 'number') return;
-              setAnchorY((prev) => ({ ...prev, assignees: y }));
-            }}
-          >
-            <RNTextInput
-              value={assigneeSearch}
-              onChangeText={setAssigneeSearch}
-              editable={canEditDetails}
-              placeholder="Поиск по имени (минимум 2 символа)"
-              placeholderTextColor={textMuted}
-              onPressIn={() => {
-                if (canEditDetails) return;
-                notifyCreatorOnly();
-              }}
-              onFocus={() => {
-                const y = anchorY.assignees ?? 0;
-                requestAnimationFrame(() => {
-                  scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
-                });
-              }}
-              style={[
-                styles.assigneeInput,
-                { color: text, borderColor: border },
-                !canEditDetails && { opacity: 0.75 },
-              ]}
-            />
-
-            {assigneeSearching ? (
-              <ThemedText style={{ color: textMuted, fontSize: 12 }}>Поиск…</ThemedText>
-            ) : null}
-
-            {assigneeResults.length > 0 ? (
-              <View style={[styles.assigneeResults, { borderColor: border, backgroundColor: cardBg }]}>
-                {assigneeResults.map((u) => (
-                  <Pressable
-                    key={u.id}
-                    disabled={!canEditDetails}
-                    onPress={() => handleAddAssignee(u)}
-                    style={({ pressed }) => [
-                      styles.assigneeResultItem,
-                      pressed && canEditDetails && { opacity: 0.7 },
-                      !canEditDetails && { opacity: 0.55 },
-                    ]}
-                  >
-                    <ThemedText style={{ color: text }} numberOfLines={1}>
-                      {u.full_name}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-
-            {selectedAssignees.length > 0 ? (
-              <View style={styles.assigneeChips}>
-                {selectedAssignees.map((a) => (
-                  <View key={a.id} style={[styles.assigneeChip, { borderColor: primary, backgroundColor: `${primary}18` }]}>
-                    <ThemedText style={{ color: text }} numberOfLines={1}>
-                      {a.full_name}
-                    </ThemedText>
-                    <Pressable
-                      disabled={!canEditDetails}
-                      onPress={() => handleRemoveAssignee(a.id)}
-                      hitSlop={10}
-                      style={styles.assigneeChipRemove}
-                    >
-                      <MaterialIcons name="close" size={16} color={primary} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
         </View>
 
         <View style={{ height: 16 }} />
@@ -1158,16 +1096,17 @@ export default function TaskDetailsScreen() {
             teams={teams}
             loading={teamsLoading}
             selectedTeamId={task.team_id ?? null}
-            onSelect={(id) => void applyTeamAndMaybeClearExecutor(id)}
+            onSelect={(id) => void applyTeamAndFilterAssignees(id)}
           />
-          <TaskExecutorPickerOverlay
-            visible={pickerSheet === 'executor'}
-            onClose={() => setPickerSheet(null)}
+          <TaskAssigneesPickerOverlay
+            visible={pickerSheet === 'assignees'}
+            onClose={closeAssigneesPicker}
             teamScope={task.team_id != null}
             team={teamForExecutor}
             teamLoading={task.team_id != null && !teamForExecutor && teamsLoading}
-            selectedExecutor={selectedExecutorForPicker}
-            onSelect={(ex) => void applyExecutor(ex)}
+            selectedAssignees={assigneesDraft}
+            onChange={onAssigneesDraftChange}
+            currentUserId={currentUserId}
           />
         </>
       ) : null}
@@ -1302,28 +1241,11 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     gap: 10,
   },
-  assigneesBlock: {
+  assigneesChipsBlock: {
     paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 10,
+    paddingBottom: 12,
   },
-  assigneeInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 14,
-  },
-  assigneeResults: {
-    borderWidth: 1,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  assigneeResultItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  assigneeChips: {
+  assigneesChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
@@ -1331,15 +1253,19 @@ const styles = StyleSheet.create({
   assigneeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingLeft: 10,
+    paddingRight: 8,
     borderRadius: 999,
     borderWidth: 1,
     maxWidth: '100%',
   },
-  assigneeChipRemove: {
-    padding: 2,
+  assigneeChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flexShrink: 1,
+    maxWidth: 220,
   },
   remindersHintWrap: {
     paddingHorizontal: 14,

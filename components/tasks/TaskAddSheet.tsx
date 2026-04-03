@@ -26,7 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import {
   collectTeamMemberOptions,
-  TaskExecutorPickerOverlay,
+  TaskAssigneesPickerOverlay,
   TaskTeamPickerOverlay,
 } from '@/components/tasks/task-assignment-pickers';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -125,7 +125,7 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: 'high', label: 'Высокий' },
 ];
 
-type SubModalId = 'schedule' | 'team' | 'executor' | 'priority' | 'reminders' | null;
+type SubModalId = 'schedule' | 'team' | 'assignees' | 'priority' | 'reminders' | null;
 
 export interface TaskAddSheetProps {
   visible: boolean;
@@ -139,7 +139,10 @@ export interface TaskAddSheetProps {
     scheduledAt?: string | null,
     remindersDisabled?: boolean,
     remindBeforeMinutes?: number | null,
-    assignment?: { team_id?: number | null; executor_id?: number | null },
+    assignment?: {
+      team_id?: number | null;
+      assignees?: { id: number; full_name: string }[];
+    },
     priority?: TaskPriority
   ) => Promise<unknown>;
 }
@@ -162,6 +165,7 @@ export function TaskAddSheet({
   const cardBg = useThemeColor({}, 'cardBackground');
 
   const isGuest = useAuthStore((s) => s.isGuest);
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const { teams, loading: teamsLoading } = useTeams();
 
   const [title, setTitle] = useState('');
@@ -178,7 +182,7 @@ export function TaskAddSheet({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [teamId, setTeamId] = useState<number | null>(null);
-  const [executor, setExecutor] = useState<{ id: number; full_name: string } | null>(null);
+  const [assignees, setAssignees] = useState<{ id: number; full_name: string }[]>([]);
 
   useEffect(() => {
     const show = Keyboard.addListener(
@@ -214,7 +218,7 @@ export function TaskAddSheet({
     else if (mainView === 'today') setScheduledDate(todayKey);
     else setScheduledDate(defaultDateKey ?? tomorrowKey);
     setTeamId(null);
-    setExecutor(null);
+    setAssignees([]);
   }, [visible, mainView, todayKey, tomorrowKey]);
 
   useEffect(() => {
@@ -222,11 +226,8 @@ export function TaskAddSheet({
     const team = teams.find((t) => t.id === teamId);
     if (!team) return;
     const opts = collectTeamMemberOptions(team);
-    setExecutor((prev) => {
-      if (!prev) return null;
-      if (opts.some((o) => o.id === prev.id)) return prev;
-      return null;
-    });
+    const allowed = new Set(opts.map((o) => o.id));
+    setAssignees((prev) => prev.filter((a) => allowed.has(a.id)));
   }, [teamId, teams]);
 
   useEffect(() => {
@@ -257,11 +258,11 @@ export function TaskAddSheet({
     setSubModal('team');
   }, []);
 
-  const openExecutorModal = useCallback(() => {
+  const openAssigneesModal = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     titleInputRef.current?.blur();
     Keyboard.dismiss();
-    setSubModal('executor');
+    setSubModal('assignees');
   }, []);
 
   const openPriorityModal = useCallback(() => {
@@ -384,9 +385,13 @@ export function TaskAddSheet({
     return teams.find((t) => t.id === teamId)?.name ?? 'Команда';
   }, [teamId, teams]);
 
-  const executorChipLabel = executor?.full_name ?? 'Исполнитель';
+  const assigneesChipLabel = useMemo(() => {
+    if (assignees.length === 0) return 'Исполнители';
+    if (assignees.length === 1) return assignees[0].full_name;
+    return `Исполнители · ${assignees.length}`;
+  }, [assignees]);
   const teamChipOn = teamId != null;
-  const executorChipOn = executor != null;
+  const assigneesChipOn = assignees.length > 0;
 
   const priorityChipLabel = useMemo(
     () => PRIORITY_OPTIONS.find((o) => o.value === priority)?.label ?? 'Приоритет',
@@ -424,7 +429,7 @@ export function TaskAddSheet({
       scheduledAtIso,
       remindersDisabled,
       remindBeforeMinutes,
-      { team_id: teamId, executor_id: executor?.id ?? null },
+      { team_id: teamId, assignees },
       priority
     );
     setSaving(false);
@@ -443,7 +448,7 @@ export function TaskAddSheet({
     addTask,
     onClose,
     teamId,
-    executor,
+    assignees,
   ]);
 
   const canSubmit = title.trim().length > 0 && !saving;
@@ -560,26 +565,26 @@ export function TaskAddSheet({
                         </ThemedText>
                       </Pressable>
                       <Pressable
-                        onPress={openExecutorModal}
+                        onPress={openAssigneesModal}
                         style={[
                           styles.quickPill,
                           { borderColor: border, backgroundColor: cardBg },
-                          executorChipOn && { borderColor: primary, backgroundColor: `${primary}18` },
+                          assigneesChipOn && { borderColor: primary, backgroundColor: `${primary}18` },
                         ]}
                       >
                         <MaterialIcons
                           name="person-outline"
                           size={18}
-                          color={executorChipOn ? primary : headerSubtitle}
+                          color={assigneesChipOn ? primary : headerSubtitle}
                         />
                         <ThemedText
                           style={[
                             styles.quickPillText,
-                            { color: executorChipOn ? primary : headerText },
+                            { color: assigneesChipOn ? primary : headerText },
                           ]}
                           numberOfLines={1}
                         >
-                          {executorChipLabel}
+                          {assigneesChipLabel}
                         </ThemedText>
                       </Pressable>
                     </>
@@ -918,14 +923,15 @@ export function TaskAddSheet({
             selectedTeamId={teamId}
             onSelect={(id) => setTeamId(id)}
           />
-          <TaskExecutorPickerOverlay
-            visible={subModal === 'executor'}
+          <TaskAssigneesPickerOverlay
+            visible={subModal === 'assignees'}
             onClose={closeSub}
             teamScope={teamId != null}
             team={teamForExecutor}
             teamLoading={teamId != null && !teamForExecutor && teamsLoading}
-            selectedExecutor={executor}
-            onSelect={(ex) => setExecutor(ex)}
+            selectedAssignees={assignees}
+            onChange={setAssignees}
+            currentUserId={currentUserId}
           />
 
           {subModal === 'priority' && (

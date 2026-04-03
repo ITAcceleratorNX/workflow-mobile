@@ -44,7 +44,6 @@ function TaskRow({
   const scheduledStr = task.scheduled_at
     ? `${toAppDateKey(task.scheduled_at)} ${formatTaskTime(task.scheduled_at)}`
     : null;
-  const hasScheduled = !!task.scheduled_at;
   const priorityLabel = task.priority === 'high' ? 'Высокий' : task.priority === 'low' ? 'Низкий' : 'Средний';
   const priorityColor = task.priority === 'high' ? '#EF4444' : task.priority === 'low' ? '#22C55E' : '#F59E0B';
 
@@ -87,12 +86,6 @@ function TaskRow({
             <MaterialIcons name="flag" size={12} color={priorityColor} />
             <ThemedText style={[styles.taskMeta, { color: textMuted }]}>{priorityLabel}</ThemedText>
           </View>
-          {task.assignee_ids?.length > 0 && (
-            <View style={[styles.badge, styles.badgeRow, { backgroundColor: primary }]}>
-              <MaterialIcons name="group" size={12} color="#FFFFFF" style={styles.badgeIcon} />
-              <ThemedText style={styles.badgeText}>Командная</ThemedText>
-            </View>
-          )}
           <TaskAssignmentBadges task={task} primary={primary} currentUserId={currentUserId} compact />
           {task.reminders_disabled && (
             <View style={styles.remindersOffWrap}>
@@ -220,25 +213,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     marginTop: 4,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginTop: 4,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  badgeIcon: {
-    marginRight: 4,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
   },
   remindersOffWrap: {
     flexDirection: 'row',
