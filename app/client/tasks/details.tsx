@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
+import { useNavigation } from '@react-navigation/native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -71,6 +72,8 @@ const TIME_SLOTS: { value: string; label: string }[] = (() => {
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
+const TITLE_SAVE_DEBOUNCE_MS = 450;
+
 function getDateOptions(): { value: string; label: string }[] {
   const options: { value: string; label: string }[] = [];
   const today = new Date();
@@ -89,6 +92,7 @@ function getDateOptions(): { value: string; label: string }[] {
 
 export default function TaskDetailsScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { taskId: taskIdParam } = useLocalSearchParams<{ taskId?: string }>();
   const taskId = taskIdParam ? parseInt(taskIdParam) : null;
@@ -124,6 +128,16 @@ export default function TaskDetailsScreen() {
 
   const scheduledEnabled = !!task?.scheduled_at;
   const [titleDraft, setTitleDraft] = useState('');
+
+  const taskRef = useRef(task);
+  const canEditDetailsRef = useRef(canEditDetails);
+  const titleDraftRef = useRef(titleDraft);
+  taskRef.current = task;
+  canEditDetailsRef.current = canEditDetails;
+  titleDraftRef.current = titleDraft;
+
+  const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const dateOptions = useMemo(() => getDateOptions(), []);
   const scrollRef = useRef<ScrollView | null>(null);
   const [anchorY, setAnchorY] = useState<{ assignees?: number }>({});
@@ -146,12 +160,13 @@ export default function TaskDetailsScreen() {
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
 
+  /** Поля задачи по значению, не по ссылке на `task`: иначе любой refresh списка затирает черновик заголовка при вводе. */
   useEffect(() => {
     if (!task) return;
     setTitleDraft(task.title ?? '');
     setRemindBeforeMinutes(task.remind_before_minutes ?? null);
     setPriority(task.priority ?? 'medium');
-  }, [task]);
+  }, [task?.id, task?.title, task?.remind_before_minutes, task?.priority]);
 
   useEffect(() => {
     if (!task) return;
@@ -206,10 +221,58 @@ export default function TaskDetailsScreen() {
     return () => clearTimeout(t);
   }, [assigneeSearch, currentUserId, canEditDetails]);
 
-  const handleClose = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.back();
-  }, [router]);
+  const flushTitleToServer = useCallback(async () => {
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+      titleDebounceRef.current = null;
+    }
+    const t = taskRef.current;
+    if (!t || !canEditDetailsRef.current) return;
+    const next = titleDraftRef.current.trim();
+    if (!next) {
+      setTitleDraft(t.title ?? '');
+      return;
+    }
+    if (next === t.title) return;
+    await updateTask(t, { title: next });
+  }, [updateTask]);
+
+  const scheduleTitleSave = useCallback(() => {
+    if (!canEditDetailsRef.current) return;
+    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+    titleDebounceRef.current = setTimeout(() => {
+      titleDebounceRef.current = null;
+      void flushTitleToServer();
+    }, TITLE_SAVE_DEBOUNCE_MS);
+  }, [flushTitleToServer]);
+
+  useEffect(() => {
+    if (titleDebounceRef.current) {
+      clearTimeout(titleDebounceRef.current);
+      titleDebounceRef.current = null;
+    }
+  }, [task?.id]);
+
+  useEffect(() => {
+    return () => {
+      void flushTitleToServer();
+    };
+  }, [flushTitleToServer]);
+
+  useEffect(() => {
+    return navigation.addListener('beforeRemove', (e) => {
+      if (!canEditDetailsRef.current) return;
+      const t = taskRef.current;
+      const next = titleDraftRef.current.trim();
+      if (!t || !next || next === t.title) return;
+      e.preventDefault();
+      void flushTitleToServer()
+        .catch(() => {})
+        .finally(() => {
+          navigation.dispatch(e.data.action);
+        });
+    });
+  }, [navigation, flushTitleToServer]);
 
   const handleToggleSchedule = useCallback(async () => {
     if (!task || !canEditDetails) return;
@@ -282,17 +345,6 @@ export default function TaskDetailsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await updateTask(task, { priority: value });
   }, [task, canEditDetails, updateTask]);
-
-  const saveTitle = useCallback(async () => {
-    if (!task || !canEditDetails) return;
-    const next = titleDraft.trim();
-    if (!next || next === task.title) {
-      setTitleDraft(task.title ?? '');
-      return;
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await updateTask(task, { title: next });
-  }, [task, canEditDetails, titleDraft, updateTask]);
 
   const handlePickMedia = useCallback(async () => {
     if (!task || !canEditDetails || attachmentsUploading) return;
@@ -505,9 +557,7 @@ export default function TaskDetailsScreen() {
           <View style={[styles.grabber, { backgroundColor: primary }]} />
         </View>
         <View style={styles.header}>
-          <Pressable onPress={handleClose} hitSlop={12} style={styles.headerBtn}>
-            <MaterialIcons name="close" size={26} color={textMuted} />
-          </Pressable>
+          <View style={styles.headerBtn} />
           <ThemedText style={[styles.headerTitle, { color: text }]}>Подробно</ThemedText>
           <View style={styles.headerBtn} />
         </View>
@@ -529,13 +579,9 @@ export default function TaskDetailsScreen() {
         <View style={[styles.grabber, { backgroundColor: primary }]} />
       </View>
       <View style={styles.header}>
-        <Pressable onPress={handleClose} hitSlop={12} style={styles.headerBtn}>
-          <MaterialIcons name="close" size={26} color={textMuted} />
-        </Pressable>
+        <View style={styles.headerBtn} />
         <ThemedText style={[styles.headerTitle, { color: text }]}>Подробно</ThemedText>
-        <Pressable onPress={handleClose} hitSlop={12} style={[styles.headerBtn, styles.headerDone]}>
-          <MaterialIcons name="check" size={24} color={primary} />
-        </Pressable>
+        <View style={styles.headerBtn} />
       </View>
 
       <KeyboardAvoidingView
@@ -555,9 +601,13 @@ export default function TaskDetailsScreen() {
         <View style={[styles.titleCard, { backgroundColor: cardBg, borderColor: border }]}>
           <RNTextInput
             value={titleDraft}
-            onChangeText={setTitleDraft}
-            onSubmitEditing={saveTitle}
-            onBlur={saveTitle}
+            onChangeText={(txt) => {
+              setTitleDraft(txt);
+              scheduleTitleSave();
+            }}
+            onBlur={() => {
+              void flushTitleToServer();
+            }}
             editable={canEditDetails}
             onPressIn={() => {
               if (canEditDetails) return;
@@ -1149,9 +1199,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerDone: {
     justifyContent: 'center',
   },
   headerTitle: {

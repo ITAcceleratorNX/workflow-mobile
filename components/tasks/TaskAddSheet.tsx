@@ -419,11 +419,14 @@ export function TaskAddSheet({
       scheduledDate != null && scheduledDate !== ''
         ? toUtcIsoFromAppDateTime(scheduledDate, scheduledTime)
         : null;
-    const created = await addTask(trimmed, scheduledAtIso, remindersDisabled, remindBeforeMinutes, {
-      team_id: teamId,
-      executor_id: executor?.id ?? null,
-      priority,
-    });
+    const created = await addTask(
+      trimmed,
+      scheduledAtIso,
+      remindersDisabled,
+      remindBeforeMinutes,
+      { team_id: teamId, executor_id: executor?.id ?? null },
+      priority
+    );
     setSaving(false);
     if (created) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

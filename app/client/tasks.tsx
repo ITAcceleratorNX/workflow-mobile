@@ -193,9 +193,13 @@ export default function TasksScreen() {
         data: s.tasks,
       }));
     }
-    const selectedSection = allUpcoming.find((s) => s.id === `day-${upcomingDate}`);
-    if (!selectedSection) return [];
-    return [{ title: selectedSection.title, data: selectedSection.tasks }];
+    /** Все дни от выбранной даты в полосе календаря и дальше (не только один день). */
+    return allUpcoming
+      .filter((s) => {
+        const dayKey = s.id.startsWith('day-') ? s.id.slice('day-'.length) : s.id;
+        return dayKey >= upcomingDate;
+      })
+      .map((s) => ({ title: s.title, data: s.tasks }));
   }, [tasks, mainView, todayKey, upcomingDate]);
 
   const openAddSheet = useCallback(() => {
