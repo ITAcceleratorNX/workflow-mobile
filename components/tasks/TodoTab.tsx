@@ -15,7 +15,8 @@ import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuthStore } from '@/stores/auth-store';
 import { useTodoList } from '@/hooks/use-todo-list';
-import { formatTaskTime, toAppDateKey } from '@/lib/dateTimeUtils';
+import { formatDateForApi, formatTaskTime, toAppDateKey } from '@/lib/dateTimeUtils';
+import { formatSectionDateLabel } from '@/lib/task-views';
 import type { UserTask } from '@/lib/user-tasks-api';
 
 interface TodoTabProps {
@@ -31,6 +32,7 @@ function TaskRow({
   primary,
   borderColor,
   currentUserId,
+  todayKey,
 }: {
   task: UserTask;
   onToggle: () => void;
@@ -40,12 +42,16 @@ function TaskRow({
   primary: string;
   borderColor: string;
   currentUserId: number | null;
+  todayKey: string;
 }) {
-  const scheduledStr = task.scheduled_at
-    ? `${toAppDateKey(task.scheduled_at)} ${formatTaskTime(task.scheduled_at)}`
-    : null;
-  const priorityLabel = task.priority === 'high' ? 'Высокий' : task.priority === 'low' ? 'Низкий' : 'Средний';
+  const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : null;
+  const timePart = task.scheduled_at ? formatTaskTime(task.scheduled_at) : null;
+  const scheduleLine =
+    dateKey && timePart
+      ? `${formatSectionDateLabel(dateKey, todayKey)} · ${timePart}`
+      : null;
   const priorityColor = task.priority === 'high' ? '#EF4444' : task.priority === 'low' ? '#22C55E' : '#F59E0B';
+  const showPriorityFlag = task.priority === 'high' || task.priority === 'low';
 
   return (
     <View style={[styles.taskRow, { borderBottomColor: borderColor }]}>
@@ -69,23 +75,29 @@ function TaskRow({
         style={({ pressed }) => [styles.taskPressArea, { opacity: pressed ? 0.92 : 1 }]}
       >
         <View style={styles.taskContent}>
-          <ThemedText
-            style={[
-              styles.taskTitle,
-              { color: task.completed ? textMuted : textColor },
-              task.completed && styles.taskCompleted,
-            ]}
-            numberOfLines={2}
-          >
-            {task.title}
-          </ThemedText>
-          {scheduledStr && (
-            <ThemedText style={[styles.taskMeta, { color: textMuted }]}>{scheduledStr}</ThemedText>
-          )}
-          <View style={styles.priorityRow}>
-            <MaterialIcons name="flag" size={12} color={priorityColor} />
-            <ThemedText style={[styles.taskMeta, { color: textMuted }]}>{priorityLabel}</ThemedText>
+          <View style={styles.titleRow}>
+            <ThemedText
+              style={[
+                styles.taskTitle,
+                { color: task.completed ? textMuted : textColor },
+                task.completed && styles.taskCompleted,
+              ]}
+              numberOfLines={2}
+            >
+              {task.title}
+            </ThemedText>
+            {showPriorityFlag ? (
+              <MaterialIcons name="flag" size={16} color={priorityColor} style={styles.titleFlag} />
+            ) : null}
           </View>
+          {scheduleLine ? (
+            <View style={styles.scheduleRow}>
+              <MaterialIcons name="schedule" size={14} color={textMuted} />
+              <ThemedText style={[styles.taskMeta, { color: textMuted }]} numberOfLines={1}>
+                {scheduleLine}
+              </ThemedText>
+            </View>
+          ) : null}
           <TaskAssignmentBadges task={task} primary={primary} currentUserId={currentUserId} compact />
           {task.reminders_disabled && (
             <View style={styles.remindersOffWrap}>
@@ -106,6 +118,7 @@ export function TodoTab({ filter = 'all' }: TodoTabProps) {
   const { tasks, loading, toggleComplete } = useTodoList(
     filter === 'overdue' ? 'overdue' : 'all'
   );
+  const todayKey = formatDateForApi(new Date());
 
   const primary = useThemeColor({}, 'primary');
   const text = useThemeColor({}, 'text');
@@ -144,6 +157,7 @@ export function TodoTab({ filter = 'all' }: TodoTabProps) {
               primary={primary}
               borderColor={border}
               currentUserId={currentUserId}
+              todayKey={todayKey}
             />
           ))}
         </ScrollView>
@@ -198,21 +212,29 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  taskTitle: {
-    fontSize: 16,
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
   },
+  taskTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  titleFlag: { marginTop: 2 },
   taskCompleted: {
     textDecorationLine: 'line-through',
   },
-  taskMeta: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  priorityRow: {
+  scheduleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 4,
+  },
+  taskMeta: {
+    fontSize: 13,
+    flex: 1,
   },
   remindersOffWrap: {
     flexDirection: 'row',

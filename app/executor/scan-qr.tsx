@@ -53,7 +53,7 @@ export default function ExecutorScanQrScreen() {
           const parsed = JSON.parse(data);
           bookingId = parsed?.bookingId ?? parsed?.booking_id;
         } catch {
-          // QR может быть URL вида http://localhost:3001/booking/123
+          // QR может быть URL вида http://192.168.0.17:3001/booking/123
           const match = data.match(/\/booking\/(\d+)/);
           if (match) bookingId = parseInt(match[1], 10);
         }
