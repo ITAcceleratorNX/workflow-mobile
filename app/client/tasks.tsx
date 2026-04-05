@@ -237,6 +237,12 @@ export default function TasksScreen() {
     setTeamsPanelOpen(true);
   }, []);
 
+  const openTaskStatsScreen = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDisplayMenuOpen(false);
+    router.push('/client/tasks/stats');
+  }, [router]);
+
   const renderItem = useCallback(
     ({ item }: { item: UserTask }) => (
       <UserTaskRow
@@ -571,6 +577,22 @@ export default function TasksScreen() {
                 </View>
               </Pressable>
             </View>
+
+            <ThemedText style={[styles.displaySectionLabel, { color: headerSubtitle, marginTop: 20 }]}>
+              Статистика
+            </ThemedText>
+            <Pressable
+              onPress={openTaskStatsScreen}
+              style={({ pressed }) => [
+                styles.teamsMenuRow,
+                { borderColor: border, backgroundColor: cardBg },
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <MaterialIcons name="bar-chart" size={24} color={primary} />
+              <ThemedText style={[styles.teamsMenuRowLabel, { color: headerText }]}>Статистика</ThemedText>
+              <MaterialIcons name="chevron-right" size={24} color={headerSubtitle} />
+            </Pressable>
 
             <ThemedText style={[styles.displaySectionLabel, { color: headerSubtitle, marginTop: 20 }]}>
               Команды
