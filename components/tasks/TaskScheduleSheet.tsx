@@ -1,6 +1,6 @@
+import { MaterialIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
-import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -8,23 +8,24 @@ import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-
 import { ThemedText } from '@/components/themed-text';
 import { formatTaskTime } from '@/lib/dateTimeUtils';
 import {
-  customPayload,
-  defaultRecurrenceNone,
-  formatEveryIntervalRu,
-  formatRecurrenceSummaryCompactRu,
-  presetToPayload,
-  RECURRENCE_PRESET_OPTIONS,
-  type RecurrenceCustomUnit,
-  type TaskRecurrencePayload,
+    customPayload,
+    defaultRecurrenceNone,
+    formatEveryIntervalRu,
+    formatRecurrenceSummaryCompactRu,
+    getRecurrenceHighlightDateKeysForMonth,
+    presetToPayload,
+    RECURRENCE_PRESET_OPTIONS,
+    type RecurrenceCustomUnit,
+    type TaskRecurrencePayload,
 } from '@/lib/task-recurrence';
 import {
-  buildMonthCells,
-  formatDateLabelRu,
-  MONTHS_NOMINATIVE,
-  nextMondayAfterToday,
-  nextWeekendDayKey,
-  parseTimeIntoDate,
-  WEEKDAY_SHORT,
+    buildMonthCells,
+    formatDateLabelRu,
+    MONTHS_NOMINATIVE,
+    nextMondayAfterToday,
+    nextWeekendDayKey,
+    parseTimeIntoDate,
+    WEEKDAY_SHORT,
 } from '@/lib/task-schedule-helpers';
 
 export type TaskScheduleSheetColors = {
@@ -161,6 +162,16 @@ export function TaskScheduleSheetContent({
     [calendarMonth]
   );
 
+  const recurrenceHighlightKeys = useMemo(() => {
+    if (!scheduledDate || recurrence.recurrence_type === 'none') return new Set<string>();
+    return getRecurrenceHighlightDateKeysForMonth(
+      calendarMonth.getFullYear(),
+      calendarMonth.getMonth(),
+      scheduledDate,
+      recurrence
+    );
+  }, [scheduledDate, recurrence, calendarMonth]);
+
   const { sheetBackground, bannerBackground, border, primary, text, textMuted } = colors;
 
   const repeatDisabled = !scheduledDate;
@@ -287,6 +298,8 @@ export function TaskScheduleSheetContent({
             }
             const selected = scheduledDate === cell.dateKey;
             const isToday = cell.dateKey === todayKey;
+            const recurrenceHit = recurrenceHighlightKeys.has(cell.dateKey);
+            const showRecurrenceRing = recurrenceHit && !selected;
             return (
               <Pressable
                 key={cell.dateKey}
@@ -297,13 +310,19 @@ export function TaskScheduleSheetContent({
                 style={[
                   styles.dayCell,
                   selected && { backgroundColor: primary },
-                  isToday && !selected && { borderWidth: 1, borderColor: primary },
+                  showRecurrenceRing && {
+                    borderWidth: 1,
+                    borderStyle: 'dotted',
+                    borderColor: primary,
+                  },
+                  isToday && !selected && !showRecurrenceRing && { borderWidth: 1, borderColor: primary },
                 ]}
               >
                 <ThemedText
                   style={[
                     styles.dayCellText,
                     { color: selected ? '#fff' : text },
+                    recurrenceHit && !selected && !isToday && { fontWeight: '700' },
                     isToday && !selected && { color: primary, fontWeight: '700' },
                   ]}
                 >

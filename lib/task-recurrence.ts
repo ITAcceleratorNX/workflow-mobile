@@ -3,6 +3,8 @@
  * Сервер — источник истины; клиент шлёт те же поля, что и API.
  */
 
+import { formatDateForApi } from '@/lib/dateTimeUtils';
+
 export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'weekdays' | 'monthly' | 'custom';
 
 export type RecurrenceCustomUnit = 'day' | 'week' | 'month';
@@ -222,4 +224,169 @@ export function customPayload(
     recurrence_custom_unit: unit,
     recurrence_weekdays: unit === 'week' ? weekdays && weekdays.length ? [...new Set(weekdays)].sort((a, b) => a - b) : [1] : null,
   };
+}
+
+const MS_DAY = 24 * 60 * 60 * 1000;
+const MS_WEEK = 7 * MS_DAY;
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const d = new Date(`${dateKey}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return formatDateForApi(d);
+}
+
+function daysInCalendarMonth(year: number, month0: number): number {
+  return new Date(year, month0 + 1, 0).getDate();
+}
+
+function addMonthsKeepDayOrLast(dateKey: string, months: number): string {
+  const [yS, mS, dS] = dateKey.split('-');
+  const y = Number(yS);
+  const m = Number(mS);
+  const d = Number(dS);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return dateKey;
+  let ny = y;
+  let nm = m + months;
+  while (nm > 12) {
+    nm -= 12;
+    ny += 1;
+  }
+  while (nm < 1) {
+    nm += 12;
+    ny -= 1;
+  }
+  const dim = daysInCalendarMonth(ny, nm - 1);
+  const nd = Math.min(d, dim);
+  return `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`;
+}
+
+function mondayDateKeyFromDateKey(dateKey: string): string {
+  const wd = weekdayMon1Sun7FromDateKey(dateKey);
+  return addDaysToDateKey(dateKey, -(wd - 1));
+}
+
+/**
+ * Следующая дата повтора строго после `currentDateKey` (как computeNextScheduledOnce на сервере, по календарным дням).
+ */
+export function computeNextOccurrenceDateKey(currentDateKey: string, rule: TaskRecurrencePayload): string | null {
+  const type = rule.recurrence_type;
+  if (type === 'none') return null;
+
+  const interval = Math.max(1, Math.min(365, Number(rule.recurrence_interval) || 1));
+  const dateKey = currentDateKey;
+
+  if (type === 'daily') {
+    return addDaysToDateKey(dateKey, interval);
+  }
+
+  if (type === 'weekly') {
+    return addDaysToDateKey(dateKey, 7 * interval);
+  }
+
+  if (type === 'weekdays') {
+    let k = addDaysToDateKey(dateKey, 1);
+    for (let i = 0; i < 14; i++) {
+      const wd = weekdayMon1Sun7FromDateKey(k);
+      if (wd >= 1 && wd <= 5) return k;
+      k = addDaysToDateKey(k, 1);
+    }
+    return addDaysToDateKey(dateKey, 1);
+  }
+
+  if (type === 'monthly') {
+    return addMonthsKeepDayOrLast(dateKey, interval);
+  }
+
+  if (type === 'custom') {
+    const unit = rule.recurrence_custom_unit;
+    const wds = rule.recurrence_weekdays?.length
+      ? [...new Set(rule.recurrence_weekdays)].sort((a, b) => a - b)
+      : [];
+
+    if (unit === 'day') {
+      return addDaysToDateKey(dateKey, interval);
+    }
+
+    if (unit === 'month') {
+      return addMonthsKeepDayOrLast(dateKey, interval);
+    }
+
+    if (unit === 'week') {
+      if (!wds.length) {
+        return addDaysToDateKey(dateKey, 7 * interval);
+      }
+
+      const anchorMondayMs = new Date(`${mondayDateKeyFromDateKey(dateKey)}T12:00:00`).getTime();
+      const tMs = new Date(`${dateKey}T12:00:00`).getTime();
+
+      let probeKey = addDaysToDateKey(dateKey, 1);
+      for (let step = 0; step < 800; step++) {
+        const wd = weekdayMon1Sun7FromDateKey(probeKey);
+        if (!wds.includes(wd)) {
+          probeKey = addDaysToDateKey(probeKey, 1);
+          continue;
+        }
+
+        const candMondayMs = new Date(`${mondayDateKeyFromDateKey(probeKey)}T12:00:00`).getTime();
+        const weekIndex = Math.round((candMondayMs - anchorMondayMs) / MS_WEEK);
+        if (weekIndex % interval !== 0) {
+          probeKey = addDaysToDateKey(probeKey, 1);
+          continue;
+        }
+
+        const probeMs = new Date(`${probeKey}T12:00:00`).getTime();
+        if (probeMs > tMs) return probeKey;
+        probeKey = addDaysToDateKey(probeKey, 1);
+      }
+      return addDaysToDateKey(dateKey, 7 * interval);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Даты в видимом месяце календаря, которые попадают под правило повтора (якорь — выбранный срок).
+ */
+export function getRecurrenceHighlightDateKeysForMonth(
+  year: number,
+  monthIndex0: number,
+  anchorDateKey: string | null,
+  rule: TaskRecurrencePayload
+): Set<string> {
+  const out = new Set<string>();
+  if (!anchorDateKey || rule.recurrence_type === 'none') return out;
+
+  const lastD = daysInCalendarMonth(year, monthIndex0);
+  const monthStart = `${year}-${String(monthIndex0 + 1).padStart(2, '0')}-01`;
+  const monthEnd = formatDateForApi(new Date(year, monthIndex0, lastD));
+
+  if (rule.recurrence_type === 'weekdays') {
+    for (let day = 1; day <= lastD; day++) {
+      const dk = formatDateForApi(new Date(year, monthIndex0, day));
+      const wd = weekdayMon1Sun7FromDateKey(dk);
+      if (wd >= 1 && wd <= 5) out.add(dk);
+    }
+    return out;
+  }
+
+  let cur = anchorDateKey;
+  let guard = 0;
+  while (cur < monthStart && guard < 4000) {
+    const next = computeNextOccurrenceDateKey(cur, rule);
+    if (!next || next <= cur) break;
+    cur = next;
+    guard++;
+  }
+
+  guard = 0;
+  while (cur <= monthEnd && guard < 4000) {
+    if (cur >= monthStart) out.add(cur);
+    const next = computeNextOccurrenceDateKey(cur, rule);
+    if (!next || next <= cur) break;
+    cur = next;
+    guard++;
+  }
+
+  return out;
 }
