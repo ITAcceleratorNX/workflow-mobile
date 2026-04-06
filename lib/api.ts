@@ -970,9 +970,10 @@ export async function searchUsersForAssign(query: string): Promise<
   { ok: true; data: UserSearchItem[] } | { ok: false; error: string }
 > {
   const q = query?.trim();
-  if (!q || q.length < 2) return { ok: true, data: [] };
+  if (!q || q.length < 1) return { ok: true, data: [] };
+  /** Без фильтра по роли: исполнители, офис, клиенты — кого реально можно назначить на задачу. */
   const result = await request<{ success: boolean; users: unknown[] }>('/users/search', {
-    params: { q, role: 'client' },
+    params: { q },
   });
   if (!result.ok) return { ok: false, error: result.error };
   const list = Array.isArray(result.data?.users) ? result.data.users : [];

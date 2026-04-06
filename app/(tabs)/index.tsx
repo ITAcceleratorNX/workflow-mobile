@@ -661,7 +661,7 @@ function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolea
               <View style={[styles.smartControlIconWrap, { backgroundColor: `${primary}80` }]}>
                 <MaterialIcons name="home" size={28} color={primary} />
               </View>
-              <ThemedText style={[styles.smartControlLabel, { color: headerText }]}>Управление умным домом</ThemedText>
+              <ThemedText style={[styles.smartControlLabel, { color: headerText }]}>Управление умным офисом</ThemedText>
             </Pressable>
             <Pressable onPress={handleHealthStats} style={[styles.smartControlButton, { backgroundColor: cardBg }]}>
               <View style={[styles.smartControlIconWrap, { backgroundColor: '#60A5FA80' }]}>

@@ -173,7 +173,7 @@ export default function ClientSmartHomeScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
-      <ScreenHeader title="Управление умным домом" />
+      <ScreenHeader title="Управление умным офисом" />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
         {subscriptions.length === 0 ? (
           <View style={styles.emptyState}>
@@ -186,11 +186,17 @@ export default function ClientSmartHomeScreen() {
             <View style={styles.roomSelectorContainer}>
               <ThemedText style={styles.roomLabel}>Выберите комнату:</ThemedText>
               <Pressable onPress={() => setShowRoomSelector(!showRoomSelector)} style={styles.roomSelectorButton}>
-                <ThemedText style={styles.roomSelectorText}>
+                <ThemedText
+                  style={styles.roomSelectorText}
+                  numberOfLines={3}
+                  ellipsizeMode="tail"
+                >
                   {selectedRoom?.meetingRoom?.name || 'Выберите комнату'}
                   {selectedRoom?.meetingRoom?.office ? ` (${selectedRoom.meetingRoom.office.name})` : ''}
                 </ThemedText>
-                <MaterialIcons name={showRoomSelector ? 'expand-less' : 'expand-more'} size={24} color="#FFFFFF" />
+                <View style={styles.roomSelectorChevronWrap} pointerEvents="none">
+                  <MaterialIcons name={showRoomSelector ? 'expand-less' : 'expand-more'} size={22} color="#FFFFFF" />
+                </View>
               </Pressable>
               {showRoomSelector && (
                 <View style={styles.roomDropdown}>
@@ -212,7 +218,7 @@ export default function ClientSmartHomeScreen() {
                 </View>
               )}
             </View>
-            <ThemedText style={styles.devicesTitle}>Устройства в комнате</ThemedText>
+            <ThemedText style={styles.devicesTitle}>Устройства в кабинете</ThemedText>
             <View style={styles.devicesAreaWrapper}>
               {isLoadingDevices ? (
                 <View style={styles.devicesGridPlaceholder} />
@@ -282,13 +288,28 @@ const styles = StyleSheet.create({
   roomSelectorButton: {
     backgroundColor: CARD_ORANGE,
     borderRadius: 12,
-    paddingHorizontal: 16,
+    paddingLeft: 16,
+    paddingRight: 12,
     paddingVertical: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  roomSelectorText: { fontSize: 16, color: '#FFFFFF', fontWeight: '500' },
+  /** Без flex/minWidth длинная подпись выталкивала стрелку за пределы кнопки. */
+  roomSelectorText: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  roomSelectorChevronWrap: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   roomDropdown: { backgroundColor: CARD_ORANGE, borderRadius: 12, marginTop: 8, overflow: 'hidden' },
   roomDropdownItem: { paddingHorizontal: 16, paddingVertical: 12 },
   roomDropdownItemActive: { backgroundColor: 'rgba(255,255,255,0.2)' },

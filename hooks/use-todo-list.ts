@@ -9,9 +9,40 @@ import {
   type TaskPriority,
   type TaskFilter,
 } from '@/lib/user-tasks-api';
+import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useToast } from '@/context/toast-context';
+
+/** Поля, которые реально принимает PATCH /user-tasks/:id (остальное только для оптимистичного UI). */
+const USER_TASK_API_PATCH_KEYS = [
+  'title',
+  'priority',
+  'completed',
+  'scheduled_at',
+  'deadline_from',
+  'deadline_to',
+  'deadline_time',
+  'assignee_ids',
+  'team_id',
+  'executor_id',
+  'reminders_disabled',
+  'remind_at',
+  'remind_before_minutes',
+  'recurrence_type',
+  'recurrence_interval',
+  'recurrence_custom_unit',
+  'recurrence_weekdays',
+] as const;
+
+function pickUserTaskApiPatch(updates: Partial<UserTask>): Parameters<typeof updateUserTask>[1] {
+  const out: Record<string, unknown> = {};
+  const u = updates as Record<string, unknown>;
+  for (const k of USER_TASK_API_PATCH_KEYS) {
+    if (u[k] !== undefined) out[k] = u[k];
+  }
+  return out as Parameters<typeof updateUserTask>[1];
+}
 
 export function useTodoList(filter: TaskFilter = 'all') {
   const [tasks, setTasks] = useState<UserTask[]>([]);
@@ -90,8 +121,12 @@ export function useTodoList(filter: TaskFilter = 'all') {
       scheduledAt?: string | null,
       remindersDisabled?: boolean,
       remindBeforeMinutes?: number | null,
-      assignment?: { team_id?: number | null; executor_id?: number | null },
-      priority: TaskPriority = 'medium'
+      assignment?: {
+        team_id?: number | null;
+        assignees?: { id: number; full_name: string }[];
+      },
+      priority: TaskPriority = 'medium',
+      recurrence?: TaskRecurrencePayload
     ) => {
       if (!token || isGuest) {
         showToast({
@@ -103,6 +138,9 @@ export function useTodoList(filter: TaskFilter = 'all') {
         return null;
       }
       const optimisticId = nextTempId();
+      const assignees = assignment?.assignees ?? [];
+      const assigneeIds = assignees.map((a) => a.id);
+      const rec = recurrence ?? defaultRecurrenceNone();
       const optimistic: UserTask = {
         id: optimisticId,
         creator_id: 0,
@@ -117,12 +155,16 @@ export function useTodoList(filter: TaskFilter = 'all') {
         priority,
         reminders_disabled: remindersDisabled ?? false,
         remind_before_minutes: remindBeforeMinutes ?? null,
+        recurrence_type: rec.recurrence_type,
+        recurrence_interval: rec.recurrence_interval,
+        recurrence_custom_unit: rec.recurrence_custom_unit,
+        recurrence_weekdays: rec.recurrence_weekdays,
         created_at: nowIso(),
         updated_at: nowIso(),
-        assignee_ids: [],
-        assignees: [],
+        assignee_ids: assigneeIds,
+        assignees,
         team_id: assignment?.team_id ?? null,
-        executor_id: assignment?.executor_id ?? null,
+        executor_id: null,
       };
 
       const before = tasksRef.current;
@@ -134,12 +176,16 @@ export function useTodoList(filter: TaskFilter = 'all') {
         deadline_from: null,
         deadline_to: null,
         deadline_time: null,
-        assignee_ids: undefined,
+        assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
         priority,
         reminders_disabled: remindersDisabled,
         remind_before_minutes: remindBeforeMinutes ?? null,
         team_id: assignment?.team_id ?? null,
-        executor_id: assignment?.executor_id ?? null,
+        executor_id: null,
+        recurrence_type: rec.recurrence_type,
+        recurrence_interval: rec.recurrence_interval,
+        recurrence_custom_unit: rec.recurrence_custom_unit,
+        recurrence_weekdays: rec.recurrence_weekdays,
       });
       if (res.ok) {
         const merged: UserTask = {
@@ -229,10 +275,31 @@ export function useTodoList(filter: TaskFilter = 'all') {
       const before = tasksRef.current;
       setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...updates } : t)));
 
-      const res = await updateUserTask(task.id, updates);
+      const apiPatch = pickUserTaskApiPatch(updates);
+      const res = await updateUserTask(task.id, apiPatch);
       if (res.ok) {
         setTasks((prev) =>
-          prev.map((t) => (t.id === task.id ? { ...t, ...res.data } : t))
+          prev.map((t) => {
+            if (t.id !== task.id) return t;
+            const merged: UserTask = { ...t, ...res.data };
+            let ids = merged.assignee_ids;
+            if (ids == null) {
+              ids =
+                merged.assignees?.length ? merged.assignees.map((a) => a.id) : (t.assignee_ids ?? []);
+            }
+            merged.assignee_ids = ids;
+            if (
+              ids.length > 0 &&
+              (!merged.assignees || merged.assignees.length === 0)
+            ) {
+              merged.assignees = ids.map((id) => {
+                const fromPrev = t.assignees?.find((a) => a.id === id);
+                const fromUpdates = updates.assignees?.find((a) => a.id === id);
+                return fromPrev ?? fromUpdates ?? { id, full_name: `Пользователь #${id}` };
+              });
+            }
+            return merged;
+          })
         );
         bump();
         return res.data;

@@ -42,7 +42,7 @@ const VIEW_TABS: { value: TaskMainView; label: string }[] = [
   { value: 'completed', label: 'Выполненные' },
 ];
 
-type TaskSectionRow = { title: string; data: UserTask[] };
+type TaskSectionRow = { title: string; data: UserTask[]; sectionId: string };
 type CalendarStripDay = { key: string; dayNumber: number; weekdayLabel: string };
 
 const WEEKDAY_SHORT_RU = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
@@ -173,17 +173,18 @@ export default function TasksScreen() {
     if (mainView === 'completed') {
       const done = getCompletedTasks(tasks);
       if (done.length === 0) return [];
-      return [{ title: '', data: done }];
+      return [{ title: '', data: done, sectionId: 'completed' }];
     }
     if (mainView === 'inbox') {
       const inbox = getInboxTasks(tasks);
       if (inbox.length === 0) return [];
-      return [{ title: 'Входящие', data: inbox }];
+      return [{ title: 'Входящие', data: inbox, sectionId: 'inbox' }];
     }
     if (mainView === 'today') {
       return getTodaySections(tasks, todayKey).map((s) => ({
         title: s.title,
         data: s.tasks,
+        sectionId: s.id,
       }));
     }
     const allUpcoming = getUpcomingSections(tasks, todayKey);
@@ -191,11 +192,16 @@ export default function TasksScreen() {
       return allUpcoming.map((s) => ({
         title: s.title,
         data: s.tasks,
+        sectionId: s.id,
       }));
     }
-    const selectedSection = allUpcoming.find((s) => s.id === `day-${upcomingDate}`);
-    if (!selectedSection) return [];
-    return [{ title: selectedSection.title, data: selectedSection.tasks }];
+    /** Все дни от выбранной даты в полосе календаря и дальше (не только один день). */
+    return allUpcoming
+      .filter((s) => {
+        const dayKey = s.id.startsWith('day-') ? s.id.slice('day-'.length) : s.id;
+        return dayKey >= upcomingDate;
+      })
+      .map((s) => ({ title: s.title, data: s.tasks, sectionId: s.id }));
   }, [tasks, mainView, todayKey, upcomingDate]);
 
   const openAddSheet = useCallback(() => {
@@ -233,11 +239,18 @@ export default function TasksScreen() {
     setTeamsPanelOpen(true);
   }, []);
 
+  const openTaskStatsScreen = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setDisplayMenuOpen(false);
+    router.push('/client/tasks/stats');
+  }, [router]);
+
   const renderItem = useCallback(
-    ({ item }: { item: UserTask }) => (
+    ({ item, section }: { item: UserTask; section: TaskSectionRow }) => (
       <UserTaskRow
         item={item}
         todayKey={todayKey}
+        sectionId={section.sectionId}
         onToggle={() => toggleComplete(item)}
         onPressRow={() => {
           if (item?.id == null) return;
@@ -248,7 +261,6 @@ export default function TasksScreen() {
         primary={primary}
         borderColor={border}
         cardBackground={cardBg}
-        isTeam={item.team_id != null}
         currentUserId={currentUserId}
       />
     ),
@@ -567,6 +579,22 @@ export default function TasksScreen() {
                 </View>
               </Pressable>
             </View>
+
+            <ThemedText style={[styles.displaySectionLabel, { color: headerSubtitle, marginTop: 20 }]}>
+              Статистика
+            </ThemedText>
+            <Pressable
+              onPress={openTaskStatsScreen}
+              style={({ pressed }) => [
+                styles.teamsMenuRow,
+                { borderColor: border, backgroundColor: cardBg },
+                pressed && { opacity: 0.85 },
+              ]}
+            >
+              <MaterialIcons name="bar-chart" size={24} color={primary} />
+              <ThemedText style={[styles.teamsMenuRowLabel, { color: headerText }]}>Статистика</ThemedText>
+              <MaterialIcons name="chevron-right" size={24} color={headerSubtitle} />
+            </Pressable>
 
             <ThemedText style={[styles.displaySectionLabel, { color: headerSubtitle, marginTop: 20 }]}>
               Команды

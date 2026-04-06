@@ -18,7 +18,6 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,91 +25,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import {
   collectTeamMemberOptions,
-  TaskExecutorPickerOverlay,
+  TaskAssigneesPickerOverlay,
   TaskTeamPickerOverlay,
 } from '@/components/tasks/task-assignment-pickers';
+import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTeams } from '@/hooks/use-teams';
 import { formatDateForApi, formatTaskTime, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
+import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
 import type { TaskMainView } from '@/lib/task-views';
 import { useAuthStore } from '@/stores/auth-store';
 import type { TaskPriority } from '@/lib/user-tasks-api';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-
-const MONTHS_GENITIVE = [
-  'января',
-  'февраля',
-  'марта',
-  'апреля',
-  'мая',
-  'июня',
-  'июля',
-  'августа',
-  'сентября',
-  'октября',
-  'ноября',
-  'декабря',
-];
-
-const MONTHS_NOMINATIVE = [
-  'Январь',
-  'Февраль',
-  'Март',
-  'Апрель',
-  'Май',
-  'Июнь',
-  'Июль',
-  'Август',
-  'Сентябрь',
-  'Октябрь',
-  'Ноябрь',
-  'Декабрь',
-];
-
-const WEEKDAY_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-
-function formatDateLabelRu(dateKey: string | null): string {
-  if (!dateKey) return 'Без даты';
-  const d = new Date(dateKey + 'T12:00:00');
-  return `${d.getDate()} ${MONTHS_GENITIVE[d.getMonth()]}`;
-}
-
-function nextMondayAfterToday(todayKey: string): string {
-  const d = new Date(todayKey + 'T12:00:00');
-  d.setDate(d.getDate() + 1);
-  while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
-  return formatDateForApi(d);
-}
-
-/** Ближайшая суббота (выходные) от текущего дня */
-function nextWeekendDayKey(todayKey: string): string {
-  const d = new Date(todayKey + 'T12:00:00');
-  const wd = d.getDay();
-  if (wd === 6 || wd === 0) return formatDateForApi(d);
-  d.setDate(d.getDate() + (6 - wd));
-  return formatDateForApi(d);
-}
-
-function parseTimeIntoDate(dateKey: string, time: string): Date {
-  const [hh, mm] = (time || '09:00').split(':').map((x) => parseInt(x, 10));
-  const d = new Date(dateKey + 'T12:00:00');
-  d.setHours(Number.isFinite(hh) ? hh : 9, Number.isFinite(mm) ? mm : 0, 0, 0);
-  return d;
-}
-
-function buildMonthCells(year: number, month: number): { day: number; dateKey: string; inMonth: boolean }[] {
-  const first = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const startPad = (first.getDay() + 6) % 7;
-  const cells: { day: number; dateKey: string; inMonth: boolean }[] = [];
-  for (let i = 0; i < startPad; i++) cells.push({ day: 0, dateKey: '', inMonth: false });
-  for (let d = 1; d <= lastDay; d++) {
-    cells.push({ day: d, dateKey: formatDateForApi(new Date(year, month, d)), inMonth: true });
-  }
-  while (cells.length % 7 !== 0) cells.push({ day: 0, dateKey: '', inMonth: false });
-  return cells;
-}
 
 const REMIND_BEFORE_OPTIONS: { value: number | null; label: string }[] = [
   { value: null, label: 'По умолчанию' },
@@ -125,7 +52,7 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: 'high', label: 'Высокий' },
 ];
 
-type SubModalId = 'schedule' | 'team' | 'executor' | 'priority' | 'reminders' | null;
+type SubModalId = 'schedule' | 'team' | 'assignees' | 'priority' | 'reminders' | null;
 
 export interface TaskAddSheetProps {
   visible: boolean;
@@ -139,8 +66,12 @@ export interface TaskAddSheetProps {
     scheduledAt?: string | null,
     remindersDisabled?: boolean,
     remindBeforeMinutes?: number | null,
-    assignment?: { team_id?: number | null; executor_id?: number | null },
-    priority?: TaskPriority
+    assignment?: {
+      team_id?: number | null;
+      assignees?: { id: number; full_name: string }[];
+    },
+    priority?: TaskPriority,
+    recurrence?: TaskRecurrencePayload
   ) => Promise<unknown>;
 }
 
@@ -162,23 +93,24 @@ export function TaskAddSheet({
   const cardBg = useThemeColor({}, 'cardBackground');
 
   const isGuest = useAuthStore((s) => s.isGuest);
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const { teams, loading: teamsLoading } = useTeams();
 
   const [title, setTitle] = useState('');
   const titleInputRef = useRef<RNTextInput>(null);
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
   const [scheduledTime, setScheduledTime] = useState('09:00');
+  const [recurrenceDraft, setRecurrenceDraft] = useState<TaskRecurrencePayload>(() => defaultRecurrenceNone());
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [remindersDisabled, setRemindersDisabled] = useState(false);
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [subModal, setSubModal] = useState<SubModalId>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
-  const [showScheduleTimePicker, setShowScheduleTimePicker] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [teamId, setTeamId] = useState<number | null>(null);
-  const [executor, setExecutor] = useState<{ id: number; full_name: string } | null>(null);
+  const [assignees, setAssignees] = useState<{ id: number; full_name: string }[]>([]);
 
   useEffect(() => {
     const show = Keyboard.addListener(
@@ -214,19 +146,21 @@ export function TaskAddSheet({
     else if (mainView === 'today') setScheduledDate(todayKey);
     else setScheduledDate(defaultDateKey ?? tomorrowKey);
     setTeamId(null);
-    setExecutor(null);
+    setAssignees([]);
+    setRecurrenceDraft(defaultRecurrenceNone());
   }, [visible, mainView, todayKey, tomorrowKey]);
+
+  useEffect(() => {
+    if (scheduledDate == null) setRecurrenceDraft(defaultRecurrenceNone());
+  }, [scheduledDate]);
 
   useEffect(() => {
     if (teamId == null) return;
     const team = teams.find((t) => t.id === teamId);
     if (!team) return;
     const opts = collectTeamMemberOptions(team);
-    setExecutor((prev) => {
-      if (!prev) return null;
-      if (opts.some((o) => o.id === prev.id)) return prev;
-      return null;
-    });
+    const allowed = new Set(opts.map((o) => o.id));
+    setAssignees((prev) => prev.filter((a) => allowed.has(a.id)));
   }, [teamId, teams]);
 
   useEffect(() => {
@@ -257,11 +191,11 @@ export function TaskAddSheet({
     setSubModal('team');
   }, []);
 
-  const openExecutorModal = useCallback(() => {
+  const openAssigneesModal = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     titleInputRef.current?.blur();
     Keyboard.dismiss();
-    setSubModal('executor');
+    setSubModal('assignees');
   }, []);
 
   const openPriorityModal = useCallback(() => {
@@ -279,7 +213,6 @@ export function TaskAddSheet({
   }, []);
 
   const closeSub = useCallback(() => {
-    setShowScheduleTimePicker(false);
     setSubModal(null);
   }, []);
 
@@ -360,9 +293,6 @@ export function TaskAddSheet({
     transform: [{ translateY: scheduleSheetTranslateY.value }],
   }));
 
-  const weekendShortcutKey = useMemo(() => nextWeekendDayKey(todayKey), [todayKey]);
-  const nextWeekShortcutKey = useMemo(() => nextMondayAfterToday(todayKey), [todayKey]);
-
   /** Краткая подпись чипа даты в Quick Add (обновляется при смене дня в модалке «Срок») */
   const scheduleChipLabel = useMemo(() => {
     if (!scheduledDate) return 'Без даты';
@@ -384,9 +314,13 @@ export function TaskAddSheet({
     return teams.find((t) => t.id === teamId)?.name ?? 'Команда';
   }, [teamId, teams]);
 
-  const executorChipLabel = executor?.full_name ?? 'Исполнитель';
+  const assigneesChipLabel = useMemo(() => {
+    if (assignees.length === 0) return 'Исполнители';
+    if (assignees.length === 1) return assignees[0].full_name;
+    return `Исполнители · ${assignees.length}`;
+  }, [assignees]);
   const teamChipOn = teamId != null;
-  const executorChipOn = executor != null;
+  const assigneesChipOn = assignees.length > 0;
 
   const priorityChipLabel = useMemo(
     () => PRIORITY_OPTIONS.find((o) => o.value === priority)?.label ?? 'Приоритет',
@@ -406,11 +340,6 @@ export function TaskAddSheet({
   const priorityChipHighlighted = priority !== 'medium';
   const remindersChipHighlighted = !remindersDisabled;
 
-  const monthCells = useMemo(
-    () => buildMonthCells(calendarMonth.getFullYear(), calendarMonth.getMonth()),
-    [calendarMonth]
-  );
-
   const handleSave = useCallback(async () => {
     const trimmed = title.trim();
     if (!trimmed || saving) return;
@@ -419,11 +348,15 @@ export function TaskAddSheet({
       scheduledDate != null && scheduledDate !== ''
         ? toUtcIsoFromAppDateTime(scheduledDate, scheduledTime)
         : null;
-    const created = await addTask(trimmed, scheduledAtIso, remindersDisabled, remindBeforeMinutes, {
-      team_id: teamId,
-      executor_id: executor?.id ?? null,
+    const created = await addTask(
+      trimmed,
+      scheduledAtIso,
+      remindersDisabled,
+      remindBeforeMinutes,
+      { team_id: teamId, assignees },
       priority,
-    });
+      recurrenceDraft
+    );
     setSaving(false);
     if (created) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -440,7 +373,8 @@ export function TaskAddSheet({
     addTask,
     onClose,
     teamId,
-    executor,
+    assignees,
+    recurrenceDraft,
   ]);
 
   const canSubmit = title.trim().length > 0 && !saving;
@@ -557,26 +491,26 @@ export function TaskAddSheet({
                         </ThemedText>
                       </Pressable>
                       <Pressable
-                        onPress={openExecutorModal}
+                        onPress={openAssigneesModal}
                         style={[
                           styles.quickPill,
                           { borderColor: border, backgroundColor: cardBg },
-                          executorChipOn && { borderColor: primary, backgroundColor: `${primary}18` },
+                          assigneesChipOn && { borderColor: primary, backgroundColor: `${primary}18` },
                         ]}
                       >
                         <MaterialIcons
                           name="person-outline"
                           size={18}
-                          color={executorChipOn ? primary : headerSubtitle}
+                          color={assigneesChipOn ? primary : headerSubtitle}
                         />
                         <ThemedText
                           style={[
                             styles.quickPillText,
-                            { color: executorChipOn ? primary : headerText },
+                            { color: assigneesChipOn ? primary : headerText },
                           ]}
                           numberOfLines={1}
                         >
-                          {executorChipLabel}
+                          {assigneesChipLabel}
                         </ThemedText>
                       </Pressable>
                     </>
@@ -670,238 +604,30 @@ export function TaskAddSheet({
                       <View style={[styles.dragGrabber, { backgroundColor: primary }]} />
                     </View>
                   </GestureDetector>
-                  <View style={styles.subSheetHeader}>
-                    <Pressable onPress={closeSub} hitSlop={12} style={styles.subSheetHeaderBtn}>
-                      <MaterialIcons name="close" size={24} color={headerText} />
-                    </Pressable>
-                    <ThemedText style={[styles.subSheetHeaderTitle, { color: headerText }]}>Срок</ThemedText>
-                    <Pressable onPress={closeSub} hitSlop={12} style={styles.subSheetHeaderBtn}>
-                      <MaterialIcons name="check" size={24} color={primary} />
-                    </Pressable>
-                  </View>
-
-                  <View style={[styles.selectedDateBanner, { backgroundColor: cardBg, borderColor: border }]}>
-                    <ThemedText style={[styles.selectedDateBannerText, { color: headerText }]}>
-                      {formatDateLabelRu(scheduledDate)}
-                    </ThemedText>
-                  </View>
-
-                  <ScrollView
-                    style={styles.subScheduleScroll}
-                    contentContainerStyle={styles.subSheetScrollContent}
-                    keyboardShouldPersistTaps="handled"
-                    keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-                    showsVerticalScrollIndicator={false}
-                    bounces
-                  >
-                      <Pressable
-                        style={[styles.shortcutRow, { borderBottomColor: border }]}
-                        onPress={() => {
-                          setScheduledDate(tomorrowKey);
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }}
-                      >
-                        <MaterialIcons name="wb-sunny" size={22} color="#F9A825" />
-                        <ThemedText style={[styles.shortcutLabel, { color: headerText }]}>Завтра</ThemedText>
-                        <ThemedText style={[styles.shortcutHint, { color: headerSubtitle }]}>
-                          {WEEKDAY_SHORT[new Date(tomorrowKey + 'T12:00:00').getDay()]}
-                        </ThemedText>
-                      </Pressable>
-
-                      <Pressable
-                        style={[styles.shortcutRow, { borderBottomColor: border }]}
-                        onPress={() => {
-                          setScheduledDate(weekendShortcutKey);
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }}
-                      >
-                        <MaterialIcons name="event-available" size={22} color="#42A5F5" />
-                        <ThemedText style={[styles.shortcutLabel, { color: headerText }]}>На выходных</ThemedText>
-                        <ThemedText style={[styles.shortcutHint, { color: headerSubtitle }]}>
-                          {WEEKDAY_SHORT[new Date(weekendShortcutKey + 'T12:00:00').getDay()]}
-                        </ThemedText>
-                      </Pressable>
-
-                      <Pressable
-                        style={[styles.shortcutRow, { borderBottomColor: border }]}
-                        onPress={() => {
-                          setScheduledDate(nextWeekShortcutKey);
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }}
-                      >
-                        <MaterialIcons name="forward" size={22} color="#AB47BC" />
-                        <ThemedText style={[styles.shortcutLabel, { color: headerText }]}>
-                          Следующая неделя
-                        </ThemedText>
-                        <ThemedText style={[styles.shortcutHint, { color: headerSubtitle }]}>
-                          {WEEKDAY_SHORT[new Date(nextWeekShortcutKey + 'T12:00:00').getDay()]}
-                        </ThemedText>
-                      </Pressable>
-
-                      <Pressable
-                        style={[styles.shortcutRow, { borderBottomColor: border }]}
-                        onPress={() => {
-                          setScheduledDate(null);
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        }}
-                      >
-                        <MaterialIcons name="event-busy" size={22} color={headerSubtitle} />
-                        <ThemedText style={[styles.shortcutLabel, { color: headerText }]}>Без срока</ThemedText>
-                      </Pressable>
-
-                      <View style={styles.calendarHeader}>
-                        <Pressable
-                          onPress={() => {
-                            const d = new Date(calendarMonth);
-                            d.setMonth(d.getMonth() - 1);
-                            setCalendarMonth(d);
-                          }}
-                          hitSlop={8}
-                        >
-                          <MaterialIcons name="chevron-left" size={28} color={headerText} />
-                        </Pressable>
-                        <ThemedText style={[styles.calendarMonthTitle, { color: headerText }]}>
-                          {MONTHS_NOMINATIVE[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
-                        </ThemedText>
-                        <Pressable
-                          onPress={() => {
-                            const d = new Date(calendarMonth);
-                            d.setMonth(d.getMonth() + 1);
-                            setCalendarMonth(d);
-                          }}
-                          hitSlop={8}
-                        >
-                          <MaterialIcons name="chevron-right" size={28} color={headerText} />
-                        </Pressable>
-                      </View>
-
-                      <View style={styles.weekdayRow}>
-                        {['П', 'В', 'С', 'Ч', 'П', 'С', 'В'].map((l, i) => (
-                          <ThemedText key={`${l}-${i}`} style={[styles.weekdayCell, { color: headerSubtitle }]}>
-                            {l}
-                          </ThemedText>
-                        ))}
-                      </View>
-
-                      <View style={styles.calendarGrid}>
-                        {monthCells.map((cell, idx) => {
-                          if (!cell.inMonth || !cell.dateKey) {
-                            return <View key={`e-${idx}`} style={styles.dayCell} />;
-                          }
-                          const selected = scheduledDate === cell.dateKey;
-                          const isToday = cell.dateKey === todayKey;
-                          return (
-                            <Pressable
-                              key={cell.dateKey}
-                              onPress={() => {
-                                setScheduledDate(cell.dateKey);
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                              }}
-                              style={[
-                                styles.dayCell,
-                                selected && { backgroundColor: primary },
-                                isToday && !selected && { borderWidth: 1, borderColor: primary },
-                              ]}
-                            >
-                              <ThemedText
-                                style={[
-                                  styles.dayCellText,
-                                  { color: selected ? '#fff' : headerText },
-                                  isToday && !selected && { color: primary, fontWeight: '700' },
-                                ]}
-                              >
-                                {cell.day}
-                              </ThemedText>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-
-                      <Pressable
-                        style={[styles.metaRow, { borderColor: border }]}
-                        onPress={() => setShowScheduleTimePicker(true)}
-                      >
-                        <MaterialIcons name="schedule" size={22} color={headerSubtitle} />
-                        <ThemedText style={[styles.metaRowLabel, { color: headerText }]}>Время</ThemedText>
-                        <ThemedText style={[styles.metaRowValue, { color: headerSubtitle }]}>
-                          {scheduledTime}
-                        </ThemedText>
-                        <MaterialIcons name="chevron-right" size={22} color={headerSubtitle} />
-                      </Pressable>
-                  </ScrollView>
-
-                  {Platform.OS === 'android' && showScheduleTimePicker ? (
-                    <DateTimePicker
-                      value={parseTimeIntoDate(scheduledDate || todayKey, scheduledTime)}
-                      mode="time"
-                      display="default"
-                      onChange={(event, date) => {
-                        setShowScheduleTimePicker(false);
-                        if (event.type === 'dismissed' || !date) return;
-                        setScheduledTime(formatTaskTime(date));
-                      }}
-                    />
-                  ) : null}
-
-                  {Platform.OS === 'ios' ? (
-                    <Modal
-                      visible={showScheduleTimePicker}
-                      transparent
-                      animationType="fade"
-                      onRequestClose={() => setShowScheduleTimePicker(false)}
-                    >
-                      <View style={styles.timePickerRoot}>
-                        <Pressable
-                          style={styles.timePickerBackdrop}
-                          onPress={() => setShowScheduleTimePicker(false)}
-                          accessibilityRole="button"
-                          accessibilityLabel="Закрыть выбор времени"
-                        />
-                        <View
-                          style={[
-                            styles.timePickerSheet,
-                            {
-                              backgroundColor: cardBg,
-                              paddingBottom: Math.max(insets.bottom, 12),
-                            },
-                          ]}
-                        >
-                          <View style={[styles.timePickerToolbar, { borderBottomColor: border }]}>
-                            <Pressable
-                              onPress={() => setShowScheduleTimePicker(false)}
-                              hitSlop={12}
-                              style={[styles.timePickerToolbarSide, { alignItems: 'flex-start' }]}
-                            >
-                              <ThemedText style={{ color: primary, fontSize: 17 }}>Отмена</ThemedText>
-                            </Pressable>
-                            <ThemedText style={[styles.timePickerToolbarTitle, { color: headerText }]}>
-                              Время
-                            </ThemedText>
-                            <Pressable
-                              onPress={() => setShowScheduleTimePicker(false)}
-                              hitSlop={12}
-                              style={[styles.timePickerToolbarSide, { alignItems: 'flex-end' }]}
-                            >
-                              <ThemedText style={{ color: primary, fontSize: 17, fontWeight: '700' }}>
-                                Готово
-                              </ThemedText>
-                            </Pressable>
-                          </View>
-                          <View style={styles.timePickerWheelWrap}>
-                            <DateTimePicker
-                              value={parseTimeIntoDate(scheduledDate || todayKey, scheduledTime)}
-                              mode="time"
-                              display="spinner"
-                              onChange={(_, date) => {
-                                if (date) setScheduledTime(formatTaskTime(date));
-                              }}
-                              style={styles.timePickerIOS}
-                            />
-                          </View>
-                        </View>
-                      </View>
-                    </Modal>
-                  ) : null}
+                  <TaskScheduleSheetContent
+                    active={subModal === 'schedule'}
+                    colors={{
+                      sheetBackground: background,
+                      bannerBackground: cardBg,
+                      border,
+                      primary,
+                      text: headerText,
+                      textMuted: headerSubtitle,
+                    }}
+                    bottomInset={insets.bottom}
+                    todayKey={todayKey}
+                    tomorrowKey={tomorrowKey}
+                    scheduledDate={scheduledDate}
+                    onScheduledDateChange={setScheduledDate}
+                    scheduledTime={scheduledTime}
+                    onScheduledTimeChange={setScheduledTime}
+                    calendarMonth={calendarMonth}
+                    onCalendarMonthChange={setCalendarMonth}
+                    onClosePress={closeSub}
+                    onConfirmPress={closeSub}
+                    recurrence={recurrenceDraft}
+                    onRecurrenceChange={setRecurrenceDraft}
+                  />
                 </Animated.View>
               </View>
             </View>
@@ -915,14 +641,15 @@ export function TaskAddSheet({
             selectedTeamId={teamId}
             onSelect={(id) => setTeamId(id)}
           />
-          <TaskExecutorPickerOverlay
-            visible={subModal === 'executor'}
+          <TaskAssigneesPickerOverlay
+            visible={subModal === 'assignees'}
             onClose={closeSub}
             teamScope={teamId != null}
             team={teamForExecutor}
             teamLoading={teamId != null && !teamForExecutor && teamsLoading}
-            selectedExecutor={executor}
-            onSelect={(ex) => setExecutor(ex)}
+            selectedAssignees={assignees}
+            onChange={setAssignees}
+            currentUserId={currentUserId}
           />
 
           {subModal === 'priority' && (
@@ -1219,14 +946,6 @@ const styles = StyleSheet.create({
   },
   subSheetHeaderBtn: { padding: 4 },
   subSheetHeaderTitle: { fontSize: 17, fontWeight: '700' },
-  selectedDateBanner: {
-    marginHorizontal: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  selectedDateBannerText: { fontSize: 16, fontWeight: '600' },
   subScheduleScroll: { maxHeight: 520, paddingHorizontal: 16 },
   subSheetScrollContent: { paddingBottom: 20, flexGrow: 1 },
   shortcutRow: {
@@ -1237,75 +956,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   shortcutLabel: { flex: 1, fontSize: 16 },
-  shortcutHint: { fontSize: 14, fontWeight: '500' },
-  calendarHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  calendarMonthTitle: { fontSize: 16, fontWeight: '700' },
-  weekdayRow: { flexDirection: 'row', marginBottom: 4 },
-  weekdayCell: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '600' },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', marginBottom: 16 },
-  dayCell: {
-    width: '14.28%',
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-  },
-  dayCellText: { fontSize: 15 },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 12,
-  },
-  metaRowLabel: { flex: 1, fontSize: 16 },
-  metaRowValue: { fontSize: 15, marginRight: 4 },
-  timePickerRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  timePickerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  timePickerSheet: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    overflow: 'hidden',
-  },
-  timePickerToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  timePickerToolbarSide: {
-    flex: 1,
-  },
-  timePickerToolbarTitle: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  timePickerWheelWrap: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-  },
-  timePickerIOS: {
-    width: '100%',
-    maxWidth: 320,
-    height: 216,
-  },
   subBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.38)',

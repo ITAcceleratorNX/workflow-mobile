@@ -1,17 +1,19 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import type { Team } from '@/lib/teams-api';
@@ -170,6 +172,8 @@ export function TaskExecutorPickerOverlay({
   onSelect,
 }: ExecutorPickerProps) {
   const insets = useSafeAreaInsets();
+  const { height: windowH } = useWindowDimensions();
+  const keyboardHeight = useKeyboardHeight(visible);
   const background = useThemeColor({}, 'background');
   const headerText = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -197,7 +201,7 @@ export function TaskExecutorPickerOverlay({
   useEffect(() => {
     if (!visible || teamMode) return;
     const q = search.trim();
-    if (q.length < 2) {
+    if (q.length < 1) {
       setResults([]);
       return;
     }
@@ -206,6 +210,7 @@ export function TaskExecutorPickerOverlay({
       const res = await searchUsersForAssign(q);
       setSearching(false);
       if (res.ok) setResults(res.data);
+      else setResults([]);
     }, 300);
     return () => clearTimeout(t);
   }, [search, visible, teamMode]);
@@ -219,6 +224,11 @@ export function TaskExecutorPickerOverlay({
     [onSelect, onClose]
   );
 
+  const pickerScrollMaxHeight = useMemo(() => {
+    if (keyboardHeight <= 0) return 420;
+    return Math.max(160, Math.min(420, windowH - keyboardHeight - 168));
+  }, [keyboardHeight, windowH]);
+
   if (!visible) return null;
 
   return (
@@ -230,7 +240,7 @@ export function TaskExecutorPickerOverlay({
             styles.subScheduleSheet,
             {
               backgroundColor: background,
-              paddingBottom: Math.max(insets.bottom, 12),
+              paddingBottom: Math.max(insets.bottom, 12) + keyboardHeight,
             },
           ]}
         >
@@ -248,9 +258,10 @@ export function TaskExecutorPickerOverlay({
           </View>
 
           <ScrollView
-            style={styles.pickerScroll}
+            style={[styles.pickerScroll, { maxHeight: pickerScrollMaxHeight }]}
             contentContainerStyle={styles.pickerScrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             <Pressable
@@ -301,7 +312,7 @@ export function TaskExecutorPickerOverlay({
                   <TextInput
                     value={search}
                     onChangeText={setSearch}
-                    placeholder="Поиск по имени (от 2 символов)"
+                    placeholder="Имя или телефон"
                     placeholderTextColor={textMuted}
                     style={[styles.searchInput, { color: headerText }]}
                   />
@@ -325,7 +336,251 @@ export function TaskExecutorPickerOverlay({
                     </Pressable>
                   );
                 })}
-                {search.trim().length >= 2 && !searching && results.length === 0 ? (
+                {search.trim().length >= 1 && !searching && results.length === 0 ? (
+                  <ThemedText style={[styles.hint, { color: textMuted }]}>Никого не найдено</ThemedText>
+                ) : null}
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+type AssigneesPickerProps = {
+  visible: boolean;
+  onClose: () => void;
+  teamScope: boolean;
+  team: Team | null;
+  teamLoading?: boolean;
+  selectedAssignees: { id: number; full_name: string }[];
+  onChange: Dispatch<SetStateAction<{ id: number; full_name: string }[]>>;
+  /** Не показывать себя в списке выбора (сервер тоже отфильтрует создателя) */
+  currentUserId?: number | null;
+};
+
+/** Мультивыбор исполнителей: без команды — поиск по всем пользователям; с командой — только участники. */
+export function TaskAssigneesPickerOverlay({
+  visible,
+  onClose,
+  team,
+  teamScope,
+  teamLoading = false,
+  selectedAssignees,
+  onChange,
+  currentUserId,
+}: AssigneesPickerProps) {
+  const insets = useSafeAreaInsets();
+  const { height: windowH } = useWindowDimensions();
+  const keyboardHeight = useKeyboardHeight(visible);
+  const background = useThemeColor({}, 'background');
+  const headerText = useThemeColor({}, 'text');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const primary = useThemeColor({}, 'primary');
+  const border = useThemeColor({}, 'border');
+  const cardBg = useThemeColor({}, 'cardBackground');
+
+  const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<UserSearchItem[]>([]);
+
+  const teamMode = teamScope && team != null;
+  const teamPending = teamScope && team == null && teamLoading;
+  const teamMissing = teamScope && team == null && !teamLoading;
+  const memberOptions = collectTeamMemberOptions(team ?? undefined).filter(
+    (m) => currentUserId == null || m.id !== currentUserId
+  );
+
+  const selectedIds = useMemo(
+    () => new Set(selectedAssignees.map((a) => a.id)),
+    [selectedAssignees]
+  );
+
+  useEffect(() => {
+    if (!visible) {
+      setSearch('');
+      setResults([]);
+      setSearching(false);
+    }
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || teamMode) return;
+    const q = search.trim();
+    if (q.length < 1) {
+      setResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setSearching(true);
+      const res = await searchUsersForAssign(q);
+      setSearching(false);
+      if (res.ok) {
+        const list = currentUserId ? res.data.filter((u) => u.id !== currentUserId) : res.data;
+        setResults(list);
+      } else {
+        setResults([]);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search, visible, teamMode, currentUserId]);
+
+  const toggle = useCallback(
+    (u: { id: number; full_name: string }) => {
+      if (currentUserId != null && u.id === currentUserId) {
+        return;
+      }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      onChange((prev) => {
+        const has = prev.some((a) => a.id === u.id);
+        if (has) return prev.filter((a) => a.id !== u.id);
+        return [...prev, u];
+      });
+    },
+    [onChange, currentUserId]
+  );
+
+  const clearAll = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onChange([]);
+  }, [onChange]);
+
+  const pickerScrollMaxHeight = useMemo(() => {
+    if (keyboardHeight <= 0) return 420;
+    return Math.max(160, Math.min(420, windowH - keyboardHeight - 168));
+  }, [keyboardHeight, windowH]);
+
+  if (!visible) return null;
+
+  return (
+    <View style={styles.subOverlayRoot}>
+      <Pressable style={styles.subBackdrop} onPress={onClose} accessibilityLabel="Закрыть" />
+      <View style={styles.subScheduleWrap}>
+        <View
+          style={[
+            styles.subScheduleSheet,
+            {
+              backgroundColor: background,
+              paddingBottom: Math.max(insets.bottom, 12) + keyboardHeight,
+            },
+          ]}
+        >
+          <View style={styles.sheetHandleHit}>
+            <View style={[styles.dragGrabber, { backgroundColor: primary }]} />
+          </View>
+          <View style={styles.subSheetHeader}>
+            <Pressable onPress={onClose} hitSlop={12} style={styles.subSheetHeaderBtn}>
+              <MaterialIcons name="close" size={24} color={headerText} />
+            </Pressable>
+            <ThemedText style={[styles.subSheetHeaderTitle, { color: headerText }]}>Исполнители</ThemedText>
+            <Pressable onPress={onClose} hitSlop={12} style={styles.subSheetHeaderBtn}>
+              <MaterialIcons name="check" size={24} color={primary} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={[styles.pickerScroll, { maxHeight: pickerScrollMaxHeight }]}
+            contentContainerStyle={styles.pickerScrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+          >
+            {selectedAssignees.length > 0 ? (
+              <View style={[styles.assigneesChipsWrap, { borderColor: border }]}>
+                <View style={styles.assigneesChipsRow}>
+                  {selectedAssignees.map((a) => (
+                    <View
+                      key={a.id}
+                      style={[styles.assigneeChip, { borderColor: primary, backgroundColor: `${primary}18` }]}
+                    >
+                      <ThemedText style={[styles.assigneeChipText, { color: headerText }]} numberOfLines={1}>
+                        {a.full_name}
+                      </ThemedText>
+                      <Pressable
+                        onPress={() => toggle(a)}
+                        hitSlop={8}
+                        accessibilityLabel="Убрать исполнителя"
+                      >
+                        <MaterialIcons name="close" size={18} color={primary} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+                <Pressable style={[styles.clearRow, { borderBottomColor: border }]} onPress={clearAll}>
+                  <MaterialIcons name="person-off" size={22} color={textMuted} />
+                  <ThemedText style={[styles.shortcutLabel, { color: headerText }]}>Сбросить всех</ThemedText>
+                </Pressable>
+              </View>
+            ) : null}
+
+            {teamPending ? (
+              <View style={styles.centerBlock}>
+                <ActivityIndicator size="large" color={primary} />
+                <ThemedText style={[styles.hint, { color: textMuted }]}>Загрузка команды…</ThemedText>
+              </View>
+            ) : teamMissing ? (
+              <ThemedText style={[styles.emptyHint, { color: textMuted }]}>
+                Команда не найдена. Закройте окно и выберите команду снова.
+              </ThemedText>
+            ) : teamMode ? (
+              memberOptions.length === 0 ? (
+                <ThemedText style={[styles.emptyHint, { color: textMuted }]}>
+                  В команде нет участников. Добавьте их в настройках команды.
+                </ThemedText>
+              ) : (
+                memberOptions.map((m) => {
+                  const on = selectedIds.has(m.id);
+                  return (
+                    <Pressable
+                      key={m.id}
+                      style={[styles.shortcutRow, { borderBottomColor: border }]}
+                      onPress={() => toggle(m)}
+                    >
+                      <MaterialIcons
+                        name={on ? 'check-box' : 'check-box-outline-blank'}
+                        size={24}
+                        color={on ? primary : textMuted}
+                      />
+                      <ThemedText style={[styles.shortcutLabel, { color: headerText }]} numberOfLines={2}>
+                        {m.full_name}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })
+              )
+            ) : (
+              <>
+                <View style={[styles.searchCard, { backgroundColor: cardBg, borderColor: border }]}>
+                  <MaterialIcons name="search" size={22} color={textMuted} />
+                  <TextInput
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Имя или телефон"
+                    placeholderTextColor={textMuted}
+                    style={[styles.searchInput, { color: headerText }]}
+                  />
+                </View>
+                {searching ? (
+                  <ThemedText style={[styles.hint, { color: textMuted }]}>Поиск…</ThemedText>
+                ) : null}
+                {results.map((u) => {
+                  const on = selectedIds.has(u.id);
+                  return (
+                    <Pressable
+                      key={u.id}
+                      style={[styles.shortcutRow, { borderBottomColor: border }]}
+                      onPress={() => toggle({ id: u.id, full_name: u.full_name })}
+                    >
+                      <MaterialIcons name="person" size={22} color={primary} />
+                      <ThemedText style={[styles.shortcutLabel, { color: headerText }]} numberOfLines={2}>
+                        {u.full_name}
+                      </ThemedText>
+                      {on ? <MaterialIcons name="check" size={22} color={primary} /> : null}
+                    </Pressable>
+                  );
+                })}
+                {search.trim().length >= 1 && !searching && results.length === 0 ? (
                   <ThemedText style={[styles.hint, { color: textMuted }]}>Никого не найдено</ThemedText>
                 ) : null}
               </>
@@ -418,4 +673,43 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 16, paddingVertical: 4 },
   hint: { fontSize: 14, paddingVertical: 8 },
+  assigneesChipsWrap: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  assigneesChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  assigneeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingLeft: 10,
+    paddingRight: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    maxWidth: '100%',
+  },
+  assigneeChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    flexShrink: 1,
+    maxWidth: 200,
+  },
+  clearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 12,
+  },
 });

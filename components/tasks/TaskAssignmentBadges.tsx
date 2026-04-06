@@ -10,7 +10,7 @@ export type TaskBadgeSource = {
   executor_id?: number | null;
   team?: TaskTeamRef | null;
   executor?: TaskExecutorRef | null;
-  assignee_ids?: number[];
+  assignees?: { id: number; full_name: string }[];
 };
 
 export type TaskAssignmentBadgesProps = {
@@ -21,24 +21,22 @@ export type TaskAssignmentBadgesProps = {
   compact?: boolean;
 };
 
-/**
- * Бейджи команды, исполнителя и устаревшей «командности» по assignee_ids.
- */
+/** Бейджи команды и исполнителей для списков, календаря и деталей. */
 export function TaskAssignmentBadges({
   task,
   primary,
   currentUserId,
   compact,
 }: TaskAssignmentBadgesProps) {
-  const legacyAssignees = !task.team_id && (task.assignee_ids?.length ?? 0) > 0;
   const teamName = task.team_id && task.team?.name ? task.team.name : null;
-  const exec =
-    task.executor_id && task.executor?.full_name
-      ? { id: task.executor_id, full_name: task.executor.full_name }
-      : null;
-  const executorIsYou = currentUserId != null && task.executor_id === currentUserId;
+  const people =
+    task.assignees && task.assignees.length > 0
+      ? task.assignees
+      : task.executor_id && task.executor?.full_name
+        ? [{ id: task.executor_id, full_name: task.executor.full_name }]
+        : [];
 
-  if (!legacyAssignees && !teamName && !exec) return null;
+  if (!teamName && people.length === 0) return null;
 
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
@@ -50,25 +48,26 @@ export function TaskAssignmentBadges({
           </ThemedText>
         </View>
       ) : null}
-      {exec ? (
+      {people.length === 1 ? (
         <View
           style={[
             styles.pill,
             styles.pillOutline,
             { borderColor: primary },
-            executorIsYou && { backgroundColor: `${primary}18` },
+            currentUserId != null && people[0].id === currentUserId && { backgroundColor: `${primary}18` },
           ]}
         >
           <MaterialIcons name="person" size={compact ? 11 : 12} color={primary} />
           <ThemedText style={[styles.pillText, { color: primary }]} numberOfLines={1}>
-            {executorIsYou ? 'Вы' : exec.full_name}
+            {currentUserId != null && people[0].id === currentUserId ? 'Вы' : people[0].full_name}
           </ThemedText>
         </View>
-      ) : null}
-      {legacyAssignees ? (
-        <View style={[styles.pill, { backgroundColor: primary, borderColor: primary }]}>
-          <MaterialIcons name="group" size={compact ? 11 : 12} color="#fff" />
-          <ThemedText style={[styles.pillText, { color: '#fff' }]}>Командная</ThemedText>
+      ) : people.length > 1 ? (
+        <View style={[styles.pill, styles.pillOutline, { borderColor: primary }]}>
+          <MaterialIcons name="group" size={compact ? 11 : 12} color={primary} />
+          <ThemedText style={[styles.pillText, { color: primary }]} numberOfLines={1}>
+            Исполнители · {people.length}
+          </ThemedText>
         </View>
       ) : null}
     </View>
