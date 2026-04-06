@@ -32,6 +32,8 @@ export default function LoginScreen() {
   const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const textColor = useThemeColor({}, 'text');
+
   const validate = useCallback(() => {
     let valid = true;
     setPhoneError('');
@@ -157,17 +159,24 @@ export default function LoginScreen() {
               disabled={loading}
             />
 
-            <Button
-              title="Открыть демо-режим"
-              onPress={handleDemoLogin}
-              variant="secondary"
-            />
+              <Button
+                  title="Запросить регистрацию"
+                  onPress={() => router.push('/register')}
+                  style={styles.buttonOutline} // Голубая заливка
+                  {...({
+                      titleStyle: styles.buttonOutlineText
+                  } as any)}
+              />
 
-            <Button
-              title="Запросить регистрацию"
-              onPress={() => router.push('/register')}
-              variant="secondary"
-            />
+              {/* ТЕПЕРЬ ЭТА КНОПКА СНИЗУ И С ОРАНЖЕВЫМ КОНТУРОМ */}
+              <Button
+                  title="Открыть демо-режим"
+                  onPress={handleDemoLogin}
+                  style={styles.registerButtonCustom} // Серый фон + оранжевый контур
+                  {...({
+                      titleStyle: styles.registerTextCustom
+                  } as any)}
+              />
 
             <Pressable style={styles.privacyLink} onPress={() => router.push('/privacy')}>
               <ThemedText style={[styles.privacyText, { color: textMuted }]}>
@@ -247,4 +256,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+    buttonOutline: {
+        backgroundColor: '#60A5FA30',
+        borderWidth: 0,
+        borderRadius: 12,
+        height: 56,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 12,
+
+        shadowColor: '#60A5FA30',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 3,
+    },
+    buttonOutlineText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',          // Обычная полужирность
+        letterSpacing: 0,           // Без лишних отступов
+        textTransform: 'none',      // Без капса (обычные буквы)
+    },
+    demoContainer: {
+        marginTop: 30,
+        paddingTop: 24,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    registerButtonCustom: {
+        backgroundColor: '#1C1C1E', // Твой стандартный серый из secondary
+        borderWidth: 1.5,
+        borderColor: '#F35713',     // Оранжевый контур
+        borderRadius: 12,
+        height: 52,
+        justifyContent: 'center',
+        marginTop: 10,
+    },
+    registerTextCustom: {
+        color: '#F35713',           // Текст тоже сделаем оранжевым, чтобы сочеталось
+        fontSize: 16,
+        fontWeight: '600',
+    },
 });

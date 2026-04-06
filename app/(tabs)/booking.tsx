@@ -112,7 +112,7 @@ export default function BookingScreen() {
 
   const [activeTab, setActiveTab] = useState<BookingTab>('book');
   const [step, setStep] = useState<Step>('offices');
-  const [selectedOffice, setSelectedOffice] = useState<Office | null>(null);
+  const [selectedOffice, setSelectedOffice] = useState<any>(null);
   const [selectedRoom, setSelectedRoom] = useState<MeetingRoom | null>(null);
 
   const [offices, setOffices] = useState<Office[]>([]);
@@ -839,40 +839,74 @@ export default function BookingScreen() {
                     </ThemedText>
                   </View>
                 ) : (
-                  <ScrollView
-                    showsVerticalScrollIndicator={false}
-                  >
-                    <View style={styles.officeGrid}>
-                      {offices.map((item) => {
-                        const photoUri = getImageUri(item.photo);
-                        return (
-                          <Pressable
-                            key={item.id}
-                            style={styles.officeCard}
-                            onPress={() => handleSelectOffice(item)}
-                          >
-                            <View style={styles.officeCardImageWrap}>
-                              {photoUri ? (
-                                <Image source={{ uri: photoUri }} style={styles.officeCardImage} contentFit="cover" />
-                              ) : (
-                                <View style={styles.officeCardImagePlaceholder}>
-                                  <MaterialIcons name="location-on" size={32} color="rgba(255,255,255,0.4)" />
-                                </View>
-                              )}
-                            </View>
-                            <ThemedText style={styles.officeCardName} numberOfLines={2}>
-                              {item.name}
-                            </ThemedText>
-                            {(item.address || item.city) && (
-                              <ThemedText style={styles.officeCardMeta} numberOfLines={2}>
-                                {[item.address, item.city].filter(Boolean).join(', ')}
-                              </ThemedText>
-                            )}
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </ScrollView>
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                        <View style={styles.officeGrid}>
+                            {offices.map((item) => {
+                                const photoUri = getImageUri(item.photo);
+                                const isSelected = selectedOffice?.id === item.id;
+
+                                return (
+                                    <Pressable
+                                        key={item.id}
+                                        style={[
+                                            styles.officeCard,
+                                            isSelected && { borderColor: '#F35713', backgroundColor: 'rgba(226, 91, 33, 0.05)' }
+                                        ]}
+                                        onPress={() => handleSelectOffice(item)}
+                                    >
+                                        {/* Контейнер для изображения */}
+                                        <View style={styles.officeCardImageWrap}>
+                                            {photoUri ? (
+                                                <Image source={{ uri: photoUri }} style={styles.officeCardImage} contentFit="cover" />
+                                            ) : (
+                                                <View style={styles.officeCardImagePlaceholder}>
+                                                    <MaterialIcons name="business" size={32} color="rgba(255,255,255,0.5)" />
+                                                </View>
+                                            )}
+
+                                            {/* Плашка с городом поверх фото (опционально, для красоты) */}
+                                            {item.city && (
+                                                <View style={styles.cityBadge}>
+                                                    <ThemedText style={styles.cityBadgeText}>{item.city}</ThemedText>
+                                                </View>
+                                            )}
+                                        </View>
+
+                                        <View style={styles.officeCardContent}>
+                                            <ThemedText style={styles.officeCardName} numberOfLines={1}>
+                                                {item.name}
+                                            </ThemedText>
+
+                                            {item.address && (
+                                                <View style={styles.addressRow}>
+                                                    <MaterialIcons name="location-on" size={12} color={textMuted} />
+                                                    <ThemedText style={styles.officeCardMeta} numberOfLines={1}>
+                                                        {item.address}
+                                                    </ThemedText>
+                                                </View>
+                                            )}
+
+                                            {/* НОВЫЙ БЛОК: Блок и Этаж */}
+                                            <View style={styles.specRow}>
+                                                {(item as any).block !== undefined && (
+                                                    <View style={styles.miniBadge}>
+                                                        <ThemedText style={styles.miniBadgeText}>Блок  {(item as any).block}</ThemedText>
+                                                    </View>
+                                                )}
+                                                {(item as any).floor !== undefined && (
+                                                    <View style={[styles.miniBadge, { backgroundColor: 'rgba(226, 91, 33, 0.1)' }]}>
+                                                        <ThemedText style={[styles.miniBadgeText, { color: '#F35713' }]}>
+                                                            {(item as any).floor} этаж
+                                                        </ThemedText>
+                                                    </View>
+                                                )}
+                                            </View>
+                                        </View>
+                                    </Pressable>
+                                );
+                            })}
+                        </View>
+                    </ScrollView>
                 )}
               </>
             )}
@@ -1082,632 +1116,731 @@ export default function BookingScreen() {
 }
 
 const styles = StyleSheet.create({
-  gradientFill: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 28,
-    marginBottom: 12,
-  },
-  titleWhite: {
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 28,
-    marginBottom: 12,
-    color: '#fff',
-  },
-  tabsRowWhite: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: 10,
-    marginBottom: 16,
-    overflow: 'hidden',
-  },
-  tabWhite: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-  },
-  tabWhiteActive: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  tabTextWhite: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  tabTextWhiteActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  stepHint: {
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  emptyState: {
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  emptyStateTitle: {
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  emptyStateSub: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  stepHintWhite: {
-    fontSize: 14,
-    marginBottom: 12,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  emptyStateTitleWhite: {
-    textAlign: 'center',
-    marginBottom: 8,
-    color: '#fff',
-  },
-  emptyStateSubWhite: {
-    fontSize: 14,
-    textAlign: 'center',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  officeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
-  },
-  officeCard: {
-    width: '30%',
-    minWidth: 100,
-    maxWidth: 140,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  officeCardImageWrap: {
-    width: '100%',
-    aspectRatio: 112 / 145,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  officeCardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  officeCardImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  officeCardName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
-    marginTop: 6,
-  },
-  officeCardMeta: {
-    fontSize: 9,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
-  },
-  backRowWhite: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    marginBottom: 8,
-  },
-  backTextWhite: {
-    fontSize: 16,
-    color: '#fff',
-  },
-  officeNameWhite: {
-    fontSize: 16,
-    marginBottom: 4,
-    color: '#fff',
-  },
-  officeAddressWhite: {
-    fontSize: 14,
-    marginBottom: 8,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  badgesLabelWhite: {
-    fontSize: 13,
-    marginBottom: 12,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  roomsScroll: {
-    marginBottom: 16,
-    maxHeight: 200,
-  },
-  roomCardOrange: {
-    width: 112,
-    marginRight: 12,
-  },
-  roomCardImageWrap: {
-    width: 112,
-    height: 145,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  roomCardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  roomCardImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roomCardImageBadge: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  roomCardImageBadgeText: {
-    fontSize: 10,
-    color: '#fff',
-  },
-  roomCardNameWhite: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#fff',
-    marginTop: 6,
-  },
-  roomCardMetaRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 2,
-  },
-  roomCardMetaWhite: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  formTitleWhite: {
-    marginBottom: 8,
-    color: '#fff',
-    fontSize: 20,
-  },
-  formSubtitleWhite: {
-    fontSize: 15,
-    marginBottom: 16,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  labelWhite: {
-    fontSize: 14,
-    marginTop: 12,
-    marginBottom: 6,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  roomImageContainer: {
-    width: '100%',
-    height: 185,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginBottom: 16,
-  },
-  roomFormPhotoScrollContent: {
-    flexDirection: 'row',
-  },
-  roomFormPhotoSlide: {
-    height: '100%',
-    overflow: 'hidden',
-  },
-  roomImage: {
-    width: '100%',
-    height: '100%',
-  },
-  roomImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roomImagePlaceholderText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 8,
-  },
-  roomImageBadge: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  roomImageBadgeText: {
-    fontSize: 12,
-    color: '#fff',
-  },
-  dateChipForm: {
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  dateChipFormSelected: {
-    backgroundColor: '#F35713',
-    borderColor: '#F35713',
-  },
-  slotChipForm: {
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  slotChipFormSelected: {
-    backgroundColor: '#F35713',
-    borderColor: '#F35713',
-  },
-  slotChipTextFormDisabled: {
-    color: 'rgba(255,255,255,0.4)',
-  },
-  inputForm: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#fff',
-    marginBottom: 16,
-  },
-  submitBtnForm: {
-    backgroundColor: CARD_ORANGE,
-  },
-  emptyWhite: {
-    textAlign: 'center',
-    paddingVertical: 32,
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  myBookingsSubtitleWhite: {
-    fontSize: 14,
-    marginBottom: 16,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  myBookingsFilterRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  myBookingsFilterTab: {
-    flex: 1,
-    position: 'relative',
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  myBookingsFilterTabActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  myBookingsFilterText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  myBookingsFilterTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  myBookingsFilterUnderline: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 2,
-    backgroundColor: '#F35713',
-  },
-  geoButtonWhite: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    gap: 6,
-  },
-  geoButtonTextWhite: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '500',
-  },
-  bookingCardActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  viewBookingBtnOrange: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  viewBookingBtnText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  bookingCardOrange: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  cancelBtnOrange: {
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  cancelBtnTextWhite: {
-    color: '#fff',
-  },
-  bookingCardTitleWhite: {
-    color: '#fff',
-  },
-  bookingStatusBadgeOrange: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  bookingStatusTextOrange: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  bookingMetaWhite: {
-    fontSize: 13,
-    marginTop: 4,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  tabsRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    marginBottom: 16,
-  },
-  tab: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabText: {
-    fontSize: 15,
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    marginBottom: 12,
-  },
-  backText: {
-    fontSize: 16,
-  },
-  officeName: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  officeAddress: {
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  badge: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  badgeText: {
-    fontSize: 13,
-  },
-  card: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  cardSub: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  roomCard: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  roomCardHeader: {
-    marginBottom: 8,
-  },
-  roomStatusBadge: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-  },
-  roomStatusAvailable: {
-    backgroundColor: 'rgba(17, 74, 101, 0.9)',
-  },
-  roomStatusBooked: {
-    backgroundColor: 'rgba(184, 64, 14, 0.9)',
-  },
-  roomStatusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  roomCardTitle: {
-    marginBottom: 4,
-  },
-  roomCardMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  scroll: {
-    flex: 1,
-  },
-  formContent: {
-    paddingBottom: 24,
-  },
-  formTitle: {
-    marginBottom: 8,
-  },
-  formSubtitle: {
-    fontSize: 15,
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  datesRow: {
-    marginBottom: 8,
-    maxHeight: 80,
-  },
-  dateChip: {
-    width: 56,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginRight: 10,
-    alignItems: 'center',
-  },
-  dateChipText: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  dateChipSub: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  dateChipTextSelected: {
-    color: '#fff',
-  },
-  loader: {
-    marginVertical: 20,
-  },
-  loaderFooter: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  slotsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
-  slotChip: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    minWidth: '30%',
-  },
-  slotChipDisabled: {
-    opacity: 0.5,
-  },
-  slotChipText: {
-    fontSize: 13,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  submitBtn: {
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  submitBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  empty: {
-    textAlign: 'center',
-    paddingVertical: 32,
-    fontSize: 15,
-  },
-  myBookingsSubtitle: {
-    fontSize: 14,
-    marginBottom: 16,
-  },
-  bookingCard: {
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  bookingCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 4,
-  },
-  bookingStatusBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  bookingStatusText: {
-    fontSize: 12,
-  },
-  bookingMeta: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  cancelBtn: {
-    marginTop: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-  },
+    gradientFill: {
+        flex: 1,
+    },
+    container: {
+        flex: 1,
+        paddingHorizontal: 20,
+        paddingTop: 16,
+    },
+    title: {
+        fontSize: 24,
+        fontWeight: '700',
+        lineHeight: 28,
+        marginBottom: 12,
+    },
+    titleWhite: {
+        fontSize: 24,
+        fontWeight: '700',
+        lineHeight: 28,
+        marginBottom: 12,
+        color: '#fff',
+    },
+    tabsRowWhite: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        borderRadius: 10,
+        marginBottom: 16,
+        overflow: 'hidden',
+    },
+    tabWhite: {
+        flex: 1,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        alignItems: 'center',
+    },
+    tabWhiteActive: {
+        backgroundColor: 'rgba(255,255,255,0.25)',
+    },
+    tabTextWhite: {
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.8)',
+    },
+    tabTextWhiteActive: {
+        color: '#fff',
+        fontWeight: '600',
+    },
+    stepHint: {
+        fontSize: 14,
+        marginBottom: 12,
+    },
+    emptyState: {
+        paddingVertical: 32,
+        paddingHorizontal: 16,
+        alignItems: 'center',
+    },
+    emptyStateTitle: {
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    emptyStateSub: {
+        fontSize: 14,
+        textAlign: 'center',
+    },
+    stepHintWhite: {
+        fontSize: 14,
+        marginBottom: 12,
+        color: 'rgba(255,255,255,0.9)',
+    },
+    emptyStateTitleWhite: {
+        textAlign: 'center',
+        marginBottom: 8,
+        color: '#fff',
+    },
+    emptyStateSubWhite: {
+        fontSize: 14,
+        textAlign: 'center',
+        color: 'rgba(255,255,255,0.7)',
+    },
+    // --- ОБНОВЛЕННЫЙ officeGrid ДЛЯ СЕТКИ ---
+    officeGrid: {
+        padding: 16,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        paddingBottom: 90,
+    },
+    officeCard: {
+        width: '48%',
+        backgroundColor: '#702A14', // Глубокий терракотовый фон
+        borderRadius: 20,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(197, 160, 89, 0.3)', // Золотистая рамка
+        overflow: 'hidden',
+        // Тень для объема
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+    },
+    officeCardImageWrap: {
+        width: '100%',
+        height: 200, // Высота фото (прямоугольник)
+        backgroundColor: 'rgba(0,0,0,0.3)', // Фон, если здание узкое
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(197, 160, 89, 0.2)',
+    },
+    officeCardImage: {
+        width: '100%',
+        height: '100%',
+    },
+    officeCardImagePlaceholder: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#444',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    cityBadge: {
+        position: 'absolute',
+        top: 8,
+        left: 8,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    cityBadgeText: {
+        fontSize: 10,
+        color: '#fff',
+        fontWeight: '600',
+    },
+    officeCardContent: {
+        padding: 10,
+    },
+    officeCardName: {
+        fontSize: 15,
+        fontWeight: '700',
+        marginBottom: 4,
+    },
+    addressRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        marginBottom: 8,
+    },
+    officeCardMeta: {
+        fontSize: 11,
+        opacity: 0.6,
+        paddingRight: 15,
+        textAlign: 'left',
+    },
+    specRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 4,
+        justifyContent: 'center', // ЦЕНТРИРОВАНИЕ БЕЙДЖЕЙ
+    },
+    miniBadge: {
+        backgroundColor: 'rgba(124, 124, 124, 0.15)',
+        paddingVertical: 2,
+        paddingHorizontal: 6,
+        borderRadius: 4,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    miniBadgeText: {
+        fontSize: 9,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        color: '#999',
+        textAlign: 'center',
+
+    },
+    floorBadge: {
+        backgroundColor: 'rgba(243, 87, 19, 0.2)', // Светло-оранжевый фон для этажа
+        paddingVertical: 2,
+        paddingHorizontal: 6,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(243, 87, 19, 0.3)',
+    },
+    floorBadgeText: {
+        fontSize: 9,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        color: '#F35713', // Яркий оранжевый текст
+    },
+
+    // ------------------------------------
+    backRowWhite: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 12,
+        marginBottom: 8,
+    },
+    backTextWhite: {
+        fontSize: 16,
+        color: '#fff',
+    },
+    officeNameWhite: {
+        fontSize: 16,
+        marginBottom: 4,
+        color: '#fff',
+    },
+    officeAddressWhite: {
+        fontSize: 14,
+        marginBottom: 8,
+        color: 'rgba(255,255,255,0.8)',
+    },
+    badgesLabelWhite: {
+        fontSize: 13,
+        marginBottom: 12,
+        color: 'rgba(255,255,255,0.9)',
+    },
+    roomsScroll: {
+        marginBottom: 16,
+        maxHeight: 200,
+    },
+    roomCardOrange: {
+        width: 112,
+        marginRight: 12,
+    },
+    roomCardImageWrap: {
+        width: 112,
+        height: 145,
+        borderRadius: 10,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255,255,255,0.1)',
+    },
+    roomCardImage: {
+        width: '100%',
+        height: '100%',
+    },
+    roomCardImagePlaceholder: {
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    roomCardImageBadge: {
+        position: 'absolute',
+        bottom: 4,
+        right: 4,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+    },
+    roomCardImageBadgeText: {
+        fontSize: 10,
+        color: '#fff',
+    },
+    roomCardNameWhite: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#fff',
+        marginTop: 6,
+    },
+    roomCardMetaRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 2,
+    },
+    roomCardMetaWhite: {
+        fontSize: 10,
+        color: 'rgba(255,255,255,0.7)',
+    },
+    formTitleWhite: {
+        marginBottom: 8,
+        color: '#fff',
+        fontSize: 20,
+    },
+    formSubtitleWhite: {
+        fontSize: 15,
+        marginBottom: 16,
+        color: 'rgba(255,255,255,0.9)',
+    },
+    labelWhite: {
+        fontSize: 14,
+        marginTop: 12,
+        marginBottom: 6,
+        color: 'rgba(255,255,255,0.9)',
+    },
+    roomImageContainer: {
+        width: '100%',
+        height: 185,
+        borderRadius: 10,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        marginBottom: 16,
+    },
+    roomFormPhotoScrollContent: {
+        flexDirection: 'row',
+    },
+    roomFormPhotoSlide: {
+        height: '100%',
+        overflow: 'hidden',
+    },
+    roomImage: {
+        width: '100%',
+        height: '100%',
+    },
+    roomImagePlaceholder: {
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    roomImagePlaceholderText: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.5)',
+        marginTop: 8,
+    },
+    roomImageBadge: {
+        position: 'absolute',
+        bottom: 12,
+        right: 12,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    roomImageBadgeText: {
+        fontSize: 12,
+        color: '#fff',
+    },
+    dateChipForm: {
+        borderColor: 'rgba(255,255,255,0.4)',
+    },
+    dateChipFormSelected: {
+        backgroundColor: '#F35713',
+        borderColor: '#F35713',
+    },
+    slotChipForm: {
+        borderColor: 'rgba(255,255,255,0.4)',
+    },
+    slotChipFormSelected: {
+        backgroundColor: '#F35713',
+        borderColor: '#F35713',
+    },
+    slotChipTextFormDisabled: {
+        color: 'rgba(255,255,255,0.4)',
+    },
+    inputForm: {
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.4)',
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        fontSize: 16,
+        color: '#fff',
+        marginBottom: 16,
+    },
+    submitBtnForm: {
+        backgroundColor: '#F35713', // CARD_ORANGE заменен на HEX
+    },
+    emptyWhite: {
+        textAlign: 'center',
+        paddingVertical: 32,
+        fontSize: 15,
+        color: 'rgba(255,255,255,0.8)',
+    },
+    myBookingsSubtitleWhite: {
+        fontSize: 14,
+        marginBottom: 16,
+        color: 'rgba(255,255,255,0.9)',
+    },
+    myBookingsFilterRow: {
+        flexDirection: 'row',
+        marginBottom: 12,
+        backgroundColor: 'rgba(0,0,0,0.2)',
+        borderRadius: 10,
+        overflow: 'hidden',
+    },
+    myBookingsFilterTab: {
+        flex: 1,
+        position: 'relative',
+        paddingVertical: 10,
+        alignItems: 'center',
+    },
+    myBookingsFilterTabActive: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    myBookingsFilterText: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.7)',
+    },
+    myBookingsFilterTextActive: {
+        color: '#fff',
+        fontWeight: '600',
+    },
+    myBookingsFilterUnderline: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 2,
+        backgroundColor: '#F35713',
+    },
+    geoButtonWhite: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        marginTop: 8,
+        marginBottom: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.7)',
+        backgroundColor: 'rgba(0,0,0,0.25)',
+        gap: 6,
+    },
+    geoButtonTextWhite: {
+        fontSize: 12,
+        color: '#FFFFFF',
+        fontWeight: '500',
+    },
+    bookingCardActions: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 12,
+        alignItems: 'center',
+    },
+    viewBookingBtnOrange: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+    },
+    viewBookingBtnText: {
+        fontSize: 14,
+        color: '#fff',
+        fontWeight: '500',
+    },
+    bookingCardOrange: {
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 12,
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
+    cancelBtnOrange: {
+        paddingVertical: 8,
+        alignItems: 'center',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.5)',
+    },
+    cancelBtnTextWhite: {
+        color: '#fff',
+    },
+    bookingCardTitleWhite: {
+        color: '#fff',
+    },
+    bookingStatusBadgeOrange: {
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
+    },
+    bookingStatusTextOrange: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.9)',
+    },
+    bookingMetaWhite: {
+        fontSize: 13,
+        marginTop: 4,
+        color: 'rgba(255,255,255,0.8)',
+    },
+    // --- Дополнительные стили для заголовков в Header деталей офиса ---
+    officeHeaderDetails: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 4,
+    },
+    officeSpecsRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 8,
+        marginBottom: 4,
+    },
+    specBadge: {
+        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    specBadgeText: {
+        color: '#fff',
+        fontSize: 11,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+    },
+    // -------------------------------------------------------------
+    tabsRow: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        marginBottom: 16,
+    },
+    tab: {
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+    },
+    tabText: {
+        fontSize: 15,
+    },
+    backRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        marginBottom: 12,
+    },
+    backText: {
+        fontSize: 16,
+    },
+    officeName: {
+        fontSize: 16,
+        marginBottom: 4,
+    },
+    officeAddress: {
+        fontSize: 14,
+        marginBottom: 12,
+    },
+    badgesRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 16,
+    },
+    badge: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 999,
+        borderWidth: 1,
+    },
+    badgeText: {
+        fontSize: 13,
+    },
+    card: {
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginBottom: 10,
+    },
+    cardSub: {
+        fontSize: 13,
+        marginTop: 4,
+    },
+    roomCard: {
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginBottom: 12,
+    },
+    roomCardHeader: {
+        marginBottom: 8,
+    },
+    roomStatusBadge: {
+        alignSelf: 'flex-start',
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: 999,
+    },
+    roomStatusAvailable: {
+        backgroundColor: 'rgba(17, 74, 101, 0.9)',
+    },
+    roomStatusBooked: {
+        backgroundColor: 'rgba(184, 64, 14, 0.9)',
+    },
+    roomStatusText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    roomCardTitle: {
+        marginBottom: 4,
+    },
+    roomCardMeta: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 12,
+    },
+    scroll: {
+        flex: 1,
+    },
+    formContent: {
+        paddingBottom: 24,
+    },
+    formTitle: {
+        marginBottom: 8,
+    },
+    formSubtitle: {
+        fontSize: 15,
+        marginBottom: 16,
+    },
+    label: {
+        fontSize: 14,
+        marginTop: 12,
+        marginBottom: 6,
+    },
+    datesRow: {
+        marginBottom: 8,
+        maxHeight: 80,
+    },
+    dateChip: {
+        width: 56,
+        paddingVertical: 8,
+        borderRadius: 10,
+        borderWidth: 1,
+        marginRight: 10,
+        alignItems: 'center',
+    },
+    dateChipText: {
+        fontSize: 18,
+        fontWeight: '600',
+    },
+    dateChipSub: {
+        fontSize: 11,
+        marginTop: 2,
+    },
+    dateChipTextSelected: {
+        color: '#fff',
+    },
+    loader: {
+        marginVertical: 20,
+    },
+    loaderFooter: {
+        paddingVertical: 16,
+        alignItems: 'center',
+    },
+    slotsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 8,
+    },
+    slotChip: {
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 10,
+        borderWidth: 1,
+        minWidth: '30%',
+    },
+    slotChipDisabled: {
+        opacity: 0.5,
+    },
+    slotChipText: {
+        fontSize: 13,
+    },
+    input: {
+        borderWidth: 1,
+        borderRadius: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        fontSize: 16,
+        marginBottom: 16,
+    },
+    submitBtn: {
+        paddingVertical: 14,
+        borderRadius: 10,
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    submitBtnText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    empty: {
+        textAlign: 'center',
+        paddingVertical: 32,
+        fontSize: 15,
+    },
+    myBookingsSubtitle: {
+        fontSize: 14,
+        marginBottom: 16,
+    },
+    bookingCard: {
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginBottom: 12,
+    },
+    bookingCardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 4,
+    },
+    bookingStatusBadge: {
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+    },
+    bookingStatusText: {
+        fontSize: 12,
+    },
+    bookingMeta: {
+        fontSize: 13,
+        marginTop: 4,
+    },
+    cancelBtn: {
+        marginTop: 12,
+        paddingVertical: 8,
+        alignItems: 'center',
+        borderRadius: 8,
+        borderWidth: 1,
+    },
 });
