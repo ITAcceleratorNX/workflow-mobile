@@ -1,5 +1,4 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -30,7 +29,7 @@ import {
   TaskAssigneesPickerOverlay,
   TaskTeamPickerOverlay,
 } from '@/components/tasks/task-assignment-pickers';
-import { Select } from '@/components/ui';
+import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTeams } from '@/hooks/use-teams';
 import { useTodoList } from '@/hooks/use-todo-list';
@@ -58,19 +57,6 @@ function isoForDateTime(dateKey: string, time: string) {
   return toUtcIsoFromAppDateTime(dateKey, time);
 }
 
-const TIME_SLOTS: { value: string; label: string }[] = (() => {
-  const slots: { value: string; label: string }[] = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      const value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-      slots.push({ value, label: value });
-    }
-  }
-  return slots;
-})();
-
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-
 const TITLE_SAVE_DEBOUNCE_MS = 450;
 
 function mergeAssigneesFromTask(t: UserTask): { id: number; full_name: string }[] {
@@ -89,22 +75,6 @@ function sameAssigneeIds(a: { id: number }[], b: { id: number }[]): boolean {
   const sa = [...a.map((x) => x.id)].sort((x, y) => x - y);
   const sb = [...b.map((x) => x.id)].sort((x, y) => x - y);
   return sa.every((v, i) => v === sb[i]);
-}
-
-function getDateOptions(): { value: string; label: string }[] {
-  const options: { value: string; label: string }[] = [];
-  const today = new Date();
-  for (let i = -7; i <= 60; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    const key = toAppDateKey(d);
-    let label = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
-    if (i === 0) label = 'Сегодня';
-    if (i === 1) label = 'Завтра';
-    if (i === -1) label = 'Вчера';
-    options.push({ value: key, label });
-  }
-  return options;
 }
 
 export default function TaskDetailsScreen() {
@@ -155,14 +125,11 @@ export default function TaskDetailsScreen() {
 
   const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const dateOptions = useMemo(() => getDateOptions(), []);
   const scrollRef = useRef<ScrollView | null>(null);
-
-  const [iosPicker, setIosPicker] = useState<{
-    open: boolean;
-    mode: 'schedule-date' | 'schedule-time';
-    value: Date;
-  }>({ open: false, mode: 'schedule-date', value: new Date() });
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [scheduleDraftDate, setScheduleDraftDate] = useState<string | null>(null);
+  const [scheduleDraftTime, setScheduleDraftTime] = useState('09:00');
+  const [scheduleCalendarMonth, setScheduleCalendarMonth] = useState(() => new Date());
 
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
   const [pickerSheet, setPickerSheet] = useState<'team' | 'assignees' | null>(null);
@@ -282,44 +249,32 @@ export default function TaskDetailsScreen() {
     await updateTask(task, { reminders_disabled: !task.reminders_disabled });
   }, [task, canEditDetails, updateTask]);
 
-  const openIosPicker = useCallback(
-    (mode: 'schedule-date' | 'schedule-time') => {
-      if (!task) return;
-      if (!canEditDetails) {
-        notifyCreatorOnly();
-        return;
-      }
-      const scheduledBase = task.scheduled_at ? new Date(task.scheduled_at) : new Date();
-      setIosPicker({ open: true, mode, value: scheduledBase });
-    },
-    [task, canEditDetails, notifyCreatorOnly]
-  );
+  const closeScheduleModal = useCallback(() => {
+    setScheduleModalOpen(false);
+  }, []);
 
-  const applyIosPicker = useCallback(async () => {
+  const openScheduleModal = useCallback(() => {
+    if (!task) return;
+    if (!canEditDetails) {
+      notifyCreatorOnly();
+      return;
+    }
+    const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : null;
+    const time = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '09:00';
+    setScheduleDraftDate(dateKey);
+    setScheduleDraftTime(time);
+    const base = new Date((dateKey ?? toAppDateKey(new Date())) + 'T12:00:00');
+    setScheduleCalendarMonth(new Date(base.getFullYear(), base.getMonth(), 1));
+    setScheduleModalOpen(true);
+  }, [task, canEditDetails, notifyCreatorOnly]);
+
+  const applyScheduleModal = useCallback(async () => {
     if (!task || !canEditDetails) return;
-    const next = iosPicker.value;
-    const dateKey = toAppDateKey(next);
-    const time = formatTaskTime(next);
-    await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
-  }, [iosPicker.value, task, canEditDetails, updateTask]);
-
-  const updateScheduleDate = useCallback(
-    async (dateKey: string) => {
-      if (!task || !canEditDetails) return;
-      const currentTime = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '09:00';
-      await updateTask(task, { scheduled_at: isoForDateTime(dateKey, currentTime) });
-    },
-    [task, canEditDetails, updateTask]
-  );
-
-  const updateScheduleTime = useCallback(
-    async (time: string) => {
-      if (!task || !canEditDetails) return;
-      const dateKey = task.scheduled_at ? toAppDateKey(task.scheduled_at) : toAppDateKey(new Date());
-      await updateTask(task, { scheduled_at: isoForDateTime(dateKey, time) });
-    },
-    [task, canEditDetails, updateTask]
-  );
+    await updateTask(task, {
+      scheduled_at: scheduleDraftDate ? isoForDateTime(scheduleDraftDate, scheduleDraftTime) : null,
+    });
+    closeScheduleModal();
+  }, [task, canEditDetails, scheduleDraftDate, scheduleDraftTime, updateTask, closeScheduleModal]);
 
   const handleRemindBeforeChange = useCallback(async (value: number | null) => {
     if (!task || !canEditDetails) return;
@@ -573,8 +528,12 @@ export default function TaskDetailsScreen() {
     );
   }
 
-  const scheduledDateLabel = task.scheduled_at ? toAppDateKey(task.scheduled_at) : '—';
-  const scheduledTimeLabel = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '—';
+  const todayKey = toAppDateKey(new Date());
+  const tomorrowKey = toAppDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+  const scheduledDateLabel = task.scheduled_at ? toAppDateKey(task.scheduled_at) : 'Без срока';
+  const scheduledTimeLabel = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '';
+  const scheduledSummaryLabel = task.scheduled_at ? `${scheduledDateLabel} · ${scheduledTimeLabel}` : 'Без срока';
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
@@ -714,35 +673,37 @@ export default function TaskDetailsScreen() {
           )}
         </View>
 
-        <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Дата и время</ThemedText>
+        <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Срок</ThemedText>
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
           <View style={styles.row}>
             <Pressable
-              disabled={!scheduledEnabled}
               onPress={() => {
-                if (!scheduledEnabled) return;
-                if (Platform.OS === 'ios') openIosPicker('schedule-date');
+                if (!canEditDetails) {
+                  notifyCreatorOnly();
+                  return;
+                }
+                openScheduleModal();
               }}
               style={({ pressed }) => [
                 styles.rowPressable,
-                pressed && scheduledEnabled && styles.rowPressablePressed,
-                !canEditDetails && scheduledEnabled && { opacity: 0.75 },
+                pressed && styles.rowPressablePressed,
+                !canEditDetails && { opacity: 0.75 },
               ]}
             >
               <View style={styles.rowLeft}>
                 <MaterialIcons name="event" size={20} color={textMuted} />
-                <ThemedText style={[styles.rowTitle, { color: text }]}>Дата</ThemedText>
+                <ThemedText style={[styles.rowTitle, { color: text }]}>Срок</ThemedText>
               </View>
               <ThemedText
                 style={[
                   styles.rowValue,
                   {
                     color: textMuted,
-                    textDecorationLine: Platform.OS === 'ios' && scheduledEnabled ? 'underline' : 'none',
+                    textDecorationLine: canEditDetails ? 'underline' : 'none',
                   },
                 ]}
               >
-                {scheduledDateLabel}
+                {scheduledSummaryLabel}
               </ThemedText>
             </Pressable>
             <Switch
@@ -753,54 +714,6 @@ export default function TaskDetailsScreen() {
               thumbColor="#fff"
             />
           </View>
-          <View style={[styles.divider, { backgroundColor: border }]} />
-          <Pressable
-            disabled={!scheduledEnabled}
-            onPress={() => {
-              if (!scheduledEnabled) return;
-              if (Platform.OS === 'ios') openIosPicker('schedule-time');
-            }}
-            style={({ pressed }) => [
-              styles.row,
-              pressed && scheduledEnabled && styles.rowPressablePressed,
-              !canEditDetails && scheduledEnabled && { opacity: 0.75 },
-            ]}
-          >
-            <View style={styles.rowLeft}>
-              <MaterialIcons name="schedule" size={20} color={textMuted} />
-              <ThemedText style={[styles.rowTitle, { color: text }]}>Время</ThemedText>
-            </View>
-            <ThemedText
-              style={[
-                styles.rowValue,
-                {
-                  color: textMuted,
-                  textDecorationLine: Platform.OS === 'ios' && scheduledEnabled ? 'underline' : 'none',
-                },
-              ]}
-            >
-              {scheduledTimeLabel}
-            </ThemedText>
-          </Pressable>
-
-          {Platform.OS !== 'ios' && Platform.OS !== 'web' && scheduledEnabled ? (
-            <View style={styles.pickersBlock}>
-              <Select
-                value={scheduledDateLabel === '—' ? toAppDateKey(new Date()) : scheduledDateLabel}
-                onValueChange={updateScheduleDate}
-                options={dateOptions}
-                placeholder="Дата"
-                disabled={!canEditDetails}
-              />
-              <Select
-                value={scheduledTimeLabel === '—' ? '09:00' : scheduledTimeLabel}
-                onValueChange={updateScheduleTime}
-                options={TIME_SLOTS}
-                placeholder="Время"
-                disabled={!canEditDetails}
-              />
-            </View>
-          ) : null}
         </View>
 
         <View style={{ height: 16 }} />
@@ -1029,63 +942,46 @@ export default function TaskDetailsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {Platform.OS === 'ios' ? (
-        <Modal
-          visible={iosPicker.open}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setIosPicker((p) => ({ ...p, open: false }))}
-        >
-          <View style={styles.pickerRoot}>
+      {scheduleModalOpen ? (
+        <Modal visible={scheduleModalOpen} transparent animationType="slide" onRequestClose={closeScheduleModal}>
+          <View style={styles.scheduleModalRoot}>
             <Pressable
-              style={styles.pickerBackdropDim}
-              onPress={() => setIosPicker((p) => ({ ...p, open: false }))}
+              style={styles.scheduleModalBackdrop}
+              onPress={closeScheduleModal}
               accessibilityRole="button"
               accessibilityLabel="Закрыть"
             />
             <View
               style={[
-                styles.pickerSheet,
+                styles.scheduleModalSheet,
                 {
-                  backgroundColor: cardBg,
-                  paddingBottom: Math.max(insets.bottom, 18),
+                  backgroundColor: background,
+                  paddingBottom: Math.max(insets.bottom, 12),
                 },
               ]}
             >
-              <View style={[styles.pickerHeader, { borderBottomColor: border }]}>
-                <Pressable
-                  onPress={() => setIosPicker((p) => ({ ...p, open: false }))}
-                  hitSlop={10}
-                  style={styles.pickerHeaderSide}
-                >
-                  <ThemedText style={{ color: primary, fontSize: 17 }}>Отмена</ThemedText>
-                </Pressable>
-                <ThemedText style={[styles.pickerHeaderTitle, { color: text }]}>
-                  {iosPicker.mode === 'schedule-time' ? 'Время' : 'Дата'}
-                </ThemedText>
-                <Pressable
-                  onPress={async () => {
-                    await applyIosPicker();
-                    setIosPicker((p) => ({ ...p, open: false }));
-                  }}
-                  hitSlop={10}
-                  style={[styles.pickerHeaderSide, { alignItems: 'flex-end' }]}
-                >
-                  <ThemedText style={{ color: primary, fontSize: 17, fontWeight: '700' }}>Готово</ThemedText>
-                </Pressable>
-              </View>
-              <View style={styles.pickerWheelWrap}>
-                <DateTimePicker
-                  value={iosPicker.value}
-                  mode={iosPicker.mode === 'schedule-time' ? 'time' : 'date'}
-                  display="spinner"
-                  onChange={(_, d) => {
-                    if (!d) return;
-                    setIosPicker((p) => ({ ...p, value: d }));
-                  }}
-                  style={styles.pickerWheel}
-                />
-              </View>
+              <TaskScheduleSheetContent
+                active={scheduleModalOpen}
+                colors={{
+                  sheetBackground: background,
+                  bannerBackground: cardBg,
+                  border,
+                  primary,
+                  text,
+                  textMuted,
+                }}
+                bottomInset={insets.bottom}
+                todayKey={todayKey}
+                tomorrowKey={tomorrowKey}
+                scheduledDate={scheduleDraftDate}
+                onScheduledDateChange={setScheduleDraftDate}
+                scheduledTime={scheduleDraftTime}
+                onScheduledTimeChange={setScheduleDraftTime}
+                calendarMonth={scheduleCalendarMonth}
+                onCalendarMonthChange={setScheduleCalendarMonth}
+                onClosePress={closeScheduleModal}
+                onConfirmPress={() => void applyScheduleModal()}
+              />
             </View>
           </View>
         </Modal>
@@ -1239,11 +1135,6 @@ const styles = StyleSheet.create({
   chevronBtn: {
     padding: 4,
   },
-  pickersBlock: {
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    gap: 10,
-  },
   assigneesChipsBlock: {
     paddingHorizontal: 14,
     paddingBottom: 12,
@@ -1302,46 +1193,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  pickerRoot: {
+  scheduleModalRoot: {
     flex: 1,
     justifyContent: 'flex-end',
   },
-  pickerBackdropDim: {
+  scheduleModalBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
-  pickerSheet: {
+  scheduleModalSheet: {
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     overflow: 'hidden',
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  pickerHeaderSide: {
-    flex: 1,
-  },
-  pickerHeaderTitle: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  pickerWheelWrap: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-  },
-  pickerWheel: {
-    width: '100%',
-    maxWidth: 320,
-    height: 216,
-    backgroundColor: 'transparent',
+    maxHeight: '92%',
   },
   attachmentActions: {
     paddingHorizontal: 14,
