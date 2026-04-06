@@ -9,6 +9,7 @@ import {
   type TaskPriority,
   type TaskFilter,
 } from '@/lib/user-tasks-api';
+import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useToast } from '@/context/toast-context';
@@ -28,6 +29,10 @@ const USER_TASK_API_PATCH_KEYS = [
   'reminders_disabled',
   'remind_at',
   'remind_before_minutes',
+  'recurrence_type',
+  'recurrence_interval',
+  'recurrence_custom_unit',
+  'recurrence_weekdays',
 ] as const;
 
 function pickUserTaskApiPatch(updates: Partial<UserTask>): Parameters<typeof updateUserTask>[1] {
@@ -120,7 +125,8 @@ export function useTodoList(filter: TaskFilter = 'all') {
         team_id?: number | null;
         assignees?: { id: number; full_name: string }[];
       },
-      priority: TaskPriority = 'medium'
+      priority: TaskPriority = 'medium',
+      recurrence?: TaskRecurrencePayload
     ) => {
       if (!token || isGuest) {
         showToast({
@@ -134,6 +140,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
       const optimisticId = nextTempId();
       const assignees = assignment?.assignees ?? [];
       const assigneeIds = assignees.map((a) => a.id);
+      const rec = recurrence ?? defaultRecurrenceNone();
       const optimistic: UserTask = {
         id: optimisticId,
         creator_id: 0,
@@ -148,6 +155,10 @@ export function useTodoList(filter: TaskFilter = 'all') {
         priority,
         reminders_disabled: remindersDisabled ?? false,
         remind_before_minutes: remindBeforeMinutes ?? null,
+        recurrence_type: rec.recurrence_type,
+        recurrence_interval: rec.recurrence_interval,
+        recurrence_custom_unit: rec.recurrence_custom_unit,
+        recurrence_weekdays: rec.recurrence_weekdays,
         created_at: nowIso(),
         updated_at: nowIso(),
         assignee_ids: assigneeIds,
@@ -171,6 +182,10 @@ export function useTodoList(filter: TaskFilter = 'all') {
         remind_before_minutes: remindBeforeMinutes ?? null,
         team_id: assignment?.team_id ?? null,
         executor_id: null,
+        recurrence_type: rec.recurrence_type,
+        recurrence_interval: rec.recurrence_interval,
+        recurrence_custom_unit: rec.recurrence_custom_unit,
+        recurrence_weekdays: rec.recurrence_weekdays,
       });
       if (res.ok) {
         const merged: UserTask = {

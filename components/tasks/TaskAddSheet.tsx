@@ -32,6 +32,7 @@ import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTeams } from '@/hooks/use-teams';
 import { formatDateForApi, formatTaskTime, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
+import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
 import type { TaskMainView } from '@/lib/task-views';
 import { useAuthStore } from '@/stores/auth-store';
 import type { TaskPriority } from '@/lib/user-tasks-api';
@@ -69,7 +70,8 @@ export interface TaskAddSheetProps {
       team_id?: number | null;
       assignees?: { id: number; full_name: string }[];
     },
-    priority?: TaskPriority
+    priority?: TaskPriority,
+    recurrence?: TaskRecurrencePayload
   ) => Promise<unknown>;
 }
 
@@ -98,6 +100,7 @@ export function TaskAddSheet({
   const titleInputRef = useRef<RNTextInput>(null);
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
   const [scheduledTime, setScheduledTime] = useState('09:00');
+  const [recurrenceDraft, setRecurrenceDraft] = useState<TaskRecurrencePayload>(() => defaultRecurrenceNone());
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [remindersDisabled, setRemindersDisabled] = useState(false);
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
@@ -144,7 +147,12 @@ export function TaskAddSheet({
     else setScheduledDate(defaultDateKey ?? tomorrowKey);
     setTeamId(null);
     setAssignees([]);
+    setRecurrenceDraft(defaultRecurrenceNone());
   }, [visible, mainView, todayKey, tomorrowKey]);
+
+  useEffect(() => {
+    if (scheduledDate == null) setRecurrenceDraft(defaultRecurrenceNone());
+  }, [scheduledDate]);
 
   useEffect(() => {
     if (teamId == null) return;
@@ -346,7 +354,8 @@ export function TaskAddSheet({
       remindersDisabled,
       remindBeforeMinutes,
       { team_id: teamId, assignees },
-      priority
+      priority,
+      recurrenceDraft
     );
     setSaving(false);
     if (created) {
@@ -365,6 +374,7 @@ export function TaskAddSheet({
     onClose,
     teamId,
     assignees,
+    recurrenceDraft,
   ]);
 
   const canSubmit = title.trim().length > 0 && !saving;
@@ -615,6 +625,8 @@ export function TaskAddSheet({
                     onCalendarMonthChange={setCalendarMonth}
                     onClosePress={closeSub}
                     onConfirmPress={closeSub}
+                    recurrence={recurrenceDraft}
+                    onRecurrenceChange={setRecurrenceDraft}
                   />
                 </Animated.View>
               </View>

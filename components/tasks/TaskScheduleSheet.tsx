@@ -1,11 +1,22 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { formatTaskTime } from '@/lib/dateTimeUtils';
+import {
+  customPayload,
+  defaultRecurrenceNone,
+  formatEveryIntervalRu,
+  formatRecurrenceSummaryCompactRu,
+  presetToPayload,
+  RECURRENCE_PRESET_OPTIONS,
+  type RecurrenceCustomUnit,
+  type TaskRecurrencePayload,
+} from '@/lib/task-recurrence';
 import {
   buildMonthCells,
   formatDateLabelRu,
@@ -40,6 +51,8 @@ export type TaskScheduleSheetContentProps = {
   onCalendarMonthChange: (d: Date) => void;
   onClosePress: () => void;
   onConfirmPress: () => void;
+  recurrence: TaskRecurrencePayload;
+  onRecurrenceChange: (next: TaskRecurrencePayload) => void;
 };
 
 /**
@@ -61,12 +74,85 @@ export function TaskScheduleSheetContent({
   onCalendarMonthChange,
   onClosePress,
   onConfirmPress,
+  recurrence,
+  onRecurrenceChange,
 }: TaskScheduleSheetContentProps) {
   const [showScheduleTimePicker, setShowScheduleTimePicker] = useState(false);
+  const [repeatMenuOpen, setRepeatMenuOpen] = useState(false);
+  const [customRepeatOpen, setCustomRepeatOpen] = useState(false);
+  const [customInterval, setCustomInterval] = useState(1);
+  const [customUnit, setCustomUnit] = useState<RecurrenceCustomUnit>('day');
+  const [customWeekdays, setCustomWeekdays] = useState<number[]>([1]);
+
+  const intervalValues = useMemo(() => Array.from({ length: 365 }, (_, i) => i + 1), []);
+
+  const unitPickerItems = useMemo(
+    () =>
+      [
+        { value: 'day' as const, label: 'Дней' },
+        { value: 'week' as const, label: 'Недель' },
+        { value: 'month' as const, label: 'Месяцев' },
+      ] as const,
+    []
+  );
+
+  const customEveryTitle = useMemo(
+    () => formatEveryIntervalRu(customInterval, customUnit),
+    [customInterval, customUnit]
+  );
 
   useEffect(() => {
-    if (!active) setShowScheduleTimePicker(false);
+    if (!active) {
+      setShowScheduleTimePicker(false);
+      setRepeatMenuOpen(false);
+      setCustomRepeatOpen(false);
+    }
   }, [active]);
+
+  const openCustomEditor = useCallback(() => {
+    if (recurrence.recurrence_type === 'custom') {
+      const n = Math.min(365, Math.max(1, recurrence.recurrence_interval ?? 1));
+      setCustomInterval(n);
+      setCustomUnit((recurrence.recurrence_custom_unit as RecurrenceCustomUnit) ?? 'day');
+      setCustomWeekdays(
+        recurrence.recurrence_weekdays?.length ? [...recurrence.recurrence_weekdays] : [1]
+      );
+    } else {
+      setCustomInterval(1);
+      setCustomUnit('day');
+      setCustomWeekdays([1]);
+    }
+    setRepeatMenuOpen(false);
+    setCustomRepeatOpen(true);
+  }, [recurrence]);
+
+  const applyCustomRepeat = useCallback(() => {
+    const n = Math.min(365, Math.max(1, customInterval));
+    let wds = customUnit === 'week' ? [...customWeekdays].sort((a, b) => a - b) : null;
+    if (customUnit === 'week' && (!wds || wds.length === 0)) wds = [1];
+    onRecurrenceChange(customPayload(n, customUnit, wds));
+    setCustomRepeatOpen(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [customInterval, customUnit, customWeekdays, onRecurrenceChange]);
+
+  const closeCustomRepeat = useCallback(() => {
+    setCustomRepeatOpen(false);
+    setRepeatMenuOpen(true);
+  }, []);
+
+  const toggleWeekday = useCallback((wd: number) => {
+    setCustomWeekdays((prev) => {
+      const set = new Set(prev);
+      if (set.has(wd)) {
+        if (set.size <= 1) return prev;
+        set.delete(wd);
+      } else {
+        set.add(wd);
+      }
+      return [...set].sort((a, b) => a - b);
+    });
+    Haptics.selectionAsync();
+  }, []);
 
   const weekendShortcutKey = useMemo(() => nextWeekendDayKey(todayKey), [todayKey]);
   const nextWeekShortcutKey = useMemo(() => nextMondayAfterToday(todayKey), [todayKey]);
@@ -76,6 +162,9 @@ export function TaskScheduleSheetContent({
   );
 
   const { sheetBackground, bannerBackground, border, primary, text, textMuted } = colors;
+
+  const repeatDisabled = !scheduledDate;
+  const repeatSummaryCompact = formatRecurrenceSummaryCompactRu(recurrence, { anchorDateKey: scheduledDate });
 
   return (
     <>
@@ -149,6 +238,7 @@ export function TaskScheduleSheetContent({
           style={[styles.shortcutRow, { borderBottomColor: border }]}
           onPress={() => {
             onScheduledDateChange(null);
+            onRecurrenceChange(defaultRecurrenceNone());
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
         >
@@ -233,6 +323,27 @@ export function TaskScheduleSheetContent({
           <ThemedText style={[styles.metaRowValue, { color: textMuted }]}>{scheduledTime}</ThemedText>
           <MaterialIcons name="chevron-right" size={22} color={textMuted} />
         </Pressable>
+
+        <Pressable
+          style={[styles.metaRow, { borderColor: border, opacity: repeatDisabled ? 0.45 : 1 }]}
+          disabled={repeatDisabled}
+          onPress={() => {
+            if (repeatDisabled) return;
+            setRepeatMenuOpen(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+        >
+          <MaterialIcons name="repeat" size={22} color={textMuted} />
+          <ThemedText style={[styles.metaRowLabelNarrow, { color: text }]}>Повтор</ThemedText>
+          <ThemedText
+            style={[styles.metaRowValue, styles.metaRowValueRight, { color: textMuted }]}
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
+            {repeatDisabled ? 'Сначала дату' : repeatSummaryCompact}
+          </ThemedText>
+          <MaterialIcons name="unfold-more" size={22} color={textMuted} />
+        </Pressable>
       </ScrollView>
 
       {Platform.OS === 'android' && showScheduleTimePicker ? (
@@ -247,6 +358,201 @@ export function TaskScheduleSheetContent({
           }}
         />
       ) : null}
+
+      <Modal
+        visible={repeatMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRepeatMenuOpen(false)}
+      >
+        <View style={styles.timePickerRoot}>
+          <Pressable
+            style={styles.timePickerBackdrop}
+            onPress={() => setRepeatMenuOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Закрыть"
+          />
+          <View
+            style={[
+              styles.repeatMenuSheet,
+              {
+                backgroundColor: bannerBackground,
+                paddingBottom: Math.max(bottomInset, 12),
+              },
+            ]}
+          >
+            <ThemedText style={[styles.repeatMenuTitle, { color: text }]}>Повтор</ThemedText>
+            {RECURRENCE_PRESET_OPTIONS.map((opt, idx) => (
+              <Pressable
+                key={opt.type}
+                style={[
+                  styles.repeatMenuRow,
+                  { borderBottomColor: border },
+                  idx === RECURRENCE_PRESET_OPTIONS.length - 1 && styles.repeatMenuRowLast,
+                ]}
+                onPress={() => {
+                  if (opt.type === 'custom') {
+                    openCustomEditor();
+                    return;
+                  }
+                  onRecurrenceChange(presetToPayload(opt.type));
+                  setRepeatMenuOpen(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <ThemedText
+                  style={[styles.repeatMenuLabel, { color: text }]}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
+                  {opt.label}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={customRepeatOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={closeCustomRepeat}
+      >
+        <View style={styles.timePickerRoot}>
+          <Pressable
+            style={styles.timePickerBackdrop}
+            onPress={closeCustomRepeat}
+            accessibilityRole="button"
+            accessibilityLabel="Закрыть"
+          />
+          <View
+            style={[
+              styles.customRepeatSheetShell,
+              {
+                backgroundColor: bannerBackground,
+                paddingBottom: Math.max(bottomInset, 12),
+              },
+            ]}
+          >
+            <View style={styles.subSheetHeader}>
+              <Pressable onPress={closeCustomRepeat} hitSlop={12} style={styles.subSheetHeaderBtn}>
+                <MaterialIcons name="arrow-back" size={24} color={text} />
+              </Pressable>
+              <ThemedText style={[styles.subSheetHeaderTitle, { color: text }]} numberOfLines={1}>
+                Свой вариант
+              </ThemedText>
+              <Pressable onPress={applyCustomRepeat} hitSlop={12} style={styles.subSheetHeaderBtn}>
+                <MaterialIcons name="check" size={24} color={primary} />
+              </Pressable>
+            </View>
+
+            <View
+              style={[
+                styles.selectedDateBanner,
+                styles.customEveryBanner,
+                {
+                  backgroundColor: sheetBackground,
+                  borderColor: border,
+                },
+              ]}
+            >
+              <ThemedText style={[styles.customEveryBannerLabel, { color: textMuted }]}>Каждые</ThemedText>
+              <ThemedText style={[styles.customEveryBannerValue, { color: primary }]} numberOfLines={1}>
+                {customEveryTitle}
+              </ThemedText>
+            </View>
+
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.customRepeatScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.customPickerRow}>
+                <Picker
+                  selectedValue={customInterval}
+                  onValueChange={(v) => {
+                    setCustomInterval(Number(v));
+                    Haptics.selectionAsync();
+                  }}
+                  style={Platform.OS === 'ios' ? styles.customPickerIOS : styles.customPickerAndroid}
+                  itemStyle={
+                    Platform.OS === 'ios'
+                      ? { color: text, fontSize: 22 }
+                      : undefined
+                  }
+                  {...(Platform.OS === 'ios' ? { selectionColor: primary } : {})}
+                  {...(Platform.OS === 'android' ? { mode: 'dropdown' as const } : {})}
+                >
+                  {intervalValues.map((n) => (
+                    <Picker.Item
+                      key={n}
+                      label={String(n)}
+                      value={n}
+                      color={Platform.OS === 'ios' ? text : undefined}
+                    />
+                  ))}
+                </Picker>
+                <Picker
+                  selectedValue={customUnit}
+                  onValueChange={(v) => {
+                    setCustomUnit(v as RecurrenceCustomUnit);
+                    Haptics.selectionAsync();
+                  }}
+                  style={Platform.OS === 'ios' ? styles.customPickerIOS : styles.customPickerAndroid}
+                  itemStyle={
+                    Platform.OS === 'ios'
+                      ? { color: text, fontSize: 22 }
+                      : undefined
+                  }
+                  {...(Platform.OS === 'ios' ? { selectionColor: primary } : {})}
+                  {...(Platform.OS === 'android' ? { mode: 'dropdown' as const } : {})}
+                >
+                  {unitPickerItems.map((u) => (
+                    <Picker.Item
+                      key={u.value}
+                      label={u.label}
+                      value={u.value}
+                      color={Platform.OS === 'ios' ? text : undefined}
+                    />
+                  ))}
+                </Picker>
+              </View>
+
+              {customUnit === 'week' ? (
+                <>
+                  <ThemedText style={[styles.customSectionLabel, { color: textMuted, marginTop: 8 }]}>
+                    ДНИ НЕДЕЛИ
+                  </ThemedText>
+                  <View style={styles.weekdayRowPick}>
+                    {(['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const).map((label, i) => {
+                      const wd = i + 1;
+                      const selected = customWeekdays.includes(wd);
+                      return (
+                        <Pressable
+                          key={wd}
+                          onPress={() => toggleWeekday(wd)}
+                          style={[
+                            styles.weekdayChip,
+                            { borderColor: border },
+                            selected && { backgroundColor: primary, borderColor: primary },
+                          ]}
+                        >
+                          <ThemedText
+                            style={{ fontSize: 13, fontWeight: '700', color: selected ? '#fff' : text }}
+                          >
+                            {label}
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {Platform.OS === 'ios' ? (
         <Modal
@@ -363,7 +669,19 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   metaRowLabel: { flex: 1, fontSize: 16 },
+  /** Подпись слева без растягивания — значение уходит вправо (строка «Повтор»). */
+  metaRowLabelNarrow: {
+    fontSize: 16,
+    fontWeight: '600',
+    flexShrink: 0,
+  },
   metaRowValue: { fontSize: 15, marginRight: 4 },
+  metaRowValueRight: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'right',
+    marginRight: 0,
+  },
   timePickerRoot: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -403,5 +721,93 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
     height: 216,
+  },
+  repeatMenuSheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    maxHeight: '70%',
+  },
+  repeatMenuTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  repeatMenuRow: {
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  repeatMenuRowLast: {
+    borderBottomWidth: 0,
+  },
+  repeatMenuLabel: {
+    fontSize: 15,
+    flexShrink: 1,
+    paddingRight: 4,
+  },
+  customRepeatSheetShell: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+    maxHeight: '92%',
+  },
+  customEveryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  customEveryBannerLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  customEveryBannerValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  customRepeatScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+  },
+  customSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  customPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    width: '100%',
+    maxWidth: '100%',
+  },
+  customPickerIOS: {
+    flex: 1,
+    height: 216,
+  },
+  customPickerAndroid: {
+    flex: 1,
+    minHeight: 120,
+    maxHeight: 220,
+  },
+  weekdayRowPick: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  weekdayChip: {
+    minWidth: 40,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
   },
 });

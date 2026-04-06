@@ -2,6 +2,11 @@ import { request } from './api';
 
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
+import {
+  normalizeRecurrenceFromApi,
+  type RecurrenceCustomUnit,
+  type RecurrenceType,
+} from '@/lib/task-recurrence';
 
 export type TaskPriority = 'low' | 'medium' | 'high';
 
@@ -32,6 +37,10 @@ export interface UserTask {
   priority: TaskPriority;
   reminders_disabled: boolean;
   remind_before_minutes: number | null;
+  recurrence_type: RecurrenceType;
+  recurrence_interval: number;
+  recurrence_custom_unit: RecurrenceCustomUnit | null;
+  recurrence_weekdays: number[] | null;
   created_at: string;
   updated_at: string;
   assignee_ids: number[];
@@ -46,11 +55,19 @@ export interface UserTask {
 }
 
 function unwrapTaskPayload(raw: unknown): UserTask {
+  let t: UserTask | undefined;
   if (raw && typeof raw === 'object' && 'task' in raw) {
-    const t = (raw as { task?: UserTask }).task;
-    if (t) return t;
+    t = (raw as { task?: UserTask }).task;
+  } else {
+    t = raw as UserTask | undefined;
   }
-  return raw as UserTask;
+  if (!t) return raw as UserTask;
+  return normalizeUserTaskRow(t);
+}
+
+function normalizeUserTaskRow(t: UserTask): UserTask {
+  const rec = normalizeRecurrenceFromApi(t);
+  return { ...t, ...rec };
 }
 
 export type UserTaskAttachmentKind = 'image' | 'video' | 'document';
@@ -115,7 +132,13 @@ export async function getUserTasks(params: {
     params: Object.keys(searchParams).length ? searchParams : undefined,
   });
   if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, data: result.data };
+  return {
+    ok: true,
+    data: {
+      ...result.data,
+      tasks: result.data.tasks.map((t) => normalizeUserTaskRow(t)),
+    },
+  };
 }
 
 export async function getUserTasksCalendar(
@@ -157,6 +180,10 @@ export async function createUserTask(body: {
   executor_id?: number | null;
   reminders_disabled?: boolean;
   remind_before_minutes?: number | null;
+  recurrence_type?: RecurrenceType;
+  recurrence_interval?: number;
+  recurrence_custom_unit?: RecurrenceCustomUnit | null;
+  recurrence_weekdays?: number[] | null;
 }): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
   const result = await request<{ task: UserTask }>('/user-tasks', {
     method: 'POST',
@@ -182,6 +209,10 @@ export async function updateUserTask(
     reminders_disabled: boolean;
     remind_at: string | null;
     remind_before_minutes: number | null;
+    recurrence_type: RecurrenceType;
+    recurrence_interval: number;
+    recurrence_custom_unit: RecurrenceCustomUnit | null;
+    recurrence_weekdays: number[] | null;
   }>
 ): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
   const result = await request<{ task: UserTask }>(`/user-tasks/${id}`, {

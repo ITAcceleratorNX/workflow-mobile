@@ -35,6 +35,12 @@ import { useTeams } from '@/hooks/use-teams';
 import { useTodoList } from '@/hooks/use-todo-list';
 import type { Team } from '@/lib/teams-api';
 import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
+import {
+  defaultRecurrenceNone,
+  formatRecurrenceSummaryCompactRu,
+  normalizeRecurrenceFromApi,
+  type TaskRecurrencePayload,
+} from '@/lib/task-recurrence';
 import type { TaskPriority, UserTask, UserTaskAttachment } from '@/lib/user-tasks-api';
 import { deleteUserTaskAttachment, getUserTaskAttachments, uploadUserTaskAttachments } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
@@ -130,6 +136,9 @@ export default function TaskDetailsScreen() {
   const [scheduleDraftDate, setScheduleDraftDate] = useState<string | null>(null);
   const [scheduleDraftTime, setScheduleDraftTime] = useState('09:00');
   const [scheduleCalendarMonth, setScheduleCalendarMonth] = useState(() => new Date());
+  const [scheduleDraftRecurrence, setScheduleDraftRecurrence] = useState<TaskRecurrencePayload>(() =>
+    defaultRecurrenceNone()
+  );
 
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
   const [pickerSheet, setPickerSheet] = useState<'team' | 'assignees' | null>(null);
@@ -234,7 +243,13 @@ export default function TaskDetailsScreen() {
     if (!task || !canEditDetails) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (task.scheduled_at) {
-      await updateTask(task, { scheduled_at: null });
+      await updateTask(task, {
+        scheduled_at: null,
+        recurrence_type: 'none',
+        recurrence_interval: 1,
+        recurrence_custom_unit: null,
+        recurrence_weekdays: null,
+      });
       return;
     }
     const nowPlus15Min = new Date(Date.now() + 15 * 60 * 1000);
@@ -265,16 +280,31 @@ export default function TaskDetailsScreen() {
     setScheduleDraftTime(time);
     const base = new Date((dateKey ?? toAppDateKey(new Date())) + 'T12:00:00');
     setScheduleCalendarMonth(new Date(base.getFullYear(), base.getMonth(), 1));
+    setScheduleDraftRecurrence(normalizeRecurrenceFromApi(task));
     setScheduleModalOpen(true);
   }, [task, canEditDetails, notifyCreatorOnly]);
 
   const applyScheduleModal = useCallback(async () => {
     if (!task || !canEditDetails) return;
+    const r = scheduleDraftRecurrence;
+    const hasDate = !!scheduleDraftDate;
     await updateTask(task, {
       scheduled_at: scheduleDraftDate ? isoForDateTime(scheduleDraftDate, scheduleDraftTime) : null,
+      recurrence_type: hasDate ? r.recurrence_type : 'none',
+      recurrence_interval: hasDate ? r.recurrence_interval : 1,
+      recurrence_custom_unit: hasDate ? r.recurrence_custom_unit : null,
+      recurrence_weekdays: hasDate ? r.recurrence_weekdays : null,
     });
     closeScheduleModal();
-  }, [task, canEditDetails, scheduleDraftDate, scheduleDraftTime, updateTask, closeScheduleModal]);
+  }, [
+    task,
+    canEditDetails,
+    scheduleDraftDate,
+    scheduleDraftTime,
+    scheduleDraftRecurrence,
+    updateTask,
+    closeScheduleModal,
+  ]);
 
   const handleRemindBeforeChange = useCallback(async (value: number | null) => {
     if (!task || !canEditDetails) return;
@@ -533,7 +563,15 @@ export default function TaskDetailsScreen() {
 
   const scheduledDateLabel = task.scheduled_at ? toAppDateKey(task.scheduled_at) : 'Без срока';
   const scheduledTimeLabel = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '';
-  const scheduledSummaryLabel = task.scheduled_at ? `${scheduledDateLabel} · ${scheduledTimeLabel}` : 'Без срока';
+  const repeatHint =
+    task.scheduled_at && task.recurrence_type && task.recurrence_type !== 'none'
+      ? formatRecurrenceSummaryCompactRu(normalizeRecurrenceFromApi(task), {
+          anchorDateKey: toAppDateKey(task.scheduled_at),
+        })
+      : '';
+  const scheduledPrimaryLine = task.scheduled_at
+    ? `${scheduledDateLabel} · ${scheduledTimeLabel}`
+    : 'Без срока';
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
@@ -690,21 +728,35 @@ export default function TaskDetailsScreen() {
                 !canEditDetails && { opacity: 0.75 },
               ]}
             >
-              <View style={styles.rowLeft}>
+              <View style={styles.scheduleRowLeft}>
                 <MaterialIcons name="event" size={20} color={textMuted} />
                 <ThemedText style={[styles.rowTitle, { color: text }]}>Срок</ThemedText>
               </View>
-              <ThemedText
-                style={[
-                  styles.rowValue,
-                  {
-                    color: textMuted,
-                    textDecorationLine: canEditDetails ? 'underline' : 'none',
-                  },
-                ]}
-              >
-                {scheduledSummaryLabel}
-              </ThemedText>
+              <View style={styles.scheduleSummaryCol}>
+                <ThemedText
+                  style={[
+                    styles.rowValue,
+                    styles.schedulePrimaryLine,
+                    {
+                      color: textMuted,
+                      textDecorationLine: canEditDetails ? 'underline' : 'none',
+                    },
+                  ]}
+                  numberOfLines={2}
+                  ellipsizeMode="tail"
+                >
+                  {scheduledPrimaryLine}
+                </ThemedText>
+                {repeatHint ? (
+                  <ThemedText
+                    style={[styles.scheduleRepeatLine, { color: textMuted }]}
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                  >
+                    {repeatHint}
+                  </ThemedText>
+                ) : null}
+              </View>
             </Pressable>
             <Switch
               value={scheduledEnabled}
@@ -981,6 +1033,8 @@ export default function TaskDetailsScreen() {
                 onCalendarMonthChange={setScheduleCalendarMonth}
                 onClosePress={closeScheduleModal}
                 onConfirmPress={() => void applyScheduleModal()}
+                recurrence={scheduleDraftRecurrence}
+                onRecurrenceChange={setScheduleDraftRecurrence}
               />
             </View>
           </View>
@@ -1064,6 +1118,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     minHeight: 72,
     textAlignVertical: 'top',
+    width: '100%',
+    maxWidth: '100%',
   },
   sectionLabel: {
     marginTop: 18,
@@ -1111,12 +1167,35 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  scheduleRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexShrink: 0,
+  },
   rowTitle: {
     fontSize: 15,
     fontWeight: '600',
   },
   rowValue: {
     fontSize: 13,
+  },
+  scheduleSummaryCol: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  schedulePrimaryLine: {
+    textAlign: 'right',
+    maxWidth: '100%',
+  },
+  scheduleRepeatLine: {
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'right',
+    maxWidth: '100%',
+    opacity: 0.92,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
