@@ -1,17 +1,19 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
 import type { Team } from '@/lib/teams-api';
@@ -170,6 +172,8 @@ export function TaskExecutorPickerOverlay({
   onSelect,
 }: ExecutorPickerProps) {
   const insets = useSafeAreaInsets();
+  const { height: windowH } = useWindowDimensions();
+  const keyboardHeight = useKeyboardHeight(visible);
   const background = useThemeColor({}, 'background');
   const headerText = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -197,7 +201,7 @@ export function TaskExecutorPickerOverlay({
   useEffect(() => {
     if (!visible || teamMode) return;
     const q = search.trim();
-    if (q.length < 2) {
+    if (q.length < 1) {
       setResults([]);
       return;
     }
@@ -206,6 +210,7 @@ export function TaskExecutorPickerOverlay({
       const res = await searchUsersForAssign(q);
       setSearching(false);
       if (res.ok) setResults(res.data);
+      else setResults([]);
     }, 300);
     return () => clearTimeout(t);
   }, [search, visible, teamMode]);
@@ -219,6 +224,11 @@ export function TaskExecutorPickerOverlay({
     [onSelect, onClose]
   );
 
+  const pickerScrollMaxHeight = useMemo(() => {
+    if (keyboardHeight <= 0) return 420;
+    return Math.max(160, Math.min(420, windowH - keyboardHeight - 168));
+  }, [keyboardHeight, windowH]);
+
   if (!visible) return null;
 
   return (
@@ -230,7 +240,7 @@ export function TaskExecutorPickerOverlay({
             styles.subScheduleSheet,
             {
               backgroundColor: background,
-              paddingBottom: Math.max(insets.bottom, 12),
+              paddingBottom: Math.max(insets.bottom, 12) + keyboardHeight,
             },
           ]}
         >
@@ -248,9 +258,10 @@ export function TaskExecutorPickerOverlay({
           </View>
 
           <ScrollView
-            style={styles.pickerScroll}
+            style={[styles.pickerScroll, { maxHeight: pickerScrollMaxHeight }]}
             contentContainerStyle={styles.pickerScrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             <Pressable
@@ -301,7 +312,7 @@ export function TaskExecutorPickerOverlay({
                   <TextInput
                     value={search}
                     onChangeText={setSearch}
-                    placeholder="Поиск по имени (от 2 символов)"
+                    placeholder="Имя или телефон"
                     placeholderTextColor={textMuted}
                     style={[styles.searchInput, { color: headerText }]}
                   />
@@ -325,7 +336,7 @@ export function TaskExecutorPickerOverlay({
                     </Pressable>
                   );
                 })}
-                {search.trim().length >= 2 && !searching && results.length === 0 ? (
+                {search.trim().length >= 1 && !searching && results.length === 0 ? (
                   <ThemedText style={[styles.hint, { color: textMuted }]}>Никого не найдено</ThemedText>
                 ) : null}
               </>
@@ -344,7 +355,7 @@ type AssigneesPickerProps = {
   team: Team | null;
   teamLoading?: boolean;
   selectedAssignees: { id: number; full_name: string }[];
-  onChange: (next: { id: number; full_name: string }[]) => void;
+  onChange: Dispatch<SetStateAction<{ id: number; full_name: string }[]>>;
   /** Не показывать себя в списке выбора (сервер тоже отфильтрует создателя) */
   currentUserId?: number | null;
 };
@@ -361,6 +372,8 @@ export function TaskAssigneesPickerOverlay({
   currentUserId,
 }: AssigneesPickerProps) {
   const insets = useSafeAreaInsets();
+  const { height: windowH } = useWindowDimensions();
+  const keyboardHeight = useKeyboardHeight(visible);
   const background = useThemeColor({}, 'background');
   const headerText = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -395,7 +408,7 @@ export function TaskAssigneesPickerOverlay({
   useEffect(() => {
     if (!visible || teamMode) return;
     const q = search.trim();
-    if (q.length < 2) {
+    if (q.length < 1) {
       setResults([]);
       return;
     }
@@ -406,6 +419,8 @@ export function TaskAssigneesPickerOverlay({
       if (res.ok) {
         const list = currentUserId ? res.data.filter((u) => u.id !== currentUserId) : res.data;
         setResults(list);
+      } else {
+        setResults([]);
       }
     }, 300);
     return () => clearTimeout(t);
@@ -417,19 +432,24 @@ export function TaskAssigneesPickerOverlay({
         return;
       }
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      if (selectedIds.has(u.id)) {
-        onChange(selectedAssignees.filter((a) => a.id !== u.id));
-      } else {
-        onChange([...selectedAssignees, u]);
-      }
+      onChange((prev) => {
+        const has = prev.some((a) => a.id === u.id);
+        if (has) return prev.filter((a) => a.id !== u.id);
+        return [...prev, u];
+      });
     },
-    [selectedAssignees, selectedIds, onChange, currentUserId, teamMode]
+    [onChange, currentUserId]
   );
 
   const clearAll = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onChange([]);
   }, [onChange]);
+
+  const pickerScrollMaxHeight = useMemo(() => {
+    if (keyboardHeight <= 0) return 420;
+    return Math.max(160, Math.min(420, windowH - keyboardHeight - 168));
+  }, [keyboardHeight, windowH]);
 
   if (!visible) return null;
 
@@ -442,7 +462,7 @@ export function TaskAssigneesPickerOverlay({
             styles.subScheduleSheet,
             {
               backgroundColor: background,
-              paddingBottom: Math.max(insets.bottom, 12),
+              paddingBottom: Math.max(insets.bottom, 12) + keyboardHeight,
             },
           ]}
         >
@@ -460,9 +480,10 @@ export function TaskAssigneesPickerOverlay({
           </View>
 
           <ScrollView
-            style={styles.pickerScroll}
+            style={[styles.pickerScroll, { maxHeight: pickerScrollMaxHeight }]}
             contentContainerStyle={styles.pickerScrollContent}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}
           >
             {selectedAssignees.length > 0 ? (
@@ -535,7 +556,7 @@ export function TaskAssigneesPickerOverlay({
                   <TextInput
                     value={search}
                     onChangeText={setSearch}
-                    placeholder="Поиск по имени (от 2 символов)"
+                    placeholder="Имя или телефон"
                     placeholderTextColor={textMuted}
                     style={[styles.searchInput, { color: headerText }]}
                   />
@@ -559,7 +580,7 @@ export function TaskAssigneesPickerOverlay({
                     </Pressable>
                   );
                 })}
-                {search.trim().length >= 2 && !searching && results.length === 0 ? (
+                {search.trim().length >= 1 && !searching && results.length === 0 ? (
                   <ThemedText style={[styles.hint, { color: textMuted }]}>Никого не найдено</ThemedText>
                 ) : null}
               </>

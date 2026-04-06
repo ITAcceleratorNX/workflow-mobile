@@ -1,6 +1,6 @@
 import { useAuthStore } from '@/stores/auth-store';
 
-const API_BASE_URL = 'http://192.168.0.17:3001/api';
+const API_BASE_URL = 'https://workflow-back-zpk4.onrender.com/api';
 
 type JsonValue = string | number | boolean | null | JsonObject | JsonValue[];
 interface JsonObject {

@@ -3,7 +3,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -546,9 +546,12 @@ export default function TaskDetailsScreen() {
     setPickerSheet(null);
   }, [task, canEditDetails, applyAssignees]);
 
-  const onAssigneesDraftChange = useCallback((next: { id: number; full_name: string }[]) => {
-    assigneesDraftRef.current = next;
-    setAssigneesDraft(next);
+  const onAssigneesDraftChange = useCallback((update: SetStateAction<{ id: number; full_name: string }[]>) => {
+    setAssigneesDraft((prev) => {
+      const next = typeof update === 'function' ? update(prev) : update;
+      assigneesDraftRef.current = next;
+      return next;
+    });
   }, []);
 
   if (!task) {
