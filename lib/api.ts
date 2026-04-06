@@ -144,6 +144,10 @@ export interface Office {
   name: string;
   city?: string;
   address?: string;
+  /** Корпус / блок здания */
+  block?: string | null;
+  /** Этаж (число) */
+  floor?: number | null;
   lat?: number | null;
   lon?: number | null;
   photo?: string | null;
@@ -218,7 +222,19 @@ export async function updateOfficeWorkingHours(
 
 export async function updateOffice(
   id: number,
-  body: Partial<Pick<Office, 'name' | 'city' | 'address' | 'working_hours_start' | 'working_hours_end' | 'auto_track_enabled'>>
+  body: Partial<
+    Pick<
+      Office,
+      | 'name'
+      | 'city'
+      | 'address'
+      | 'block'
+      | 'floor'
+      | 'working_hours_start'
+      | 'working_hours_end'
+      | 'auto_track_enabled'
+    >
+  >
 ): Promise<{ ok: true; data: Office } | { ok: false; error: string }> {
   const result = await request<Office>(`/offices/${id}`, {
     method: 'PUT',
@@ -232,6 +248,8 @@ export async function createOffice(body: {
   name: string;
   address: string;
   city: string;
+  block?: string | null;
+  floor?: number | null;
   working_hours_start?: string;
   working_hours_end?: string;
   auto_track_enabled?: boolean;

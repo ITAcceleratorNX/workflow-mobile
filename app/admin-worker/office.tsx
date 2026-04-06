@@ -54,6 +54,15 @@ function toHHmm(v: string | null | undefined): string {
   return v;
 }
 
+/** Этаж из поля ввода: пусто → null, иначе целое ≥ 0 */
+function parseFloorField(s: string): { ok: true; value: number | null } | { ok: false } {
+  const t = s.trim();
+  if (t === '') return { ok: true, value: null };
+  const n = parseInt(t, 10);
+  if (Number.isNaN(n) || n < 0) return { ok: false };
+  return { ok: true, value: n };
+}
+
 export default function AdminWorkerOfficeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -78,12 +87,16 @@ export default function AdminWorkerOfficeScreen() {
   const [editName, setEditName] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editCity, setEditCity] = useState('');
+  const [editBlock, setEditBlock] = useState('');
+  const [editFloor, setEditFloor] = useState('');
   const [savingDataId, setSavingDataId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newCity, setNewCity] = useState('');
+  const [newBlock, setNewBlock] = useState('');
+  const [newFloor, setNewFloor] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [newOfficePhoto, setNewOfficePhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
@@ -147,6 +160,8 @@ export default function AdminWorkerOfficeScreen() {
       setEditName(office.name ?? '');
       setEditAddress(office.address ?? '');
       setEditCity(office.city ?? '');
+      setEditBlock(office.block ?? '');
+      setEditFloor(office.floor != null ? String(office.floor) : '');
       setRooms([]);
       await loadRooms(id);
     },
@@ -293,6 +308,12 @@ export default function AdminWorkerOfficeScreen() {
         showToast({ title: 'Введите название офиса', variant: 'destructive', duration: 4000 });
         return;
       }
+      const floorParsed = parseFloorField(editFloor);
+      if (!floorParsed.ok) {
+        showToast({ title: 'Этаж — целое число ≥ 0', variant: 'destructive', duration: 4000 });
+        return;
+      }
+      const blockTrim = editBlock.trim();
       setSavingDataId(officeId);
       let result;
       if (editOfficePhoto) {
@@ -300,6 +321,8 @@ export default function AdminWorkerOfficeScreen() {
         fd.append('name', editName.trim());
         fd.append('address', editAddress.trim());
         fd.append('city', editCity.trim());
+        fd.append('block', blockTrim);
+        fd.append('floor', floorParsed.value === null ? '' : String(floorParsed.value));
         const asset = editOfficePhoto;
         const ext = asset.uri.split('.').pop() || 'jpg';
         fd.append('photo', {
@@ -314,14 +337,25 @@ export default function AdminWorkerOfficeScreen() {
           name: editName.trim(),
           address: editAddress.trim() || undefined,
           city: editCity.trim() || undefined,
+          block: blockTrim || null,
+          floor: floorParsed.value,
         });
       }
       if (result.ok) {
         showToast({ title: 'Данные офиса сохранены', variant: 'success' });
+        const d = result.data;
         setOffices((prev) =>
           prev.map((o) =>
             o.id === officeId
-              ? { ...o, name: editName.trim(), address: editAddress.trim(), city: editCity.trim(), photo: result.ok ? result.data?.photo : o.photo }
+              ? {
+                  ...o,
+                  name: editName.trim(),
+                  address: editAddress.trim(),
+                  city: editCity.trim(),
+                  block: d?.block ?? (blockTrim || null),
+                  floor: d?.floor ?? floorParsed.value,
+                  photo: d?.photo ?? o.photo,
+                }
               : o
           )
         );
@@ -330,7 +364,7 @@ export default function AdminWorkerOfficeScreen() {
       }
       setSavingDataId(null);
     },
-    [editName, editAddress, editCity, editOfficePhoto, showToast]
+    [editName, editAddress, editCity, editBlock, editFloor, editOfficePhoto, showToast]
   );
 
   const handleCreateOffice = useCallback(async () => {
@@ -338,14 +372,22 @@ export default function AdminWorkerOfficeScreen() {
       setCreateError('Заполните название, адрес и город');
       return;
     }
+    const floorParsed = parseFloorField(newFloor);
+    if (!floorParsed.ok) {
+      setCreateError('Этаж — целое число ≥ 0');
+      return;
+    }
     setCreateError(null);
     setIsCreating(true);
     let result;
+    const blockTrim = newBlock.trim();
     if (newOfficePhoto) {
       const fd = new FormData();
       fd.append('name', newName.trim());
       fd.append('address', newAddress.trim());
       fd.append('city', newCity.trim());
+      fd.append('block', blockTrim);
+      fd.append('floor', floorParsed.value === null ? '' : String(floorParsed.value));
       const asset = newOfficePhoto;
       const ext = asset.uri.split('.').pop() || 'jpg';
       fd.append('photo', {
@@ -359,6 +401,8 @@ export default function AdminWorkerOfficeScreen() {
         name: newName.trim(),
         address: newAddress.trim(),
         city: newCity.trim(),
+        block: blockTrim || undefined,
+        floor: floorParsed.value,
       });
     }
     if (result.ok) {
@@ -366,6 +410,8 @@ export default function AdminWorkerOfficeScreen() {
       setNewName('');
       setNewAddress('');
       setNewCity('');
+      setNewBlock('');
+      setNewFloor('');
       setNewOfficePhoto(null);
       setShowCreateForm(false);
       load();
@@ -373,7 +419,7 @@ export default function AdminWorkerOfficeScreen() {
       setCreateError(result.error);
     }
     setIsCreating(false);
-  }, [newName, newAddress, newCity, newOfficePhoto, showToast, load]);
+  }, [newName, newAddress, newCity, newBlock, newFloor, newOfficePhoto, showToast, load]);
 
   const handleDeleteOffice = useCallback(
     (office: Office) => {
@@ -502,27 +548,58 @@ export default function AdminWorkerOfficeScreen() {
           {showCreateForm && (
             <View style={styles.createCard}>
               <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Новый офис</ThemedText>
+              <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Название</ThemedText>
               <TextInput
                 style={[styles.input, { color: text }]}
-                placeholder="Название"
+                placeholder="Введите название"
                 placeholderTextColor={textMuted}
                 value={newName}
                 onChangeText={setNewName}
+                accessibilityLabel="Название офиса"
               />
+              <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Адрес</ThemedText>
               <TextInput
                 style={[styles.input, { color: text }]}
-                placeholder="Адрес"
+                placeholder="Улица, дом"
                 placeholderTextColor={textMuted}
                 value={newAddress}
                 onChangeText={setNewAddress}
+                accessibilityLabel="Адрес"
               />
+              <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Город</ThemedText>
               <TextInput
                 style={[styles.input, { color: text }]}
                 placeholder="Город"
                 placeholderTextColor={textMuted}
                 value={newCity}
                 onChangeText={setNewCity}
+                accessibilityLabel="Город"
               />
+              <View style={styles.rowInputs}>
+                <View style={styles.fieldColumn}>
+                  <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Блок</ThemedText>
+                  <TextInput
+                    style={[styles.input, styles.inputInRow, { color: text }]}
+                    placeholder="Необязательно"
+                    placeholderTextColor={textMuted}
+                    value={newBlock}
+                    onChangeText={setNewBlock}
+                    accessibilityLabel="Блок"
+                  />
+                </View>
+                <View style={styles.fieldColumn}>
+                  <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Этаж</ThemedText>
+                  <TextInput
+                    style={[styles.input, styles.inputInRow, { color: text }]}
+                    placeholder="Необязательно"
+                    placeholderTextColor={textMuted}
+                    value={newFloor}
+                    onChangeText={setNewFloor}
+                    keyboardType="number-pad"
+                    accessibilityLabel="Этаж"
+                  />
+                </View>
+              </View>
               <Pressable style={styles.addRoomButton} onPress={pickPhotoForNew}>
                 <MaterialIcons name="add-a-photo" size={20} color={primary} />
                 <ThemedText style={[styles.addRoomButtonText, { color: primary }]}>
@@ -570,6 +647,13 @@ export default function AdminWorkerOfficeScreen() {
                         <ThemedText style={[styles.cardMeta, { color: textMuted }]} numberOfLines={1}>
                           {office.city ?? ''} {office.address ?? ''}
                         </ThemedText>
+                        {(office.block || office.floor != null) && (
+                          <ThemedText style={[styles.cardMeta, { color: textMuted }]} numberOfLines={1}>
+                            {[office.block ? `Блок ${office.block}` : null, office.floor != null ? `${office.floor} этаж` : null]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </ThemedText>
+                        )}
                         <ThemedText style={[styles.cardHours, { color: textMuted }]}>
                           {hoursStr}
                           {office.auto_track_enabled ? ' · авто-трекер' : ''}
@@ -588,27 +672,58 @@ export default function AdminWorkerOfficeScreen() {
                       <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>
                         Данные офиса
                       </ThemedText>
+                      <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Название</ThemedText>
                       <TextInput
                         style={[styles.input, { color: text }]}
-                        placeholder="Название"
+                        placeholder="Введите название"
                         placeholderTextColor={textMuted}
                         value={editName}
                         onChangeText={setEditName}
+                        accessibilityLabel="Название офиса"
                       />
+                      <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Адрес</ThemedText>
                       <TextInput
                         style={[styles.input, { color: text }]}
-                        placeholder="Адрес"
+                        placeholder="Улица, дом"
                         placeholderTextColor={textMuted}
                         value={editAddress}
                         onChangeText={setEditAddress}
+                        accessibilityLabel="Адрес"
                       />
+                      <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Город</ThemedText>
                       <TextInput
                         style={[styles.input, { color: text }]}
                         placeholder="Город"
                         placeholderTextColor={textMuted}
                         value={editCity}
                         onChangeText={setEditCity}
+                        accessibilityLabel="Город"
                       />
+                      <View style={styles.rowInputs}>
+                        <View style={styles.fieldColumn}>
+                          <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Блок</ThemedText>
+                          <TextInput
+                            style={[styles.input, styles.inputInRow, { color: text }]}
+                            placeholder="Необязательно"
+                            placeholderTextColor={textMuted}
+                            value={editBlock}
+                            onChangeText={setEditBlock}
+                            accessibilityLabel="Блок"
+                          />
+                        </View>
+                        <View style={styles.fieldColumn}>
+                          <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Этаж</ThemedText>
+                          <TextInput
+                            style={[styles.input, styles.inputInRow, { color: text }]}
+                            placeholder="Необязательно"
+                            placeholderTextColor={textMuted}
+                            value={editFloor}
+                            onChangeText={setEditFloor}
+                            keyboardType="number-pad"
+                            accessibilityLabel="Этаж"
+                          />
+                        </View>
+                      </View>
                       <Pressable style={[styles.addRoomButton, { marginBottom: 12 }]} onPress={pickPhotoForEdit}>
                         <MaterialIcons name="add-a-photo" size={20} color={primary} />
                         <ThemedText style={[styles.addRoomButtonText, { color: primary }]}>
@@ -630,25 +745,26 @@ export default function AdminWorkerOfficeScreen() {
                       <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>
                         Рабочие часы
                       </ThemedText>
-                      <View style={styles.row}>
-                        <TextInput
-                          style={[styles.timeInput, { color: text }]}
-                          placeholder="09:00"
-                          placeholderTextColor={textMuted}
-                          value={startInput}
-                          onChangeText={setStartInput}
-                          keyboardType="numbers-and-punctuation"
-                        />
-                        <ThemedText style={[styles.timeSep, { color: textMuted }]}>–</ThemedText>
-                        <TextInput
-                          style={[styles.timeInput, { color: text }]}
-                          placeholder="18:00"
-                          placeholderTextColor={textMuted}
-                          value={endInput}
-                          onChangeText={setEndInput}
-                          keyboardType="numbers-and-punctuation"
-                        />
-                      </View>
+                      <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Начало дня</ThemedText>
+                      <TextInput
+                        style={[styles.timeInput, { color: text }]}
+                        placeholder="09:00"
+                        placeholderTextColor={textMuted}
+                        value={startInput}
+                        onChangeText={setStartInput}
+                        keyboardType="numbers-and-punctuation"
+                        accessibilityLabel="Начало рабочего дня"
+                      />
+                      <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Конец дня</ThemedText>
+                      <TextInput
+                        style={[styles.timeInput, { color: text }]}
+                        placeholder="18:00"
+                        placeholderTextColor={textMuted}
+                        value={endInput}
+                        onChangeText={setEndInput}
+                        keyboardType="numbers-and-punctuation"
+                        accessibilityLabel="Конец рабочего дня"
+                      />
                       <View style={styles.switchRow}>
                         <ThemedText style={[styles.switchLabel, { color: text }]}>
                           Авто-трекер по рабочим часам
@@ -684,30 +800,40 @@ export default function AdminWorkerOfficeScreen() {
                               <View key={r.id} style={styles.roomRow}>
                                 {editingRoomId === r.id ? (
                                   <View style={styles.roomEditBlock}>
+                                    <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Название</ThemedText>
                                     <TextInput
                                       style={[styles.roomInput, { color: text }]}
-                                      placeholder="Название"
+                                      placeholder="Переговорная"
                                       placeholderTextColor={textMuted}
                                       value={editRoomName}
                                       onChangeText={setEditRoomName}
+                                      accessibilityLabel="Название переговорной"
                                     />
                                     <View style={styles.roomEditRow}>
-                                      <TextInput
-                                        style={[styles.roomInputSmall, { color: text }]}
-                                        placeholder="Этаж"
-                                        placeholderTextColor={textMuted}
-                                        value={editRoomFloor}
-                                        onChangeText={setEditRoomFloor}
-                                        keyboardType="number-pad"
-                                      />
-                                      <TextInput
-                                        style={[styles.roomInputSmall, { color: text }]}
-                                        placeholder="Вместимость"
-                                        placeholderTextColor={textMuted}
-                                        value={editRoomCapacity}
-                                        onChangeText={setEditRoomCapacity}
-                                        keyboardType="number-pad"
-                                      />
+                                      <View style={styles.fieldColumn}>
+                                        <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Этаж</ThemedText>
+                                        <TextInput
+                                          style={[styles.roomInputSmall, { color: text }]}
+                                          placeholder="0"
+                                          placeholderTextColor={textMuted}
+                                          value={editRoomFloor}
+                                          onChangeText={setEditRoomFloor}
+                                          keyboardType="number-pad"
+                                          accessibilityLabel="Этаж переговорной"
+                                        />
+                                      </View>
+                                      <View style={styles.fieldColumn}>
+                                        <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Вместимость</ThemedText>
+                                        <TextInput
+                                          style={[styles.roomInputSmall, { color: text }]}
+                                          placeholder="1"
+                                          placeholderTextColor={textMuted}
+                                          value={editRoomCapacity}
+                                          onChangeText={setEditRoomCapacity}
+                                          keyboardType="number-pad"
+                                          accessibilityLabel="Вместимость"
+                                        />
+                                      </View>
                                     </View>
                                     <View style={styles.roomEditActions}>
                                       <Pressable
@@ -781,30 +907,40 @@ export default function AdminWorkerOfficeScreen() {
                               <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>
                                 Новая переговорная
                               </ThemedText>
+                              <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Название</ThemedText>
                               <TextInput
                                 style={[styles.input, { color: text }]}
-                                placeholder="Название"
+                                placeholder="Переговорная"
                                 placeholderTextColor={textMuted}
                                 value={newRoomName}
                                 onChangeText={setNewRoomName}
+                                accessibilityLabel="Название переговорной"
                               />
-                              <View style={styles.row}>
-                                <TextInput
-                                  style={[styles.timeInput, { color: text }]}
-                                  placeholder="Этаж (0)"
-                                  placeholderTextColor={textMuted}
-                                  value={newRoomFloor}
-                                  onChangeText={setNewRoomFloor}
-                                  keyboardType="number-pad"
-                                />
-                                <TextInput
-                                  style={[styles.timeInput, { color: text }]}
-                                  placeholder="Вместимость (1)"
-                                  placeholderTextColor={textMuted}
-                                  value={newRoomCapacity}
-                                  onChangeText={setNewRoomCapacity}
-                                  keyboardType="number-pad"
-                                />
+                              <View style={styles.rowInputs}>
+                                <View style={styles.fieldColumn}>
+                                  <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Этаж</ThemedText>
+                                  <TextInput
+                                    style={[styles.timeInput, { color: text }]}
+                                    placeholder="0"
+                                    placeholderTextColor={textMuted}
+                                    value={newRoomFloor}
+                                    onChangeText={setNewRoomFloor}
+                                    keyboardType="number-pad"
+                                    accessibilityLabel="Этаж переговорной"
+                                  />
+                                </View>
+                                <View style={styles.fieldColumn}>
+                                  <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Вместимость</ThemedText>
+                                  <TextInput
+                                    style={[styles.timeInput, { color: text }]}
+                                    placeholder="1"
+                                    placeholderTextColor={textMuted}
+                                    value={newRoomCapacity}
+                                    onChangeText={setNewRoomCapacity}
+                                    keyboardType="number-pad"
+                                    accessibilityLabel="Вместимость"
+                                  />
+                                </View>
                               </View>
                               {roomCreateError ? (
                                 <ThemedText style={styles.errorText}>{roomCreateError}</ThemedText>
@@ -865,7 +1001,7 @@ export default function AdminWorkerOfficeScreen() {
           <View style={styles.hintBox}>
             <MaterialIcons name="info-outline" size={18} color={primary} />
             <ThemedText style={styles.hintText}>
-              Блоки и местонахождения офисов настраиваются в веб-версии.
+              Координаты на карте (широта и долгота) при необходимости задаются в веб-версии.
             </ThemedText>
           </View>
           </ScrollView>
@@ -882,16 +1018,20 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     backgroundColor: screenBg,
   },
   header: {
-    paddingHorizontal: 16,
+    paddingLeft: 8,
+    paddingRight: 16,
     paddingBottom: 16,
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 44,
+    alignSelf: 'flex-start',
     minHeight: 44,
+    paddingVertical: 4,
+    paddingRight: 8,
+    marginLeft: -4,
     marginBottom: 8,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   backLabel: {
     fontSize: 16,
@@ -1023,14 +1163,26 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  row: {
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginBottom: 6,
+  },
+  rowInputs: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
     marginBottom: 14,
   },
-  timeInput: {
+  fieldColumn: {
     flex: 1,
+  },
+  inputInRow: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  timeInput: {
+    alignSelf: 'stretch',
+    width: '100%',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
     backgroundColor: screenBg,
@@ -1038,9 +1190,7 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-  },
-  timeSep: {
-    fontSize: 16,
+    marginBottom: 12,
   },
   switchRow: {
     flexDirection: 'row',

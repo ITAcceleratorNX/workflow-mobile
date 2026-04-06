@@ -1,51 +1,50 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import { MaterialIcons } from '@expo/vector-icons';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Linking,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    View,
+} from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useWindowDimensions } from 'react-native';
+import { useThemeColor } from '@/hooks/use-theme-color';
+import {
+    type MeetingRoom,
+    type MeetingRoomBooking,
+    type MyBookingsStatusFilter,
+    type Office,
+    cancelMeetingRoomBooking,
+    createMeetingRoomBooking,
+    getMeetingRooms,
+    getMyBookings,
+    getOffices,
+    getRoomDailyAvailability,
+} from '@/lib/api';
 import { config } from '@/lib/config';
 import {
-  formatDateForApi,
-  formatDisplayDateFromIso,
-  formatTimeOnly,
-  getAlmatySlotKey,
+    formatDateForApi,
+    formatDisplayDateFromIso,
+    formatTimeOnly,
+    getAlmatySlotKey,
 } from '@/lib/dateTimeUtils';
 import { getImageUri, getPrimaryPhotoUri, getRoomPhotoUris } from '@/lib/image-uri';
-import {
-  type MeetingRoom,
-  type MeetingRoomBooking,
-  type MyBookingsStatusFilter,
-  type Office,
-  cancelMeetingRoomBooking,
-  createMeetingRoomBooking,
-  getMeetingRooms,
-  getMyBookings,
-  getOffices,
-  getRoomDailyAvailability,
-} from '@/lib/api';
 import { findNearestOffice } from '@/lib/nearest-office';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
 const CARD_ORANGE = '#E25B21';
@@ -873,34 +872,43 @@ export default function BookingScreen() {
                                         </View>
 
                                         <View style={styles.officeCardContent}>
-                                            <ThemedText style={styles.officeCardName} numberOfLines={1}>
+                                            <ThemedText style={styles.officeCardName} numberOfLines={2}>
                                                 {item.name}
                                             </ThemedText>
 
-                                            {item.address && (
+                                            {item.address ? (
                                                 <View style={styles.addressRow}>
-                                                    <MaterialIcons name="location-on" size={12} color={textMuted} />
-                                                    <ThemedText style={styles.officeCardMeta} numberOfLines={1}>
+                                                    <MaterialIcons
+                                                        name="location-on"
+                                                        size={12}
+                                                        color={textMuted}
+                                                        style={styles.addressIcon}
+                                                    />
+                                                    <ThemedText style={styles.officeCardMeta} numberOfLines={2}>
                                                         {item.address}
                                                     </ThemedText>
                                                 </View>
-                                            )}
+                                            ) : null}
 
-                                            {/* НОВЫЙ БЛОК: Блок и Этаж */}
-                                            <View style={styles.specRow}>
-                                                {(item as any).block !== undefined && (
-                                                    <View style={styles.miniBadge}>
-                                                        <ThemedText style={styles.miniBadgeText}>Блок  {(item as any).block}</ThemedText>
-                                                    </View>
-                                                )}
-                                                {(item as any).floor !== undefined && (
-                                                    <View style={[styles.miniBadge, { backgroundColor: 'rgba(226, 91, 33, 0.1)' }]}>
-                                                        <ThemedText style={[styles.miniBadgeText, { color: '#F35713' }]}>
-                                                            {(item as any).floor} этаж
-                                                        </ThemedText>
-                                                    </View>
-                                                )}
-                                            </View>
+                                            {(item.block != null && String(item.block).trim() !== '') ||
+                                            item.floor != null ? (
+                                                <View style={styles.specRow}>
+                                                    {item.block != null && String(item.block).trim() !== '' ? (
+                                                        <View style={styles.miniBadge}>
+                                                            <ThemedText style={styles.miniBadgeText}>
+                                                                Блок {String(item.block).trim()}
+                                                            </ThemedText>
+                                                        </View>
+                                                    ) : null}
+                                                    {item.floor != null ? (
+                                                        <View style={styles.miniBadge}>
+                                                            <ThemedText style={styles.miniBadgeText}>
+                                                                {item.floor} этаж
+                                                            </ThemedText>
+                                                        </View>
+                                                    ) : null}
+                                                </View>
+                                            ) : null}
                                         </View>
                                     </Pressable>
                                 );
@@ -1249,60 +1257,56 @@ const styles = StyleSheet.create({
         fontWeight: '600',
     },
     officeCardContent: {
-        padding: 10,
+        paddingHorizontal: 10,
+        paddingTop: 10,
+        paddingBottom: 12,
+        alignItems: 'stretch',
     },
     officeCardName: {
         fontSize: 15,
         fontWeight: '700',
-        marginBottom: 4,
+        marginBottom: 6,
+        textAlign: 'left',
     },
     addressRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: 2,
+        alignItems: 'flex-start',
+        gap: 4,
         marginBottom: 8,
     },
+    addressIcon: {
+        marginTop: 1,
+    },
     officeCardMeta: {
+        flex: 1,
         fontSize: 11,
-        opacity: 0.6,
-        paddingRight: 15,
+        lineHeight: 15,
+        opacity: 0.75,
         textAlign: 'left',
     },
     specRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 4,
-        justifyContent: 'center', // ЦЕНТРИРОВАНИЕ БЕЙДЖЕЙ
+        alignItems: 'center',
+        gap: 6,
+        justifyContent: 'flex-start',
+        marginTop: 2,
     },
     miniBadge: {
-        backgroundColor: 'rgba(124, 124, 124, 0.15)',
-        paddingVertical: 2,
-        paddingHorizontal: 6,
-        borderRadius: 4,
+        backgroundColor: 'rgba(124, 124, 124, 0.22)',
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        borderRadius: 6,
         justifyContent: 'center',
         alignItems: 'center',
+        alignSelf: 'flex-start',
     },
     miniBadgeText: {
         fontSize: 9,
         fontWeight: '800',
         textTransform: 'uppercase',
-        color: '#999',
-        textAlign: 'center',
-
-    },
-    floorBadge: {
-        backgroundColor: 'rgba(243, 87, 19, 0.2)', // Светло-оранжевый фон для этажа
-        paddingVertical: 2,
-        paddingHorizontal: 6,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: 'rgba(243, 87, 19, 0.3)',
-    },
-    floorBadgeText: {
-        fontSize: 9,
-        fontWeight: '800',
-        textTransform: 'uppercase',
-        color: '#F35713', // Яркий оранжевый текст
+        color: 'rgba(255, 255, 255, 0.55)',
+        textAlign: 'left',
     },
 
     // ------------------------------------
