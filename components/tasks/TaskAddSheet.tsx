@@ -15,6 +15,7 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
@@ -33,6 +34,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTeams } from '@/hooks/use-teams';
 import { formatDateForApi, formatTaskTime, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
 import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
+import { parseTaskScheduleFromText } from '@/lib/parseTaskScheduleFromText';
 import type { TaskMainView } from '@/lib/task-views';
 import { useAuthStore } from '@/stores/auth-store';
 import type { TaskPriority } from '@/lib/user-tasks-api';
@@ -51,6 +53,9 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: 'medium', label: 'Средний' },
   { value: 'high', label: 'Высокий' },
 ];
+
+/** Если в поле только срок без названия («завтра», «в 15:30») — уходит на API как заголовок. */
+const QUICK_ADD_FALLBACK_TITLE = 'Задача';
 
 type SubModalId = 'schedule' | 'team' | 'assignees' | 'priority' | 'reminders' | null;
 
@@ -98,6 +103,8 @@ export function TaskAddSheet({
 
   const [title, setTitle] = useState('');
   const titleInputRef = useRef<RNTextInput>(null);
+  /** Чтобы не сбрасывать форму при смене todayKey/tomorrowKey пока шит открыт. */
+  const addSheetResetDoneForOpenRef = useRef(false);
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
   const [scheduledTime, setScheduledTime] = useState('09:00');
   const [recurrenceDraft, setRecurrenceDraft] = useState<TaskRecurrencePayload>(() => defaultRecurrenceNone());
@@ -111,6 +118,68 @@ export function TaskAddSheet({
 
   const [teamId, setTeamId] = useState<number | null>(null);
   const [assignees, setAssignees] = useState<{ id: number; full_name: string }[]>([]);
+
+  const [nlpScheduleHint, setNlpScheduleHint] = useState<string | null>(null);
+  const nlpHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nlpHintLatestRef = useRef<string | null>(null);
+  /** Распознан только срок, название пустое — разрешаем отправку с дефолтным заголовком. */
+  const [allowEmptyTitleFromNlp, setAllowEmptyTitleFromNlp] = useState(false);
+  const scheduleChipScale = useSharedValue(1);
+  const scheduleChipScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scheduleChipScale.value }],
+  }));
+
+  const pulseScheduleChip = useCallback(() => {
+    scheduleChipScale.value = withSequence(
+      withTiming(1.08, { duration: 150 }),
+      withSpring(1, { damping: 16, stiffness: 280 })
+    );
+  }, [scheduleChipScale]);
+
+  const showNlpScheduleHint = useCallback((tail: string | null) => {
+    if (nlpHintTimerRef.current) {
+      clearTimeout(nlpHintTimerRef.current);
+      nlpHintTimerRef.current = null;
+    }
+    const next = tail && tail.length > 0 ? tail : null;
+    nlpHintLatestRef.current = next;
+    setNlpScheduleHint(next);
+    if (!next) return;
+    nlpHintTimerRef.current = setTimeout(() => {
+      setNlpScheduleHint(null);
+      nlpHintLatestRef.current = null;
+      nlpHintTimerRef.current = null;
+    }, 3200);
+  }, []);
+
+  const onTitleChange = useCallback(
+    (text: string) => {
+      const parsed = parseTaskScheduleFromText(text, { todayKey, tomorrowKey });
+      if (parsed.matched) {
+        setTitle(text);
+        setAllowEmptyTitleFromNlp(parsed.cleanedTitle.trim().length === 0);
+        if (parsed.dateKey != null) {
+          setScheduledDate(parsed.dateKey);
+          if (parsed.time != null) setScheduledTime(parsed.time);
+        } else if (parsed.time != null) {
+          setScheduledDate((prev) => (prev != null && prev !== '' ? prev : todayKey));
+          setScheduledTime(parsed.time);
+        }
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        pulseScheduleChip();
+        const t = parsed.scheduleTail;
+        if (t) {
+          const prev = nlpHintLatestRef.current;
+          const merged = !prev ? t : prev === t || prev.includes(t) ? prev : `${prev} · ${t}`;
+          showNlpScheduleHint(merged);
+        }
+      } else {
+        setTitle(text);
+        setAllowEmptyTitleFromNlp(false);
+      }
+    },
+    [todayKey, tomorrowKey, pulseScheduleChip, showNlpScheduleHint]
+  );
 
   useEffect(() => {
     const show = Keyboard.addListener(
@@ -128,13 +197,31 @@ export function TaskAddSheet({
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (nlpHintTimerRef.current) clearTimeout(nlpHintTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     if (subModal !== 'schedule') return;
     const base = scheduledDate ? new Date(scheduledDate + 'T12:00:00') : new Date(todayKey + 'T12:00:00');
     setCalendarMonth(new Date(base.getFullYear(), base.getMonth(), 1));
   }, [subModal, scheduledDate, todayKey]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      addSheetResetDoneForOpenRef.current = false;
+      if (nlpHintTimerRef.current) {
+        clearTimeout(nlpHintTimerRef.current);
+        nlpHintTimerRef.current = null;
+      }
+      return;
+    }
+    if (addSheetResetDoneForOpenRef.current) {
+      return;
+    }
+    addSheetResetDoneForOpenRef.current = true;
+
     setSubModal(null);
     setTitle('');
     const nowPlus15 = new Date(Date.now() + 15 * 60 * 1000);
@@ -147,8 +234,15 @@ export function TaskAddSheet({
     else setScheduledDate(defaultDateKey ?? tomorrowKey);
     setTeamId(null);
     setAssignees([]);
+    nlpHintLatestRef.current = null;
+    if (nlpHintTimerRef.current) {
+      clearTimeout(nlpHintTimerRef.current);
+      nlpHintTimerRef.current = null;
+    }
+    setNlpScheduleHint(null);
+    setAllowEmptyTitleFromNlp(false);
     setRecurrenceDraft(defaultRecurrenceNone());
-  }, [visible, mainView, todayKey, tomorrowKey]);
+  }, [visible, mainView, todayKey, tomorrowKey, defaultDateKey]);
 
   useEffect(() => {
     if (scheduledDate == null) setRecurrenceDraft(defaultRecurrenceNone());
@@ -342,14 +436,35 @@ export function TaskAddSheet({
 
   const handleSave = useCallback(async () => {
     const trimmed = title.trim();
-    if (!trimmed || saving) return;
+    if (saving) return;
+    if (!trimmed && !allowEmptyTitleFromNlp) return;
+
+    const parsed = parseTaskScheduleFromText(trimmed, { todayKey, tomorrowKey });
+    let effectiveTitle = parsed.matched ? parsed.cleanedTitle.trim() : trimmed;
+    if (!effectiveTitle && allowEmptyTitleFromNlp) {
+      effectiveTitle = QUICK_ADD_FALLBACK_TITLE;
+    }
+    if (!effectiveTitle) return;
+
+    let effDate = scheduledDate;
+    let effTime = scheduledTime;
+    if (parsed.matched) {
+      if (parsed.dateKey != null) {
+        effDate = parsed.dateKey;
+        effTime = parsed.time ?? scheduledTime;
+      } else if (parsed.time != null) {
+        effTime = parsed.time;
+        if (effDate == null || effDate === '') {
+          effDate = todayKey;
+        }
+      }
+    }
+
     setSaving(true);
     const scheduledAtIso =
-      scheduledDate != null && scheduledDate !== ''
-        ? toUtcIsoFromAppDateTime(scheduledDate, scheduledTime)
-        : null;
+      effDate != null && effDate !== '' ? toUtcIsoFromAppDateTime(effDate, effTime) : null;
     const created = await addTask(
-      trimmed,
+      effectiveTitle,
       scheduledAtIso,
       remindersDisabled,
       remindBeforeMinutes,
@@ -366,6 +481,8 @@ export function TaskAddSheet({
     title,
     scheduledDate,
     scheduledTime,
+    todayKey,
+    tomorrowKey,
     remindersDisabled,
     remindBeforeMinutes,
     priority,
@@ -374,10 +491,13 @@ export function TaskAddSheet({
     onClose,
     teamId,
     assignees,
+    allowEmptyTitleFromNlp,
     recurrenceDraft,
   ]);
 
-  const canSubmit = title.trim().length > 0 && !saving;
+  const canSubmit =
+    !saving &&
+    (title.trim().length > 0 || (allowEmptyTitleFromNlp && scheduledDate != null));
 
   return (
     <Modal
@@ -417,20 +537,42 @@ export function TaskAddSheet({
               showsVerticalScrollIndicator={false}
               bounces
             >
-              <View style={styles.titleRow}>
-                <View style={[styles.accentBar, { backgroundColor: primary }]} />
-                <RNTextInput
-                  ref={titleInputRef}
-                  value={title}
-                  onChangeText={setTitle}
-                  placeholder="Название задачи"
-                  placeholderTextColor={headerSubtitle}
-                  style={[styles.titleInput, { color: headerText }]}
-                  multiline={false}
-                  returnKeyType="done"
-                  blurOnSubmit
-                  onSubmitEditing={handleSave}
-                />
+              <View style={styles.titleBlock}>
+                <View style={styles.titleRow}>
+                  <View
+                    style={[
+                      styles.accentBar,
+                      {
+                        backgroundColor: primary,
+                        opacity: nlpScheduleHint || scheduledDate != null ? 1 : 0.9,
+                        width: nlpScheduleHint || scheduledDate != null ? 4 : 3,
+                      },
+                    ]}
+                  />
+                  <RNTextInput
+                    ref={titleInputRef}
+                    value={title}
+                    onChangeText={onTitleChange}
+                    placeholder="Название задачи"
+                    placeholderTextColor={headerSubtitle}
+                    style={[styles.titleInput, { color: headerText }]}
+                    multiline={false}
+                    returnKeyType="done"
+                    blurOnSubmit
+                    onSubmitEditing={handleSave}
+                  />
+                </View>
+                {nlpScheduleHint ? (
+                  <ThemedText
+                    accessibilityLabel={`Распознано: ${nlpScheduleHint}`}
+                    accessibilityLiveRegion="polite"
+                    style={[styles.nlpScheduleHint, { color: primary }]}
+                    numberOfLines={2}
+                  >
+                    <ThemedText style={styles.nlpScheduleHintLead}>Распознано: </ThemedText>
+                    {nlpScheduleHint}
+                  </ThemedText>
+                ) : null}
               </View>
 
               <View style={[styles.toolsRow, { borderTopColor: border }]}>
@@ -447,22 +589,57 @@ export function TaskAddSheet({
                       styles.quickPill,
                       { borderColor: border, backgroundColor: cardBg },
                       scheduleChipHighlighted && { borderColor: primary, backgroundColor: `${primary}18` },
+                      nlpScheduleHint && { borderColor: primary, borderWidth: 1.5 },
                     ]}
                   >
-                    <MaterialIcons
-                      name={scheduledDate === todayKey ? 'today' : 'event'}
-                      size={18}
-                      color={scheduleChipHighlighted ? primary : headerSubtitle}
-                    />
-                    <ThemedText
+                    <Animated.View
                       style={[
-                        styles.quickPillText,
-                        { color: scheduleChipHighlighted ? primary : headerText },
+                        styles.scheduleChipInner,
+                        scheduleChipScaleStyle,
                       ]}
-                      numberOfLines={1}
                     >
-                      {scheduleChipLabel}
-                    </ThemedText>
+                      <MaterialIcons
+                        name={scheduledDate === todayKey ? 'today' : 'event'}
+                        size={18}
+                        color={scheduleChipHighlighted ? primary : headerSubtitle}
+                      />
+                      {scheduledDate != null ? (
+                        <>
+                          <ThemedText
+                            style={[
+                              styles.quickPillText,
+                              {
+                                color: scheduleChipHighlighted ? primary : headerText,
+                                flexShrink: 1,
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {scheduleChipLabel}
+                          </ThemedText>
+                          <ThemedText
+                            style={[
+                              styles.quickPillText,
+                              styles.scheduleChipTimeEmphasis,
+                              { color: primary, flexShrink: 0 },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {`· ${scheduledTime}`}
+                          </ThemedText>
+                        </>
+                      ) : (
+                        <ThemedText
+                          style={[
+                            styles.quickPillText,
+                            { color: scheduleChipHighlighted ? primary : headerText },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {scheduleChipLabel}
+                        </ThemedText>
+                      )}
+                    </Animated.View>
                   </Pressable>
 
                   {!isGuest && (
@@ -866,9 +1043,20 @@ const styles = StyleSheet.create({
   submitFabDisabled: {
     opacity: 0.4,
   },
+  titleBlock: { width: '100%' },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  accentBar: { width: 3, borderRadius: 2, marginRight: 10, minHeight: 44 },
+  accentBar: { borderRadius: 2, marginRight: 10, minHeight: 44 },
   titleInput: { flex: 1, fontSize: 17, minHeight: 44, paddingVertical: 8 },
+  nlpScheduleHint: { fontSize: 13, lineHeight: 18, marginTop: 8, paddingLeft: 2 },
+  nlpScheduleHintLead: { fontWeight: '700' },
+  scheduleChipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+    maxWidth: '100%',
+  },
+  scheduleChipTimeEmphasis: { fontWeight: '700' },
   toolsRow: {
     flexDirection: 'row',
     alignItems: 'center',
