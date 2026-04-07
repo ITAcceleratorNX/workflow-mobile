@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { PullToRefresh } from '@/components/ui';
 import { useToast } from '@/context/toast-context';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import {
@@ -128,6 +129,7 @@ export default function BookingScreen() {
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isGuest = useAuthStore((s) => s.isGuest);
   const {
@@ -311,6 +313,33 @@ export default function BookingScreen() {
     (page: number, append: boolean) => loadMyBookings(myBookingsFilter, page, append),
     [loadMyBookings, myBookingsFilter]
   );
+
+  const onRefresh = useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      if (activeTab === 'my-bookings') {
+        await loadMyBookingsForCurrentFilter(1, false);
+        return;
+      }
+
+      // activeTab === 'book'
+      if (selectedOffice?.id) {
+        await loadRooms(selectedOffice.id);
+      } else {
+        await loadOffices();
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [
+    refreshing,
+    activeTab,
+    loadMyBookingsForCurrentFilter,
+    selectedOffice?.id,
+    loadRooms,
+    loadOffices,
+  ]);
 
   useEffect(() => {
     loadOffices();
@@ -838,83 +867,103 @@ export default function BookingScreen() {
                     </ThemedText>
                   </View>
                 ) : (
+                  <PullToRefresh
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    loaderSize={96}
+                    topOffset={16}
+                  >
                     <ScrollView showsVerticalScrollIndicator={false}>
-                        <View style={styles.officeGrid}>
-                            {offices.map((item) => {
-                                const photoUri = getImageUri(item.photo);
-                                const isSelected = selectedOffice?.id === item.id;
+                      <View style={styles.officeGrid}>
+                        {offices.map((item) => {
+                          const photoUri = getImageUri(item.photo);
+                          const isSelected = selectedOffice?.id === item.id;
 
-                                return (
-                                    <Pressable
-                                        key={item.id}
-                                        style={[
-                                            styles.officeCard,
-                                            isSelected && { borderColor: '#F35713', backgroundColor: 'rgba(226, 91, 33, 0.05)' }
-                                        ]}
-                                        onPress={() => handleSelectOffice(item)}
-                                    >
-                                        {/* Контейнер для изображения */}
-                                        <View style={styles.officeCardImageWrap}>
-                                            {photoUri ? (
-                                                <Image source={{ uri: photoUri }} style={styles.officeCardImage} contentFit="cover" />
-                                            ) : (
-                                                <View style={styles.officeCardImagePlaceholder}>
-                                                    <MaterialIcons name="business" size={32} color="rgba(255,255,255,0.5)" />
-                                                </View>
-                                            )}
+                          return (
+                            <Pressable
+                              key={item.id}
+                              style={[
+                                styles.officeCard,
+                                isSelected && {
+                                  borderColor: '#F35713',
+                                  backgroundColor: 'rgba(226, 91, 33, 0.05)',
+                                },
+                              ]}
+                              onPress={() => handleSelectOffice(item)}
+                            >
+                              {/* Контейнер для изображения */}
+                              <View style={styles.officeCardImageWrap}>
+                                {photoUri ? (
+                                  <Image
+                                    source={{ uri: photoUri }}
+                                    style={styles.officeCardImage}
+                                    contentFit="cover"
+                                  />
+                                ) : (
+                                  <View style={styles.officeCardImagePlaceholder}>
+                                    <MaterialIcons
+                                      name="business"
+                                      size={32}
+                                      color="rgba(255,255,255,0.5)"
+                                    />
+                                  </View>
+                                )}
 
-                                            {/* Плашка с городом поверх фото (опционально, для красоты) */}
-                                            {item.city && (
-                                                <View style={styles.cityBadge}>
-                                                    <ThemedText style={styles.cityBadgeText}>{item.city}</ThemedText>
-                                                </View>
-                                            )}
-                                        </View>
+                                {/* Плашка с городом поверх фото (опционально, для красоты) */}
+                                {item.city && (
+                                  <View style={styles.cityBadge}>
+                                    <ThemedText style={styles.cityBadgeText}>
+                                      {item.city}
+                                    </ThemedText>
+                                  </View>
+                                )}
+                              </View>
 
-                                        <View style={styles.officeCardContent}>
-                                            <ThemedText style={styles.officeCardName} numberOfLines={2}>
-                                                {item.name}
-                                            </ThemedText>
+                              <View style={styles.officeCardContent}>
+                                <ThemedText style={styles.officeCardName} numberOfLines={2}>
+                                  {item.name}
+                                </ThemedText>
 
-                                            {item.address ? (
-                                                <View style={styles.addressRow}>
-                                                    <MaterialIcons
-                                                        name="location-on"
-                                                        size={12}
-                                                        color={textMuted}
-                                                        style={styles.addressIcon}
-                                                    />
-                                                    <ThemedText style={styles.officeCardMeta} numberOfLines={2}>
-                                                        {item.address}
-                                                    </ThemedText>
-                                                </View>
-                                            ) : null}
+                                {item.address ? (
+                                  <View style={styles.addressRow}>
+                                    <MaterialIcons
+                                      name="location-on"
+                                      size={12}
+                                      color={textMuted}
+                                      style={styles.addressIcon}
+                                    />
+                                    <ThemedText style={styles.officeCardMeta} numberOfLines={2}>
+                                      {item.address}
+                                    </ThemedText>
+                                  </View>
+                                ) : null}
 
-                                            {(item.block != null && String(item.block).trim() !== '') ||
-                                            item.floor != null ? (
-                                                <View style={styles.specRow}>
-                                                    {item.block != null && String(item.block).trim() !== '' ? (
-                                                        <View style={styles.miniBadge}>
-                                                            <ThemedText style={styles.miniBadgeText}>
-                                                                Блок {String(item.block).trim()}
-                                                            </ThemedText>
-                                                        </View>
-                                                    ) : null}
-                                                    {item.floor != null ? (
-                                                        <View style={styles.miniBadge}>
-                                                            <ThemedText style={styles.miniBadgeText}>
-                                                                {item.floor} этаж
-                                                            </ThemedText>
-                                                        </View>
-                                                    ) : null}
-                                                </View>
-                                            ) : null}
-                                        </View>
-                                    </Pressable>
-                                );
-                            })}
-                        </View>
+                                {(item.block != null && String(item.block).trim() !== '') ||
+                                item.floor != null ? (
+                                  <View style={styles.specRow}>
+                                    {item.block != null && String(item.block).trim() !== '' ? (
+                                      <View style={styles.miniBadge}>
+                                        <ThemedText style={styles.miniBadgeText}>
+                                          Блок {String(item.block).trim()}
+                                        </ThemedText>
+                                      </View>
+                                    ) : null}
+                                    {item.floor != null ? (
+                                      <View style={styles.miniBadge}>
+                                        <ThemedText style={styles.miniBadgeText}>
+                                          {item.floor} этаж
+                                        </ThemedText>
+                                      </View>
+                                    ) : null}
+                                  </View>
+                                ) : null}
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
                     </ScrollView>
+                  </PullToRefresh>
                 )}
               </>
             )}
@@ -946,56 +995,81 @@ export default function BookingScreen() {
                     </ThemedText>
                   </View>
                 ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.roomsScroll}>
-                    {visibleRooms.map((item) => {
-                      const photoUri = getRoomPhotoUri(item);
-                      const photoCount = item.photos?.length ?? (item.photo ? 1 : 0);
-                      const imageFailed = roomImageFailedIds.has(item.id);
-                      const showImage = !!photoUri && photoUri.length > 0 && !imageFailed;
-                      return (
-                        <Pressable
-                          key={item.id}
-                          style={styles.roomCardOrange}
-                          onPress={() => handleSelectRoom(item)}
-                        >
-                          <View style={styles.roomCardImageWrap}>
-                            {showImage ? (
-                              <Image
-                                source={{ uri: photoUri }}
-                                style={styles.roomCardImage}
-                                contentFit="cover"
-                                cachePolicy="disk"
-                                recyclingKey={String(item.id)}
-                                onError={() => {
-                                  setRoomImageFailedIds((prev) => new Set(prev).add(item.id));
-                                }}
-                              />
-                            ) : (
-                              <View style={styles.roomCardImagePlaceholder}>
-                                <MaterialIcons name="image" size={32} color="rgba(255,255,255,0.4)" />
+                  <PullToRefresh
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    loaderSize={96}
+                    topOffset={16}
+                  >
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.roomsScroll}
+                      >
+                        {visibleRooms.map((item) => {
+                          const photoUri = getRoomPhotoUri(item);
+                          const photoCount = item.photos?.length ?? (item.photo ? 1 : 0);
+                          const imageFailed = roomImageFailedIds.has(item.id);
+                          const showImage = !!photoUri && photoUri.length > 0 && !imageFailed;
+                          return (
+                            <Pressable
+                              key={item.id}
+                              style={styles.roomCardOrange}
+                              onPress={() => handleSelectRoom(item)}
+                            >
+                              <View style={styles.roomCardImageWrap}>
+                                {showImage ? (
+                                  <Image
+                                    source={{ uri: photoUri }}
+                                    style={styles.roomCardImage}
+                                    contentFit="cover"
+                                    cachePolicy="disk"
+                                    recyclingKey={String(item.id)}
+                                    onError={() => {
+                                      setRoomImageFailedIds((prev) =>
+                                        new Set(prev).add(item.id)
+                                      );
+                                    }}
+                                  />
+                                ) : (
+                                  <View style={styles.roomCardImagePlaceholder}>
+                                    <MaterialIcons
+                                      name="image"
+                                      size={32}
+                                      color="rgba(255,255,255,0.4)"
+                                    />
+                                  </View>
+                                )}
+                                {photoCount > 1 && (
+                                  <View style={styles.roomCardImageBadge}>
+                                    <ThemedText style={styles.roomCardImageBadgeText}>
+                                      +{photoCount - 1}
+                                    </ThemedText>
+                                  </View>
+                                )}
                               </View>
-                            )}
-                            {photoCount > 1 && (
-                              <View style={styles.roomCardImageBadge}>
-                                <ThemedText style={styles.roomCardImageBadgeText}>+{photoCount - 1}</ThemedText>
+                              <ThemedText style={styles.roomCardNameWhite} numberOfLines={2}>
+                                {item.name}
+                              </ThemedText>
+                              <View style={styles.roomCardMetaRow}>
+                                {item.floor != null && (
+                                  <ThemedText style={styles.roomCardMetaWhite}>
+                                    {item.floor} этаж
+                                  </ThemedText>
+                                )}
+                                {item.capacity != null && (
+                                  <ThemedText style={styles.roomCardMetaWhite}>
+                                    до {item.capacity} чел.
+                                  </ThemedText>
+                                )}
                               </View>
-                            )}
-                          </View>
-                          <ThemedText style={styles.roomCardNameWhite} numberOfLines={2}>
-                            {item.name}
-                          </ThemedText>
-                          <View style={styles.roomCardMetaRow}>
-                            {item.floor != null && (
-                              <ThemedText style={styles.roomCardMetaWhite}>{item.floor} этаж</ThemedText>
-                            )}
-                            {item.capacity != null && (
-                              <ThemedText style={styles.roomCardMetaWhite}>до {item.capacity} чел.</ThemedText>
-                            )}
-                          </View>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </ScrollView>
+                  </PullToRefresh>
                 )}
               </>
             )}
@@ -1037,83 +1111,100 @@ export default function BookingScreen() {
                   </Pressable>
                 ))}
               </View>
-              <FlatList
-                data={isGuest ? filteredMyBookings : myBookings}
-                keyExtractor={(b) => String(b.id)}
-                onEndReached={
-                  !isGuest && myBookingsHasMore && !loadingMoreBookings
-                    ? () => loadMyBookings(myBookingsFilter, myBookingsPage + 1, true)
-                    : undefined
-                }
-                onEndReachedThreshold={0.4}
-                ListEmptyComponent={
-                  <ThemedText style={styles.emptyWhite}>
-                    {myBookingsFilter === 'active'
-                      ? 'Нет активных бронирований'
-                      : myBookingsFilter === 'completed'
-                        ? 'Нет завершённых бронирований'
-                        : 'Нет отменённых бронирований'}
-                  </ThemedText>
-                }
-                ListFooterComponent={
-                  loadingMoreBookings ? (
-                    <View style={styles.loaderFooter}>
-                      <ActivityIndicator size="small" color="#fff" />
-                    </View>
-                  ) : null
-                }
-                renderItem={({ item }) => {
-                  const room = item.meeting_room ?? item.meetingRoom;
-                  const startStr = typeof item.start_time === 'string' ? item.start_time : '';
-                  const endStr = typeof item.end_time === 'string' ? item.end_time : '';
-                  const dateStr = startStr.slice(0, 10);
-                  const isCancelling = cancellingId === item.id;
-                  const statusText = getBookingStatusText(item.status);
-                  const isCancelled = isBookingCancelled(item);
-                  const isCompleted = item.status === 'completed' || isBookingCompleted(item);
-                  const canCancel = !isCancelled && !isCompleted;
-                  return (
-                    <View style={styles.bookingCardOrange}>
-                      <View style={styles.bookingCardHeader}>
-                        <ThemedText type="defaultSemiBold" style={styles.bookingCardTitleWhite}>
-                          {room?.name ?? 'Комната'}
+              <PullToRefresh
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                loaderSize={96}
+                topOffset={16}
+              >
+                <FlatList
+                  data={isGuest ? filteredMyBookings : myBookings}
+                  keyExtractor={(b) => String(b.id)}
+                  onEndReached={
+                    !isGuest && myBookingsHasMore && !loadingMoreBookings
+                      ? () => loadMyBookings(myBookingsFilter, myBookingsPage + 1, true)
+                      : undefined
+                  }
+                  onEndReachedThreshold={0.4}
+                  ListEmptyComponent={
+                    <ThemedText style={styles.emptyWhite}>
+                      {myBookingsFilter === 'active'
+                        ? 'Нет активных бронирований'
+                        : myBookingsFilter === 'completed'
+                          ? 'Нет завершённых бронирований'
+                          : 'Нет отменённых бронирований'}
+                    </ThemedText>
+                  }
+                  ListFooterComponent={
+                    loadingMoreBookings ? (
+                      <View style={styles.loaderFooter}>
+                        <ActivityIndicator size="small" color="#fff" />
+                      </View>
+                    ) : null
+                  }
+                  renderItem={({ item }) => {
+                    const room = item.meeting_room ?? item.meetingRoom;
+                    const startStr =
+                      typeof item.start_time === 'string' ? item.start_time : '';
+                    const endStr = typeof item.end_time === 'string' ? item.end_time : '';
+                    const isCancelling = cancellingId === item.id;
+                    const statusText = getBookingStatusText(item.status);
+                    const isCancelled = isBookingCancelled(item);
+                    const isCompleted = item.status === 'completed' || isBookingCompleted(item);
+                    const canCancel = !isCancelled && !isCompleted;
+                    return (
+                      <View style={styles.bookingCardOrange}>
+                        <View style={styles.bookingCardHeader}>
+                          <ThemedText
+                            type="defaultSemiBold"
+                            style={styles.bookingCardTitleWhite}
+                          >
+                            {room?.name ?? 'Комната'}
+                          </ThemedText>
+                          <View style={styles.bookingStatusBadgeOrange}>
+                            <ThemedText style={styles.bookingStatusTextOrange}>
+                              {statusText}
+                            </ThemedText>
+                          </View>
+                        </View>
+                        <ThemedText style={styles.bookingMetaWhite}>
+                          {formatDisplayDateFromIso(startStr)} • {formatTimeOnly(startStr)}–
+                          {formatTimeOnly(endStr)}
                         </ThemedText>
-                        <View style={styles.bookingStatusBadgeOrange}>
-                          <ThemedText style={styles.bookingStatusTextOrange}>{statusText}</ThemedText>
+                        {item.company_name && (
+                          <ThemedText style={styles.bookingMetaWhite}>
+                            {item.company_name}
+                          </ThemedText>
+                        )}
+                        <View style={styles.bookingCardActions}>
+                          <Pressable
+                            onPress={() => router.push(`/booking/${item.id}`)}
+                            style={styles.viewBookingBtnOrange}
+                          >
+                            <MaterialIcons name="qr-code-2" size={18} color="#fff" />
+                            <ThemedText style={styles.viewBookingBtnText}>QR код</ThemedText>
+                          </Pressable>
+                          {canCancel && (
+                            <Pressable
+                              onPress={() => handleCancelBooking(item)}
+                              disabled={isCancelling}
+                              style={styles.cancelBtnOrange}
+                            >
+                              {isCancelling ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <ThemedText style={styles.cancelBtnTextWhite}>
+                                  Отменить бронирование
+                                </ThemedText>
+                              )}
+                            </Pressable>
+                          )}
                         </View>
                       </View>
-                      <ThemedText style={styles.bookingMetaWhite}>
-                        {formatDisplayDateFromIso(startStr)} • {formatTimeOnly(startStr)}–{formatTimeOnly(endStr)}
-                      </ThemedText>
-                      {item.company_name && (
-                        <ThemedText style={styles.bookingMetaWhite}>{item.company_name}</ThemedText>
-                      )}
-                      <View style={styles.bookingCardActions}>
-                        <Pressable
-                          onPress={() => router.push(`/booking/${item.id}`)}
-                          style={styles.viewBookingBtnOrange}
-                        >
-                          <MaterialIcons name="qr-code-2" size={18} color="#fff" />
-                          <ThemedText style={styles.viewBookingBtnText}>QR код</ThemedText>
-                        </Pressable>
-                        {canCancel && (
-                          <Pressable
-                            onPress={() => handleCancelBooking(item)}
-                            disabled={isCancelling}
-                            style={styles.cancelBtnOrange}
-                          >
-                            {isCancelling ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <ThemedText style={styles.cancelBtnTextWhite}>Отменить бронирование</ThemedText>
-                            )}
-                          </Pressable>
-                        )}
-                      </View>
-                    </View>
-                  );
-                }}
-              />
+                    );
+                  }}
+                />
+              </PullToRefresh>
             </>
           )}
         </>

@@ -9,8 +9,8 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "version": "1.0.1",
-      "buildNumber": "13",
+      "version": "1.0.2",
+      "buildNumber": "15",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -59,7 +59,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 7,
+      "versionCode": 9,
       "package": "com.workflow.kz"
     },
     "web": {
@@ -118,7 +118,8 @@
       ],
       "expo-background-task",
       "./plugins/withStripUnwantedInfoPlist",
-      "./plugins/withIosPodfileHermesAlignment"
+      "./plugins/withIosPodfileHermesAlignment",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

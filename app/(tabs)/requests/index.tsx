@@ -448,16 +448,6 @@ export default function RequestsListScreen() {
           <ThemedText type="title" style={[styles.title, { color: textColor }]}>
             Заявки
           </ThemedText>
-          <Pressable
-            onPress={openCreate}
-            style={({ pressed }) => [
-              styles.createBtn,
-              { backgroundColor: primaryColor, opacity: pressed ? 0.85 : 1 },
-            ]}
-          >
-            <MaterialIcons name="add" size={20} color="#FFF" />
-            <ThemedText style={styles.createBtnText}>Создать</ThemedText>
-          </Pressable>
         </View>
 
         {tabsConfig && tabsConfig.length > 0 && (
@@ -527,6 +517,18 @@ export default function RequestsListScreen() {
             </View>
           </View>
         )}
+
+        <Pressable
+          onPress={openCreate}
+          style={({ pressed }) => [
+            styles.createBtn,
+            styles.createBtnFullWidth,
+            { backgroundColor: primaryColor, opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <MaterialIcons name="add" size={20} color="#FFF" />
+          <ThemedText style={styles.createBtnText}>Создать</ThemedText>
+        </Pressable>
       </View>
     ),
     [
@@ -573,7 +575,10 @@ export default function RequestsListScreen() {
           data={sortedList}
           keyExtractor={(item) => `req-${item.id}`}
           ListHeaderComponent={listHeader}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingTop: insets.top + 12 },
+          ]}
           onEndReached={onEndReached}
         onEndReachedThreshold={0.4}
         ListFooterComponent={
@@ -623,7 +628,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 24,
-    paddingTop: 48,
     paddingBottom: 24,
   },
   header: {
@@ -649,6 +653,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 8,
+  },
+  createBtnFullWidth: {
+    width: '100%',
+    justifyContent: 'center',
+    marginTop: 4,
   },
   createBtnText: {
     fontSize: 15,
