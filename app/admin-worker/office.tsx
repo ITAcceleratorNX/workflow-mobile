@@ -1209,6 +1209,7 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 20,
+    minWidth: 120,
   },
   saveBtnText: {
     color: '#fff',
