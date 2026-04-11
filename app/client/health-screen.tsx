@@ -34,6 +34,7 @@ import {
 } from '@/stores/sleep-store';
 import { useWaterStore, WATER_PORTIONS } from '@/stores/water-store';
 import { MoodCheckInCard } from '@/components/mood-check-in-card';
+import { HealthyAiInsights } from '@/components/healthy-ai-insights';
 
 const { width, height } = Dimensions.get('window');
 const ADVICE_MODAL_HEIGHT = Math.floor(height * 0.85);
@@ -530,6 +531,7 @@ export default function ClientHealthScreen() {
           </Pressable>
         </View>
 
+        <HealthyAiInsights />
         <StepsCard stepsToday={stepsToday} stepsGoal={stepsGoal} animateTrigger={animateTrigger} />
         <RecommendationCard onPress={goToSleep} />
         <MoodCheckInCard />
