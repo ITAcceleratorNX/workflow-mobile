@@ -190,7 +190,7 @@ export default function AdminWorkerSmartHomeScreen() {
       setLinkError(result.error);
     }
     setIsLinking(false);
-  }, [selectedRoomId, selectedDevice, show, loadRoomDevices]);
+  }, [selectedRoomId, selectedDevice, showToast, loadRoomDevices]);
 
   const handleUnlink = useCallback(
     async (id: number) => {

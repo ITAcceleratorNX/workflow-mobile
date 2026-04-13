@@ -179,7 +179,7 @@ export default function AdminWorkerUsersScreen() {
       setPasswordError(result.error);
     }
     setIsChangingPassword(false);
-  }, [selectedUserId, newPassword, confirmPassword, show]);
+  }, [selectedUserId, newPassword, confirmPassword, showToast]);
 
   // Смена роли
   const [selectedRoleUserId, setSelectedRoleUserId] = useState<number | null>(null);
@@ -207,7 +207,7 @@ export default function AdminWorkerUsersScreen() {
       setRoleError(result.error);
     }
     setIsChangingRole(false);
-  }, [selectedRoleUserId, newRole, show]);
+  }, [selectedRoleUserId, newRole, showToast]);
 
   // Смена руководителя категории
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
@@ -258,7 +258,7 @@ export default function AdminWorkerUsersScreen() {
       setChangeHeadError(result.error);
     }
     setIsChangingHead(false);
-  }, [selectedCategoryId, selectedExecutorId, show]);
+  }, [selectedCategoryId, selectedExecutorId, showToast]);
 
   const selectedUserName = useMemo(
     () => officeUsers.find((u) => u.id === selectedUserId)?.full_name ?? null,
