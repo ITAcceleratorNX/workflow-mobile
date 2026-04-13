@@ -9,8 +9,8 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "version": "1.0.2",
-      "buildNumber": "15",
+      "version": "1.0.3",
+      "buildNumber": "16",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -59,7 +59,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 9,
+      "versionCode": 10,
       "package": "com.workflow.kz"
     },
     "web": {

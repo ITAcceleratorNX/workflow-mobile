@@ -29,6 +29,7 @@ export default function ResetPasswordScreen() {
 
   const [step, setStep] = useState<Step>(1);
   const [phone, setPhone] = useState('');
+  const phoneRef = useRef('');
   const [verificationCode, setVerificationCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -47,14 +48,17 @@ export default function ResetPasswordScreen() {
     return () => clearTimeout(t);
   }, [countdown]);
 
+  const isPhoneValid = PHONE_REGEX.test(phone);
+
   const handleSendVerificationCode = async () => {
-    if (!PHONE_REGEX.test(phone)) {
+    const currentPhone = phoneRef.current || phone;
+    if (!PHONE_REGEX.test(currentPhone)) {
       setError('Введите корректный номер телефона в формате +7 XXX XXX XX XX');
       return;
     }
     setIsSendingCode(true);
     setError('');
-    const result = await sendVerificationCode(phone, 'password_reset');
+    const result = await sendVerificationCode(currentPhone, 'password_reset');
     setIsSendingCode(false);
     if (!result.success) {
       setError(result.message ?? 'Ошибка при отправке SMS. Попробуйте позже.');
@@ -151,7 +155,9 @@ export default function ResetPasswordScreen() {
               <RNTextInput
                 value={phone}
                 onChangeText={(v) => {
-                  setPhone(formatPhone(v));
+                  const next = formatPhone(v);
+                  phoneRef.current = next;
+                  setPhone(next);
                   setError('');
                 }}
                 keyboardType="phone-pad"
@@ -164,6 +170,7 @@ export default function ResetPasswordScreen() {
               <Pressable
                 style={[styles.primaryButton, { backgroundColor: primary }, isSendingCode && styles.disabled]}
                 onPress={handleSendVerificationCode}
+                disabled={isSendingCode || !isPhoneValid}
               >
                 <ThemedText style={styles.primaryButtonText}>
                   {isSendingCode ? 'Отправка...' : 'Отправить код'}
