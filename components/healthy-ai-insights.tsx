@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LayoutAnimation,
   Platform,
@@ -12,6 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { formatDateForApi } from '@/lib/dateTimeUtils';
+import { getHealthyInsight, type HealthyInsightResponse } from '@/lib/healthy-api';
 import {
   buildHealthyInsight,
   type HealthyInsightPeriod,
@@ -65,6 +66,28 @@ function statusAccent(tone: HealthyInsightResult['statusTone']): string {
   if (tone === 'positive') return COLORS.positive;
   if (tone === 'attention') return COLORS.accentSoft;
   return COLORS.textMuted;
+}
+
+function normalizeServerInsight(result: HealthyInsightResponse): HealthyInsightResult {
+  return {
+    period: result.period ?? 'day',
+    lowData: result.lowData ?? true,
+    missingHints: Array.isArray(result.missingHints) ? result.missingHints : [],
+    statusLabel: result.statusLabel ?? 'Мало данных',
+    statusTone: result.statusTone ?? 'neutral',
+    summary: result.summary ?? 'Данных пока недостаточно для точного вывода.',
+    weakPoints: Array.isArray(result.weakPoints) ? result.weakPoints : [],
+    improved: Array.isArray(result.improved) ? result.improved : [],
+    worsened: Array.isArray(result.worsened) ? result.worsened : [],
+    recommendations: Array.isArray(result.recommendations) ? result.recommendations : [],
+    supportMessage: result.supportMessage ?? 'Продолжайте отмечать данные, чтобы анализ стал точнее.',
+    weeklyFocus: result.weeklyFocus,
+    monthlyDynamics: result.monthlyDynamics,
+    strengths: Array.isArray(result.strengths) ? result.strengths : [],
+    weaknessesNarrative: Array.isArray(result.weaknessesNarrative) ? result.weaknessesNarrative : [],
+    patternsLine: result.patternsLine,
+    monthlyFocus: result.monthlyFocus,
+  };
 }
 
 function InsightBody({ result }: { result: HealthyInsightResult }) {
@@ -216,6 +239,10 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
 
 export function HealthyAiInsights() {
   const [period, setPeriod] = useState<HealthyInsightPeriod>('day');
+  const [remoteInsight, setRemoteInsight] = useState<HealthyInsightResult | null>(null);
+  const [remoteGeneratedAt, setRemoteGeneratedAt] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const todayKey = useMemo(() => formatDateForApi(new Date()), []);
   const goalSleepMinutes = useSleepStore((s) => s.settings.goalMinutes);
@@ -297,6 +324,35 @@ export function HealthyAiInsights() {
     ]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadInsight = async () => {
+      setIsRefreshing(true);
+      const result = await getHealthyInsight(period);
+      if (cancelled) return;
+
+      if (result.ok) {
+        setRemoteInsight(normalizeServerInsight(result.data));
+        setRemoteGeneratedAt(result.data.generated_at ?? null);
+        setLoadError(null);
+      } else {
+        setRemoteInsight(null);
+        setRemoteGeneratedAt(null);
+        setLoadError(result.error);
+      }
+
+      setIsRefreshing(false);
+    };
+
+    loadInsight();
+    return () => {
+      cancelled = true;
+    };
+  }, [period]);
+
+  const resolvedInsight = remoteInsight ?? insight;
+
   const onTab = useCallback((p: HealthyInsightPeriod) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setPeriod(p);
@@ -307,6 +363,23 @@ export function HealthyAiInsights() {
       <View style={styles.cardHeader}>
         <MaterialIcons name="auto-awesome" size={22} color={COLORS.accent} />
         <ThemedText style={[styles.cardTitle, { color: COLORS.textPrimary }]}>AI Insight</ThemedText>
+      </View>
+
+      <View style={styles.metaRow}>
+        <ThemedText style={[styles.metaText, { color: COLORS.textMuted }]}>
+          {remoteInsight
+            ? remoteGeneratedAt
+              ? `Обновлено: ${remoteGeneratedAt.slice(11, 16)}`
+              : 'Серверный анализ'
+            : loadError
+              ? 'Локальный fallback'
+              : isRefreshing
+                ? 'Обновляем анализ...'
+                : 'Подготовка анализа...'}
+        </ThemedText>
+        {loadError ? (
+          <ThemedText style={[styles.metaText, { color: COLORS.accentSoft }]}>Сеть недоступна</ThemedText>
+        ) : null}
       </View>
 
       <View style={[styles.segment, { backgroundColor: COLORS.trackBg }]}>
@@ -331,7 +404,7 @@ export function HealthyAiInsights() {
         })}
       </View>
 
-      <InsightBody key={period} result={insight} />
+      <InsightBody key={period} result={resolvedInsight} />
     </View>
   );
 }
@@ -357,6 +430,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: 0.2,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  metaText: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   segment: {
     flexDirection: 'row',
