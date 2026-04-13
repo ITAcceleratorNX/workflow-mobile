@@ -11,7 +11,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
-import { formatDateForApi } from '@/lib/dateTimeUtils';
+import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
 import { getHealthyInsight, type HealthyInsightResponse } from '@/lib/healthy-api';
 import {
   buildHealthyInsight,
@@ -369,7 +369,7 @@ export function HealthyAiInsights() {
         <ThemedText style={[styles.metaText, { color: COLORS.textMuted }]}>
           {remoteInsight
             ? remoteGeneratedAt
-              ? `Обновлено: ${remoteGeneratedAt.slice(11, 16)}`
+              ? `Обновлено: ${formatTimeOnly(remoteGeneratedAt) || remoteGeneratedAt.slice(11, 16)}`
               : 'Серверный анализ'
             : loadError
               ? 'Локальный fallback'
