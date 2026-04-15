@@ -159,7 +159,7 @@ export default function TaskDetailsScreen() {
     setTitleDraft(task.title ?? '');
     setRemindBeforeMinutes(task.remind_before_minutes ?? null);
     setPriority(task.priority ?? 'medium');
-  }, [task?.id, task?.title, task?.remind_before_minutes, task?.priority]);
+  }, [task, remindBeforeMinutes]);
 
   useEffect(() => {
     let cancelled = false;
