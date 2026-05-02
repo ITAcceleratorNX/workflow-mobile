@@ -1,768 +1,1509 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
+  Image,
   Modal,
-  StyleSheet,
-  View,
-  ScrollView,
   Pressable,
-  Dimensions,
-  Switch,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
 } from 'react-native';
-import Animated, {
-  createAnimatedComponent,
-  Easing,
-  useAnimatedProps,
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
-import Svg, { Circle } from 'react-native-svg';
+import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import Svg, {
+  Circle,
+  ClipPath,
+  Defs,
+  G,
+  LinearGradient as SvgLinearGradient,
+  Path,
+  Rect,
+  Stop,
+} from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
+import { HealthyAiInsights } from '@/components/healthy-ai-insights';
+import { useHealthySync } from '@/hooks/use-healthy-sync';
 import { formatDateForApi } from '@/lib/dateTimeUtils';
-import { useStepsStore } from '@/stores/steps-store';
+import { buildHealthyInsight } from '@/lib/healthy-ai-insights';
+import type { EnergyLevel, StressLevel } from '@/stores/mood-store';
+import { useMoodStore } from '@/stores/mood-store';
 import {
   formatSleepDuration,
-  FULL_SLEEP_ADVICE,
-  getScheduledSleepMinutes,
   type SleepRating,
   useSleepStore,
 } from '@/stores/sleep-store';
+import { useStepsStore } from '@/stores/steps-store';
 import { useWaterStore, WATER_PORTIONS } from '@/stores/water-store';
-import { MoodCheckInCard } from '@/components/mood-check-in-card';
-import { HealthyAiInsights } from '@/components/healthy-ai-insights';
-import { useHealthySync } from '@/hooks/use-healthy-sync';
 
-const { width, height } = Dimensions.get('window');
-const ADVICE_MODAL_HEIGHT = Math.floor(height * 0.85);
-const CARD_PADDING = 16;
-const CIRCLE_SIZE = Math.min(width - CARD_PADDING * 2 - 32, 260);
-const CIRCLE_R = (CIRCLE_SIZE - 24) / 2;
-const CIRCLE_CX = CIRCLE_SIZE / 2;
-const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_R;
+const STEPS_PANEL_IMAGE = require('@/assets/images/footsteps-8682406.png');
 
-const AnimatedCircle = createAnimatedComponent(Circle);
+// ===== Design tokens =====
 
-// Design spec colors
 const COLORS = {
-  background: '#1a1a1a',
-  backgroundAlt: '#222222',
-  cardBg: '#2a2a2a',
-  accent: '#FF5722',
-  textPrimary: '#ffffff',
-  textSecondary: '#888888',
-  blueAccent: '#4FC3F7',
-  trackGray: '#3a3a3a',
-  warningBorder: 'rgba(255, 87, 34, 0.5)',
-  warningBg: 'rgba(255, 87, 34, 0.15)',
+  background: '#1A1A1A',
+  cardBg: '#2A2A2A',
+  cardBgSubtle: '#242424',
+  trackBg: '#3A3A3A',
+  divider: 'rgba(255,255,255,0.06)',
+
+  textPrimary: '#FFFFFF',
+  textSecondary: '#A0A0A5',
+  textMuted: '#6E6E73',
+
+  accent: '#F35713',
+  blue: '#4FC3F7',
+  blueSoft: 'rgba(79, 195, 247, 0.18)',
+  indigo: '#7B6FF7',
+  indigoSoft: 'rgba(123, 111, 247, 0.18)',
+  pink: '#E85D87',
+  pinkSoft: 'rgba(232, 93, 135, 0.18)',
+  orange: '#FF8A50',
+  orangeSoft: 'rgba(255, 138, 80, 0.22)',
+  green: '#4CAF50',
+  greenSoft: 'rgba(76, 175, 80, 0.18)',
+  yellow: '#FFC107',
+  yellowSoft: 'rgba(255, 193, 7, 0.18)',
+  red: '#FF5252',
+  redSoft: 'rgba(255, 82, 82, 0.18)',
 };
 
-function formatHealthDate(date: Date): string {
-  const s = new Intl.DateTimeFormat('ru-RU', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  }).format(date);
-  return s.charAt(0).toUpperCase() + s.slice(1);
+type HealthyTab = 'today' | 'insight' | 'settings';
+
+const TABS: { key: HealthyTab; label: string }[] = [
+  { key: 'today', label: 'Сегодня' },
+  { key: 'insight', label: 'Insight' },
+  { key: 'settings', label: 'Настройки' },
+];
+
+// ===== Helpers =====
+
+function sleepRatingLabel(rating: SleepRating | null): string {
+  if (rating === 'good') return 'Хороший сон';
+  if (rating === 'ok') return 'Можно и лучше';
+  if (rating === 'poor') return 'Не выспался';
+  return 'Оцените сон';
 }
 
-// --- Steps Card ---
-function StepsCard({
-  stepsToday,
-  stepsGoal,
-  animateTrigger,
-}: {
-  stepsToday: number;
-  stepsGoal: number;
-  animateTrigger?: number;
-}) {
-  const progress = useMemo(() => {
-    if (stepsGoal <= 0) return 0;
-    return Math.min(stepsToday / stepsGoal, 1);
-  }, [stepsToday, stepsGoal]);
+function formatLiters(ml: number): string {
+  if (ml >= 1000) return `${(ml / 1000).toFixed(1)} л`;
+  return `${ml} мл`;
+}
 
-  const animatedProgress = useSharedValue(0);
+// ===== Illustrations (SVG) =====
 
-  useEffect(() => {
-    animatedProgress.value = withSequence(
-      withTiming(0, { duration: 0 }),
-      withTiming(progress, {
-        duration: 1000,
-        easing: Easing.out(Easing.cubic),
-      })
-    );
-  }, [progress, animateTrigger]);
+const ILLUSTRATION_W = 140;
+const ILLUSTRATION_H = 96;
 
-  const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: CIRCLE_CIRCUMFERENCE * (1 - animatedProgress.value),
-  }));
+/** Сцена сна: тёмное небо, луна, звёзды, облака */
+function SleepIllustration() {
+  return (
+    <Svg width={ILLUSTRATION_W} height={ILLUSTRATION_H} viewBox="0 0 140 96">
+      <Defs>
+        <SvgLinearGradient id="sleepBg" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor="#2C3A66" />
+          <Stop offset="100%" stopColor="#0E1530" />
+        </SvgLinearGradient>
+      </Defs>
+      <Rect width={140} height={96} fill="url(#sleepBg)" />
+
+      {/* stars */}
+      <Path
+        d="M22 14 L23.4 17.5 L27 18 L24.2 20.4 L25 24.2 L22 22.2 L19 24.2 L19.8 20.4 L17 18 L20.6 17.5 Z"
+        fill="#FFE082"
+        opacity={0.95}
+      />
+      <Circle cx={42} cy={32} r={1} fill="#FFE082" opacity={0.7} />
+      <Circle cx={56} cy={14} r={1.4} fill="#FFE082" opacity={0.85} />
+      <Circle cx={75} cy={26} r={0.9} fill="#FFE082" opacity={0.6} />
+      <Circle cx={120} cy={20} r={1.2} fill="#FFE082" opacity={0.7} />
+
+      {/* crescent moon */}
+      <Circle cx={108} cy={32} r={15} fill="#FFE082" />
+      <Circle cx={114} cy={29} r={13} fill="#1A2347" />
+
+      {/* clouds */}
+      <Path
+        d="M-6 64 C 6 54, 24 54, 30 64 C 36 58, 50 58, 56 66 L 56 96 L -6 96 Z"
+        fill="#1B2447"
+      />
+      <Path
+        d="M40 74 C 50 64, 70 64, 78 74 C 88 68, 104 68, 116 76 C 128 72, 144 74, 146 80 L 146 96 L 40 96 Z"
+        fill="#0B1226"
+        opacity={0.95}
+      />
+    </Svg>
+  );
+}
+
+/**
+ * Сцена воды: тёмно-синий фон, капли вокруг, аккуратный «тумблер»-стакан.
+ * Уровень воды зависит от progress (0..1) — меняется при добавлении воды.
+ */
+function WaterIllustration({ progress }: { progress: number }) {
+  const p = Math.max(0, Math.min(1, progress));
+
+  // Стакан: вертикальные стенки 56..88 по X, верх y=18, низ скруглённый до y=82
+  const glassPath =
+    'M56 18 L88 18 L88 74 Q88 82 80 82 L64 82 Q56 82 56 74 Z';
+
+  // Вода: рассчитываем верхнюю кромку, остальное обрезает clipPath по форме стакана
+  const yTop = 24; // верхняя граница «полного» стакана (отступ от ободка)
+  const yBottom = 82;
+  const yWater = yTop + (1 - p) * (yBottom - yTop);
 
   return (
-    <View style={styles.card}>
-      <View style={styles.circleWrap}>
-        <Svg width={CIRCLE_SIZE} height={CIRCLE_SIZE}>
-          <Circle
-            cx={CIRCLE_CX}
-            cy={CIRCLE_CX}
-            r={CIRCLE_R}
-            stroke={COLORS.trackGray}
-            strokeWidth={12}
-            strokeLinecap="round"
-            fill="none"
+    <Svg width={ILLUSTRATION_W} height={ILLUSTRATION_H} viewBox="0 0 140 96">
+      <Defs>
+        <SvgLinearGradient id="waterBg" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor="#1A3A5C" />
+          <Stop offset="100%" stopColor="#06121F" />
+        </SvgLinearGradient>
+        <SvgLinearGradient id="waterFill" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor="#7BD8FF" />
+          <Stop offset="100%" stopColor="#1976D2" />
+        </SvgLinearGradient>
+        <ClipPath id="glassClip">
+          <Path d={glassPath} />
+        </ClipPath>
+      </Defs>
+      <Rect width={140} height={96} fill="url(#waterBg)" />
+
+      {/* ambient drops */}
+      <Circle cx={20} cy={60} r={3} fill="#4FC3F7" opacity={0.55} />
+      <Circle cx={28} cy={78} r={2} fill="#4FC3F7" opacity={0.4} />
+      <Circle cx={120} cy={38} r={2} fill="#4FC3F7" opacity={0.45} />
+      <Circle cx={128} cy={70} r={2.5} fill="#4FC3F7" opacity={0.55} />
+
+      {/* glass interior subtle tint */}
+      <Path d={glassPath} fill="rgba(255,255,255,0.05)" />
+
+      {/* water (clipped to glass shape) */}
+      {p > 0.01 && (
+        <G clipPath="url(#glassClip)">
+          <Rect x={54} y={yWater} width={36} height={40} fill="url(#waterFill)" />
+          {/* water surface highlight */}
+          <Rect
+            x={54}
+            y={yWater}
+            width={36}
+            height={1.5}
+            fill="rgba(255,255,255,0.55)"
           />
-          <AnimatedCircle
-            cx={CIRCLE_CX}
-            cy={CIRCLE_CX}
-            r={CIRCLE_R}
-            stroke={COLORS.accent}
-            strokeWidth={12}
-            strokeLinecap="round"
-            strokeDasharray={CIRCLE_CIRCUMFERENCE}
-            fill="none"
-            rotation={-90}
-            originX={CIRCLE_CX}
-            originY={CIRCLE_CX}
-            animatedProps={animatedProps}
-          />
-        </Svg>
-        <View style={styles.circleCenter} pointerEvents="none">
-          <MaterialIcons name="directions-walk" size={36} color={COLORS.accent} style={styles.stepsIcon} />
-          <ThemedText style={[styles.stepsValue, { color: COLORS.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.35}>
-            {stepsToday.toLocaleString('ru-RU')}
-          </ThemedText>
-          <ThemedText style={[styles.stepsGoal, { color: COLORS.textSecondary }]}>
-            из {stepsGoal.toLocaleString('ru-RU')}
-          </ThemedText>
-        </View>
-      </View>
-      <ThemedText style={[styles.stepsLabel, { color: COLORS.textSecondary }]}>
-        Шаги сегодня
-      </ThemedText>
+        </G>
+      )}
+
+      {/* glass outline */}
+      <Path
+        d={glassPath}
+        fill="none"
+        stroke="rgba(220,240,255,0.78)"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      {/* rim emphasis */}
+      <Path
+        d="M56 18 L88 18"
+        stroke="rgba(255,255,255,0.9)"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+      />
+      {/* glass side highlight */}
+      <Path
+        d="M60 24 L60 60"
+        stroke="rgba(255,255,255,0.3)"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+/** Правая панель «Шаги»: оранжевый градиент + растровые следы из assets */
+function StepsIllustration() {
+  return (
+    <ExpoLinearGradient
+      colors={['#7A4428', '#2A1308']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.stepsPanelArt}
+    >
+      <Image
+        source={STEPS_PANEL_IMAGE}
+        style={styles.stepsPanelImage}
+        resizeMode="contain"
+      />
+    </ExpoLinearGradient>
+  );
+}
+
+// ===== Top Tabs =====
+
+function TopTabs({
+  active,
+  onChange,
+}: {
+  active: HealthyTab;
+  onChange: (t: HealthyTab) => void;
+}) {
+  return (
+    <View style={styles.tabsBar}>
+      {TABS.map((t) => {
+        const isActive = active === t.key;
+        return (
+          <Pressable
+            key={t.key}
+            onPress={() => onChange(t.key)}
+            style={[styles.tabItem, isActive && styles.tabItemActive]}
+            hitSlop={6}
+          >
+            <ThemedText
+              style={[
+                styles.tabLabel,
+                { color: isActive ? COLORS.textPrimary : COLORS.textSecondary },
+              ]}
+            >
+              {t.label}
+            </ThemedText>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
-// --- Today's Recommendation Card ---
-function RecommendationCard({ onPress }: { onPress?: () => void }) {
-  const [showDetailModal, setShowDetailModal] = useState(false);
+// ===== Today: AI Summary =====
+
+function TodayAiSummary({ onPressMore }: { onPressMore: () => void }) {
   const todayKey = useMemo(() => formatDateForApi(new Date()), []);
-  const dayRecord = useSleepStore((s) => s.dayRecords[todayKey]);
-  const recommendations = dayRecord?.recommendations ?? [];
-  const rating = dayRecord?.rating ?? null;
-  const shortAdvice = recommendations.length > 0 ? recommendations[0] : 'Сну нужно уделить внимание. Попробуйте ложиться в одно время и избегайте экранов за 1 час до сна.';
-
-  return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <View style={styles.recommendationHeader}>
-        <View style={[styles.recommendationIconWrap, { backgroundColor: COLORS.accent }]}>
-          <MaterialIcons name="lightbulb-outline" size={24} color="#fff" />
-        </View>
-        <MaterialIcons name="bed" size={24} color={COLORS.blueAccent} style={styles.recommendationSleepIcon} />
-      </View>
-      <ThemedText style={[styles.recommendationTitle, { color: COLORS.textPrimary }]}>
-        Рекомендация на сегодня
-      </ThemedText>
-      <ThemedText style={[styles.recommendationBody, { color: COLORS.textSecondary }]}>
-        {shortAdvice}
-      </ThemedText>
-      {rating && (
-        <Pressable
-          style={styles.detailBtn}
-          onPress={(e) => {
-            e?.stopPropagation?.();
-            setShowDetailModal(true);
-          }}
-        >
-          <ThemedText style={[styles.detailBtnText, { color: COLORS.accent }]}>Подробнее</ThemedText>
-          <MaterialIcons name="arrow-forward" size={16} color={COLORS.accent} />
-        </Pressable>
-      )}
-
-      <Modal
-        visible={showDetailModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDetailModal(false)}
-      >
-        <Pressable
-          style={styles.adviceModalOverlay}
-          onPress={() => setShowDetailModal(false)}
-        >
-          <View style={styles.adviceModalContent}>
-            <View style={styles.adviceModalHeader}>
-              <ThemedText style={[styles.adviceModalTitle, { color: COLORS.textPrimary }]}>
-                Как улучшить сон
-              </ThemedText>
-              <Pressable onPress={() => setShowDetailModal(false)} hitSlop={12}>
-                <MaterialIcons name="close" size={24} color={COLORS.textSecondary} />
-              </Pressable>
-            </View>
-            <ScrollView
-              style={styles.adviceModalScroll}
-              contentContainerStyle={styles.adviceModalScrollContent}
-              showsVerticalScrollIndicator={true}
-            >
-              <ThemedText style={[styles.adviceModalBody, { color: COLORS.textSecondary }]}>
-                {rating ? FULL_SLEEP_ADVICE[rating as SleepRating] : shortAdvice}
-              </ThemedText>
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-    </Pressable>
-  );
-}
-
-// --- Last Night Sleep Card ---
-function LastNightSleepCard({ onPress }: { onPress?: () => void }) {
-  const lastNightMinutes = useSleepStore((s) => s.lastNightSleepMinutes);
-  const avg7DaysMinutes = useSleepStore((s) => s.avgSleep7DaysMinutes);
-
-  return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <MaterialIcons name="nightlight-round" size={24} color={COLORS.accent} style={styles.cardIcon} />
-      <ThemedText style={[styles.cardTitle, { color: COLORS.textPrimary }]}>Сон прошлой ночью</ThemedText>
-      {lastNightMinutes != null ? (
-        <>
-          <View style={styles.sleepValueWrap}>
-            <ThemedText style={[styles.sleepValue, { color: COLORS.textPrimary }]}>
-              {formatSleepDuration(lastNightMinutes)}
-            </ThemedText>
-          </View>
-          {avg7DaysMinutes != null && (
-            <ThemedText style={[styles.sleepSubtext, { color: COLORS.textSecondary }]}>
-              Среднее за 7 дней: {formatSleepDuration(avg7DaysMinutes)}
-            </ThemedText>
-          )}
-        </>
-      ) : (
-        <ThemedText style={[styles.sleepSubtext, { color: COLORS.textSecondary }]}>
-          Нет данных сна из Apple Health
-        </ThemedText>
-      )}
-    </Pressable>
-  );
-}
-
-// --- Sleep Schedule Card ---
-function SleepScheduleCard({ onPress }: { onPress?: () => void }) {
-  const settings = useSleepStore((s) => s.settings);
-  const setSettings = useSleepStore((s) => s.setSettings);
-  const scale = useSharedValue(1);
-  const scheduledMinutes = getScheduledSleepMinutes(settings);
-  const scheduleWarning = scheduledMinutes < settings.goalMinutes;
-  const bedtimeStr = `${settings.bedtimeHour.toString().padStart(2, '0')}:${settings.bedtimeMinute.toString().padStart(2, '0')}`;
-  const wakeStr = `${settings.wakeHour.toString().padStart(2, '0')}:${settings.wakeMinute.toString().padStart(2, '0')}`;
-
-  const handleToggle = useCallback((value: boolean) => {
-    scale.value = withSequence(
-      withTiming(1.15, { duration: 80, easing: Easing.out(Easing.ease) }),
-      withTiming(1, { duration: 150, easing: Easing.out(Easing.back(1.5)) })
-    );
-    setSettings({ notificationsEnabled: value });
-  }, [scale, setSettings]);
-
-  const animatedSwitchStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <View style={styles.cardHeaderRow}>
-        <MaterialIcons name="schedule" size={20} color={COLORS.textSecondary} />
-        <ThemedText style={[styles.cardTitle, { color: COLORS.textPrimary, marginLeft: 8 }]}>
-          Расписание сна
-        </ThemedText>
-      </View>
-      <View style={styles.scheduleRow}>
-        <ThemedText style={[styles.scheduleLabel, { color: COLORS.textPrimary }]}>Цель сна</ThemedText>
-        <View style={styles.pill}><ThemedText style={styles.pillText}>{Math.floor(settings.goalMinutes / 60)}ч</ThemedText></View>
-      </View>
-      <View style={styles.scheduleRow}>
-        <View style={styles.scheduleLabelRow}>
-          <MaterialIcons name="nightlight-round" size={16} color={COLORS.textSecondary} />
-          <ThemedText style={[styles.scheduleLabel, { color: COLORS.textPrimary, marginLeft: 6 }]}>Время сна</ThemedText>
-        </View>
-        <View style={styles.pill}>
-          <ThemedText style={styles.pillText}>{bedtimeStr}</ThemedText>
-          <MaterialIcons name="schedule" size={14} color={COLORS.textSecondary} style={{ marginLeft: 4 }} />
-        </View>
-      </View>
-      <View style={styles.scheduleRow}>
-        <View style={styles.scheduleLabelRow}>
-          <MaterialIcons name="wb-sunny" size={16} color={COLORS.textSecondary} />
-          <ThemedText style={[styles.scheduleLabel, { color: COLORS.textPrimary, marginLeft: 6 }]}>Время подъёма</ThemedText>
-        </View>
-        <View style={styles.pill}>
-          <ThemedText style={styles.pillText}>{wakeStr}</ThemedText>
-          <MaterialIcons name="schedule" size={14} color={COLORS.textSecondary} style={{ marginLeft: 4 }} />
-        </View>
-      </View>
-      <View style={[styles.scheduleRow, { opacity: 0.8 }]}>
-        <ThemedText style={[styles.scheduleLabel, { color: COLORS.textSecondary }]}>По расписанию</ThemedText>
-        <ThemedText style={[styles.scheduleValue, { color: COLORS.textSecondary }]}>
-          {formatSleepDuration(scheduledMinutes)}
-        </ThemedText>
-      </View>
-      {scheduleWarning && (
-        <View style={[styles.warningBanner, { borderColor: COLORS.warningBorder, backgroundColor: COLORS.warningBg }]}>
-          <MaterialIcons name="warning" size={18} color={COLORS.accent} />
-          <ThemedText style={[styles.warningText, { color: COLORS.textPrimary }]}>
-            Расписание не соответствует цели сна
-          </ThemedText>
-        </View>
-      )}
-      <View style={[styles.scheduleRow, styles.toggleRow]}>
-        <View style={styles.scheduleLabelRow}>
-          <MaterialIcons name="notifications" size={18} color={COLORS.textSecondary} />
-          <ThemedText style={[styles.scheduleLabel, { color: COLORS.textPrimary, marginLeft: 8 }]}>
-            Уведомления о сне
-          </ThemedText>
-        </View>
-        <Animated.View style={animatedSwitchStyle}>
-          <Switch
-            value={settings.notificationsEnabled}
-            onValueChange={handleToggle}
-            trackColor={{ false: COLORS.trackGray, true: COLORS.accent }}
-            thumbColor="#fff"
-          />
-        </Animated.View>
-      </View>
-    </Pressable>
-  );
-}
-
-// --- Water Intake Card ---
-function WaterIntakeCard() {
-  const [showPortionModal, setShowPortionModal] = useState(false);
-  const todayKey = useMemo(() => formatDateForApi(new Date()), []);
+  const goalSleepMinutes = useSleepStore((s) => s.settings.goalMinutes);
+  const lastNightSleepMinutes = useSleepStore((s) => s.lastNightSleepMinutes);
+  const avgSleep7DaysMinutes = useSleepStore((s) => s.avgSleep7DaysMinutes);
+  const dayRecords = useSleepStore((s) => s.dayRecords);
   const stepsToday = useStepsStore((s) => s.stepsToday);
+  const stepsGoal = useStepsStore((s) => s.settings.goalSteps ?? 10000);
+  const stepsHistory = useStepsStore((s) => s.history);
   const heightCm = useStepsStore((s) => s.settings.heightCm);
   const weightKg = useStepsStore((s) => s.settings.weightKg);
-  const todaySleepRating = useSleepStore(
-    (s) => s.dayRecords[todayKey]?.rating ?? null
-  );
   const intakeTodayMl = useWaterStore((s) => s.intakeTodayMl);
   const healthWaterTodayMl = useWaterStore((s) => s.healthWaterTodayMl);
-  const addWater = useWaterStore((s) => s.addWater);
   const getTodayGoalMl = useWaterStore((s) => s.getTodayGoalMl);
-  const ensureDateSync = useWaterStore((s) => s.ensureDateSync);
+  const moodRecords = useMoodStore((s) => s.records);
+  const moodToday = moodRecords[todayKey] ?? null;
+  const todaySleepRating = dayRecords[todayKey]?.rating ?? null;
 
-  useEffect(() => {
-    ensureDateSync(todayKey);
-  }, [todayKey, ensureDateSync]);
-
-  const goalMl = getTodayGoalMl({
+  const waterIntakeMl = intakeTodayMl + (healthWaterTodayMl ?? 0);
+  const waterGoalMl = getTodayGoalMl({
     heightCm,
     weightKg,
     stepsToday,
     sleepRating: todaySleepRating,
   });
-  const totalIntakeMl = intakeTodayMl + (healthWaterTodayMl ?? 0);
-  const progress = goalMl > 0 ? Math.min(totalIntakeMl / goalMl, 1) : 0;
-  const percent = goalMl > 0 ? Math.round((totalIntakeMl / goalMl) * 100) : 0;
 
-  const handleAddWater = useCallback(
-    (ml: number) => {
-      addWater(ml, todayKey);
-      setShowPortionModal(false);
-    },
-    [addWater, todayKey]
+  const moodRecordsByDate = useMemo(() => {
+    const o: Record<string, { moodValue: number; energy: EnergyLevel; stress: StressLevel }> = {};
+    for (const [k, v] of Object.entries(moodRecords)) {
+      o[k] = { moodValue: v.moodValue, energy: v.energy, stress: v.stress };
+    }
+    return o;
+  }, [moodRecords]);
+
+  const sleepRatingsByDate = useMemo(() => {
+    const o: Record<string, SleepRating> = {};
+    for (const [k, v] of Object.entries(dayRecords)) {
+      if (v.rating) o[k] = v.rating;
+    }
+    return o;
+  }, [dayRecords]);
+
+  const insight = useMemo(
+    () =>
+      buildHealthyInsight({
+        period: 'day',
+        todayKey,
+        goalSleepMinutes,
+        lastNightSleepMinutes,
+        avgSleep7DaysMinutes,
+        todaySleepRating,
+        stepsToday,
+        stepsGoal,
+        stepsHistory,
+        waterIntakeMl,
+        waterGoalMl,
+        moodToday: moodToday
+          ? { moodValue: moodToday.moodValue, energy: moodToday.energy, stress: moodToday.stress }
+          : null,
+        moodRecordsByDate,
+        sleepRatingsByDate,
+      }),
+    [
+      todayKey,
+      goalSleepMinutes,
+      lastNightSleepMinutes,
+      avgSleep7DaysMinutes,
+      todaySleepRating,
+      stepsToday,
+      stepsGoal,
+      stepsHistory,
+      waterIntakeMl,
+      waterGoalMl,
+      moodToday,
+      moodRecordsByDate,
+      sleepRatingsByDate,
+    ]
   );
 
-  const formatLiters = (ml: number) => {
-    if (ml >= 1000) return `${(ml / 1000).toFixed(1)} л`;
-    return `${ml} мл`;
-  };
-
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeaderRow}>
-        <MaterialIcons name="water-drop" size={24} color={COLORS.blueAccent} />
-        <ThemedText style={[styles.cardTitle, { color: COLORS.textPrimary, marginLeft: 8 }]}>
-          Потребление воды
-        </ThemedText>
-      </View>
-      <View style={styles.waterRow}>
-        <View style={styles.waterValueWrap}>
-          <ThemedText style={[styles.waterValue, { color: COLORS.textPrimary }]}>
-            {formatLiters(totalIntakeMl)}
-          </ThemedText>
+    <View style={[styles.card, styles.aiSummaryCard]}>
+      <View style={styles.aiSummaryHeader}>
+        <View style={[styles.iconBubble, { backgroundColor: COLORS.indigoSoft }]}>
+          <MaterialIcons name="auto-awesome" size={18} color={COLORS.indigo} />
         </View>
-        <ThemedText style={[styles.waterPercent, { color: COLORS.blueAccent }]}>
-          {percent}%
+        <ThemedText style={[styles.aiSummaryLabel, { color: COLORS.textSecondary }]}>
+          Твоя цель:
         </ThemedText>
       </View>
-      <ThemedText style={[styles.waterSubtext, { color: COLORS.textSecondary }]}>
-        из цели {formatLiters(goalMl)} (рост, вес, шаги, сон)
+      <ThemedText style={[styles.aiSummaryTitle, { color: COLORS.textPrimary }]} numberOfLines={3}>
+        {insight.statusLabel}
       </ThemedText>
-      <View style={[styles.progressTrack, { backgroundColor: COLORS.trackGray }]}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              backgroundColor: COLORS.blueAccent,
-              width: `${Math.min(progress * 100, 100)}%`,
-            },
-          ]}
-        />
-      </View>
-      <Pressable
-        style={[styles.addWaterBtn, { backgroundColor: '#00838F' }]}
-        onPress={() => setShowPortionModal(true)}
-      >
-        <ThemedText style={styles.addWaterBtnText}>+ Добавить воду</ThemedText>
+      <ThemedText style={[styles.aiSummaryBody, { color: COLORS.textSecondary }]} numberOfLines={3}>
+        {insight.summary}
+      </ThemedText>
+      <Pressable onPress={onPressMore} style={styles.aiSummaryMoreBtn} hitSlop={8}>
+        <ThemedText style={[styles.aiSummaryMoreText, { color: COLORS.textPrimary }]}>
+          Подробнее
+        </ThemedText>
       </Pressable>
-
-      <Modal
-        visible={showPortionModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPortionModal(false)}
-      >
-        <Pressable
-          style={styles.waterModalOverlay}
-          onPress={() => setShowPortionModal(false)}
-        >
-          <Pressable style={styles.waterModalContent} onPress={(e) => e.stopPropagation()}>
-            <ThemedText style={[styles.waterModalTitle, { color: COLORS.textPrimary }]}>
-              Добавить воду
-            </ThemedText>
-            <View style={styles.waterPortionGrid}>
-              {WATER_PORTIONS.map((ml) => (
-                <Pressable
-                  key={ml}
-                  onPress={() => handleAddWater(ml)}
-                  style={[styles.waterPortionBtn, { backgroundColor: COLORS.trackGray }]}
-                >
-                  <ThemedText style={{ color: COLORS.textPrimary, fontSize: 15, fontWeight: '600' }}>
-                    {ml >= 1000 ? `${ml / 1000} л` : `${ml} мл`}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable onPress={() => setShowPortionModal(false)} style={styles.waterModalClose}>
-              <ThemedText style={{ color: COLORS.textSecondary }}>Отмена</ThemedText>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
 
-// --- Health Settings Card ---
-function HealthSettingsCard({
-  onStepsPress,
-  onNotificationsPress,
+// ===== Today: Mini Cards =====
+
+function MiniCard({
+  iconName,
+  iconColor,
+  iconBg,
+  title,
+  primaryLine,
+  subtitle,
+  onPress,
+  emptyHint,
 }: {
-  onStepsPress: () => void;
-  onNotificationsPress: () => void;
+  iconName: React.ComponentProps<typeof MaterialIcons>['name'];
+  iconColor: string;
+  iconBg: string;
+  title: string;
+  primaryLine?: string;
+  subtitle?: string;
+  onPress?: () => void;
+  emptyHint?: string;
 }) {
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeaderRow}>
-        <MaterialIcons name="settings" size={20} color={COLORS.textSecondary} />
-        <ThemedText style={[styles.cardTitle, { color: COLORS.textPrimary, marginLeft: 8 }]}>
-          Настройки здоровья
-        </ThemedText>
+    <Pressable
+      style={({ pressed }) => [styles.miniCard, pressed && styles.cardPressed]}
+      onPress={onPress}
+    >
+      <View style={[styles.miniCardIcon, { backgroundColor: iconBg }]}>
+        <MaterialIcons name={iconName} size={22} color={iconColor} />
       </View>
-      <Pressable style={styles.settingsRow} onPress={onStepsPress} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
-        <MaterialIcons name="directions-walk" size={20} color={COLORS.textSecondary} />
-        <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>Шагомер</ThemedText>
-        <ThemedText style={[styles.settingsValue, { color: COLORS.textSecondary }]}>Настройки</ThemedText>
-        <MaterialIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-      </Pressable>
-      <Pressable style={styles.settingsRow} onPress={onNotificationsPress} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
-        <MaterialIcons name="notifications" size={20} color={COLORS.textSecondary} />
-        <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>Уведомления</ThemedText>
-        <ThemedText style={[styles.settingsValue, { color: COLORS.textSecondary }]}>Настройки</ThemedText>
-        <MaterialIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-      </Pressable>
+      <View style={styles.miniCardBody}>
+        <ThemedText style={[styles.miniCardTitle, { color: COLORS.textPrimary }]}>
+          {title}
+        </ThemedText>
+        {primaryLine ? (
+          <ThemedText style={[styles.miniCardPrimary, { color: COLORS.textPrimary }]} numberOfLines={1}>
+            {primaryLine}
+          </ThemedText>
+        ) : (
+          <ThemedText style={[styles.miniCardEmpty, { color: COLORS.textSecondary }]} numberOfLines={1}>
+            {emptyHint ?? 'Нет данных'}
+          </ThemedText>
+        )}
+        {subtitle ? (
+          <ThemedText style={[styles.miniCardSub, { color: COLORS.textSecondary }]} numberOfLines={1}>
+            {subtitle}
+          </ThemedText>
+        ) : null}
+      </View>
+      <MaterialIcons name="chevron-right" size={22} color={COLORS.textMuted} />
+    </Pressable>
+  );
+}
+
+/**
+ * Карточка с иллюстрацией справа (как на дизайне для Сон / Вода / Шаги).
+ * Слева — заголовок с маленькой иконкой, крупное значение и подпись.
+ * Справа — иллюстрация (SVG или растр), прижатая к правому краю.
+ */
+function VisualMiniCard({
+  iconName,
+  iconColor,
+  iconBg,
+  title,
+  primaryLine,
+  subtitle,
+  onPress,
+  emptyHint,
+  illustration,
+}: {
+  iconName: React.ComponentProps<typeof MaterialIcons>['name'];
+  iconColor: string;
+  iconBg: string;
+  title: string;
+  primaryLine?: string;
+  subtitle?: string;
+  onPress?: () => void;
+  emptyHint?: string;
+  illustration: React.ReactNode;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.visualCard, pressed && styles.cardPressed]}
+      onPress={onPress}
+    >
+      <View style={styles.visualCardLeft}>
+        <View style={styles.visualCardHeader}>
+          <View style={[styles.visualCardIcon, { backgroundColor: iconBg }]}>
+            <MaterialIcons name={iconName} size={16} color={iconColor} />
+          </View>
+          <ThemedText style={[styles.visualCardTitle, { color: COLORS.textPrimary }]}>
+            {title}
+          </ThemedText>
+        </View>
+        {primaryLine ? (
+          <ThemedText
+            style={[styles.visualCardPrimary, { color: COLORS.textPrimary }]}
+            numberOfLines={1}
+          >
+            {primaryLine}
+          </ThemedText>
+        ) : (
+          <ThemedText
+            style={[styles.visualCardEmpty, { color: COLORS.textSecondary }]}
+            numberOfLines={1}
+          >
+            {emptyHint ?? 'Нет данных'}
+          </ThemedText>
+        )}
+        {subtitle ? (
+          <ThemedText
+            style={[styles.visualCardSub, { color: COLORS.textSecondary }]}
+            numberOfLines={1}
+          >
+            {subtitle}
+          </ThemedText>
+        ) : null}
+      </View>
+      <View style={styles.visualCardArt} pointerEvents="none">
+        {illustration}
+      </View>
+    </Pressable>
+  );
+}
+
+function SleepMiniCard({ onPress }: { onPress: () => void }) {
+  const todayKey = useMemo(() => formatDateForApi(new Date()), []);
+  const lastNightMinutes = useSleepStore((s) => s.lastNightSleepMinutes);
+  const rating = useSleepStore((s) => s.dayRecords[todayKey]?.rating ?? null);
+
+  const primary = lastNightMinutes != null ? formatSleepDuration(lastNightMinutes) : undefined;
+  const subtitle = rating ? sleepRatingLabel(rating) : undefined;
+
+  return (
+    <VisualMiniCard
+      iconName="nightlight-round"
+      iconColor={COLORS.indigo}
+      iconBg={COLORS.indigoSoft}
+      title="Сон"
+      primaryLine={primary}
+      subtitle={subtitle}
+      onPress={onPress}
+      emptyHint="Укажите сон"
+      illustration={<SleepIllustration />}
+    />
+  );
+}
+
+function WaterMiniCard({ onPress }: { onPress: () => void }) {
+  const stepsToday = useStepsStore((s) => s.stepsToday);
+  const heightCm = useStepsStore((s) => s.settings.heightCm);
+  const weightKg = useStepsStore((s) => s.settings.weightKg);
+  const todayKey = useMemo(() => formatDateForApi(new Date()), []);
+  const todaySleepRating = useSleepStore((s) => s.dayRecords[todayKey]?.rating ?? null);
+  const intakeTodayMl = useWaterStore((s) => s.intakeTodayMl);
+  const healthWaterTodayMl = useWaterStore((s) => s.healthWaterTodayMl);
+  const getTodayGoalMl = useWaterStore((s) => s.getTodayGoalMl);
+
+  const totalMl = intakeTodayMl + (healthWaterTodayMl ?? 0);
+  const goalMl = getTodayGoalMl({ heightCm, weightKg, stepsToday, sleepRating: todaySleepRating });
+
+  const progress = goalMl > 0 ? totalMl / goalMl : 0;
+  const primary = `${formatLiters(totalMl)} из ${formatLiters(goalMl)}`;
+
+  return (
+    <VisualMiniCard
+      iconName="water-drop"
+      iconColor={COLORS.blue}
+      iconBg={COLORS.blueSoft}
+      title="Вода"
+      primaryLine={totalMl > 0 ? primary : undefined}
+      subtitle={totalMl > 0 ? undefined : 'Добавьте воду'}
+      onPress={onPress}
+      emptyHint="Добавьте воду"
+      illustration={<WaterIllustration progress={progress} />}
+    />
+  );
+}
+
+function StepsMiniCard({ onPress }: { onPress: () => void }) {
+  const stepsToday = useStepsStore((s) => s.stepsToday);
+  const stepsGoal = useStepsStore((s) => s.settings.goalSteps ?? 10000);
+
+  const primary = stepsToday > 0 ? `${stepsToday.toLocaleString('ru-RU')} шагов` : undefined;
+  const subtitle =
+    stepsToday > 0
+      ? `Цель ${stepsGoal.toLocaleString('ru-RU')}`
+      : 'Заполните данные';
+
+  return (
+    <VisualMiniCard
+      iconName="directions-walk"
+      iconColor={COLORS.orange}
+      iconBg={COLORS.orangeSoft}
+      title="Шаги"
+      primaryLine={primary}
+      subtitle={subtitle}
+      onPress={onPress}
+      emptyHint="Заполните данные"
+      illustration={<StepsIllustration />}
+    />
+  );
+}
+
+// ===== Today: Mood quick check-in =====
+
+/** Минималистичные круглые «смайлы» как на макете: жёлто-оранжевые → красно-оранжевые */
+type MoodFaceVariant = 'happy' | 'neutral' | 'sad' | 'verySad';
+
+const MOOD_FACE_FILL_WARM = '#FFCC80';
+const MOOD_FACE_FILL_SAD = '#FF8A65';
+const MOOD_FACE_STROKE = '#3E2723';
+const MOOD_FACE_LINE = '#1A1A1A';
+
+const QUICK_MOODS: { value: number; variant: MoodFaceVariant }[] = [
+  { value: 85, variant: 'happy' },
+  { value: 60, variant: 'neutral' },
+  { value: 35, variant: 'sad' },
+  { value: 15, variant: 'verySad' },
+];
+
+function MoodFaceIcon({ variant }: { variant: MoodFaceVariant }) {
+  const warm = variant === 'happy' || variant === 'neutral';
+  const fill = warm ? MOOD_FACE_FILL_WARM : MOOD_FACE_FILL_SAD;
+
+  const mouth =
+    variant === 'happy' ? (
+      <Path
+        d="M 13 23 Q 20 30 27 23"
+        stroke={MOOD_FACE_LINE}
+        strokeWidth={1.7}
+        fill="none"
+        strokeLinecap="round"
+      />
+    ) : variant === 'neutral' ? (
+      <Path
+        d="M 13 24 L 27 24"
+        stroke={MOOD_FACE_LINE}
+        strokeWidth={1.7}
+        strokeLinecap="round"
+      />
+    ) : variant === 'sad' ? (
+      <Path
+        d="M 13 25 Q 20 21 27 25"
+        stroke={MOOD_FACE_LINE}
+        strokeWidth={1.7}
+        fill="none"
+        strokeLinecap="round"
+      />
+    ) : (
+      <Path
+        d="M 13 26 Q 20 17 27 26"
+        stroke={MOOD_FACE_LINE}
+        strokeWidth={1.7}
+        fill="none"
+        strokeLinecap="round"
+      />
+    );
+
+  return (
+    <Svg width={36} height={36} viewBox="0 0 40 40">
+      <Circle
+        cx={20}
+        cy={20}
+        r={16}
+        fill={fill}
+        stroke={MOOD_FACE_STROKE}
+        strokeWidth={1.15}
+      />
+      <Circle cx={14} cy={16} r={1.85} fill={MOOD_FACE_LINE} />
+      <Circle cx={26} cy={16} r={1.85} fill={MOOD_FACE_LINE} />
+      {mouth}
+    </Svg>
+  );
+}
+
+function MoodMiniCard() {
+  const todayKey = useMemo(() => formatDateForApi(new Date()), []);
+  const moodToday = useMoodStore((s) => s.records[todayKey] ?? null);
+  const setMood = useMoodStore((s) => s.setMood);
+
+  const handleSelect = useCallback(
+    (value: number) => {
+      setMood(todayKey, {
+        moodValue: value,
+        energy: moodToday?.energy ?? 'medium',
+        stress: moodToday?.stress ?? 'medium',
+      });
+    },
+    [setMood, todayKey, moodToday?.energy, moodToday?.stress]
+  );
+
+  return (
+    <View style={styles.miniCardTall}>
+      <View style={styles.miniCardTallHeader}>
+        <View style={[styles.miniCardIcon, { backgroundColor: COLORS.greenSoft }]}>
+          <MaterialIcons name="mood" size={22} color={COLORS.green} />
+        </View>
+        <View style={styles.miniCardTallTitleBlock}>
+          <ThemedText style={[styles.miniCardTitle, { color: COLORS.textPrimary }]}>
+            Настроение
+          </ThemedText>
+          <ThemedText style={[styles.miniCardSub, { color: COLORS.textSecondary }]}>
+            {moodToday ? 'Как ты себя чувствуешь?' : 'Отметьте настроение'}
+          </ThemedText>
+        </View>
+      </View>
+      <View style={styles.moodRow}>
+        {QUICK_MOODS.map((m) => {
+          const isSelected =
+            moodToday != null && Math.abs(moodToday.moodValue - m.value) < 13;
+          return (
+            <Pressable
+              key={m.value}
+              onPress={() => handleSelect(m.value)}
+              style={[
+                styles.moodPill,
+                isSelected && styles.moodPillActive,
+              ]}
+            >
+              <MoodFaceIcon variant={m.variant} />
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
+
+// ===== Today tab =====
+
+function TodayTabContent({
+  onPressMore,
+  onOpenSleep,
+  onOpenWaterAdd,
+  onOpenSteps,
+}: {
+  onPressMore: () => void;
+  onOpenSleep: () => void;
+  onOpenWaterAdd: () => void;
+  onOpenSteps: () => void;
+}) {
+  return (
+    <Animated.View entering={FadeIn.duration(180)}>
+      <TodayAiSummary onPressMore={onPressMore} />
+      <SleepMiniCard onPress={onOpenSleep} />
+      <WaterMiniCard onPress={onOpenWaterAdd} />
+      <StepsMiniCard onPress={onOpenSteps} />
+      <MoodMiniCard />
+    </Animated.View>
+  );
+}
+
+// ===== Insight tab =====
+
+function InsightTabContent() {
+  return (
+    <Animated.View entering={FadeIn.duration(180)}>
+      <HealthyAiInsights />
+    </Animated.View>
+  );
+}
+
+// ===== Settings tab =====
+
+function SettingsRow({
+  iconName,
+  iconColor,
+  iconBg,
+  label,
+  sublabel,
+  onPress,
+  isLast,
+}: {
+  iconName: React.ComponentProps<typeof MaterialIcons>['name'];
+  iconColor: string;
+  iconBg: string;
+  label: string;
+  sublabel?: string;
+  onPress: () => void;
+  isLast?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.settingsRow,
+        !isLast && styles.settingsRowDivider,
+        pressed && styles.cardPressed,
+      ]}
+    >
+      <View style={[styles.settingsIconBubble, { backgroundColor: iconBg }]}>
+        <MaterialIcons name={iconName} size={20} color={iconColor} />
+      </View>
+      <View style={styles.settingsTextWrap}>
+        <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>
+          {label}
+        </ThemedText>
+        {sublabel ? (
+          <ThemedText style={[styles.settingsSubLabel, { color: COLORS.textSecondary }]}>
+            {sublabel}
+          </ThemedText>
+        ) : null}
+      </View>
+      <MaterialIcons name="chevron-right" size={22} color={COLORS.textMuted} />
+    </Pressable>
+  );
+}
+
+function WaterNormaModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const manualGoalMl = useWaterStore((s) => s.manualGoalMl);
+  const setManualGoal = useWaterStore((s) => s.setManualGoal);
+  const heightCm = useStepsStore((s) => s.settings.heightCm);
+  const weightKg = useStepsStore((s) => s.settings.weightKg);
+  const stepsToday = useStepsStore((s) => s.stepsToday);
+  const todayKey = useMemo(() => formatDateForApi(new Date()), []);
+  const todaySleepRating = useSleepStore((s) => s.dayRecords[todayKey]?.rating ?? null);
+  const getTodayGoalMl = useWaterStore((s) => s.getTodayGoalMl);
+  const autoGoalMl = getTodayGoalMl({ heightCm, weightKg, stepsToday, sleepRating: todaySleepRating });
+
+  const [draft, setDraft] = useState<string>(manualGoalMl != null ? String(manualGoalMl) : '');
+
+  const handleApply = useCallback(() => {
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      setManualGoal(null);
+      onClose();
+      return;
+    }
+    const ml = parseInt(trimmed, 10);
+    if (!Number.isFinite(ml) || ml <= 0) {
+      onClose();
+      return;
+    }
+    setManualGoal(ml);
+    onClose();
+  }, [draft, setManualGoal, onClose]);
+
+  const handleAuto = useCallback(() => {
+    setManualGoal(null);
+    setDraft('');
+    onClose();
+  }, [setManualGoal, onClose]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalHeader}>
+            <ThemedText style={[styles.modalTitle, { color: COLORS.textPrimary }]}>
+              Норма воды
+            </ThemedText>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <MaterialIcons name="close" size={22} color={COLORS.textSecondary} />
+            </Pressable>
+          </View>
+          <ThemedText style={[styles.modalBody, { color: COLORS.textSecondary }]}>
+            Авто-расчёт: {formatLiters(autoGoalMl)} (по росту, весу, шагам и сну)
+          </ThemedText>
+          <ThemedText style={[styles.modalSection, { color: COLORS.textSecondary }]}>
+            Своя цель в мл
+          </ThemedText>
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            keyboardType="number-pad"
+            placeholder="например, 2500"
+            placeholderTextColor={COLORS.textMuted}
+            style={styles.modalInput}
+          />
+          <View style={styles.modalActions}>
+            <Pressable
+              onPress={handleAuto}
+              style={({ pressed }) => [styles.modalSecondaryBtn, pressed && styles.cardPressed]}
+            >
+              <ThemedText style={[styles.modalSecondaryText, { color: COLORS.textPrimary }]}>
+                Авто-расчёт
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={handleApply}
+              style={({ pressed }) => [styles.modalPrimaryBtn, pressed && styles.cardPressed]}
+            >
+              <ThemedText style={styles.modalPrimaryText}>Сохранить</ThemedText>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function GoalsSummaryModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const sleepGoalMin = useSleepStore((s) => s.settings.goalMinutes);
+  const stepsGoal = useStepsStore((s) => s.settings.goalSteps);
+  const manualWaterMl = useWaterStore((s) => s.manualGoalMl);
+  const heightCm = useStepsStore((s) => s.settings.heightCm);
+  const weightKg = useStepsStore((s) => s.settings.weightKg);
+  const stepsToday = useStepsStore((s) => s.stepsToday);
+  const todayKey = useMemo(() => formatDateForApi(new Date()), []);
+  const todaySleepRating = useSleepStore((s) => s.dayRecords[todayKey]?.rating ?? null);
+  const getTodayGoalMl = useWaterStore((s) => s.getTodayGoalMl);
+  const autoWaterMl = getTodayGoalMl({ heightCm, weightKg, stepsToday, sleepRating: todaySleepRating });
+
+  const waterDisplay = manualWaterMl != null
+    ? `${formatLiters(manualWaterMl)} (вручную)`
+    : `${formatLiters(autoWaterMl)} (авто)`;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalHeader}>
+            <ThemedText style={[styles.modalTitle, { color: COLORS.textPrimary }]}>
+              Текущие цели
+            </ThemedText>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <MaterialIcons name="close" size={22} color={COLORS.textSecondary} />
+            </Pressable>
+          </View>
+          <View style={styles.goalRow}>
+            <ThemedText style={[styles.goalLabel, { color: COLORS.textSecondary }]}>Сон</ThemedText>
+            <ThemedText style={[styles.goalValue, { color: COLORS.textPrimary }]}>
+              {Math.floor(sleepGoalMin / 60)}ч{sleepGoalMin % 60 ? ` ${sleepGoalMin % 60}м` : ''}
+            </ThemedText>
+          </View>
+          <View style={styles.goalRow}>
+            <ThemedText style={[styles.goalLabel, { color: COLORS.textSecondary }]}>Вода</ThemedText>
+            <ThemedText style={[styles.goalValue, { color: COLORS.textPrimary }]}>
+              {waterDisplay}
+            </ThemedText>
+          </View>
+          <View style={styles.goalRow}>
+            <ThemedText style={[styles.goalLabel, { color: COLORS.textSecondary }]}>Шаги</ThemedText>
+            <ThemedText style={[styles.goalValue, { color: COLORS.textPrimary }]}>
+              {stepsGoal != null ? stepsGoal.toLocaleString('ru-RU') : '—'}
+            </ThemedText>
+          </View>
+          <ThemedText style={[styles.modalBody, { color: COLORS.textMuted, marginTop: 12 }]}>
+            Изменить цели можно в разделах «Сон», «Вода» и «Шаги».
+          </ThemedText>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function SettingsTabContent({
+  onOpenSleep,
+  onOpenSteps,
+  onOpenNotifications,
+  onOpenWaterNorma,
+  onOpenGoals,
+}: {
+  onOpenSleep: () => void;
+  onOpenSteps: () => void;
+  onOpenNotifications: () => void;
+  onOpenWaterNorma: () => void;
+  onOpenGoals: () => void;
+}) {
+  return (
+    <Animated.View entering={FadeIn.duration(180)} style={styles.settingsList}>
+      <SettingsRow
+        iconName="nightlight-round"
+        iconColor={COLORS.indigo}
+        iconBg={COLORS.indigoSoft}
+        label="Сон"
+        sublabel="Режим сна"
+        onPress={onOpenSleep}
+      />
+      <SettingsRow
+        iconName="water-drop"
+        iconColor={COLORS.blue}
+        iconBg={COLORS.blueSoft}
+        label="Вода"
+        sublabel="Норма воды"
+        onPress={onOpenWaterNorma}
+      />
+      <SettingsRow
+        iconName="directions-walk"
+        iconColor={COLORS.pink}
+        iconBg={COLORS.pinkSoft}
+        label="Шаги"
+        sublabel="Цель шагов"
+        onPress={onOpenSteps}
+      />
+      <SettingsRow
+        iconName="notifications"
+        iconColor={COLORS.yellow}
+        iconBg={COLORS.yellowSoft}
+        label="Уведомления"
+        onPress={onOpenNotifications}
+      />
+      <SettingsRow
+        iconName="emoji-events"
+        iconColor={COLORS.accent}
+        iconBg="rgba(243, 87, 19, 0.18)"
+        label="Цели"
+        onPress={onOpenGoals}
+      />
+      <SettingsRow
+        iconName="straighten"
+        iconColor={COLORS.green}
+        iconBg={COLORS.greenSoft}
+        label="Рост и вес"
+        onPress={onOpenSteps}
+        isLast
+      />
+    </Animated.View>
+  );
+}
+
+// ===== Water portion modal (quick add from Today) =====
+
+function WaterAddModal({
+  visible,
+  onClose,
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) {
+  const todayKey = useMemo(() => formatDateForApi(new Date()), []);
+  const addWater = useWaterStore((s) => s.addWater);
+
+  const handleAdd = useCallback(
+    (ml: number) => {
+      addWater(ml, todayKey);
+      onClose();
+    },
+    [addWater, todayKey, onClose]
+  );
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalHeader}>
+            <ThemedText style={[styles.modalTitle, { color: COLORS.textPrimary }]}>
+              Добавить воду
+            </ThemedText>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <MaterialIcons name="close" size={22} color={COLORS.textSecondary} />
+            </Pressable>
+          </View>
+          <View style={styles.portionGrid}>
+            {WATER_PORTIONS.map((ml) => (
+              <Pressable
+                key={ml}
+                onPress={() => handleAdd(ml)}
+                style={({ pressed }) => [
+                  styles.portionBtn,
+                  pressed && styles.cardPressed,
+                ]}
+              >
+                <ThemedText style={[styles.portionText, { color: COLORS.textPrimary }]}>
+                  {ml >= 1000 ? `${ml / 1000} л` : `${ml} мл`}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ===== Main screen =====
 
 export default function ClientHealthScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const stepsToday = useStepsStore((s) => s.stepsToday);
-  const stepsGoal = useStepsStore((s) => s.settings.goalSteps) ?? 10000;
-  const todayFormatted = useMemo(() => formatHealthDate(new Date()), []);
-  const [animateTrigger, setAnimateTrigger] = useState(0);
-  const requestSurveyShow = useSleepStore((s) => s.requestSurveyShow);
+  const [tab, setTab] = useState<HealthyTab>('today');
+  const [waterAddVisible, setWaterAddVisible] = useState(false);
+  const [waterNormaVisible, setWaterNormaVisible] = useState(false);
+  const [goalsVisible, setGoalsVisible] = useState(false);
 
   useHealthySync();
 
-  useFocusEffect(
-    useCallback(() => {
-      setAnimateTrigger((t) => t + 1);
-    }, [])
+  const goToSleep = useCallback(() => router.push('/client/sleep-screen'), [router]);
+  const goToSteps = useCallback(() => router.push('/steps'), [router]);
+  const goToNotifications = useCallback(
+    () => router.push('/notification-settings'),
+    [router]
   );
 
-  const goToSleep = useCallback(() => router.push('/client/sleep-screen'), [router]);
-  const goToNotifications = useCallback(() => router.push('/notification-settings'), [router]);
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: COLORS.background }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <MaterialIcons name="chevron-left" size={24} color={COLORS.accent} />
-          <ThemedText style={[styles.backLabel, { color: COLORS.accent }]}>Назад</ThemedText>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backButton}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <MaterialIcons name="chevron-left" size={26} color={COLORS.textPrimary} />
         </Pressable>
+        <ThemedText style={[styles.headerTitle, { color: COLORS.textPrimary }]}>
+          Healthy
+        </ThemedText>
+        <View style={styles.headerSide} />
+      </View>
+
+      <View style={styles.tabsBarWrap}>
+        <TopTabs active={tab} onChange={setTab} />
       </View>
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 28 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.titleRow}>
-          <View style={styles.titleBlock}>
-            <ThemedText style={[styles.title, { color: COLORS.textPrimary }]}>Здоровье</ThemedText>
-            <ThemedText style={[styles.subtitle, { color: COLORS.textSecondary }]}>{todayFormatted}</ThemedText>
-          </View>
-          <Pressable
-            style={[styles.rateSleepBtn, { backgroundColor: COLORS.accent }]}
-            onPress={requestSurveyShow}
-          >
-            <ThemedText style={styles.rateSleepText}>Оценить сон</ThemedText>
-          </Pressable>
-        </View>
-
-        <HealthyAiInsights />
-        <StepsCard stepsToday={stepsToday} stepsGoal={stepsGoal} animateTrigger={animateTrigger} />
-        <RecommendationCard onPress={goToSleep} />
-        <MoodCheckInCard />
-        <LastNightSleepCard onPress={goToSleep} />
-        <SleepScheduleCard onPress={goToSleep} />
-        <WaterIntakeCard />
-        <HealthSettingsCard
-          onStepsPress={() => router.push('/steps')}
-          onNotificationsPress={goToNotifications}
-        />
+        {tab === 'today' && (
+          <TodayTabContent
+            onPressMore={() => setTab('insight')}
+            onOpenSleep={goToSleep}
+            onOpenWaterAdd={() => setWaterAddVisible(true)}
+            onOpenSteps={goToSteps}
+          />
+        )}
+        {tab === 'insight' && <InsightTabContent />}
+        {tab === 'settings' && (
+          <SettingsTabContent
+            onOpenSleep={goToSleep}
+            onOpenSteps={goToSteps}
+            onOpenNotifications={goToNotifications}
+            onOpenWaterNorma={() => setWaterNormaVisible(true)}
+            onOpenGoals={() => setGoalsVisible(true)}
+          />
+        )}
       </ScrollView>
+
+      <WaterAddModal visible={waterAddVisible} onClose={() => setWaterAddVisible(false)} />
+      <WaterNormaModal visible={waterNormaVisible} onClose={() => setWaterNormaVisible(false)} />
+      <GoalsSummaryModal visible={goalsVisible} onClose={() => setGoalsVisible(false)} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scroll: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 6 },
-  backButton: { flexDirection: 'row', alignItems: 'center', minWidth: 44, minHeight: 44 },
-  backLabel: { fontSize: 16, marginLeft: 4 },
-  content: { paddingHorizontal: 16, paddingTop: 12 },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-  },
-  titleBlock: { flex: 1 },
-  title: { fontSize: 28, fontWeight: 'bold', lineHeight: 36 },
-  subtitle: { fontSize: 15, marginTop: 4 },
-  rateSleepBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 24,
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  rateSleepText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+// ===== Styles =====
 
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 4,
+    minHeight: 44,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  headerSide: { width: 44, height: 44 },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  // Tabs
+  tabsBarWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  tabsBar: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.cardBgSubtle,
+    borderRadius: 14,
+    padding: 4,
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabItemActive: {
+    backgroundColor: COLORS.trackBg,
+  },
+  tabLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Generic card
   card: {
     backgroundColor: COLORS.cardBg,
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: 'visible',
+    padding: 16,
+    marginBottom: 12,
   },
-  cardIcon: { marginBottom: 8 },
-  cardTitle: { fontSize: 17, fontWeight: '600', marginBottom: 8 },
-  cardHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  cardPressed: { opacity: 0.85 },
 
-  circleWrap: {
-    width: CIRCLE_SIZE,
-    height: CIRCLE_SIZE,
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'visible',
-  },
-  circleCenter: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: CIRCLE_SIZE - 48,
+  // AI summary
+  aiSummaryCard: {
     paddingVertical: 16,
-    overflow: 'visible',
   },
-  stepsIcon: { marginBottom: 8 },
-  stepsValue: { fontSize: 38, fontWeight: 'bold', lineHeight: 46 },
-  stepsGoal: { fontSize: 14, marginTop: 2 },
-  stepsLabel: { fontSize: 14, marginTop: 16, textAlign: 'center' },
+  aiSummaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+  aiSummaryLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  aiSummaryTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    lineHeight: 22,
+    marginBottom: 4,
+  },
+  aiSummaryBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  aiSummaryMoreBtn: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.trackBg,
+  },
+  aiSummaryMoreText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
 
-  recommendationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  recommendationIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  // Mini card
+  miniCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    gap: 14,
+  },
+  miniCardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recommendationSleepIcon: { marginTop: 4 },
-  recommendationTitle: { fontSize: 17, fontWeight: 'bold', marginBottom: 8 },
-  recommendationBody: { fontSize: 15, lineHeight: 22 },
-  detailBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 4,
-  },
-  detailBtnText: { fontSize: 15, fontWeight: '600' },
-  adviceModalOverlay: {
+  miniCardBody: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
+    gap: 2,
   },
-  adviceModalContent: {
-    width: '100%',
-    height: ADVICE_MODAL_HEIGHT,
-    backgroundColor: COLORS.cardBg,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 34,
-  },
-  adviceModalScroll: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  adviceModalScrollContent: {
-    paddingBottom: 24,
-  },
-  adviceModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingBottom: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.trackGray,
-  },
-  adviceModalTitle: { fontSize: 18, fontWeight: 'bold' },
-  adviceModalBody: {
+  miniCardTitle: {
     fontSize: 15,
-    lineHeight: 24,
+    fontWeight: '600',
+  },
+  miniCardPrimary: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  miniCardSub: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  miniCardEmpty: {
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  iconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  sleepValueWrap: { minHeight: 40, justifyContent: 'center', marginBottom: 4 },
-  sleepValue: { fontSize: 32, fontWeight: 'bold', lineHeight: 40 },
-  sleepSubtext: { fontSize: 14, lineHeight: 20 },
-
-  scheduleRow: {
+  // Visual mini card (with right-side illustration)
+  visualCard: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 18,
+    marginBottom: 12,
+    height: ILLUSTRATION_H,
+    overflow: 'hidden',
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'stretch',
+  },
+  visualCardLeft: {
+    flex: 1,
     paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.trackGray,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    gap: 3,
   },
-  scheduleLabelRow: { flexDirection: 'row', alignItems: 'center' },
-  scheduleLabel: { fontSize: 15 },
-  scheduleValue: { fontSize: 15 },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: COLORS.trackGray,
-    borderRadius: 8,
-  },
-  pillText: { fontSize: 14, color: COLORS.textPrimary },
-  toggleRow: { borderBottomWidth: 0 },
-  warningBanner: {
+  visualCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
+    marginBottom: 2,
+  },
+  visualCardIcon: {
+    width: 26,
+    height: 26,
     borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  warningText: { fontSize: 14, flex: 1 },
-
-  waterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  waterValueWrap: { minHeight: 36, justifyContent: 'center' },
-  waterValue: { fontSize: 28, fontWeight: 'bold', lineHeight: 36 },
-  waterPercent: { fontSize: 16, fontWeight: '600', lineHeight: 22 },
-  waterSubtext: { fontSize: 14, marginBottom: 12, lineHeight: 20 },
-  progressTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  progressFill: { height: '100%', borderRadius: 4 },
-  addWaterBtn: {
-    paddingVertical: 14,
-    borderRadius: 12,
     alignItems: 'center',
-  },
-  addWaterBtnText: { fontSize: 15, fontWeight: '600', color: '#fff' },
-  waterModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
-    padding: 24,
   },
-  waterModalContent: {
+  visualCardTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  visualCardPrimary: {
+    fontSize: 19,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  visualCardEmpty: {
+    fontSize: 15,
+    fontStyle: 'italic',
+  },
+  visualCardSub: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  visualCardArt: {
+    width: ILLUSTRATION_W,
+    height: ILLUSTRATION_H,
+    overflow: 'hidden',
+  },
+  stepsPanelArt: {
+    width: ILLUSTRATION_W,
+    height: ILLUSTRATION_H,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  stepsPanelImage: {
+    width: ILLUSTRATION_W * 0.78,
+    height: ILLUSTRATION_H * 0.78,
+  },
+
+  // Mood quick check-in
+  miniCardTall: {
     backgroundColor: COLORS.cardBg,
     borderRadius: 16,
-    padding: 20,
+    padding: 14,
+    marginBottom: 12,
   },
-  waterModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  waterPortionGrid: {
+  miniCardTallHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
-  },
-  waterPortionBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    minWidth: 70,
     alignItems: 'center',
+    gap: 14,
+    marginBottom: 14,
   },
-  waterModalClose: {
-    alignSelf: 'center',
-    padding: 8,
+  miniCardTallTitleBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  moodRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  moodPill: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.trackBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moodPillActive: {
+    backgroundColor: 'rgba(255, 204, 128, 0.22)',
+    borderWidth: 1,
+    borderColor: MOOD_FACE_FILL_WARM,
   },
 
+  // Settings list
+  settingsList: {
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
   settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.trackGray,
-    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 14,
   },
-  settingsLabel: { fontSize: 15, flex: 1 },
-  settingsValue: { fontSize: 14 },
+  settingsRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.divider,
+  },
+  settingsIconBubble: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsTextWrap: { flex: 1, gap: 2 },
+  settingsLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  settingsSubLabel: {
+    fontSize: 13,
+  },
+
+  // Modals
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 18,
+    padding: 20,
+    gap: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalBody: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  modalSection: {
+    fontSize: 13,
+    marginTop: 8,
+  },
+  modalInput: {
+    backgroundColor: COLORS.trackBg,
+    color: COLORS.textPrimary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    marginTop: 4,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  modalSecondaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.trackBg,
+    alignItems: 'center',
+  },
+  modalSecondaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalPrimaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+  },
+  modalPrimaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  goalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.divider,
+  },
+  goalLabel: {
+    fontSize: 14,
+  },
+  goalValue: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  // Water portion grid
+  portionGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 4,
+  },
+  portionBtn: {
+    flexBasis: '30%',
+    flexGrow: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: COLORS.trackBg,
+    alignItems: 'center',
+  },
+  portionText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
 });
