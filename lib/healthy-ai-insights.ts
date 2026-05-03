@@ -1,8 +1,17 @@
 /**
- * Healthy — этап 1: детерминированный «ИИ»-вывод по локальным данным.
- * Рекомендации только из банка; без медицинских и запрещённых тем.
+ * Healthy — локальный вывод: этап 1 (банк рекомендаций) + этап 2 (персонализация из healthy-insight-signals).
+ * Сервер даёт полную картину по синхронизированным дням; офлайн использует синтетические ряды из истории в приложении.
  */
 import { formatDateForApi } from '@/lib/dateTimeUtils';
+import {
+  buildHelpfulHabits,
+  buildMetricLinks,
+  buildPositiveHighlight,
+  buildRationale,
+  comparePeriodDynamics,
+  computeWindowSignals,
+  type InsightSignalRow,
+} from '@/lib/healthy-insight-signals';
 import type { EnergyLevel, StressLevel } from '@/stores/mood-store';
 import type { SleepRating } from '@/stores/sleep-store';
 
@@ -40,6 +49,8 @@ export interface HealthyWeakPoint {
   label: string;
 }
 
+export type HealthyDynamicsLabel = 'better' | 'worse' | 'stable';
+
 export interface HealthyInsightResult {
   period: HealthyInsightPeriod;
   lowData: boolean;
@@ -58,6 +69,14 @@ export interface HealthyInsightResult {
   weaknessesNarrative: string[];
   patternsLine?: string;
   monthlyFocus?: string;
+  dynamicsLabel?: HealthyDynamicsLabel;
+  dynamicsSummary?: string;
+  vsPreviousPeriod?: string[];
+  metricLinks?: string[];
+  helpfulHabits?: string[];
+  rationale?: string;
+  positiveHighlight?: string;
+  actionToday?: string;
 }
 
 /** Банк рекомендаций (продуктовая логика): сон, вода, движение, восстановление, стресс. */
@@ -155,19 +174,182 @@ function weakLabel(id: HealthyMetricId): string {
   return map[id];
 }
 
+function parseApiDate(key: string): Date {
+  const [y, m, d] = key.split('-').map((x) => parseInt(x, 10));
+  return new Date(y, m - 1, d);
+}
+
+function addDaysLocal(d: Date, n: number): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+function getInsightPeriodWindows(period: HealthyInsightPeriod, todayKey: string) {
+  const end = parseApiDate(todayKey);
+  if (period === 'day') {
+    const cur = formatDateForApi(end);
+    const prev = formatDateForApi(addDaysLocal(end, -1));
+    return { current: { start: cur, end: cur }, previous: { start: prev, end: prev } };
+  }
+  if (period === 'week') {
+    const curStart = formatDateForApi(addDaysLocal(end, -6));
+    const curEnd = formatDateForApi(end);
+    const prevEnd = formatDateForApi(addDaysLocal(end, -7));
+    const prevStart = formatDateForApi(addDaysLocal(end, -13));
+    return {
+      current: { start: curStart, end: curEnd },
+      previous: { start: prevStart, end: prevEnd },
+    };
+  }
+  const curStart = formatDateForApi(addDaysLocal(end, -29));
+  const curEnd = formatDateForApi(end);
+  const prevEnd = formatDateForApi(addDaysLocal(end, -30));
+  const prevStart = formatDateForApi(addDaysLocal(end, -59));
+  return {
+    current: { start: curStart, end: curEnd },
+    previous: { start: prevStart, end: prevEnd },
+  };
+}
+
+function sleepMinutesFromRating(rating: SleepRating | undefined, goal: number): number | null {
+  if (!rating || goal <= 0) return null;
+  if (rating === 'good') return Math.round(goal * 1);
+  if (rating === 'ok') return Math.round(goal * 0.82);
+  return Math.round(goal * 0.65);
+}
+
+function buildSyntheticRows(input: HealthyInsightInput): InsightSignalRow[] {
+  const stepMap = new Map(input.stepsHistory.map((h) => [h.date, h.steps]));
+  const anchor = parseApiDate(input.todayKey);
+  const rows: InsightSignalRow[] = [];
+
+  for (let i = 59; i >= 0; i -= 1) {
+    const d = addDaysLocal(anchor, -i);
+    const key = formatDateForApi(d);
+    const mood = input.moodRecordsByDate[key];
+    const steps = key === input.todayKey ? input.stepsToday : (stepMap.get(key) ?? null);
+
+    let sleep_minutes: number | null = null;
+    if (key === input.todayKey) {
+      sleep_minutes =
+        input.lastNightSleepMinutes ??
+        sleepMinutesFromRating(input.todaySleepRating ?? input.sleepRatingsByDate[key], input.goalSleepMinutes);
+    } else {
+      sleep_minutes =
+        sleepMinutesFromRating(input.sleepRatingsByDate[key], input.goalSleepMinutes) ??
+        (input.avgSleep7DaysMinutes != null ? input.avgSleep7DaysMinutes : null);
+    }
+
+    const water_ml = key === input.todayKey ? input.waterIntakeMl : null;
+    const water_goal_ml = key === input.todayKey ? input.waterGoalMl : null;
+
+    let completeness_score = 25;
+    if (mood) completeness_score += 25;
+    if (steps != null && steps > 200) completeness_score += 25;
+    if (sleep_minutes != null) completeness_score += 15;
+    if (water_ml != null && water_ml > 0) completeness_score += 10;
+
+    rows.push({
+      date: key,
+      sleep_minutes,
+      water_ml,
+      water_goal_ml,
+      steps_count: steps,
+      mood_value: mood?.moodValue ?? null,
+      energy_level: mood?.energy ?? null,
+      stress_level: mood?.stress ?? null,
+      completeness_score,
+    });
+  }
+
+  return rows;
+}
+
+function enrichInsightWithPersonalization(
+  base: HealthyInsightResult,
+  input: HealthyInsightInput
+): HealthyInsightResult {
+  const rows = buildSyntheticRows(input);
+  const windows = getInsightPeriodWindows(input.period, input.todayKey);
+  const currentRows = rows.filter((r) => r.date >= windows.current.start && r.date <= windows.current.end);
+  const previousRows = rows.filter((r) => r.date >= windows.previous.start && r.date <= windows.previous.end);
+  const profile = { sleep_goal_minutes: input.goalSleepMinutes, steps_goal: input.stepsGoal };
+  const curSignals = computeWindowSignals(currentRows, profile);
+  const prevSignals = computeWindowSignals(previousRows, profile);
+  const dynamics = comparePeriodDynamics(curSignals, prevSignals, input.period);
+
+  let metricLinks: string[] = [];
+  let helpfulHabits: string[] = [];
+  if (!base.lowData) {
+    const minForLinks = input.period === 'month' ? 10 : input.period === 'week' ? 5 : 4;
+    if (currentRows.length >= minForLinks) {
+      const sorted = [...currentRows].sort((a, b) => a.date.localeCompare(b.date));
+      metricLinks = buildMetricLinks(sorted, profile);
+    }
+    const minForHabits = input.period === 'month' ? 12 : input.period === 'week' ? 7 : 5;
+    if (currentRows.length >= minForHabits) {
+      const sorted = [...currentRows].sort((a, b) => a.date.localeCompare(b.date));
+      helpfulHabits = buildHelpfulHabits(sorted, profile);
+    }
+  }
+
+  const rationale = buildRationale({
+    period: input.period,
+    lowData: base.lowData,
+    statusTone: base.statusTone,
+    weakPoints: base.weakPoints,
+    dynamicsLabel: dynamics.dynamicsLabel,
+    dynamicsSummary: dynamics.dynamicsSummary,
+  });
+
+  const positiveHighlight = buildPositiveHighlight({
+    lowData: base.lowData,
+    statusTone: base.statusTone,
+    strengths: base.strengths,
+    weakPoints: base.weakPoints,
+    dynamicsLabel: dynamics.dynamicsLabel,
+  });
+
+  const actionToday =
+    input.period === 'day' && !base.lowData && base.recommendations[0]
+      ? base.recommendations[0]
+      : '';
+
+  let monthlyDynamics = base.monthlyDynamics;
+  if (input.period === 'month' && !base.lowData && dynamics.dynamicsSummary) {
+    monthlyDynamics = [dynamics.dynamicsSummary, base.monthlyDynamics ?? ''].filter(Boolean).join(' ');
+  }
+
+  return {
+    ...base,
+    monthlyDynamics,
+    dynamicsLabel: dynamics.dynamicsLabel,
+    dynamicsSummary: dynamics.dynamicsSummary,
+    vsPreviousPeriod: dynamics.vsPreviousPeriod,
+    metricLinks,
+    helpfulHabits,
+    rationale,
+    positiveHighlight,
+    actionToday,
+  };
+}
+
 export function buildHealthyInsight(input: HealthyInsightInput): HealthyInsightResult {
   const seed =
     input.todayKey.split('-').reduce((acc, x) => acc + parseInt(x, 10), 0) +
     (input.stepsToday % 97) +
     Math.round(input.waterIntakeMl % 51);
 
+  let base: HealthyInsightResult;
   if (input.period === 'day') {
-    return buildDay(input, seed);
+    base = buildDay(input, seed);
+  } else if (input.period === 'week') {
+    base = buildWeek(input, seed);
+  } else {
+    base = buildMonth(input, seed);
   }
-  if (input.period === 'week') {
-    return buildWeek(input, seed);
-  }
-  return buildMonth(input, seed);
+  return enrichInsightWithPersonalization(base, input);
 }
 
 function dayDataSignals(input: HealthyInsightInput): {

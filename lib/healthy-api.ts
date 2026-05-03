@@ -4,6 +4,8 @@ const HEALTHY_API_VERSION = 'healthy.v1';
 
 export type HealthyInsightPeriod = 'day' | 'week' | 'month';
 
+export type HealthyDynamicsLabel = 'better' | 'worse' | 'stable';
+
 export interface HealthyWeakPoint {
   id: 'sleep' | 'water' | 'steps' | 'mood' | 'energy' | 'stress';
   label: string;
@@ -27,6 +29,14 @@ export interface HealthyInsightResponse {
   weaknessesNarrative: string[];
   patternsLine?: string;
   monthlyFocus?: string;
+  dynamicsLabel?: HealthyDynamicsLabel;
+  dynamicsSummary?: string;
+  vsPreviousPeriod?: string[];
+  metricLinks?: string[];
+  helpfulHabits?: string[];
+  rationale?: string;
+  positiveHighlight?: string;
+  actionToday?: string;
   generated_at?: string;
   engine_version?: string;
 }

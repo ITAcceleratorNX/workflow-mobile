@@ -68,6 +68,13 @@ function statusAccent(tone: HealthyInsightResult['statusTone']): string {
   return COLORS.textMuted;
 }
 
+function dynamicsShortLabel(label: HealthyInsightResult['dynamicsLabel']): string | null {
+  if (!label) return null;
+  if (label === 'better') return 'Лучше, чем раньше';
+  if (label === 'worse') return 'Тяжелее, чем раньше';
+  return 'Примерно стабильно';
+}
+
 function normalizeServerInsight(result: HealthyInsightResponse): HealthyInsightResult {
   return {
     period: result.period ?? 'day',
@@ -87,10 +94,31 @@ function normalizeServerInsight(result: HealthyInsightResponse): HealthyInsightR
     weaknessesNarrative: Array.isArray(result.weaknessesNarrative) ? result.weaknessesNarrative : [],
     patternsLine: result.patternsLine,
     monthlyFocus: result.monthlyFocus,
+    dynamicsLabel: result.dynamicsLabel,
+    dynamicsSummary: result.dynamicsSummary,
+    vsPreviousPeriod: Array.isArray(result.vsPreviousPeriod) ? result.vsPreviousPeriod : [],
+    metricLinks: Array.isArray(result.metricLinks) ? result.metricLinks : [],
+    helpfulHabits: Array.isArray(result.helpfulHabits) ? result.helpfulHabits : [],
+    rationale: result.rationale,
+    positiveHighlight: result.positiveHighlight,
+    actionToday: result.actionToday,
   };
 }
 
 function InsightBody({ result }: { result: HealthyInsightResult }) {
+  const displayRecommendations =
+    result.period === 'day' && result.actionToday?.trim()
+      ? result.recommendations.filter((t) => t.trim() !== result.actionToday?.trim()).slice(0, 2)
+      : result.recommendations;
+
+  const showDelta =
+    (result.period === 'week' || result.period === 'month')
+    && !result.lowData
+    && (result.improved.length > 0 || result.worsened.length > 0);
+
+  const rationaleText = result.rationale?.trim();
+  const highlightText = result.positiveHighlight?.trim();
+
   return (
     <Animated.View entering={FadeIn.duration(220)} style={styles.body}>
       <View style={styles.statusRow}>
@@ -101,6 +129,25 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
       </View>
 
       <ThemedText style={[styles.summary, { color: COLORS.textMuted }]}>{result.summary}</ThemedText>
+
+      {!!rationaleText && (
+        <View style={[styles.rationaleCard, { backgroundColor: COLORS.trackBg }]}>
+          <ThemedText style={[styles.sectionTitle, { color: COLORS.textPrimary, marginBottom: 6 }]}>
+            Почему такой вывод
+          </ThemedText>
+          <ThemedText style={[styles.sectionText, { color: COLORS.textMuted }]}>{rationaleText}</ThemedText>
+        </View>
+      )}
+
+      {!!highlightText && (
+        <View style={[styles.highlightCard, { borderColor: 'rgba(52, 199, 89, 0.35)' }]}>
+          <MaterialIcons name="wb-sunny" size={18} color={COLORS.positive} />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <ThemedText style={[styles.focusTitle, { color: COLORS.textPrimary }]}>Позитивный сигнал</ThemedText>
+            <ThemedText style={[styles.focusBody, { color: COLORS.textMuted }]}>{highlightText}</ThemedText>
+          </View>
+        </View>
+      )}
 
       {result.lowData && (
         <View style={styles.lowDataBanner}>
@@ -118,7 +165,68 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
         </View>
       )}
 
-      {result.period === 'week' && !result.lowData && (result.improved.length > 0 || result.worsened.length > 0) && (
+      {result.period !== 'day' && !!result.dynamicsSummary?.trim() && (
+        <View style={styles.dynamicsRow}>
+          {result.dynamicsLabel ? (
+            <View style={[styles.dynamicsChip, { backgroundColor: COLORS.chipBg }]}>
+              <ThemedText style={[styles.dynamicsChipText, { color: COLORS.accent }]}>
+                {dynamicsShortLabel(result.dynamicsLabel)}
+              </ThemedText>
+            </View>
+          ) : null}
+          <ThemedText style={[styles.dynamicsSummaryText, { color: COLORS.textMuted }]}>
+            {result.dynamicsSummary}
+          </ThemedText>
+        </View>
+      )}
+
+      {result.period !== 'day' && (result.vsPreviousPeriod ?? []).length > 0 && (
+        <View style={styles.section}>
+          <ThemedText style={[styles.sectionTitle, { color: COLORS.textPrimary }]}>К прошлому периоду</ThemedText>
+          {(result.vsPreviousPeriod ?? []).map((line, i) => (
+            <View key={`vp-${i}`} style={styles.bulletRow}>
+              <MaterialIcons name="swap-horiz" size={16} color={COLORS.textMuted} style={styles.bulletIcon} />
+              <ThemedText style={[styles.bulletText, { color: COLORS.textMuted }]}>{line}</ThemedText>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {(result.metricLinks ?? []).length > 0 && (
+        <View style={styles.section}>
+          <ThemedText style={[styles.sectionTitle, { color: COLORS.textPrimary }]}>Связи по вашим данным</ThemedText>
+          {(result.metricLinks ?? []).map((line, i) => (
+            <View key={`ml-${i}`} style={styles.bulletRow}>
+              <MaterialIcons name="timeline" size={16} color={COLORS.accentSoft} style={styles.bulletIcon} />
+              <ThemedText style={[styles.bulletText, { color: COLORS.textMuted }]}>{line}</ThemedText>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {(result.helpfulHabits ?? []).length > 0 && (
+        <View style={styles.section}>
+          <ThemedText style={[styles.sectionTitle, { color: COLORS.textPrimary }]}>Что помогает по журналу</ThemedText>
+          {(result.helpfulHabits ?? []).map((line, i) => (
+            <View key={`hh-${i}`} style={styles.bulletRow}>
+              <MaterialIcons name="eco" size={16} color={COLORS.positive} style={styles.bulletIcon} />
+              <ThemedText style={[styles.bulletText, { color: COLORS.textMuted }]}>{line}</ThemedText>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {result.period === 'day' && !!result.actionToday?.trim() && (
+        <View style={[styles.actionTodayCard, { borderColor: 'rgba(243, 87, 19, 0.45)' }]}>
+          <MaterialIcons name="bolt" size={20} color={COLORS.accent} />
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <ThemedText style={[styles.focusTitle, { color: COLORS.textPrimary }]}>Один шаг сегодня</ThemedText>
+            <ThemedText style={[styles.focusBody, { color: COLORS.textMuted }]}>{result.actionToday}</ThemedText>
+          </View>
+        </View>
+      )}
+
+      {showDelta && (
         <View style={styles.deltaBlock}>
           {result.improved.length > 0 && (
             <View style={styles.deltaRow}>
@@ -205,24 +313,24 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
       )}
 
       {result.weakPoints.length > 0 && (
-          <View style={styles.section}>
-            <ThemedText style={[styles.sectionTitle, { color: COLORS.textPrimary }]}>Главные просадки</ThemedText>
-            {result.weakPoints.map((w) => (
-              <View key={w.id} style={styles.weakRow}>
-                <View style={[styles.weakIconWrap, { backgroundColor: COLORS.trackBg }]}>
-                  <MaterialIcons name={metricIcon(w.id)} size={18} color={COLORS.accentSoft} />
-                </View>
-                <ThemedText style={[styles.weakLabel, { color: COLORS.textMuted }]}>{w.label}</ThemedText>
+        <View style={styles.section}>
+          <ThemedText style={[styles.sectionTitle, { color: COLORS.textPrimary }]}>Главные просадки</ThemedText>
+          {result.weakPoints.map((w) => (
+            <View key={w.id} style={styles.weakRow}>
+              <View style={[styles.weakIconWrap, { backgroundColor: COLORS.trackBg }]}>
+                <MaterialIcons name={metricIcon(w.id)} size={18} color={COLORS.accentSoft} />
               </View>
-            ))}
-          </View>
-        )}
+              <ThemedText style={[styles.weakLabel, { color: COLORS.textMuted }]}>{w.label}</ThemedText>
+            </View>
+          ))}
+        </View>
+      )}
 
       <View style={styles.section}>
         <ThemedText style={[styles.sectionTitle, { color: COLORS.textPrimary }]}>
           Рекомендации
         </ThemedText>
-        {result.recommendations.map((text, i) => (
+        {displayRecommendations.map((text, i) => (
           <View key={i} style={[styles.recCard, { backgroundColor: COLORS.trackBg }]}>
             <ThemedText style={[styles.recText, { color: COLORS.textPrimary }]}>{text}</ThemedText>
           </View>
@@ -378,7 +486,9 @@ export function HealthyAiInsights() {
                 : 'Подготовка анализа...'}
         </ThemedText>
         {loadError ? (
-          <ThemedText style={[styles.metaText, { color: COLORS.accentSoft }]}>Сеть недоступна</ThemedText>
+          <ThemedText style={[styles.metaHint, { color: COLORS.accentSoft }]}>
+            Локально — синхронизируйте при сети для полного сравнения периодов на сервере.
+          </ThemedText>
         ) : null}
       </View>
 
@@ -442,6 +552,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
+  metaHint: {
+    fontSize: 11,
+    lineHeight: 14,
+    flexShrink: 1,
+    textAlign: 'right',
+    maxWidth: '62%',
+  },
   segment: {
     flexDirection: 'row',
     borderRadius: 12,
@@ -481,6 +598,48 @@ const styles = StyleSheet.create({
   summary: {
     fontSize: 15,
     lineHeight: 22,
+    marginBottom: 14,
+  },
+  rationaleCard: {
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  highlightCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  dynamicsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 14,
+    flexWrap: 'wrap',
+  },
+  dynamicsChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  dynamicsChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dynamicsSummaryText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  actionTodayCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
     marginBottom: 14,
   },
   lowDataBanner: {
