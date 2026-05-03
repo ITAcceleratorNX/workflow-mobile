@@ -11,6 +11,7 @@ import { SleepSurveyGate } from '@/components/sleep-survey-gate';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PushNotificationsHost } from '@/components/push-notifications-host';
 import { registerBackgroundStepsTask } from '@/lib/background-steps-sync';
+import { registerBackgroundHealthyTask } from '@/lib/background-healthy-sync';
 import { ToastProvider } from '@/context/toast-context';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
 import { parseRequestDeepLinkUrl } from '@/lib/shareRequest';
@@ -22,6 +23,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     registerBackgroundStepsTask();
+    registerBackgroundHealthyTask();
   }, []);
 
   useEffect(() => {

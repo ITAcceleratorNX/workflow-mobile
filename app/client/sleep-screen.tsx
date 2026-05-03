@@ -20,6 +20,7 @@ import {
   type SleepRating,
   useSleepStore,
 } from '@/stores/sleep-store';
+import { useSleepSurvey } from '@/hooks/use-sleep-survey';
 import { formatDateForApi } from '@/lib/dateTimeUtils';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -59,10 +60,12 @@ export default function SleepScreen() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const lastNightMinutes = useSleepStore((s) => s.lastNightSleepMinutes);
   const avg7DaysMinutes = useSleepStore((s) => s.avgSleep7DaysMinutes);
+  const requestSurveyShow = useSleepStore((s) => s.requestSurveyShow);
+  const todayRating = useSleepStore((s) => s.dayRecords[todayKey]?.rating ?? null);
+  const scheduledMinutes = getScheduledSleepMinutes(settings);
 
 
   const goalHours = Math.floor(settings.goalMinutes / 60);
-  const scheduledMinutes = getScheduledSleepMinutes(settings);
   const scheduleWarning = scheduledMinutes < settings.goalMinutes;
 
   const [timePickerMode, setTimePickerMode] = useState<'bed' | 'wake' | null>(null);
@@ -217,31 +220,28 @@ export default function SleepScreen() {
           {lastNightMinutes != null ? (
             <>
               <View style={styles.sleepValueWrap}>
-                <ThemedText
-                  style={[styles.sleepValue, { color: COLORS.textPrimary }]}
-                >
+                <ThemedText style={[styles.sleepValue, { color: COLORS.textPrimary }]}>
                   {formatSleepDuration(lastNightMinutes)}
                 </ThemedText>
+                {todayRating != null && (
+                  <ThemedText style={[styles.sleepEstimateHint, { color: COLORS.textSecondary }]}>
+                    Оценка по расписанию
+                  </ThemedText>
+                )}
               </View>
               {avg7DaysMinutes != null && (
-                <ThemedText
-                  style={[styles.sleepSubtext, { color: COLORS.textSecondary }]}
-                >
+                <ThemedText style={[styles.sleepSubtext, { color: COLORS.textSecondary }]}>
                   Среднее за 7 дней: {formatSleepDuration(avg7DaysMinutes)}
                 </ThemedText>
               )}
             </>
           ) : (
             <View style={styles.emptyState}>
-              <ThemedText
-                style={[styles.emptyText, { color: COLORS.textSecondary }]}
-              >
-                Нет данных сна из Apple Health
+              <ThemedText style={[styles.emptyText, { color: COLORS.textSecondary }]}>
+                Оцените сон, чтобы увидеть длительность
               </ThemedText>
-              <Pressable style={styles.connectBtn}>
-                <ThemedText style={styles.connectBtnText}>
-                  Подключить Apple Health
-                </ThemedText>
+              <Pressable style={styles.connectBtn} onPress={requestSurveyShow}>
+                <ThemedText style={styles.connectBtnText}>Оценить сон</ThemedText>
               </Pressable>
             </View>
           )}
@@ -541,6 +541,7 @@ const styles = StyleSheet.create({
   },
   sleepValueWrap: { minHeight: 40, justifyContent: 'center', marginBottom: 4 },
   sleepValue: { fontSize: 32, fontWeight: 'bold', lineHeight: 40 },
+  sleepEstimateHint: { fontSize: 12, lineHeight: 16, marginTop: 2 },
   sleepSubtext: { fontSize: 14, lineHeight: 20 },
   emptyState: {
     paddingVertical: 16,

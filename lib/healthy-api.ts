@@ -39,6 +39,16 @@ export interface HealthyInsightResponse {
   actionToday?: string;
   generated_at?: string;
   engine_version?: string;
+  metricRatios?: {
+    cur: { sleep: number | null; mood: number | null; steps: number | null; stressHigh: number | null };
+    prev: { sleep: number | null; mood: number | null; steps: number | null; stressHigh: number | null };
+  };
+  sparklines?: {
+    dates: string[];
+    sleep: (number | null)[];
+    mood: (number | null)[];
+    steps: (number | null)[];
+  } | null;
 }
 
 export interface HealthyProfilePayload {

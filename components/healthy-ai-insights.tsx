@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { Circle, Path, Svg } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
@@ -68,11 +69,160 @@ function statusAccent(tone: HealthyInsightResult['statusTone']): string {
   return COLORS.textMuted;
 }
 
-function dynamicsShortLabel(label: HealthyInsightResult['dynamicsLabel']): string | null {
-  if (!label) return null;
-  if (label === 'better') return 'Лучше, чем раньше';
-  if (label === 'worse') return 'Тяжелее, чем раньше';
-  return 'Примерно стабильно';
+function dynamicsConfig(label: HealthyInsightResult['dynamicsLabel']) {
+  if (label === 'better') return { text: 'Лучше', icon: 'trending-up' as const, color: COLORS.positive };
+  if (label === 'worse') return { text: 'Тяжелее', icon: 'trending-down' as const, color: COLORS.accentSoft };
+  return { text: 'Стабильно', icon: 'trending-flat' as const, color: COLORS.textMuted };
+}
+
+type MetricRatios = NonNullable<HealthyInsightResult['metricRatios']>;
+
+function pct(v: number | null | undefined): string {
+  if (v == null) return '—';
+  return `${Math.round(v * 100)}%`;
+}
+
+function delta(cur: number | null | undefined, prev: number | null | undefined): string | null {
+  if (cur == null || prev == null) return null;
+  const d = Math.round((cur - prev) * 100);
+  if (d === 0) return null;
+  return d > 0 ? `+${d}%` : `${d}%`;
+}
+
+function MetricBar({
+  label,
+  icon,
+  cur,
+  prev,
+}: {
+  label: string;
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+  cur: number | null | undefined;
+  prev: number | null | undefined;
+}) {
+  const d = delta(cur, prev);
+  const dPositive = cur != null && prev != null && cur > prev;
+  const dNegative = cur != null && prev != null && cur < prev;
+  const curFill = Math.min(1, Math.max(0, cur ?? 0));
+  const prevFill = Math.min(1, Math.max(0, prev ?? 0));
+
+  if (cur == null && prev == null) return null;
+
+  return (
+    <View style={styles.metricBarRow}>
+      <View style={styles.metricBarLabelCol}>
+        <MaterialIcons name={icon} size={15} color={COLORS.textMuted} />
+        <ThemedText style={[styles.metricBarLabel, { color: COLORS.textMuted }]}>{label}</ThemedText>
+      </View>
+      <View style={styles.metricBarTrackCol}>
+        <View style={[styles.metricBarTrack, { backgroundColor: COLORS.trackBg }]}>
+          <View style={[styles.metricBarFill, { width: `${curFill * 100}%`, backgroundColor: COLORS.accent }]} />
+        </View>
+        <View style={[styles.metricBarTrack, { backgroundColor: COLORS.trackBg, marginTop: 3, opacity: 0.55 }]}>
+          <View style={[styles.metricBarFill, { width: `${prevFill * 100}%`, backgroundColor: COLORS.textMuted }]} />
+        </View>
+      </View>
+      <View style={styles.metricBarValueCol}>
+        <ThemedText style={[styles.metricBarPct, { color: COLORS.textPrimary }]}>{pct(cur)}</ThemedText>
+        {d != null && (
+          <ThemedText style={[styles.metricBarDelta, {
+            color: dPositive ? COLORS.positive : dNegative ? COLORS.accentSoft : COLORS.textMuted,
+          }]}>{d}</ThemedText>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function MetricCompareSection({ ratios }: { ratios: MetricRatios }) {
+  const hasAny =
+    ratios.cur.sleep != null || ratios.cur.mood != null || ratios.cur.steps != null;
+  if (!hasAny) return null;
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.metricBarLegend}>
+        <ThemedText style={[styles.sectionTitle, { color: COLORS.textPrimary }]}>Сравнение с прошлым периодом</ThemedText>
+        <View style={styles.metricBarLegendRow}>
+          <View style={[styles.metricBarLegendDot, { backgroundColor: COLORS.accent }]} />
+          <ThemedText style={[styles.metricBarLegendLabel, { color: COLORS.textMuted }]}>Сейчас</ThemedText>
+          <View style={[styles.metricBarLegendDot, { backgroundColor: COLORS.textMuted, opacity: 0.55, marginLeft: 10 }]} />
+          <ThemedText style={[styles.metricBarLegendLabel, { color: COLORS.textMuted }]}>Раньше</ThemedText>
+        </View>
+      </View>
+      <MetricBar label="Сон" icon="bedtime" cur={ratios.cur.sleep} prev={ratios.prev.sleep} />
+      <MetricBar label="Настроение" icon="sentiment-satisfied" cur={ratios.cur.mood} prev={ratios.prev.mood} />
+      <MetricBar label="Шаги" icon="directions-walk" cur={ratios.cur.steps} prev={ratios.prev.steps} />
+    </View>
+  );
+}
+
+type Sparklines = NonNullable<NonNullable<HealthyInsightResult['sparklines']>>;
+
+function MiniSparkline({ values, color }: { values: (number | null)[]; color: string }) {
+  const W = 80;
+  const H = 32;
+  const pts = values
+    .map((v, i) => (v != null ? { x: i, y: v, idx: i } : null))
+    .filter((p): p is { x: number; y: number; idx: number } => p !== null);
+
+  if (pts.length < 2) return null;
+
+  const maxV = Math.max(...pts.map((p) => p.y), 0.01);
+  const n = values.length - 1 || 1;
+
+  const mapped = pts.map((p) => ({
+    sx: (p.x / n) * W,
+    sy: H - (p.y / maxV) * (H - 4) - 2,
+  }));
+
+  const d = mapped
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.sx.toFixed(1)} ${p.sy.toFixed(1)}`)
+    .join(' ');
+
+  const last = mapped[mapped.length - 1];
+
+  return (
+    <Svg width={W} height={H}>
+      <Path d={d} stroke={color} strokeWidth={1.8} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      {last && <Circle cx={last.sx} cy={last.sy} r={3} fill={color} />}
+    </Svg>
+  );
+}
+
+function SparklineSection({ sparklines, period }: { sparklines: Sparklines; period: HealthyInsightResult['period'] }) {
+  const hasSleep = sparklines.sleep.some((v) => v != null);
+  const hasMood = sparklines.mood.some((v) => v != null);
+  const hasSteps = sparklines.steps.some((v) => v != null);
+  if (!hasSleep && !hasMood && !hasSteps) return null;
+
+  const label = period === 'week' ? 'Тренд за неделю' : 'Тренд за месяц';
+
+  return (
+    <View style={styles.section}>
+      <ThemedText style={[styles.sectionTitle, { color: COLORS.textPrimary }]}>{label}</ThemedText>
+      <View style={styles.sparklineGrid}>
+        {hasSleep && (
+          <View style={styles.sparklineItem}>
+            <MiniSparkline values={sparklines.sleep} color={COLORS.accent} />
+            <ThemedText style={[styles.sparklineLabel, { color: COLORS.textMuted }]}>Сон</ThemedText>
+          </View>
+        )}
+        {hasMood && (
+          <View style={styles.sparklineItem}>
+            <MiniSparkline values={sparklines.mood} color={COLORS.positive} />
+            <ThemedText style={[styles.sparklineLabel, { color: COLORS.textMuted }]}>Настроение</ThemedText>
+          </View>
+        )}
+        {hasSteps && (
+          <View style={styles.sparklineItem}>
+            <MiniSparkline values={sparklines.steps} color={COLORS.textMuted} />
+            <ThemedText style={[styles.sparklineLabel, { color: COLORS.textMuted }]}>Шаги</ThemedText>
+          </View>
+        )}
+      </View>
+    </View>
+  );
 }
 
 function normalizeServerInsight(result: HealthyInsightResponse): HealthyInsightResult {
@@ -102,6 +252,8 @@ function normalizeServerInsight(result: HealthyInsightResponse): HealthyInsightR
     rationale: result.rationale,
     positiveHighlight: result.positiveHighlight,
     actionToday: result.actionToday,
+    metricRatios: result.metricRatios,
+    sparklines: result.sparklines,
   };
 }
 
@@ -167,13 +319,17 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
 
       {result.period !== 'day' && !!result.dynamicsSummary?.trim() && (
         <View style={styles.dynamicsRow}>
-          {result.dynamicsLabel ? (
-            <View style={[styles.dynamicsChip, { backgroundColor: COLORS.chipBg }]}>
-              <ThemedText style={[styles.dynamicsChipText, { color: COLORS.accent }]}>
-                {dynamicsShortLabel(result.dynamicsLabel)}
-              </ThemedText>
-            </View>
-          ) : null}
+          {result.dynamicsLabel ? (() => {
+            const cfg = dynamicsConfig(result.dynamicsLabel);
+            return (
+              <View style={[styles.dynamicsChip, { backgroundColor: COLORS.chipBg }]}>
+                <MaterialIcons name={cfg.icon} size={14} color={cfg.color} />
+                <ThemedText style={[styles.dynamicsChipText, { color: cfg.color, marginLeft: 4 }]}>
+                  {cfg.text}
+                </ThemedText>
+              </View>
+            );
+          })() : null}
           <ThemedText style={[styles.dynamicsSummaryText, { color: COLORS.textMuted }]}>
             {result.dynamicsSummary}
           </ThemedText>
@@ -190,6 +346,14 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
             </View>
           ))}
         </View>
+      )}
+
+      {result.period !== 'day' && result.metricRatios && !result.lowData && (
+        <MetricCompareSection ratios={result.metricRatios} />
+      )}
+
+      {result.period !== 'day' && result.sparklines && !result.lowData && (
+        <SparklineSection sparklines={result.sparklines} period={result.period} />
       )}
 
       {(result.metricLinks ?? []).length > 0 && (
@@ -621,6 +785,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   dynamicsChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
@@ -628,6 +794,74 @@ const styles = StyleSheet.create({
   dynamicsChipText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  metricBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+  },
+  metricBarLabelCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 100,
+    gap: 5,
+  },
+  metricBarLabel: {
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  metricBarTrackCol: {
+    flex: 1,
+  },
+  metricBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  metricBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  metricBarValueCol: {
+    width: 44,
+    alignItems: 'flex-end',
+  },
+  metricBarPct: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  metricBarDelta: {
+    fontSize: 11,
+  },
+  metricBarLegend: {
+    marginBottom: 10,
+  },
+  metricBarLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  metricBarLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  metricBarLegendLabel: {
+    fontSize: 11,
+  },
+  sparklineGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  sparklineItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  sparklineLabel: {
+    fontSize: 11,
   },
   dynamicsSummaryText: {
     flex: 1,

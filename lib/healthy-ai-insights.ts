@@ -77,6 +77,16 @@ export interface HealthyInsightResult {
   rationale?: string;
   positiveHighlight?: string;
   actionToday?: string;
+  metricRatios?: {
+    cur: { sleep: number | null; mood: number | null; steps: number | null; stressHigh: number | null };
+    prev: { sleep: number | null; mood: number | null; steps: number | null; stressHigh: number | null };
+  };
+  sparklines?: {
+    dates: string[];
+    sleep: (number | null)[];
+    mood: (number | null)[];
+    steps: (number | null)[];
+  } | null;
 }
 
 /** Банк рекомендаций (продуктовая логика): сон, вода, движение, восстановление, стресс. */
@@ -363,7 +373,7 @@ function dayDataSignals(input: HealthyInsightInput): {
   const hasSteps = input.stepsToday > 200;
   const hasWaterLog = input.waterIntakeMl > 0;
 
-  if (!hasSleep) missing.push('сон (Apple Health или оценка сна)');
+  if (!hasSleep) missing.push('оценка сна');
   if (!hasMood) missing.push('настроение и самочувствие');
   if (!hasSteps) missing.push('шаги');
   if (!hasWaterLog) missing.push('вода (хотя бы одна отметка)');
