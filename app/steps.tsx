@@ -1,5 +1,5 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   Pressable,
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, PageLoader, TextInput } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SmartDeskCalculator } from '@/components/smart-office/smart-desk-calculator';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useStepsReminders } from '@/hooks/use-steps-reminders';
 import { formatDateRelative } from '@/lib/dateTimeUtils';
@@ -27,10 +28,35 @@ import { useStepsStore } from '@/stores/steps-store';
 
 type StepsTab = 'today' | 'history' | 'settings';
 
+function parseStepsTab(raw: string | string[] | undefined): StepsTab {
+  const t = Array.isArray(raw) ? raw[0] : raw;
+  if (t === 'settings' || t === 'history' || t === 'today') return t;
+  return 'today';
+}
+
 export default function StepsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string | string[] }>();
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<StepsTab>('today');
+  const [activeTab, setActiveTab] = useState<StepsTab>(() => parseStepsTab(params.tab));
+
+  useFocusEffect(
+    useCallback(() => {
+      setActiveTab(parseStepsTab(params.tab));
+    }, [params.tab])
+  );
+
+  const handleTabPress = useCallback(
+    (tab: StepsTab) => {
+      setActiveTab(tab);
+      if (tab === 'today') {
+        router.setParams({});
+      } else {
+        router.setParams({ tab });
+      }
+    },
+    [router]
+  );
 
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -112,7 +138,7 @@ export default function StepsScreen() {
         {(['today', 'history', 'settings'] as const).map((tab) => (
           <Pressable
             key={tab}
-            onPress={() => setActiveTab(tab)}
+            onPress={() => handleTabPress(tab)}
             style={[
               styles.tab,
               activeTab === tab && { backgroundColor: border },
@@ -282,6 +308,11 @@ export default function StepsScreen() {
                 }
               />
             </View>
+
+            <ThemedText style={[styles.sectionTitle, { color: text, marginTop: 24 }]}>
+              Умный стол
+            </ThemedText>
+            <SmartDeskCalculator variant="embedded" />
 
             <ThemedText style={[styles.sectionTitle, { color: text, marginTop: 24 }]}>
               Уведомления (Healthy)

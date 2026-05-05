@@ -9,11 +9,11 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PageLoader, ScreenHeader } from '@/components/ui';
+import { SmartDeskCalculator } from '@/components/smart-office/smart-desk-calculator';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
@@ -61,7 +61,6 @@ const MOCK_DEVICES: YandexDevice[] = [
 
 export default function ClientSmartHomeScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const isGuest = useAuthStore((state) => state.isGuest);
   const { show: showToast } = useToast();
@@ -173,29 +172,51 @@ export default function ClientSmartHomeScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
-      <ScreenHeader title="Управление умным офисом" />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
+      <ScreenHeader
+        title="Управление умным офисом"
+        titleStyle={styles.screenTitleLarge}
+      />
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {subscriptions.length === 0 ? (
-          <View style={styles.emptyState}>
-            <MaterialIcons name="home" size={64} color="rgba(255,255,255,0.4)" />
-            <ThemedText style={styles.emptyTitle}>Нет подписок на комнаты</ThemedText>
-            <ThemedText style={styles.emptySubtitle}>Обратитесь к администратору</ThemedText>
-          </View>
+          <>
+            <View style={styles.emptyState}>
+              <MaterialIcons name="home" size={64} color="rgba(255,255,255,0.4)" />
+              <ThemedText style={styles.emptyTitle}>Нет подписок на комнаты</ThemedText>
+              <ThemedText style={styles.emptySubtitle}>Обратитесь к администратору</ThemedText>
+            </View>
+            <SmartDeskCalculator variant="compact" compactTheme="dark" containerStyle={styles.deskCalculatorSection} />
+          </>
         ) : (
           <>
             <View style={styles.roomSelectorContainer}>
-              <ThemedText style={styles.roomLabel}>Выберите комнату:</ThemedText>
-              <Pressable onPress={() => setShowRoomSelector(!showRoomSelector)} style={styles.roomSelectorButton}>
-                <ThemedText
-                  style={styles.roomSelectorText}
-                  numberOfLines={3}
-                  ellipsizeMode="tail"
-                >
-                  {selectedRoom?.meetingRoom?.name || 'Выберите комнату'}
-                  {selectedRoom?.meetingRoom?.office ? ` (${selectedRoom.meetingRoom.office.name})` : ''}
-                </ThemedText>
-                <View style={styles.roomSelectorChevronWrap} pointerEvents="none">
-                  <MaterialIcons name={showRoomSelector ? 'expand-less' : 'expand-more'} size={22} color="#FFFFFF" />
+              <ThemedText style={[styles.devicesTitle, styles.sectionHeadingFirst]}>Выберите комнату</ThemedText>
+              <Pressable
+                onPress={() => setShowRoomSelector(!showRoomSelector)}
+                style={({ pressed }) => [
+                  styles.deviceCard,
+                  styles.roomCardFullWidth,
+                  { backgroundColor: CARD_ORANGE, opacity: pressed ? 0.9 : 1 },
+                ]}
+              >
+                <View style={styles.deviceCardContent}>
+                  <View style={styles.roomCardTextCol}>
+                    <ThemedText style={[styles.deviceName, styles.roomCardTitleNoFlex]} numberOfLines={2}>
+                      {selectedRoom?.meetingRoom?.name || 'Выберите комнату'}
+                    </ThemedText>
+                    <ThemedText style={styles.deviceStatus} numberOfLines={2}>
+                      {selectedRoom?.meetingRoom?.office?.name || 'Нажмите, чтобы открыть список'}
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.deviceIconContainer, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                    <MaterialIcons
+                      name={showRoomSelector ? 'expand-less' : 'expand-more'}
+                      size={22}
+                      color="#FFFFFF"
+                    />
+                  </View>
                 </View>
               </Pressable>
               {showRoomSelector && (
@@ -270,6 +291,7 @@ export default function ClientSmartHomeScreen() {
                 </View>
               )}
             </View>
+            <SmartDeskCalculator variant="compact" compactTheme="dark" containerStyle={styles.deskCalculatorSection} />
           </>
         )}
       </ScrollView>
@@ -279,47 +301,48 @@ export default function ClientSmartHomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 8 },
+  content: { paddingHorizontal: 16, paddingTop: 12 },
+  screenTitleLarge: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '700',
+    letterSpacing: -0.35,
+  },
+  deskCalculatorSection: { marginTop: 12 },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48 },
   emptyTitle: { fontSize: 16, fontWeight: '600', color: '#FFFFFF', marginTop: 16 },
   emptySubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
-  roomSelectorContainer: { marginBottom: 8 },
-  roomLabel: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginBottom: 8 },
-  roomSelectorButton: {
-    backgroundColor: CARD_ORANGE,
-    borderRadius: 12,
-    paddingLeft: 16,
-    paddingRight: 12,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    overflow: 'hidden',
+  roomSelectorContainer: { marginBottom: 12 },
+  sectionHeadingFirst: { marginTop: 0 },
+  roomCardFullWidth: {
+    width: '100%',
+    alignSelf: 'stretch',
   },
-  /** Без flex/minWidth длинная подпись выталкивала стрелку за пределы кнопки. */
-  roomSelectorText: {
+  roomCardTextCol: {
     flex: 1,
     minWidth: 0,
     marginRight: 8,
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '500',
   },
-  roomSelectorChevronWrap: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+  roomCardTitleNoFlex: {
+    flex: 0,
   },
-  roomDropdown: { backgroundColor: CARD_ORANGE, borderRadius: 12, marginTop: 8, overflow: 'hidden' },
+  roomDropdown: { backgroundColor: CARD_ORANGE, borderRadius: 14, marginTop: 8, overflow: 'hidden' },
   roomDropdownItem: { paddingHorizontal: 16, paddingVertical: 12 },
   roomDropdownItemActive: { backgroundColor: 'rgba(255,255,255,0.2)' },
   roomDropdownText: { fontSize: 16, color: '#FFFFFF' },
-  devicesTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', marginTop: 8 },
-  devicesAreaWrapper: { position: 'relative', minHeight: 140 },
+  devicesTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 4,
+    marginBottom: 10,
+    letterSpacing: -0.2,
+  },
+  devicesAreaWrapper: { position: 'relative' },
   devicesGridPlaceholder: { width: CARD_WIDTH, height: 100, borderRadius: 16, backgroundColor: CARD_ORANGE, opacity: 0.6 },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
   devicesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  deviceCard: { width: CARD_WIDTH, borderRadius: 16, padding: 16, minHeight: 100 },
+  deviceCard: { width: CARD_WIDTH, borderRadius: 14, padding: 16, minHeight: 100 },
   deviceCardDisabled: { opacity: 0.5 },
   deviceCardContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flex: 1, paddingRight: 16 },
   deviceName: { fontSize: 15, fontWeight: '500', color: '#FFFFFF', flex: 1, marginRight: 8 },

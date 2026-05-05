@@ -4,6 +4,7 @@ export default function ClientLayout() {
   return (
     <Stack screenOptions={{ headerShown: false, presentation: 'card' }}>
       <Stack.Screen name="smart-home" />
+      <Stack.Screen name="desk-height" />
       <Stack.Screen name="health-screen" />
       <Stack.Screen name="sleep-screen" />
       <Stack.Screen name="todo-list" />

@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type TextStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -13,9 +13,18 @@ interface ScreenHeaderProps {
   hideBackLabel?: boolean;
   /** Render title on the same row as back button */
   inlineTitle?: boolean;
+  /** Доп. стили заголовка (например увеличенный шрифт на отдельном экране). */
+  titleStyle?: StyleProp<TextStyle>;
 }
 
-export function ScreenHeader({ title, onBack, rightSlot, hideBackLabel = false, inlineTitle = false }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  onBack,
+  rightSlot,
+  hideBackLabel = false,
+  inlineTitle = false,
+  titleStyle,
+}: ScreenHeaderProps) {
   const router = useRouter();
   const primary = useThemeColor({}, 'primary');
 
@@ -29,7 +38,7 @@ export function ScreenHeader({ title, onBack, rightSlot, hideBackLabel = false, 
           {!hideBackLabel && <ThemedText style={[styles.backLabel, { color: primary }]}>Назад</ThemedText>}
         </Pressable>
         {inlineTitle ? (
-          <ThemedText type="title" style={[styles.title, styles.titleInline]}>
+          <ThemedText type="title" style={[styles.title, styles.titleInline, titleStyle]}>
             {title}
           </ThemedText>
         ) : null}
@@ -40,7 +49,7 @@ export function ScreenHeader({ title, onBack, rightSlot, hideBackLabel = false, 
         ) : null}
       </View>
       {!inlineTitle ? (
-        <ThemedText type="title" style={styles.title}>
+        <ThemedText type="title" style={[styles.title, titleStyle]}>
           {title}
         </ThemedText>
       ) : null}

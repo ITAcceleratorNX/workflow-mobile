@@ -25,7 +25,7 @@ import {
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getStatusLabel, getTypeLabel } from '@/constants/requests';
+import { getStatusLabel, getTypeLabel, formatServiceCategoryDisplayName } from '@/constants/requests';
 
 // Размеры как в kcell-service-front compact: 140×100, rounded-xl, gap-4
 const CARD_PHOTO_WIDTH = 140;
@@ -133,15 +133,57 @@ function getFirstPhotoUrl(request: RequestGroup): string | null {
   return sub?.photos?.[0]?.photo_url ?? null;
 }
 
-/** Карточка заявки — дизайн 1:1 с kcell-service-front compact (client). Для всех ролей одинаковый вид. */
+function getPrimarySubRequest(request: RequestGroup) {
+  return request.requests?.[0];
+}
+
+/** Тип услуги для карточки клиента / администратора / офис-менеджера: Клининг, КТО, Административная (см. formatServiceCategoryDisplayName). */
+function getServiceTypeLabel(request: RequestGroup): string {
+  return formatServiceCategoryDisplayName(getPrimarySubRequest(request)?.category?.name);
+}
+
+/** Блок / локация для карточки исполнителя (КТО, клининг): корпус, этаж. */
+function getExecutorBlockLine(request: RequestGroup): string {
+  const sub = getPrimarySubRequest(request);
+  return (
+    sub?.location?.trim() ||
+    request.location_detail?.trim() ||
+    request.location?.trim() ||
+    'Не указано'
+  );
+}
+
+/** Название работы для исполнителя — только title / описание (не тип услуги из категории). */
+function getExecutorRequestTitle(request: RequestGroup): string {
+  const sub = getPrimarySubRequest(request);
+  const t = sub?.title?.trim();
+  if (t) return t;
+  const d = sub?.description?.trim();
+  if (d) return d.length > 80 ? `${d.slice(0, 80)}…` : d;
+  return 'Не указано';
+}
+
+/**
+ * Карточка списка: исполнитель — блок + название работы;
+ * клиент, администратор офиса (admin-worker), офис-менеджер (department-head), manager — тип услуги + адрес.
+ */
+function usesExecutorRequestCard(role: RequestGroupsRole | string | null | undefined): boolean {
+  return role === 'executor';
+}
+
+/** Карточка заявки — kcell compact; для executor отдельная вёрстка (блок + название). */
 function RequestCard({
   request,
+  role,
   onPress,
 }: {
   request: RequestGroup;
+  role: RequestGroupsRole | null;
   onPress: () => void;
 }) {
+  const isExecutor = usesExecutorRequestCard(role);
   const typeLabel = getTypeLabel(request.request_type ?? 'normal');
+  const serviceTypeBadgeText = `Тип: ${getServiceTypeLabel(request)}`;
   const statusLabel = getStatusLabel(request.status);
   const formattedDateLong = request.created_date
     ? new Date(request.created_date).toLocaleDateString('ru-RU', {
@@ -156,7 +198,10 @@ function RequestCard({
       })
     : '—';
   const photoUrl = getFirstPhotoUrl(request);
-  const locationText = request.location_detail || 'Местоположение не указано';
+  const locationText =
+    request.location_detail?.trim() ||
+    request.location?.trim() ||
+    'Местоположение не указано';
 
   return (
     <Pressable
@@ -182,30 +227,57 @@ function RequestCard({
         )}
       </View>
 
-      {/* Контент справа — kcell: flex-1 min-w-0, заголовок text-white text-lg font-semibold mb-2, бейджи rounded-full, локация text-gray-400 text-sm, дата с Clock */}
+      {/* Контент справа — kcell: flex-1 min-w-0, бейджи rounded-full, локация text-gray-400 text-sm, дата с Clock */}
       <View style={styles.cardContent}>
-        <ThemedText style={styles.cardTitle} numberOfLines={1}>
-          Заявка #{request.id}
-        </ThemedText>
-        <View style={styles.badges}>
-          <View style={styles.badgeType}>
-            <ThemedText style={styles.badgeText} numberOfLines={1} ellipsizeMode="tail">
-              {typeLabel}
+        {isExecutor ? (
+          <>
+            <ThemedText style={styles.executorBlockLine} numberOfLines={2}>
+              Блок: {getExecutorBlockLine(request)}
             </ThemedText>
-          </View>
-          <View style={styles.badgeStatus}>
-            <ThemedText style={styles.badgeStatusText} numberOfLines={1} ellipsizeMode="tail">
-              {statusLabel}
+            <ThemedText style={styles.executorRequestTitle} numberOfLines={2}>
+              {getExecutorRequestTitle(request)}
             </ThemedText>
-          </View>
-        </View>
-        <ThemedText style={styles.cardLocation} numberOfLines={1}>
-          {locationText}
-        </ThemedText>
+            <View style={styles.badges}>
+              <View style={[styles.badgeStatus, styles.badgeStatusWide]}>
+                <ThemedText style={styles.badgeStatusText} numberOfLines={1} ellipsizeMode="tail">
+                  {statusLabel}
+                </ThemedText>
+              </View>
+            </View>
+          </>
+        ) : (
+          <>
+            <ThemedText style={styles.cardTitle} numberOfLines={1}>
+              Заявка #{request.id}
+            </ThemedText>
+            <View style={styles.badges}>
+              <View style={styles.badgeType}>
+                <ThemedText style={styles.badgeText} numberOfLines={1} ellipsizeMode="tail">
+                  {typeLabel}
+                </ThemedText>
+              </View>
+              <View style={styles.badgeStatus}>
+                <ThemedText style={styles.badgeStatusText} numberOfLines={1} ellipsizeMode="tail">
+                  {statusLabel}
+                </ThemedText>
+              </View>
+            </View>
+          </>
+        )}
+        {!isExecutor && (
+          <ThemedText style={styles.cardMetaMuted} numberOfLines={1}>
+            {serviceTypeBadgeText}
+          </ThemedText>
+        )}
+        {!isExecutor && (
+          <ThemedText style={styles.cardLocation} numberOfLines={2}>
+            {locationText}
+          </ThemedText>
+        )}
         <View style={styles.cardDateRow}>
           <MaterialIcons
             name="schedule"
-            size={16}
+            size={15}
             color={KCELL.locationDate}
           />
           <ThemedText style={styles.cardDate} numberOfLines={1}>
@@ -214,7 +286,7 @@ function RequestCard({
         </View>
       </View>
 
-      {/* Стрелка — kcell: ChevronRight w-6 h-6 text-gray-500 */}
+      {/* Стрелка — по центру по вертикали относительно карточки */}
       <MaterialIcons
         name="chevron-right"
         size={24}
@@ -597,7 +669,11 @@ export default function RequestsListScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <RequestCard request={item} onPress={() => openDetail(item)} />
+          <RequestCard
+            request={item}
+            role={role}
+            onPress={() => openDetail(item)}
+          />
         )}
         />
       </PullToRefresh>
@@ -698,7 +774,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: CARD_GAP,
     marginBottom: 16,
     backgroundColor: 'transparent',
@@ -727,59 +803,91 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   cardTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     color: KCELL.title,
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  executorBlockLine: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: KCELL.locationDate,
+    marginBottom: 4,
+    letterSpacing: 0.2,
+  },
+  executorRequestTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: KCELL.title,
+    marginBottom: 6,
+    lineHeight: 22,
+  },
+  cardMetaMuted: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: KCELL.locationDate,
+    marginBottom: 6,
   },
   badges: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 6,
     maxWidth: '100%',
   },
   badgeType: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 9999,
     backgroundColor: KCELL.badgeType,
     maxWidth: '48%',
+    flexShrink: 1,
+    minWidth: 0,
   },
   badgeStatus: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 9999,
     backgroundColor: KCELL.badgeStatus,
     maxWidth: '48%',
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  badgeStatusWide: {
+    maxWidth: '100%',
+    alignSelf: 'flex-start',
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
     color: '#FFFFFF',
   },
   badgeStatusText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
     color: KCELL.badgeStatusText,
   },
   cardLocation: {
     fontSize: 14,
+    lineHeight: 19,
     color: KCELL.locationDate,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   cardDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    marginTop: 2,
   },
   cardDate: {
-    fontSize: 14,
+    fontSize: 13,
     color: KCELL.locationDate,
+    flex: 1,
   },
   chevron: {
     flexShrink: 0,
+    alignSelf: 'center',
   },
   footerLoader: {
     paddingVertical: 16,
