@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Share, StyleSheet, View } from 'react-native';
+import { Pressable, Share, ScrollView, StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -126,7 +126,12 @@ export default function BookingQrScreen() {
         </ThemedText>
       </View>
 
-      <View style={[styles.content, { paddingBottom: insets.bottom + 88 }]}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 28 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {office && (
           <View style={[styles.card, { backgroundColor: cardBackground }]}>
             <ThemedText style={[styles.cardTitle, { color: textColor }]}>
@@ -193,8 +198,9 @@ export default function BookingQrScreen() {
             Покажите этот QR исполнителю для сканирования.
           </ThemedText>
         </View>
+
         <Pressable
-          style={[styles.shareButtonFloating, { bottom: insets.bottom + 16 }]}
+          style={styles.shareButton}
           onPress={() =>
             Share.share({
               title: 'Бронирование переговорной',
@@ -206,7 +212,7 @@ export default function BookingQrScreen() {
           <MaterialIcons name="share" size={18} color="#FFFFFF" />
           <ThemedText style={styles.shareButtonText}>Поделиться ссылкой</ThemedText>
         </Pressable>
-      </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -234,10 +240,14 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
   },
-  content: {
+  scroll: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
     gap: 12,
   },
   card: {
@@ -262,7 +272,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   qrCard: {
-    marginTop: 12,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
@@ -293,22 +302,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   shareButton: {
-    marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#111827',
-    gap: 8,
-  },
-  shareButtonFloating: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
+    marginTop: 4,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'stretch',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 999,

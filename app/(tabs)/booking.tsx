@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -129,6 +129,9 @@ export default function BookingScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  /** Защита от гонок при смене фильтра / параллельных запросов «мои бронирования». */
+  const myBookingsLoadSeqRef = useRef(0);
 
   const isGuest = useAuthStore((s) => s.isGuest);
   const {
@@ -287,11 +290,28 @@ export default function BookingScreen() {
         setMyBookingsHasMore(false);
         return;
       }
-      if (append) setLoadingMoreBookings(true);
-      else setLoadingBookings(true);
+
+      const loadSeq = ++myBookingsLoadSeqRef.current;
+
+      if (append) {
+        setLoadingMoreBookings(true);
+      } else {
+        setLoadingBookings(true);
+        setMyBookings([]);
+      }
+
       const res = await getMyBookings({ status: statusFilter, page, pageSize: PAGE_SIZE });
-      if (append) setLoadingMoreBookings(false);
-      else setLoadingBookings(false);
+
+      if (loadSeq !== myBookingsLoadSeqRef.current) {
+        return;
+      }
+
+      if (append) {
+        setLoadingMoreBookings(false);
+      } else {
+        setLoadingBookings(false);
+      }
+
       if (res.ok) {
         if (append) {
           setMyBookings((prev) => [...prev, ...res.data]);
@@ -300,12 +320,19 @@ export default function BookingScreen() {
         }
         setMyBookingsPage(res.page);
         setMyBookingsHasMore(res.hasMore);
-      } else if (!append) {
-        setMyBookings([]);
-        setMyBookingsHasMore(false);
+      } else {
+        if (!append) {
+          setMyBookingsHasMore(false);
+        }
+        showToast({
+          title: append ? 'Не удалось загрузить ещё' : 'Не удалось загрузить бронирования',
+          description: res.error,
+          variant: 'destructive',
+          duration: 4500,
+        });
       }
     },
-    [isGuest, guestBookings]
+    [isGuest, guestBookings, showToast]
   );
 
   const loadMyBookingsForCurrentFilter = useCallback(
@@ -1077,136 +1104,133 @@ export default function BookingScreen() {
         )}
 
       {activeTab === 'my-bookings' && (
-        <>
-          {loadingBookings ? (
-            <ActivityIndicator size="large" color="#fff" style={styles.loader} />
-          ) : myBookings.length === 0 ? (
-            <BookingText style={styles.emptyWhite}>
-              Нет бронирований
-            </BookingText>
-          ) : (
-            <>
-              <BookingText style={styles.myBookingsSubtitleWhite}>
-                Управляйте своими бронированиями переговорных комнат
-              </BookingText>
-              <View style={styles.myBookingsFilterRow}>
-                {(['active', 'completed', 'cancelled'] as const).map((filter) => (
-                  <Pressable
-                    key={filter}
-                    onPress={() => setMyBookingsFilter(filter)}
-                    style={[styles.myBookingsFilterTab, myBookingsFilter === filter && styles.myBookingsFilterTabActive]}
-                  >
-                    <BookingText
-                      style={[
-                        styles.myBookingsFilterText,
-                        myBookingsFilter === filter && styles.myBookingsFilterTextActive,
-                      ]}
-                    >
-                      {filter === 'active' ? 'Активные' : filter === 'completed' ? 'Завершенные' : 'Отменённые'}
-                    </BookingText>
-                    {myBookingsFilter === filter && (
-                      <View style={styles.myBookingsFilterUnderline} />
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-              <PullToRefresh
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                loaderSize={96}
-                topOffset={16}
+        <View style={styles.myBookingsTab}>
+          <BookingText style={styles.myBookingsSubtitleWhite}>
+            Управляйте своими бронированиями переговорных комнат
+          </BookingText>
+          <View style={styles.myBookingsFilterRow}>
+            {(['active', 'completed', 'cancelled'] as const).map((filter) => (
+              <Pressable
+                key={filter}
+                onPress={() => setMyBookingsFilter(filter)}
+                style={[styles.myBookingsFilterTab, myBookingsFilter === filter && styles.myBookingsFilterTabActive]}
               >
-                <FlatList
-                  data={isGuest ? filteredMyBookings : myBookings}
-                  keyExtractor={(b) => String(b.id)}
-                  onEndReached={
-                    !isGuest && myBookingsHasMore && !loadingMoreBookings
-                      ? () => loadMyBookings(myBookingsFilter, myBookingsPage + 1, true)
-                      : undefined
-                  }
-                  onEndReachedThreshold={0.4}
-                  ListEmptyComponent={
-                    <BookingText style={styles.emptyWhite}>
-                      {myBookingsFilter === 'active'
-                        ? 'Нет активных бронирований'
-                        : myBookingsFilter === 'completed'
-                          ? 'Нет завершённых бронирований'
-                          : 'Нет отменённых бронирований'}
-                    </BookingText>
-                  }
-                  ListFooterComponent={
-                    loadingMoreBookings ? (
-                      <View style={styles.loaderFooter}>
-                        <ActivityIndicator size="small" color="#fff" />
-                      </View>
-                    ) : null
-                  }
-                  renderItem={({ item }) => {
-                    const room = item.meeting_room ?? item.meetingRoom;
-                    const startStr =
-                      typeof item.start_time === 'string' ? item.start_time : '';
-                    const endStr = typeof item.end_time === 'string' ? item.end_time : '';
-                    const isCancelling = cancellingId === item.id;
-                    const statusText = getBookingStatusText(item.status);
-                    const isCancelled = isBookingCancelled(item);
-                    const isCompleted = item.status === 'completed' || isBookingCompleted(item);
-                    const canCancel = !isCancelled && !isCompleted;
-                    return (
-                      <View style={styles.bookingCardOrange}>
-                        <View style={styles.bookingCardHeader}>
-                          <BookingText
-                            type="defaultSemiBold"
-                            style={styles.bookingCardTitleWhite}
-                          >
-                            {room?.name ?? 'Комната'}
-                          </BookingText>
-                          <View style={styles.bookingStatusBadgeOrange}>
-                            <BookingText style={styles.bookingStatusTextOrange}>
-                              {statusText}
-                            </BookingText>
-                          </View>
-                        </View>
-                        <BookingText style={styles.bookingMetaWhite}>
-                          {formatDisplayDateFromIso(startStr)} • {formatTimeOnly(startStr)}–
-                          {formatTimeOnly(endStr)}
+                <BookingText
+                  style={[
+                    styles.myBookingsFilterText,
+                    myBookingsFilter === filter && styles.myBookingsFilterTextActive,
+                  ]}
+                >
+                  {filter === 'active' ? 'Активные' : filter === 'completed' ? 'Завершенные' : 'Отменённые'}
+                </BookingText>
+                {myBookingsFilter === filter && (
+                  <View style={styles.myBookingsFilterUnderline} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+          <PullToRefresh
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            loaderSize={96}
+            topOffset={16}
+            style={styles.myBookingsPullRefresh}
+          >
+            <FlatList
+              style={styles.myBookingsFlatList}
+              contentContainerStyle={styles.myBookingsListContent}
+              data={isGuest ? filteredMyBookings : myBookings}
+              keyExtractor={(b) => String(b.id)}
+              onEndReached={
+                !isGuest && myBookingsHasMore && !loadingMoreBookings && !loadingBookings
+                  ? () => loadMyBookings(myBookingsFilter, myBookingsPage + 1, true)
+                  : undefined
+              }
+              onEndReachedThreshold={0.4}
+              ListEmptyComponent={
+                loadingBookings && !isGuest ? (
+                  <ActivityIndicator size="large" color="#fff" style={styles.loader} />
+                ) : (
+                  <BookingText style={styles.emptyWhite}>
+                    {myBookingsFilter === 'active'
+                      ? 'Нет активных бронирований'
+                      : myBookingsFilter === 'completed'
+                        ? 'Нет завершённых бронирований'
+                        : 'Нет отменённых бронирований'}
+                  </BookingText>
+                )
+              }
+              ListFooterComponent={
+                loadingMoreBookings ? (
+                  <View style={styles.loaderFooter}>
+                    <ActivityIndicator size="small" color="#fff" />
+                  </View>
+                ) : null
+              }
+              renderItem={({ item }) => {
+                const room = item.meeting_room ?? item.meetingRoom;
+                const startStr =
+                  typeof item.start_time === 'string' ? item.start_time : '';
+                const endStr = typeof item.end_time === 'string' ? item.end_time : '';
+                const isCancelling = cancellingId === item.id;
+                const statusText = getBookingStatusText(item.status);
+                const isCancelled = isBookingCancelled(item);
+                const isCompleted = item.status === 'completed' || isBookingCompleted(item);
+                const canCancel = !isCancelled && !isCompleted;
+                return (
+                  <View style={styles.bookingCardOrange}>
+                    <View style={styles.bookingCardHeader}>
+                      <BookingText
+                        type="defaultSemiBold"
+                        style={styles.bookingCardTitleWhite}
+                      >
+                        {room?.name ?? 'Комната'}
+                      </BookingText>
+                      <View style={styles.bookingStatusBadgeOrange}>
+                        <BookingText style={styles.bookingStatusTextOrange}>
+                          {statusText}
                         </BookingText>
-                        {item.company_name && (
-                          <BookingText style={styles.bookingMetaWhite}>
-                            {item.company_name}
-                          </BookingText>
-                        )}
-                        <View style={styles.bookingCardActions}>
-                          <Pressable
-                            onPress={() => router.push(`/booking/${item.id}`)}
-                            style={styles.viewBookingBtnOrange}
-                          >
-                            <MaterialIcons name="qr-code-2" size={18} color="#fff" />
-                            <BookingText style={styles.viewBookingBtnText}>QR код</BookingText>
-                          </Pressable>
-                          {canCancel && (
-                            <Pressable
-                              onPress={() => handleCancelBooking(item)}
-                              disabled={isCancelling}
-                              style={styles.cancelBtnOrange}
-                            >
-                              {isCancelling ? (
-                                <ActivityIndicator size="small" color="#fff" />
-                              ) : (
-                                <BookingText style={styles.cancelBtnTextWhite}>
-                                  Отменить бронирование
-                                </BookingText>
-                              )}
-                            </Pressable>
-                          )}
-                        </View>
                       </View>
-                    );
-                  }}
-                />
-              </PullToRefresh>
-            </>
-          )}
-        </>
+                    </View>
+                    <BookingText style={styles.bookingMetaWhite}>
+                      {formatDisplayDateFromIso(startStr)} • {formatTimeOnly(startStr)}–
+                      {formatTimeOnly(endStr)}
+                    </BookingText>
+                    {item.company_name && (
+                      <BookingText style={styles.bookingMetaWhite}>
+                        {item.company_name}
+                      </BookingText>
+                    )}
+                    <View style={styles.bookingCardActions}>
+                      <Pressable
+                        onPress={() => router.push(`/booking/${item.id}`)}
+                        style={styles.viewBookingBtnOrange}
+                      >
+                        <MaterialIcons name="qr-code-2" size={18} color="#fff" />
+                        <BookingText style={styles.viewBookingBtnText}>QR код</BookingText>
+                      </Pressable>
+                      {canCancel && (
+                        <Pressable
+                          onPress={() => handleCancelBooking(item)}
+                          disabled={isCancelling}
+                          style={styles.cancelBtnOrange}
+                        >
+                          {isCancelling ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <BookingText style={styles.cancelBtnTextWhite}>
+                              Отменить бронирование
+                            </BookingText>
+                          )}
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                );
+              }}
+            />
+          </PullToRefresh>
+        </View>
       )}
       </View>
     </LinearGradient>
@@ -1579,6 +1603,17 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         color: 'rgba(255,255,255,0.9)',
     },
+    myBookingsTab: {
+        flex: 1,
+        minHeight: 0,
+    },
+    myBookingsPullRefresh: {
+        flex: 1,
+        minHeight: 0,
+    },
+    myBookingsFlatList: {
+        flex: 1,
+    },
     myBookingsFilterRow: {
         flexDirection: 'row',
         marginBottom: 12,
@@ -1610,6 +1645,10 @@ const styles = StyleSheet.create({
         right: 0,
         height: 2,
         backgroundColor: '#F35713',
+    },
+    myBookingsListContent: {
+        flexGrow: 1,
+        paddingBottom: 90,
     },
     geoButtonWhite: {
         flexDirection: 'row',
