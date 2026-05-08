@@ -11,8 +11,11 @@ import {
   View,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Spacing } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { formatPhone, PHONE_REGEX } from '@/lib';
 import { resetPassword, sendVerificationCode, verifyCode } from '@/lib/auth';
@@ -21,11 +24,13 @@ type Step = 1 | 2 | 3 | 4;
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const border = useThemeColor({}, 'border');
   const errorColor = useThemeColor({}, 'error');
   const primary = useThemeColor({}, 'primary');
+  const onPrimary = useThemeColor({}, 'onPrimary');
 
   const [step, setStep] = useState<Step>(1);
   const [phone, setPhone] = useState('');
@@ -132,7 +137,13 @@ export default function ResetPasswordScreen() {
       >
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            {
+              paddingTop: Math.max(insets.top, Spacing.xxl) + Spacing.sm,
+              paddingBottom: Math.max(insets.bottom, Spacing.xxl) + Spacing.sm,
+            },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -172,7 +183,7 @@ export default function ResetPasswordScreen() {
                 onPress={handleSendVerificationCode}
                 disabled={isSendingCode || !isPhoneValid}
               >
-                <ThemedText style={styles.primaryButtonText}>
+                <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>
                   {isSendingCode ? 'Отправка...' : 'Отправить код'}
                 </ThemedText>
               </Pressable>
@@ -204,7 +215,7 @@ export default function ResetPasswordScreen() {
               </View>
               {error ? <ThemedText style={[styles.error, { color: errorColor }]}>{error}</ThemedText> : null}
               <Pressable style={[styles.primaryButton, { backgroundColor: primary }]} onPress={handleVerifyCode}>
-                <ThemedText style={styles.primaryButtonText}>Подтвердить</ThemedText>
+                <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Подтвердить</ThemedText>
               </Pressable>
               <Pressable
                 style={[styles.secondaryButton, { borderColor: border }]}
@@ -261,7 +272,7 @@ export default function ResetPasswordScreen() {
               </View>
               {error ? <ThemedText style={[styles.error, { color: errorColor }]}>{error}</ThemedText> : null}
               <Pressable style={[styles.primaryButton, { backgroundColor: primary }, loading && styles.disabled]} disabled={loading} onPress={handleResetPassword}>
-                <ThemedText style={styles.primaryButtonText}>{loading ? 'Сохранение...' : 'Изменить пароль'}</ThemedText>
+                <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>{loading ? 'Сохранение...' : 'Изменить пароль'}</ThemedText>
               </Pressable>
               <Pressable style={styles.ghostButton} onPress={() => { setStep(2); setError(''); }}>
                 <ThemedText style={[styles.ghostText, { color: textMuted }]}>Назад</ThemedText>
@@ -276,7 +287,7 @@ export default function ResetPasswordScreen() {
                 Ваш пароль успешно изменен. Теперь вы можете войти в систему с новым паролем.
               </ThemedText>
               <Pressable style={[styles.primaryButton, { backgroundColor: primary }]} onPress={() => router.replace('/login')}>
-                <ThemedText style={styles.primaryButtonText}>Перейти к входу</ThemedText>
+                <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Перейти к входу</ThemedText>
               </Pressable>
             </View>
           )}
@@ -359,7 +370,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },

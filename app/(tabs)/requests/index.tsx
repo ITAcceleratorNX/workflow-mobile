@@ -9,41 +9,34 @@ import {
     StyleSheet,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PageLoader, PullToRefresh, Select } from '@/components/ui';
+import {
+    formatServiceCategoryDisplayName,
+    getStatusLabel,
+    getTypeLabel,
+} from '@/constants/requests';
+import { FontSizes, LineHeights, Radius, Spacing } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import {
-  getOffices,
-  getRequestGroups,
-  type Office,
-  type RequestGroup,
-  type RequestGroupsRole,
-  type RequestGroupsSegments,
+    getOffices,
+    getRequestGroups,
+    type Office,
+    type RequestGroup,
+    type RequestGroupsRole,
+    type RequestGroupsSegments,
 } from '@/lib/api';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getStatusLabel, getTypeLabel, formatServiceCategoryDisplayName } from '@/constants/requests';
 
-// Размеры как в kcell-service-front compact: 140×100, rounded-xl, gap-4
+// Размеры карточки заявки.
 const CARD_PHOTO_WIDTH = 140;
 const CARD_PHOTO_HEIGHT = 100;
-const CARD_GAP = 16;
+const CARD_GAP = Spacing.lg;
 const PAGE_SIZE = 20;
-
-const KCELL = {
-  photoBg: '#1F2937',
-  photoPlaceholderBg: '#374151',
-  photoPlaceholderIcon: '#6B7280',
-  badgeType: '#2A5A4A',
-  badgeStatus: '#4A4A4A',
-  badgeStatusText: '#D1D5DB',
-  locationDate: '#9CA3AF',
-  chevron: '#6B7280',
-  title: '#FFFFFF',
-} as const;
 
 const TYPE_OPTIONS = [
   { value: 'all', label: 'Все' },
@@ -181,6 +174,14 @@ function RequestCard({
   role: RequestGroupsRole | null;
   onPress: () => void;
 }) {
+  const text = useThemeColor({}, 'text');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const successSoft = useThemeColor({}, 'successSoft');
+  const success = useThemeColor({}, 'success');
+  const textSecondary = useThemeColor({}, 'textSecondary');
+
   const isExecutor = usesExecutorRequestCard(role);
   const typeLabel = getTypeLabel(request.request_type ?? 'normal');
   const serviceTypeBadgeText = `Тип: ${getServiceTypeLabel(request)}`;
@@ -206,10 +207,11 @@ function RequestCard({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Заявка ${request.id}, ${statusLabel}`}
       style={({ pressed }) => [styles.card, { opacity: pressed ? 0.85 : 1 }]}
     >
-      {/* Фото слева — kcell: w-[140px] h-[100px] rounded-xl overflow-hidden bg-gray-800 */}
-      <View style={styles.photoWrap}>
+      <View style={[styles.photoWrap, { backgroundColor: surfaceMuted }]}>
         {photoUrl ? (
           <Image
             source={{ uri: photoUrl }}
@@ -217,29 +219,42 @@ function RequestCard({
             resizeMode="cover"
           />
         ) : (
-          <View style={styles.photoPlaceholder}>
-            <MaterialIcons
-              name="image"
-              size={32}
-              color={KCELL.photoPlaceholderIcon}
-            />
+          <View
+            style={[styles.photoPlaceholder, { backgroundColor: surfaceElevated }]}
+          >
+            <MaterialIcons name="image" size={32} color={textMuted} />
           </View>
         )}
       </View>
 
-      {/* Контент справа — kcell: flex-1 min-w-0, бейджи rounded-full, локация text-gray-400 text-sm, дата с Clock */}
       <View style={styles.cardContent}>
         {isExecutor ? (
           <>
-            <ThemedText style={styles.executorBlockLine} numberOfLines={2}>
+            <ThemedText
+              style={[styles.executorBlockLine, { color: textMuted }]}
+              numberOfLines={2}
+            >
               Блок: {getExecutorBlockLine(request)}
             </ThemedText>
-            <ThemedText style={styles.executorRequestTitle} numberOfLines={2}>
+            <ThemedText
+              style={[styles.executorRequestTitle, { color: text }]}
+              numberOfLines={2}
+            >
               {getExecutorRequestTitle(request)}
             </ThemedText>
             <View style={styles.badges}>
-              <View style={[styles.badgeStatus, styles.badgeStatusWide]}>
-                <ThemedText style={styles.badgeStatusText} numberOfLines={1} ellipsizeMode="tail">
+              <View
+                style={[
+                  styles.badgeStatus,
+                  styles.badgeStatusWide,
+                  { backgroundColor: surfaceMuted },
+                ]}
+              >
+                <ThemedText
+                  style={[styles.badgeStatusText, { color: textSecondary }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   {statusLabel}
                 </ThemedText>
               </View>
@@ -247,17 +262,28 @@ function RequestCard({
           </>
         ) : (
           <>
-            <ThemedText style={styles.cardTitle} numberOfLines={1}>
+            <ThemedText
+              style={[styles.cardTitle, { color: text }]}
+              numberOfLines={1}
+            >
               Заявка #{request.id}
             </ThemedText>
             <View style={styles.badges}>
-              <View style={styles.badgeType}>
-                <ThemedText style={styles.badgeText} numberOfLines={1} ellipsizeMode="tail">
+              <View style={[styles.badgeType, { backgroundColor: successSoft }]}>
+                <ThemedText
+                  style={[styles.badgeText, { color: success }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   {typeLabel}
                 </ThemedText>
               </View>
-              <View style={styles.badgeStatus}>
-                <ThemedText style={styles.badgeStatusText} numberOfLines={1} ellipsizeMode="tail">
+              <View style={[styles.badgeStatus, { backgroundColor: surfaceMuted }]}>
+                <ThemedText
+                  style={[styles.badgeStatusText, { color: textSecondary }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   {statusLabel}
                 </ThemedText>
               </View>
@@ -265,32 +291,36 @@ function RequestCard({
           </>
         )}
         {!isExecutor && (
-          <ThemedText style={styles.cardMetaMuted} numberOfLines={1}>
+          <ThemedText
+            style={[styles.cardMetaMuted, { color: textMuted }]}
+            numberOfLines={1}
+          >
             {serviceTypeBadgeText}
           </ThemedText>
         )}
         {!isExecutor && (
-          <ThemedText style={styles.cardLocation} numberOfLines={2}>
+          <ThemedText
+            style={[styles.cardLocation, { color: textMuted }]}
+            numberOfLines={2}
+          >
             {locationText}
           </ThemedText>
         )}
         <View style={styles.cardDateRow}>
-          <MaterialIcons
-            name="schedule"
-            size={15}
-            color={KCELL.locationDate}
-          />
-          <ThemedText style={styles.cardDate} numberOfLines={1}>
+          <MaterialIcons name="schedule" size={15} color={textMuted} />
+          <ThemedText
+            style={[styles.cardDate, { color: textMuted }]}
+            numberOfLines={1}
+          >
             {formattedDateLong}
           </ThemedText>
         </View>
       </View>
 
-      {/* Стрелка — по центру по вертикали относительно карточки */}
       <MaterialIcons
         name="chevron-right"
         size={24}
-        color={KCELL.chevron}
+        color={textMuted}
         style={styles.chevron}
       />
     </Pressable>
@@ -306,7 +336,10 @@ export default function RequestsListScreen() {
   const textColor = useThemeColor({}, 'text');
   const mutedColor = useThemeColor({}, 'textMuted');
   const primaryColor = useThemeColor({}, 'primary');
+  const onPrimary = useThemeColor({}, 'onPrimary');
   const borderColor = useThemeColor({}, 'border');
+  const accentSoft = useThemeColor({}, 'accentSoft');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -501,14 +534,6 @@ export default function RequestsListScreen() {
     [router]
   );
 
-  const sectionTitleByRole: Record<string, string> = {
-    client: 'Мои заявки',
-    'admin-worker': 'Заявки',
-    'department-head': 'Заявки',
-    executor: 'Заявки',
-    manager: 'Заявки',
-  };
-
   const openCreate = useCallback(() => {
     router.push('/requests/create' as const);
   }, [router]);
@@ -530,15 +555,18 @@ export default function RequestsListScreen() {
                 <Pressable
                   key={tab.key}
                   onPress={() => setActiveTab(tab.key)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={tab.label}
                   style={[
                     styles.tab,
-                    isActive && { backgroundColor: '#5A5A5A' },
+                    isActive && { backgroundColor: accentSoft },
                   ]}
                 >
                   <ThemedText
                     style={[
                       styles.tabLabel,
-                      { color: isActive ? '#FFFFFF' : mutedColor },
+                      { color: isActive ? primaryColor : mutedColor },
                     ]}
                   >
                     {tab.label}
@@ -592,14 +620,18 @@ export default function RequestsListScreen() {
 
         <Pressable
           onPress={openCreate}
+          accessibilityRole="button"
+          accessibilityLabel="Создать заявку"
           style={({ pressed }) => [
             styles.createBtn,
             styles.createBtnFullWidth,
             { backgroundColor: primaryColor, opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          <MaterialIcons name="add" size={20} color="#FFF" />
-          <ThemedText style={styles.createBtnText}>Создать</ThemedText>
+          <MaterialIcons name="add" size={20} color={onPrimary} />
+          <ThemedText style={[styles.createBtnText, { color: onPrimary }]}>
+            Создать
+          </ThemedText>
         </Pressable>
       </View>
     ),
@@ -609,6 +641,8 @@ export default function RequestsListScreen() {
       mutedColor,
       borderColor,
       primaryColor,
+      onPrimary,
+      accentSoft,
       openCreate,
       tabsConfig,
       activeTab,
@@ -625,7 +659,12 @@ export default function RequestsListScreen() {
   if (loading && sortedList.length === 0) {
     return (
       <ThemedView style={styles.centered}>
-        <View style={styles.initialLoaderPill}>
+        <View
+          style={[
+            styles.initialLoaderPill,
+            { backgroundColor: surfaceElevated },
+          ]}
+        >
           <PageLoader size={56} variant="overlay" />
         </View>
         <ThemedText style={[styles.loadingText, { color: mutedColor }]}>
@@ -641,7 +680,7 @@ export default function RequestsListScreen() {
         refreshing={refreshing}
         onRefresh={onRefresh}
         loaderSize={96}
-        topOffset={insets.top + 16}
+        topOffset={insets.top + Spacing.lg}
       >
         <FlatList
           data={sortedList}
@@ -649,32 +688,35 @@ export default function RequestsListScreen() {
           ListHeaderComponent={listHeader}
           contentContainerStyle={[
             styles.listContent,
-            { paddingTop: insets.top + 12 },
+            {
+              paddingTop: insets.top + Spacing.md,
+              paddingBottom: insets.bottom + Spacing.giant + Spacing.md,
+            },
           ]}
           onEndReached={onEndReached}
-        onEndReachedThreshold={0.4}
-        ListFooterComponent={
-          loadingMore ? (
-            <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color={primaryColor} />
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color={primaryColor} />
+              </View>
+            ) : null
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <MaterialIcons name="inbox" size={48} color={mutedColor} />
+              <ThemedText style={[styles.emptyText, { color: mutedColor }]}>
+                {error || 'Нет заявок'}
+              </ThemedText>
             </View>
-          ) : null
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <MaterialIcons name="inbox" size={48} color={mutedColor} />
-            <ThemedText style={[styles.emptyText, { color: mutedColor }]}>
-              {error || 'Нет заявок'}
-            </ThemedText>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <RequestCard
-            request={item}
-            role={role}
-            onPress={() => openDetail(item)}
-          />
-        )}
+          }
+          renderItem={({ item }) => (
+            <RequestCard
+              request={item}
+              role={role}
+              onPress={() => openDetail(item)}
+            />
+          )}
         />
       </PullToRefresh>
     </ThemedView>
@@ -689,31 +731,30 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
+    gap: Spacing.lg,
   },
   initialLoaderPill: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(28,28,30,0.92)',
   },
   loadingText: {
-    fontSize: 14,
+    fontSize: FontSizes.bodySmall,
+    lineHeight: LineHeights.bodySmall,
   },
   listContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
+    paddingHorizontal: Spacing.xxl,
   },
   header: {
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   title: {
     flex: 1,
@@ -724,49 +765,44 @@ const styles = StyleSheet.create({
   createBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Spacing.xs + 2,
     minHeight: 44,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: Spacing.md + 2,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.sm,
   },
   createBtnFullWidth: {
     width: '100%',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   createBtnText: {
-    fontSize: 15,
+    fontSize: FontSizes.body,
     fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    marginBottom: 12,
   },
   tabsRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-    paddingBottom: 12,
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    paddingBottom: Spacing.md,
     borderBottomWidth: 1,
   },
   tab: {
     minHeight: 44,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: Spacing.md + 2,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.sm,
     justifyContent: 'center',
   },
   tabLabel: {
-    fontSize: 14,
+    fontSize: FontSizes.bodySmall,
     fontWeight: '500',
   },
   filtersRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
   },
   filterItem: {
     flex: 1,
@@ -776,16 +812,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: CARD_GAP,
-    marginBottom: 16,
+    marginBottom: Spacing.lg,
     backgroundColor: 'transparent',
   },
   photoWrap: {
     width: CARD_PHOTO_WIDTH,
     height: CARD_PHOTO_HEIGHT,
     flexShrink: 0,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: KCELL.photoBg,
   },
   photoImage: {
     width: '100%',
@@ -796,60 +831,54 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: KCELL.photoPlaceholderBg,
   },
   cardContent: {
     flex: 1,
     minWidth: 0,
   },
   cardTitle: {
-    fontSize: 17,
+    fontSize: FontSizes.title,
+    lineHeight: LineHeights.title,
     fontWeight: '600',
-    color: KCELL.title,
-    marginBottom: 6,
+    marginBottom: Spacing.xs + 2,
   },
   executorBlockLine: {
     fontSize: 13,
     fontWeight: '500',
-    color: KCELL.locationDate,
-    marginBottom: 4,
+    marginBottom: Spacing.xs,
     letterSpacing: 0.2,
   },
   executorRequestTitle: {
-    fontSize: 17,
+    fontSize: FontSizes.title,
     fontWeight: '700',
-    color: KCELL.title,
-    marginBottom: 6,
-    lineHeight: 22,
+    marginBottom: Spacing.xs + 2,
+    lineHeight: LineHeights.title,
   },
   cardMetaMuted: {
     fontSize: 13,
     lineHeight: 18,
-    color: KCELL.locationDate,
-    marginBottom: 6,
+    marginBottom: Spacing.xs + 2,
   },
   badges: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs + 2,
     maxWidth: '100%',
   },
   badgeType: {
-    paddingHorizontal: 10,
+    paddingHorizontal: Spacing.sm + 2,
     paddingVertical: 5,
-    borderRadius: 9999,
-    backgroundColor: KCELL.badgeType,
+    borderRadius: Radius.pill,
     maxWidth: '48%',
     flexShrink: 1,
     minWidth: 0,
   },
   badgeStatus: {
-    paddingHorizontal: 10,
+    paddingHorizontal: Spacing.sm + 2,
     paddingVertical: 5,
-    borderRadius: 9999,
-    backgroundColor: KCELL.badgeStatus,
+    borderRadius: Radius.pill,
     maxWidth: '48%',
     flexShrink: 1,
     minWidth: 0,
@@ -861,28 +890,24 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
   badgeStatusText: {
     fontSize: 11,
     fontWeight: '600',
-    color: KCELL.badgeStatusText,
   },
   cardLocation: {
-    fontSize: 14,
+    fontSize: FontSizes.bodySmall,
     lineHeight: 19,
-    color: KCELL.locationDate,
-    marginBottom: 6,
+    marginBottom: Spacing.xs + 2,
   },
   cardDateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Spacing.xs + 2,
     marginTop: 2,
   },
   cardDate: {
     fontSize: 13,
-    color: KCELL.locationDate,
     flex: 1,
   },
   chevron: {
@@ -890,16 +915,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   footerLoader: {
-    paddingVertical: 16,
+    paddingVertical: Spacing.lg,
     alignItems: 'center',
   },
   empty: {
     alignItems: 'center',
-    paddingVertical: 48,
-    gap: 12,
+    paddingVertical: Spacing.giant + Spacing.lg,
+    gap: Spacing.md,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: FontSizes.bodySmall,
     textAlign: 'center',
   },
 });

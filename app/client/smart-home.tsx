@@ -1,11 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
   ScrollView,
   Pressable,
   ActivityIndicator,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PageLoader, ScreenHeader } from '@/components/ui';
 import { SmartDeskCalculator } from '@/components/smart-office/smart-desk-calculator';
+import { Radius, Spacing } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
@@ -25,10 +26,10 @@ import {
   type ClientRoomSubscription,
 } from '@/lib/api';
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2;
-const CARD_ORANGE = '#D94F15';
-const CARD_GREEN = '#1A9A8A';
+function smartHomeCardWidth(screenWidth: number) {
+  const pad = Spacing.lg * 3;
+  return Math.max(0, (screenWidth - pad) / 2);
+}
 
 const MOCK_SUBSCRIPTIONS: ClientRoomSubscription[] = [
   {
@@ -61,10 +62,27 @@ const MOCK_DEVICES: YandexDevice[] = [
 
 export default function ClientSmartHomeScreen() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const cardWidth = useMemo(() => smartHomeCardWidth(windowWidth), [windowWidth]);
   const user = useAuthStore((state) => state.user);
   const isGuest = useAuthStore((state) => state.isGuest);
   const { show: showToast } = useToast();
   const background = useThemeColor({}, 'background');
+  const primary = useThemeColor({}, 'primary');
+  const success = useThemeColor({}, 'success');
+  const text = useThemeColor({}, 'text');
+  const textSecondary = useThemeColor({}, 'textSecondary');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+
+  const onAccentSurface = useMemo(
+    () => ({
+      iconBubble: 'rgba(255,255,255,0.22)' as const,
+      iconBubbleStrong: 'rgba(255,255,255,0.32)' as const,
+      inactivePower: 'rgba(255,255,255,0.65)' as const,
+    }),
+    []
+  );
 
   const [subscriptions, setSubscriptions] = useState<ClientRoomSubscription[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
@@ -176,51 +194,71 @@ export default function ClientSmartHomeScreen() {
         title="Управление умным офисом"
         titleStyle={styles.screenTitleLarge}
       />
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 28 }]}
+      {loading && subscriptions.length === 0 ? (
+        <View style={styles.fullScreenLoading}>
+          <PageLoader size={96} />
+        </View>
+      ) : (
+        <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + Spacing.huge - 4 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {subscriptions.length === 0 ? (
           <>
             <View style={styles.emptyState}>
-              <MaterialIcons name="home" size={64} color="rgba(255,255,255,0.4)" />
-              <ThemedText style={styles.emptyTitle}>Нет подписок на комнаты</ThemedText>
-              <ThemedText style={styles.emptySubtitle}>Обратитесь к администратору</ThemedText>
+              <MaterialIcons name="home" size={64} color={textMuted} />
+              <ThemedText style={[styles.emptyTitle, { color: text }]}>Нет подписок на комнаты</ThemedText>
+              <ThemedText style={[styles.emptySubtitle, { color: textSecondary }]}>
+                Обратитесь к администратору
+              </ThemedText>
             </View>
-            <SmartDeskCalculator variant="compact" compactTheme="dark" containerStyle={styles.deskCalculatorSection} />
+            <SmartDeskCalculator variant="compact" compactTheme="app" containerStyle={styles.deskCalculatorSection} />
           </>
         ) : (
           <>
             <View style={styles.roomSelectorContainer}>
-              <ThemedText style={[styles.devicesTitle, styles.sectionHeadingFirst]}>Выберите комнату</ThemedText>
+              <ThemedText style={[styles.devicesTitle, styles.sectionHeadingFirst, { color: text }]}>
+                Выберите комнату
+              </ThemedText>
               <Pressable
                 onPress={() => setShowRoomSelector(!showRoomSelector)}
+                accessibilityRole="button"
+                accessibilityLabel="Выбор комнаты"
+                accessibilityState={{ expanded: showRoomSelector }}
                 style={({ pressed }) => [
                   styles.deviceCard,
                   styles.roomCardFullWidth,
-                  { backgroundColor: CARD_ORANGE, opacity: pressed ? 0.9 : 1 },
+                  { backgroundColor: primary, opacity: pressed ? 0.9 : 1 },
                 ]}
               >
                 <View style={styles.deviceCardContent}>
                   <View style={styles.roomCardTextCol}>
-                    <ThemedText style={[styles.deviceName, styles.roomCardTitleNoFlex]} numberOfLines={2}>
+                    <ThemedText
+                      style={[styles.deviceName, styles.roomCardTitleNoFlex, { color: onPrimary }]}
+                      numberOfLines={2}
+                    >
                       {selectedRoom?.meetingRoom?.name || 'Выберите комнату'}
                     </ThemedText>
-                    <ThemedText style={styles.deviceStatus} numberOfLines={2}>
+                    <ThemedText style={[styles.deviceStatus, { color: onPrimary, opacity: 0.88 }]} numberOfLines={2}>
                       {selectedRoom?.meetingRoom?.office?.name || 'Нажмите, чтобы открыть список'}
                     </ThemedText>
                   </View>
-                  <View style={[styles.deviceIconContainer, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                  <View
+                    style={[styles.deviceIconContainer, { backgroundColor: onAccentSurface.iconBubble }]}
+                  >
                     <MaterialIcons
                       name={showRoomSelector ? 'expand-less' : 'expand-more'}
                       size={22}
-                      color="#FFFFFF"
+                      color={onPrimary}
                     />
                   </View>
                 </View>
               </Pressable>
               {showRoomSelector && (
-                <View style={styles.roomDropdown}>
+                <View style={[styles.roomDropdown, { backgroundColor: primary }]}>
                   {subscriptions.map((sub) => (
                     <Pressable
                       key={sub.id}
@@ -228,9 +266,16 @@ export default function ClientSmartHomeScreen() {
                         setSelectedRoomId(sub.meeting_room_id);
                         setShowRoomSelector(false);
                       }}
-                      style={[styles.roomDropdownItem, selectedRoomId === sub.meeting_room_id && styles.roomDropdownItemActive]}
+                      accessibilityRole="button"
+                      accessibilityLabel={sub.meetingRoom?.name ?? `Комната ${sub.meeting_room_id}`}
+                      style={[
+                        styles.roomDropdownItem,
+                        selectedRoomId === sub.meeting_room_id && {
+                          backgroundColor: onAccentSurface.iconBubble,
+                        },
+                      ]}
                     >
-                      <ThemedText style={styles.roomDropdownText}>
+                      <ThemedText style={[styles.roomDropdownText, { color: onPrimary }]}>
                         {sub.meetingRoom?.name || `Комната ID: ${sub.meeting_room_id}`}
                         {sub.meetingRoom?.office ? ` (${sub.meetingRoom.office.name})` : ''}
                       </ThemedText>
@@ -239,44 +284,64 @@ export default function ClientSmartHomeScreen() {
                 </View>
               )}
             </View>
-            <ThemedText style={styles.devicesTitle}>Устройства в кабинете</ThemedText>
+            <ThemedText style={[styles.devicesTitle, { color: text }]}>Устройства в кабинете</ThemedText>
             <View style={styles.devicesAreaWrapper}>
               {isLoadingDevices ? (
-                <View style={styles.devicesGridPlaceholder} />
+                <View style={[styles.devicesGridPlaceholder, { width: cardWidth, backgroundColor: primary }]} />
               ) : controllableDevices.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <MaterialIcons name="lightbulb" size={64} color="rgba(255,255,255,0.4)" />
-                  <ThemedText style={styles.emptyTitle}>Нет доступных устройств</ThemedText>
-                  <ThemedText style={styles.emptySubtitle}>В этой комнате нет устройств</ThemedText>
+                  <MaterialIcons name="lightbulb" size={64} color={textMuted} />
+                  <ThemedText style={[styles.emptyTitle, { color: text }]}>Нет доступных устройств</ThemedText>
+                  <ThemedText style={[styles.emptySubtitle, { color: textSecondary }]}>
+                    В этой комнате нет устройств
+                  </ThemedText>
                 </View>
               ) : (
                 <View style={styles.devicesGrid}>
                   {controllableDevices.map((device) => {
                     const isOn = getDeviceState(device);
                     const isControllingThis = isControlling === device.id;
+                    const cardBg = isOn ? success : primary;
                     return (
                       <Pressable
                         key={device.id}
                         onPress={() => handleControlDevice(device, !isOn)}
                         disabled={isControllingThis || isOn === null}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${device.name}, ${isOn ? 'включено' : 'выключено'}`}
                         style={[
                           styles.deviceCard,
-                          { backgroundColor: isOn ? CARD_GREEN : CARD_ORANGE },
+                          { width: cardWidth, backgroundColor: cardBg },
                           isControllingThis && styles.deviceCardDisabled,
                         ]}
                       >
                         <View style={styles.deviceCardContent}>
                           <View>
-                            <ThemedText style={styles.deviceName}>{device.name}</ThemedText>
-                            <ThemedText style={styles.deviceStatus}>
+                            <ThemedText style={[styles.deviceName, { color: onPrimary }]}>
+                              {device.name}
+                            </ThemedText>
+                            <ThemedText style={[styles.deviceStatus, { color: onPrimary, opacity: 0.88 }]}>
                               {isControllingThis ? 'Загрузка...' : isOn ? 'Вкл.' : 'Выкл.'}
                             </ThemedText>
                           </View>
-                          <View style={[styles.deviceIconContainer, { backgroundColor: isOn ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.2)' }]}>
+                          <View
+                            style={[
+                              styles.deviceIconContainer,
+                              {
+                                backgroundColor: isOn
+                                  ? onAccentSurface.iconBubbleStrong
+                                  : onAccentSurface.iconBubble,
+                              },
+                            ]}
+                          >
                             {isControllingThis ? (
-                              <ActivityIndicator size="small" color="#FFFFFF" />
+                              <ActivityIndicator size="small" color={onPrimary} />
                             ) : (
-                              <MaterialIcons name="power-settings-new" size={22} color={isOn ? '#FFFFFF' : 'rgba(255,255,255,0.6)'} />
+                              <MaterialIcons
+                                name="power-settings-new"
+                                size={22}
+                                color={isOn ? onPrimary : onAccentSurface.inactivePower}
+                              />
                             )}
                           </View>
                         </View>
@@ -291,28 +356,35 @@ export default function ClientSmartHomeScreen() {
                 </View>
               )}
             </View>
-            <SmartDeskCalculator variant="compact" compactTheme="dark" containerStyle={styles.deskCalculatorSection} />
+            <SmartDeskCalculator variant="compact" compactTheme="app" containerStyle={styles.deskCalculatorSection} />
           </>
         )}
       </ScrollView>
+      )}
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 12 },
+  fullScreenLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.giant,
+  },
+  content: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
   screenTitleLarge: {
     fontSize: 24,
     lineHeight: 30,
     fontWeight: '700',
     letterSpacing: -0.35,
   },
-  deskCalculatorSection: { marginTop: 12 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#FFFFFF', marginTop: 16 },
-  emptySubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
-  roomSelectorContainer: { marginBottom: 12 },
+  deskCalculatorSection: { marginTop: Spacing.md },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.giant },
+  emptyTitle: { fontSize: 16, fontWeight: '600', marginTop: Spacing.lg },
+  emptySubtitle: { fontSize: 14, marginTop: Spacing.xs },
+  roomSelectorContainer: { marginBottom: Spacing.md },
   sectionHeadingFirst: { marginTop: 0 },
   roomCardFullWidth: {
     width: '100%',
@@ -321,31 +393,39 @@ const styles = StyleSheet.create({
   roomCardTextCol: {
     flex: 1,
     minWidth: 0,
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   roomCardTitleNoFlex: {
     flex: 0,
   },
-  roomDropdown: { backgroundColor: CARD_ORANGE, borderRadius: 14, marginTop: 8, overflow: 'hidden' },
-  roomDropdownItem: { paddingHorizontal: 16, paddingVertical: 12 },
-  roomDropdownItemActive: { backgroundColor: 'rgba(255,255,255,0.2)' },
-  roomDropdownText: { fontSize: 16, color: '#FFFFFF' },
+  roomDropdown: { borderRadius: Radius.lg - 2, marginTop: Spacing.sm, overflow: 'hidden' },
+  roomDropdownItem: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
+  roomDropdownText: { fontSize: 16 },
   devicesTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 4,
-    marginBottom: 10,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm + 2,
     letterSpacing: -0.2,
   },
   devicesAreaWrapper: { position: 'relative' },
-  devicesGridPlaceholder: { width: CARD_WIDTH, height: 100, borderRadius: 16, backgroundColor: CARD_ORANGE, opacity: 0.6 },
+  devicesGridPlaceholder: {
+    height: 100,
+    borderRadius: Radius.lg,
+    opacity: 0.55,
+  },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
-  devicesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  deviceCard: { width: CARD_WIDTH, borderRadius: 14, padding: 16, minHeight: 100 },
+  devicesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
+  deviceCard: { borderRadius: Radius.lg - 2, padding: Spacing.lg, minHeight: 100 },
   deviceCardDisabled: { opacity: 0.5 },
-  deviceCardContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flex: 1, paddingRight: 16 },
-  deviceName: { fontSize: 15, fontWeight: '500', color: '#FFFFFF', flex: 1, marginRight: 8 },
-  deviceStatus: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+  deviceCardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    flex: 1,
+    paddingRight: Spacing.lg,
+  },
+  deviceName: { fontSize: 15, fontWeight: '500', flex: 1, marginRight: Spacing.sm },
+  deviceStatus: { fontSize: 13, marginTop: Spacing.xs },
   deviceIconContainer: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
 });

@@ -66,6 +66,7 @@ function PhotoGrid({
   onPress: (url: string) => void;
 }) {
   const { width } = useWindowDimensions();
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
   const gap = 8;
   const count = 3;
   const size = (width - 48 - gap * (count - 1)) / count;
@@ -80,7 +81,12 @@ function PhotoGrid({
           <Pressable
             key={`${p.photo_url}-${idx}`}
             onPress={() => onPress(p.photo_url)}
-            style={[styles.photoTile, { width: size, height: size }]}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={`Фото ${idx + 1}`}
+            style={[
+              styles.photoTile,
+              { width: size, height: size, backgroundColor: surfaceMuted },
+            ]}
           >
             <Image
               source={{ uri: p.photo_url }}
@@ -110,6 +116,10 @@ export default function RequestDetailScreen() {
   const borderColor = useThemeColor({}, 'border');
   const backgroundColor = useThemeColor({}, 'background');
   const cardBackground = useThemeColor({}, 'cardBackground');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const successColor = useThemeColor({}, 'success');
+  const dangerColor = useThemeColor({}, 'danger');
+  const dividerColor = useThemeColor({}, 'divider');
 
   const [request, setRequest] = useState<RequestGroup | null>(null);
   const [loading, setLoading] = useState(true);
@@ -671,12 +681,12 @@ export default function RequestDetailScreen() {
       >
         <View style={styles.badges}>
           <View style={[styles.badge, { backgroundColor: primaryColor }]}>
-            <ThemedText style={styles.badgeText}>
+            <ThemedText style={[styles.badgeText, { color: onPrimary }]}>
               {getStatusLabel(request.status)}
             </ThemedText>
           </View>
           <View style={[styles.badge, { backgroundColor: mutedColor }]}>
-            <ThemedText style={styles.badgeText}>
+            <ThemedText style={[styles.badgeText, { color: onPrimary }]}>
               {getTypeLabel(request.request_type ?? 'normal')}
             </ThemedText>
           </View>
@@ -850,7 +860,7 @@ export default function RequestDetailScreen() {
                 { backgroundColor: cardBackground, borderColor },
               ]}
             >
-              <View style={styles.handle} />
+              <View style={[styles.handle, { backgroundColor: dividerColor }]} />
               <ThemedText style={[styles.acceptRejectBlockTitle, { color: textColor }]}>
                 Принять заявку
               </ThemedText>
@@ -946,7 +956,9 @@ export default function RequestDetailScreen() {
                 />
 
                 {acceptFormError ? (
-                  <ThemedText style={styles.acceptModalError}>{acceptFormError}</ThemedText>
+                  <ThemedText style={[styles.acceptModalError, { color: dangerColor }]}>
+                    {acceptFormError}
+                  </ThemedText>
                 ) : null}
               </ScrollView>
 
@@ -954,19 +966,29 @@ export default function RequestDetailScreen() {
                 <Pressable
                   onPress={handleAcceptGroupSubmit}
                   disabled={actionLoading}
-                  style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnAccept]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Принять заявку"
+                  style={[
+                    styles.acceptRejectBlockBtn,
+                    { backgroundColor: successColor },
+                  ]}
                 >
-                  <MaterialIcons name="check-circle" size={20} color="#FFF" />
-                  <ThemedText style={styles.acceptRejectLabel}>
+                  <MaterialIcons name="check-circle" size={20} color={onPrimary} />
+                  <ThemedText style={[styles.acceptRejectLabel, { color: onPrimary }]}>
                     {actionLoading ? '...' : 'Принять'}
                   </ThemedText>
                 </Pressable>
                 <Pressable
                   onPress={() => setShowAcceptGroupModal(false)}
-                  style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnReject]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Отмена"
+                  style={[
+                    styles.acceptRejectBlockBtn,
+                    { backgroundColor: dangerColor },
+                  ]}
                 >
-                  <MaterialIcons name="cancel" size={20} color="#FFF" />
-                  <ThemedText style={styles.acceptRejectLabel}>
+                  <MaterialIcons name="cancel" size={20} color={onPrimary} />
+                  <ThemedText style={[styles.acceptRejectLabel, { color: onPrimary }]}>
                     Отмена
                   </ThemedText>
                 </Pressable>
@@ -994,7 +1016,7 @@ export default function RequestDetailScreen() {
                 { backgroundColor: cardBackground, borderColor },
               ]}
             >
-              <View style={styles.handle} />
+              <View style={[styles.handle, { backgroundColor: dividerColor }]} />
               <ThemedText style={[styles.acceptRejectBlockTitle, { color: textColor }]}>
                 Отклонить заявку
               </ThemedText>
@@ -1017,26 +1039,38 @@ export default function RequestDetailScreen() {
                 multiline
               />
               {acceptFormError ? (
-                <ThemedText style={styles.acceptModalError}>{acceptFormError}</ThemedText>
+                <ThemedText style={[styles.acceptModalError, { color: dangerColor }]}>
+                  {acceptFormError}
+                </ThemedText>
               ) : null}
 
               <View style={styles.acceptRejectBlockButtons}>
                 <Pressable
                   onPress={handleRejectGroup}
                   disabled={!rejectGroupReason.trim() || actionLoading}
-                  style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnReject]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Отклонить заявку"
+                  style={[
+                    styles.acceptRejectBlockBtn,
+                    { backgroundColor: dangerColor },
+                  ]}
                 >
-                  <MaterialIcons name="cancel" size={20} color="#FFF" />
-                  <ThemedText style={styles.acceptRejectLabel}>
+                  <MaterialIcons name="cancel" size={20} color={onPrimary} />
+                  <ThemedText style={[styles.acceptRejectLabel, { color: onPrimary }]}>
                     {actionLoading ? '...' : 'Отклонить'}
                   </ThemedText>
                 </Pressable>
                 <Pressable
                   onPress={() => setShowRejectGroupModal(false)}
-                  style={[styles.acceptRejectBlockBtn, styles.acceptRejectBlockBtnAccept]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Закрыть"
+                  style={[
+                    styles.acceptRejectBlockBtn,
+                    { backgroundColor: successColor },
+                  ]}
                 >
-                  <MaterialIcons name="check-circle" size={20} color="#FFF" />
-                  <ThemedText style={styles.acceptRejectLabel}>
+                  <MaterialIcons name="check-circle" size={20} color={onPrimary} />
+                  <ThemedText style={[styles.acceptRejectLabel, { color: onPrimary }]}>
                     Закрыть
                   </ThemedText>
                 </Pressable>
@@ -1172,7 +1206,6 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 14,
-    color: '#FFFFFF',
     fontWeight: '600',
   },
   block: {
@@ -1205,7 +1238,6 @@ const styles = StyleSheet.create({
   photoTile: {
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#1C1C1E',
   },
   photoModal: {
     ...StyleSheet.absoluteFillObject,
@@ -1224,7 +1256,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   acceptRejectLabel: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -1262,12 +1293,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
   },
-  acceptRejectBlockBtnAccept: {
-    backgroundColor: '#22C55E',
-  },
-  acceptRejectBlockBtnReject: {
-    backgroundColor: '#EF4444',
-  },
+  acceptRejectBlockBtnAccept: {},
+  acceptRejectBlockBtnReject: {},
   acceptRejectModalSheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -1282,7 +1309,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(120,120,128,0.32)',
     marginTop: 8,
     marginBottom: 12,
   },
@@ -1376,7 +1402,6 @@ const styles = StyleSheet.create({
     borderColor: '#22C55E',
   },
   acceptModalError: {
-    color: '#EF4444',
     fontSize: 14,
     marginTop: 12,
   },

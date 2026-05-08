@@ -8,10 +8,12 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, TextInput } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Button, TextInput } from '@/components/ui';
+import { FontSizes, LineHeights, Radius, Spacing } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { formatPhone, PHONE_REGEX } from '@/lib';
 import { getCurrentUser, loginWithPhone } from '@/lib/auth';
@@ -19,11 +21,13 @@ import { useAuthStore } from '@/stores/auth-store';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const setAuth = useAuthStore((state) => state.setAuth);
   const setGuestAuth = useAuthStore((state) => state.setGuestAuth);
   const errorColor = useThemeColor({}, 'error');
   const textMuted = useThemeColor({}, 'textMuted');
-  const border = useThemeColor({}, 'border');
+  const infoColor = useThemeColor({}, 'info');
+  const infoSoft = useThemeColor({}, 'infoSoft');
 
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -31,8 +35,6 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const textColor = useThemeColor({}, 'text');
 
   const validate = useCallback(() => {
     let valid = true;
@@ -97,7 +99,13 @@ export default function LoginScreen() {
         style={styles.keyboard}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop: Math.max(insets.top, Spacing.huge) + Spacing.md,
+              paddingBottom: Math.max(insets.bottom, Spacing.huge) + Spacing.md,
+            },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -119,16 +127,19 @@ export default function LoginScreen() {
                 onChangeText={handlePhoneChange}
                 keyboardType="phone-pad"
                 maxLength={19}
+                errorMessage={phoneError || undefined}
               />
-              {phoneError ? (
-                <ThemedText style={[styles.errorText, { color: errorColor }]}>{phoneError}</ThemedText>
-              ) : null}
             </View>
 
             <View style={styles.field}>
               <View style={styles.passwordRow}>
                 <ThemedText style={styles.label}>Пароль</ThemedText>
-                <Pressable onPress={() => router.push('/reset-password')}>
+                <Pressable
+                  onPress={() => router.push('/reset-password')}
+                  hitSlop={8}
+                  accessibilityRole="link"
+                  accessibilityLabel="Забыли пароль"
+                >
                   <ThemedText style={[styles.linkText, { color: errorColor }]}>
                     Забыли пароль?
                   </ThemedText>
@@ -139,46 +150,43 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={handlePasswordChange}
                 secureTextEntry
+                errorMessage={passwordError || undefined}
               />
-              {passwordError ? (
-                <ThemedText style={[styles.errorText, { color: errorColor }]}>
-                  {passwordError}
-                </ThemedText>
-              ) : null}
             </View>
 
             {formError ? (
-                <ThemedText style={[styles.formErrorText, { color: errorColor }]}>
-                  {formError}
-                </ThemedText>
+              <ThemedText style={[styles.formErrorText, { color: errorColor }]}>
+                {formError}
+              </ThemedText>
             ) : null}
 
             <Button
               title={loading ? 'Вход...' : 'Войти'}
               onPress={handleLogin}
               disabled={loading}
+              loading={loading}
             />
 
-              <Button
-                  title="Запросить регистрацию"
-                  onPress={() => router.push('/register')}
-                  style={styles.buttonOutline} // Голубая заливка
-                  {...({
-                      titleStyle: styles.buttonOutlineText
-                  } as any)}
-              />
+            <Button
+              title="Запросить регистрацию"
+              onPress={() => router.push('/register')}
+              style={{ backgroundColor: infoSoft }}
+              labelColor={infoColor}
+            />
 
-              {/* ТЕПЕРЬ ЭТА КНОПКА СНИЗУ И С ОРАНЖЕВЫМ КОНТУРОМ */}
-              <Button
-                  title="Открыть демо-режим"
-                  onPress={handleDemoLogin}
-                  style={styles.registerButtonCustom} // Серый фон + оранжевый контур
-                  {...({
-                      titleStyle: styles.registerTextCustom
-                  } as any)}
-              />
+            <Button
+              title="Открыть демо-режим"
+              onPress={handleDemoLogin}
+              variant="outline"
+            />
 
-            <Pressable style={styles.privacyLink} onPress={() => router.push('/privacy')}>
+            <Pressable
+              style={styles.privacyLink}
+              onPress={() => router.push('/privacy')}
+              hitSlop={8}
+              accessibilityRole="link"
+              accessibilityLabel="Политика конфиденциальности"
+            >
               <ThemedText style={[styles.privacyText, { color: textMuted }]}>
                 Политика конфиденциальности
               </ThemedText>
@@ -200,12 +208,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 40,
+    paddingHorizontal: Spacing.xl,
   },
   header: {
-    marginBottom: 32,
-    gap: 12,
+    marginBottom: Spacing.huge,
+    gap: Spacing.md,
   },
   title: {
     fontSize: 28,
@@ -213,14 +220,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subtitle: {
-    fontSize: 18,
-    lineHeight: 26,
+    fontSize: FontSizes.title + 1,
+    lineHeight: LineHeights.headline,
   },
   form: {
-    gap: 24,
+    gap: Spacing.xxl,
   },
   field: {
-    gap: 8,
+    gap: Spacing.sm,
   },
   passwordRow: {
     flexDirection: 'row',
@@ -228,74 +235,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   label: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: FontSizes.body + 1,
+    lineHeight: LineHeights.body + 2,
     fontWeight: '500',
   },
   linkText: {
-    fontSize: 12,
+    fontSize: FontSizes.caption,
     fontWeight: '500',
-  },
-  errorText: {
-    fontSize: 12,
   },
   privacyLink: {
     alignSelf: 'center',
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
   },
   privacyText: {
-    fontSize: 16,
+    fontSize: FontSizes.body + 1,
     textAlign: 'center',
-  },
-  formErrorContainer: {
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
   },
   formErrorText: {
-    fontSize: 14,
+    fontSize: FontSizes.bodySmall,
     textAlign: 'center',
   },
-    buttonOutline: {
-        backgroundColor: '#60A5FA30',
-        borderWidth: 0,
-        borderRadius: 12,
-        height: 56,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 12,
-
-        shadowColor: '#60A5FA30',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
-        elevation: 3,
-    },
-    buttonOutlineText: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '600',          // Обычная полужирность
-        letterSpacing: 0,           // Без лишних отступов
-        textTransform: 'none',      // Без капса (обычные буквы)
-    },
-    demoContainer: {
-        marginTop: 30,
-        paddingTop: 24,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    registerButtonCustom: {
-        backgroundColor: '#1C1C1E', // Твой стандартный серый из secondary
-        borderWidth: 1.5,
-        borderColor: '#F35713',     // Оранжевый контур
-        borderRadius: 12,
-        height: 52,
-        justifyContent: 'center',
-        marginTop: 10,
-    },
-    registerTextCustom: {
-        color: '#F35713',           // Текст тоже сделаем оранжевым, чтобы сочеталось
-        fontSize: 16,
-        fontWeight: '600',
-    },
 });
+
+// Note: радиус и высота кнопок берётся из общего <Button>;
+// для info-варианта и outline-варианта используется новый API `Button`.

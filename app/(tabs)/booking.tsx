@@ -2,7 +2,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -18,7 +18,6 @@ import {
 import { ThemedText } from '@/components/themed-text';
 import { PullToRefresh } from '@/components/ui';
 import { useToast } from '@/context/toast-context';
-import { useThemeColor } from '@/hooks/use-theme-color';
 import {
     type MeetingRoom,
     type MeetingRoomBooking,
@@ -48,7 +47,6 @@ import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
-const CARD_ORANGE = '#E25B21';
 
 /**
  * URL первого фото комнаты — как в браузере: используем photos[0] или photo как есть.
@@ -99,15 +97,16 @@ function getBookingStatusText(status?: string): string {
   }
 }
 
+/** Текст экрана «Бронь»: всегда белый на градиенте в любой теме приложения. */
+function BookingText(props: ComponentProps<typeof ThemedText>) {
+  return <ThemedText {...props} lightColor="#FFFFFF" darkColor="#FFFFFF" />;
+}
+
 export default function BookingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
-  const borderColor = useThemeColor({}, 'border');
-  const textMuted = useThemeColor({}, 'textMuted');
-  const tintColor = useThemeColor({}, 'tint');
-  const textColor = useThemeColor({}, 'text');
   const gradientColors = ORANGE_GRADIENT;
 
   const [activeTab, setActiveTab] = useState<BookingTab>('book');
@@ -684,7 +683,7 @@ export default function BookingScreen() {
         <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
           <Pressable style={styles.backRowWhite} onPress={goBack}>
             <MaterialIcons name="arrow-back" size={24} color="#fff" />
-            <ThemedText style={styles.backTextWhite}>Назад</ThemedText>
+            <BookingText style={styles.backTextWhite}>Назад</BookingText>
           </Pressable>
           <ScrollView style={styles.scroll} contentContainerStyle={styles.formContent}>
             <View style={styles.roomImageContainer}>
@@ -711,26 +710,26 @@ export default function BookingScreen() {
                   </ScrollView>
                   {roomPhotoCount > 1 && (
                     <View style={styles.roomImageBadge}>
-                      <ThemedText style={styles.roomImageBadgeText}>+{roomPhotoCount - 1} фото</ThemedText>
+                      <BookingText style={styles.roomImageBadgeText}>+{roomPhotoCount - 1} фото</BookingText>
                     </View>
                   )}
                 </>
               ) : (
                 <View style={styles.roomImagePlaceholder}>
                   <MaterialIcons name="image" size={48} color="rgba(255,255,255,0.4)" />
-                  <ThemedText style={styles.roomImagePlaceholderText}>Фото не загружено</ThemedText>
+                  <BookingText style={styles.roomImagePlaceholderText}>Фото не загружено</BookingText>
                 </View>
               )}
             </View>
-            <ThemedText type="title" style={styles.formTitleWhite}>
+            <BookingText type="title" style={styles.formTitleWhite}>
               Бронирование
-            </ThemedText>
-            <ThemedText style={styles.formSubtitleWhite}>
+            </BookingText>
+            <BookingText style={styles.formSubtitleWhite}>
               {selectedRoom.name}
               {selectedRoom.floor != null && ` • ${selectedRoom.floor} этаж`}
               {selectedRoom.capacity != null && ` • до ${selectedRoom.capacity} чел.`}
-            </ThemedText>
-            <ThemedText style={styles.labelWhite}>Дата</ThemedText>
+            </BookingText>
+            <BookingText style={styles.labelWhite}>Дата</BookingText>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.datesRow}>
             {datesForPicker.map((d) => {
               const key = formatDateForApi(d);
@@ -745,17 +744,17 @@ export default function BookingScreen() {
                     isSelected && styles.dateChipFormSelected,
                   ]}
                 >
-                  <ThemedText style={[styles.dateChipText, isSelected && styles.dateChipTextSelected]}>
+                  <BookingText style={[styles.dateChipText, isSelected && styles.dateChipTextSelected]}>
                     {d.getDate()}
-                  </ThemedText>
-                  <ThemedText style={[styles.dateChipSub, isSelected && styles.dateChipTextSelected]}>
+                  </BookingText>
+                  <BookingText style={[styles.dateChipSub, isSelected && styles.dateChipTextSelected]}>
                     {['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][d.getDay()]}
-                  </ThemedText>
+                  </BookingText>
                 </Pressable>
               );
             })}
           </ScrollView>
-          <ThemedText style={styles.labelWhite}>Время</ThemedText>
+          <BookingText style={styles.labelWhite}>Время</BookingText>
           {loadingAvailability ? (
             <ActivityIndicator size="small" color="#fff" style={styles.loader} />
           ) : (
@@ -775,7 +774,7 @@ export default function BookingScreen() {
                       isSelected && styles.slotChipFormSelected,
                     ]}
                   >
-                    <ThemedText
+                    <BookingText
                       style={[
                         styles.slotChipText,
                         disabled && styles.slotChipTextFormDisabled,
@@ -783,13 +782,13 @@ export default function BookingScreen() {
                       ]}
                     >
                       {slot.label}
-                    </ThemedText>
+                    </BookingText>
                   </Pressable>
                 );
               })}
             </View>
           )}
-          <ThemedText style={styles.labelWhite}>Компания (необязательно)</ThemedText>
+          <BookingText style={styles.labelWhite}>Компания (необязательно)</BookingText>
           <TextInput
             value={companyName}
             onChangeText={setCompanyName}
@@ -805,7 +804,7 @@ export default function BookingScreen() {
             {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <ThemedText style={styles.submitBtnText}>Забронировать</ThemedText>
+              <BookingText style={styles.submitBtnText}>Забронировать</BookingText>
             )}
           </Pressable>
         </ScrollView>
@@ -817,25 +816,25 @@ export default function BookingScreen() {
   return (
     <LinearGradient colors={gradientColors} style={styles.gradientFill}>
       <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
-        <ThemedText type="title" style={styles.titleWhite}>
+        <BookingText type="title" style={styles.titleWhite}>
           Переговорные
-        </ThemedText>
+        </BookingText>
         <View style={styles.tabsRowWhite}>
           <Pressable
             onPress={() => setActiveTab('book')}
             style={[styles.tabWhite, activeTab === 'book' && styles.tabWhiteActive]}
           >
-            <ThemedText style={[styles.tabTextWhite, activeTab === 'book' && styles.tabTextWhiteActive]}>
+            <BookingText style={[styles.tabTextWhite, activeTab === 'book' && styles.tabTextWhiteActive]}>
               Бронировать
-            </ThemedText>
+            </BookingText>
           </Pressable>
           <Pressable
             onPress={() => setActiveTab('my-bookings')}
             style={[styles.tabWhite, activeTab === 'my-bookings' && styles.tabWhiteActive]}
           >
-            <ThemedText style={[styles.tabTextWhite, activeTab === 'my-bookings' && styles.tabTextWhiteActive]}>
+            <BookingText style={[styles.tabTextWhite, activeTab === 'my-bookings' && styles.tabTextWhiteActive]}>
               Мои бронирования
-            </ThemedText>
+            </BookingText>
           </Pressable>
         </View>
 
@@ -843,28 +842,28 @@ export default function BookingScreen() {
           <>
             {!selectedOffice && (
               <>
-                <ThemedText style={styles.stepHintWhite}>
+                <BookingText style={styles.stepHintWhite}>
                   Выберите офис для просмотра переговорных комнат
-                </ThemedText>
+                </BookingText>
                 <Pressable
                   onPress={handleDetectNearestOffice}
                   style={styles.geoButtonWhite}
                 >
                   <MaterialIcons name="my-location" size={18} color="#FFFFFF" />
-                  <ThemedText style={styles.geoButtonTextWhite}>
+                  <BookingText style={styles.geoButtonTextWhite}>
                     Определить ближайший офис
-                  </ThemedText>
+                  </BookingText>
                 </Pressable>
                 {loadingOffices ? (
                   <ActivityIndicator size="large" color="#fff" style={styles.loader} />
                 ) : offices.length === 0 ? (
                   <View style={styles.emptyState}>
-                    <ThemedText type="defaultSemiBold" style={styles.emptyStateTitleWhite}>
+                    <BookingText type="defaultSemiBold" style={styles.emptyStateTitleWhite}>
                       Нет офисов
-                    </ThemedText>
-                    <ThemedText style={styles.emptyStateSubWhite}>
+                    </BookingText>
+                    <BookingText style={styles.emptyStateSubWhite}>
                       Обратитесь к администратору
-                    </ThemedText>
+                    </BookingText>
                   </View>
                 ) : (
                   <PullToRefresh
@@ -912,29 +911,29 @@ export default function BookingScreen() {
                                 {/* Плашка с городом поверх фото (опционально, для красоты) */}
                                 {item.city && (
                                   <View style={styles.cityBadge}>
-                                    <ThemedText style={styles.cityBadgeText}>
+                                    <BookingText style={styles.cityBadgeText}>
                                       {item.city}
-                                    </ThemedText>
+                                    </BookingText>
                                   </View>
                                 )}
                               </View>
 
                               <View style={styles.officeCardContent}>
-                                <ThemedText style={styles.officeCardName} numberOfLines={2}>
+                                <BookingText style={styles.officeCardName} numberOfLines={2}>
                                   {item.name}
-                                </ThemedText>
+                                </BookingText>
 
                                 {item.address ? (
                                   <View style={styles.addressRow}>
                                     <MaterialIcons
                                       name="location-on"
                                       size={12}
-                                      color={textMuted}
+                                      color="#FFFFFF"
                                       style={styles.addressIcon}
                                     />
-                                    <ThemedText style={styles.officeCardMeta} numberOfLines={2}>
+                                    <BookingText style={styles.officeCardMeta} numberOfLines={2}>
                                       {item.address}
-                                    </ThemedText>
+                                    </BookingText>
                                   </View>
                                 ) : null}
 
@@ -943,16 +942,16 @@ export default function BookingScreen() {
                                   <View style={styles.specRow}>
                                     {item.block != null && String(item.block).trim() !== '' ? (
                                       <View style={styles.miniBadge}>
-                                        <ThemedText style={styles.miniBadgeText}>
+                                        <BookingText style={styles.miniBadgeText}>
                                           Блок {String(item.block).trim()}
-                                        </ThemedText>
+                                        </BookingText>
                                       </View>
                                     ) : null}
                                     {item.floor != null ? (
                                       <View style={styles.miniBadge}>
-                                        <ThemedText style={styles.miniBadgeText}>
+                                        <BookingText style={styles.miniBadgeText}>
                                           {item.floor} этаж
-                                        </ThemedText>
+                                        </BookingText>
                                       </View>
                                     ) : null}
                                   </View>
@@ -972,27 +971,27 @@ export default function BookingScreen() {
               <>
                 <Pressable style={styles.backRowWhite} onPress={() => setSelectedOffice(null)}>
                   <MaterialIcons name="arrow-back" size={24} color="#fff" />
-                  <ThemedText style={styles.backTextWhite}>Назад к выбору офисов</ThemedText>
+                  <BookingText style={styles.backTextWhite}>Назад к выбору офисов</BookingText>
                 </Pressable>
-                <ThemedText style={styles.officeNameWhite}>{selectedOffice.name}</ThemedText>
+                <BookingText style={styles.officeNameWhite}>{selectedOffice.name}</BookingText>
                 {(selectedOffice.city || selectedOffice.address) && (
-                  <ThemedText style={styles.officeAddressWhite}>
+                  <BookingText style={styles.officeAddressWhite}>
                     {[selectedOffice.city, selectedOffice.address].filter(Boolean).join(', ')}
-                  </ThemedText>
+                  </BookingText>
                 )}
-                <ThemedText style={styles.badgesLabelWhite}>
+                <BookingText style={styles.badgesLabelWhite}>
                   Доступно: {totalAvailable} · Забронировано: {totalBooked}
-                </ThemedText>
+                </BookingText>
                 {loadingRooms ? (
                   <ActivityIndicator size="large" color="#fff" style={styles.loader} />
                 ) : visibleRooms.length === 0 ? (
                   <View style={styles.emptyState}>
-                    <ThemedText type="defaultSemiBold" style={styles.emptyStateTitleWhite}>
+                    <BookingText type="defaultSemiBold" style={styles.emptyStateTitleWhite}>
                       Нет переговорных по заданным параметрам
-                    </ThemedText>
-                    <ThemedText style={styles.emptyStateSubWhite}>
+                    </BookingText>
+                    <BookingText style={styles.emptyStateSubWhite}>
                       Попробуйте изменить фильтры или сбросить их.
-                    </ThemedText>
+                    </BookingText>
                   </View>
                 ) : (
                   <PullToRefresh
@@ -1043,25 +1042,25 @@ export default function BookingScreen() {
                                 )}
                                 {photoCount > 1 && (
                                   <View style={styles.roomCardImageBadge}>
-                                    <ThemedText style={styles.roomCardImageBadgeText}>
+                                    <BookingText style={styles.roomCardImageBadgeText}>
                                       +{photoCount - 1}
-                                    </ThemedText>
+                                    </BookingText>
                                   </View>
                                 )}
                               </View>
-                              <ThemedText style={styles.roomCardNameWhite} numberOfLines={2}>
+                              <BookingText style={styles.roomCardNameWhite} numberOfLines={2}>
                                 {item.name}
-                              </ThemedText>
+                              </BookingText>
                               <View style={styles.roomCardMetaRow}>
                                 {item.floor != null && (
-                                  <ThemedText style={styles.roomCardMetaWhite}>
+                                  <BookingText style={styles.roomCardMetaWhite}>
                                     {item.floor} этаж
-                                  </ThemedText>
+                                  </BookingText>
                                 )}
                                 {item.capacity != null && (
-                                  <ThemedText style={styles.roomCardMetaWhite}>
+                                  <BookingText style={styles.roomCardMetaWhite}>
                                     до {item.capacity} чел.
-                                  </ThemedText>
+                                  </BookingText>
                                 )}
                               </View>
                             </Pressable>
@@ -1082,14 +1081,14 @@ export default function BookingScreen() {
           {loadingBookings ? (
             <ActivityIndicator size="large" color="#fff" style={styles.loader} />
           ) : myBookings.length === 0 ? (
-            <ThemedText style={styles.emptyWhite}>
+            <BookingText style={styles.emptyWhite}>
               Нет бронирований
-            </ThemedText>
+            </BookingText>
           ) : (
             <>
-              <ThemedText style={styles.myBookingsSubtitleWhite}>
+              <BookingText style={styles.myBookingsSubtitleWhite}>
                 Управляйте своими бронированиями переговорных комнат
-              </ThemedText>
+              </BookingText>
               <View style={styles.myBookingsFilterRow}>
                 {(['active', 'completed', 'cancelled'] as const).map((filter) => (
                   <Pressable
@@ -1097,14 +1096,14 @@ export default function BookingScreen() {
                     onPress={() => setMyBookingsFilter(filter)}
                     style={[styles.myBookingsFilterTab, myBookingsFilter === filter && styles.myBookingsFilterTabActive]}
                   >
-                    <ThemedText
+                    <BookingText
                       style={[
                         styles.myBookingsFilterText,
                         myBookingsFilter === filter && styles.myBookingsFilterTextActive,
                       ]}
                     >
                       {filter === 'active' ? 'Активные' : filter === 'completed' ? 'Завершенные' : 'Отменённые'}
-                    </ThemedText>
+                    </BookingText>
                     {myBookingsFilter === filter && (
                       <View style={styles.myBookingsFilterUnderline} />
                     )}
@@ -1127,13 +1126,13 @@ export default function BookingScreen() {
                   }
                   onEndReachedThreshold={0.4}
                   ListEmptyComponent={
-                    <ThemedText style={styles.emptyWhite}>
+                    <BookingText style={styles.emptyWhite}>
                       {myBookingsFilter === 'active'
                         ? 'Нет активных бронирований'
                         : myBookingsFilter === 'completed'
                           ? 'Нет завершённых бронирований'
                           : 'Нет отменённых бронирований'}
-                    </ThemedText>
+                    </BookingText>
                   }
                   ListFooterComponent={
                     loadingMoreBookings ? (
@@ -1155,26 +1154,26 @@ export default function BookingScreen() {
                     return (
                       <View style={styles.bookingCardOrange}>
                         <View style={styles.bookingCardHeader}>
-                          <ThemedText
+                          <BookingText
                             type="defaultSemiBold"
                             style={styles.bookingCardTitleWhite}
                           >
                             {room?.name ?? 'Комната'}
-                          </ThemedText>
+                          </BookingText>
                           <View style={styles.bookingStatusBadgeOrange}>
-                            <ThemedText style={styles.bookingStatusTextOrange}>
+                            <BookingText style={styles.bookingStatusTextOrange}>
                               {statusText}
-                            </ThemedText>
+                            </BookingText>
                           </View>
                         </View>
-                        <ThemedText style={styles.bookingMetaWhite}>
+                        <BookingText style={styles.bookingMetaWhite}>
                           {formatDisplayDateFromIso(startStr)} • {formatTimeOnly(startStr)}–
                           {formatTimeOnly(endStr)}
-                        </ThemedText>
+                        </BookingText>
                         {item.company_name && (
-                          <ThemedText style={styles.bookingMetaWhite}>
+                          <BookingText style={styles.bookingMetaWhite}>
                             {item.company_name}
-                          </ThemedText>
+                          </BookingText>
                         )}
                         <View style={styles.bookingCardActions}>
                           <Pressable
@@ -1182,7 +1181,7 @@ export default function BookingScreen() {
                             style={styles.viewBookingBtnOrange}
                           >
                             <MaterialIcons name="qr-code-2" size={18} color="#fff" />
-                            <ThemedText style={styles.viewBookingBtnText}>QR код</ThemedText>
+                            <BookingText style={styles.viewBookingBtnText}>QR код</BookingText>
                           </Pressable>
                           {canCancel && (
                             <Pressable
@@ -1193,9 +1192,9 @@ export default function BookingScreen() {
                               {isCancelling ? (
                                 <ActivityIndicator size="small" color="#fff" />
                               ) : (
-                                <ThemedText style={styles.cancelBtnTextWhite}>
+                                <BookingText style={styles.cancelBtnTextWhite}>
                                   Отменить бронирование
-                                </ThemedText>
+                                </BookingText>
                               )}
                             </Pressable>
                           )}
@@ -1567,7 +1566,7 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     submitBtnForm: {
-        backgroundColor: '#F35713', // CARD_ORANGE заменен на HEX
+        backgroundColor: '#F35713',
     },
     emptyWhite: {
         textAlign: 'center',
