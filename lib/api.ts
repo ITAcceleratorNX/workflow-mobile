@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 
 import { config } from '@/lib/config';
+import { compressRequestPhotos } from '@/lib/request-photo-compression';
 import { useAuthStore } from '@/stores/auth-store';
 
 const { apiBaseUrl } = config;
@@ -781,11 +782,15 @@ export async function uploadRequestPhotos(
   photoType: 'before' | 'after' = 'after'
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const formData = new FormData();
-  photos.forEach((p, i) => {
+  const compressedPhotos = await compressRequestPhotos(
+    photos.map((p) => p.uri),
+    `request_${photoType}`
+  );
+  compressedPhotos.forEach((p) => {
     formData.append('photos', {
       uri: p.uri,
-      type: p.type ?? 'image/jpeg',
-      name: `photo_${i}_${Date.now()}.jpg`,
+      type: p.type,
+      name: p.name,
     } as unknown as Blob);
   });
   formData.append('type', photoType);

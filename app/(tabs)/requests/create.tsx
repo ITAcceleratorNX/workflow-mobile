@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -44,6 +45,7 @@ import {
   hasRoomsForLocation,
 } from '@/lib/office-locations';
 import { findNearestOffice } from '@/lib/nearest-office';
+import { compressRequestPhotos } from '@/lib/request-photo-compression';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -181,6 +183,7 @@ export default function CreateRequestScreen() {
   const [completionDate, setCompletionDate] = useState(new Date());
   const [afterPhotos, setAfterPhotos] = useState<string[]>([]);
   const [isDetectingNearestOffice, setIsDetectingNearestOffice] = useState(false);
+  const dismissKeyboard = useCallback(() => Keyboard.dismiss(), []);
 
   const selectedOffice =
     locationSource === 'cabinet' && selectedCabinetRoom
@@ -544,11 +547,12 @@ export default function CreateRequestScreen() {
     ];
     formData.append('sub_requests', JSON.stringify(subRequestsData));
 
-    photos.forEach((uri) => {
+    const compressedBeforePhotos = await compressRequestPhotos(photos, 'request_before');
+    compressedBeforePhotos.forEach((photo) => {
       formData.append('photos', {
-        uri,
-        type: 'image/jpeg',
-        name: `photo_${Date.now()}.jpg`,
+        uri: photo.uri,
+        type: photo.type,
+        name: photo.name,
       } as unknown as Blob);
     });
 
@@ -966,6 +970,8 @@ export default function CreateRequestScreen() {
                                 placeholderTextColor={mutedColor}
                                 value={customLocation}
                                 onChangeText={setCustomLocation}
+                                returnKeyType="done"
+                                onSubmitEditing={dismissKeyboard}
                               />
                             </View>
                           )}
@@ -1014,6 +1020,8 @@ export default function CreateRequestScreen() {
                                     placeholderTextColor={mutedColor}
                                     value={customRoom}
                                     onChangeText={setCustomRoom}
+                                    returnKeyType="done"
+                                    onSubmitEditing={dismissKeyboard}
                                   />
                                 </View>
                               )}
@@ -1026,6 +1034,8 @@ export default function CreateRequestScreen() {
                                 placeholderTextColor={mutedColor}
                                 value={customRoom}
                                 onChangeText={setCustomRoom}
+                                returnKeyType="done"
+                                onSubmitEditing={dismissKeyboard}
                               />
                             </View>
                           )}
@@ -1041,6 +1051,8 @@ export default function CreateRequestScreen() {
                         placeholderTextColor={mutedColor}
                         value={customLocationDetail}
                         onChangeText={setCustomLocationDetail}
+                        returnKeyType="done"
+                        onSubmitEditing={dismissKeyboard}
                       />
                     </View>
                   )}
@@ -1084,6 +1096,8 @@ export default function CreateRequestScreen() {
                     placeholderTextColor={mutedColor}
                     value={plannedDate}
                     onChangeText={setPlannedDate}
+                    returnKeyType="done"
+                    onSubmitEditing={dismissKeyboard}
                   />
                 </View>
               )}
@@ -1141,6 +1155,8 @@ export default function CreateRequestScreen() {
                       const d = new Date(v);
                       if (!isNaN(d.getTime())) setRecurrenceStartDate(d);
                     }}
+                    returnKeyType="done"
+                    onSubmitEditing={dismissKeyboard}
                   />
                 </View>
               )}
@@ -1203,6 +1219,8 @@ export default function CreateRequestScreen() {
                     placeholderTextColor={mutedColor}
                     value={title}
                     onChangeText={setTitle}
+                    returnKeyType="done"
+                    onSubmitEditing={dismissKeyboard}
                   />
                 </View>
               )}
@@ -1246,6 +1264,9 @@ export default function CreateRequestScreen() {
                 onChangeText={setDescription}
                 multiline
                 numberOfLines={4}
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={dismissKeyboard}
               />
 
               <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Фото (до 3 шт.)</ThemedText>
@@ -1411,6 +1432,8 @@ export default function CreateRequestScreen() {
                       const d = new Date(v);
                       if (!isNaN(d.getTime())) setCompletionDate(d);
                     }}
+                    returnKeyType="done"
+                    onSubmitEditing={dismissKeyboard}
                   />
                   <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Комментарий о выполненной работе *</ThemedText>
                   <TextInput
@@ -1423,6 +1446,9 @@ export default function CreateRequestScreen() {
                     value={completionComment}
                     onChangeText={setCompletionComment}
                     multiline
+                    returnKeyType="done"
+                    blurOnSubmit
+                    onSubmitEditing={dismissKeyboard}
                   />
 
                   <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Фото результата *</ThemedText>
