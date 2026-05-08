@@ -38,6 +38,7 @@ interface RequestActionMenuProps {
   onAdminCompleteGroup?: () => void;
   onAdminAcceptGroup?: () => void;
   onAdminRejectGroup?: () => void;
+  onEditRequestGroup?: () => void;
 }
 
 export function RequestActionMenu({
@@ -60,6 +61,7 @@ export function RequestActionMenu({
   onAdminCompleteGroup,
   onAdminAcceptGroup,
   onAdminRejectGroup,
+  onEditRequestGroup,
 }: RequestActionMenuProps) {
   const [visible, setVisible] = useState(false);
   const primary = useThemeColor({}, 'primary');
@@ -115,6 +117,7 @@ export function RequestActionMenu({
     onAdminCompleteGroup,
     onAdminAcceptGroup,
     onAdminRejectGroup,
+    onEditRequestGroup,
   });
   if (actions.length === 0) return null;
 

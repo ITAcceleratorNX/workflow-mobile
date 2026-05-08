@@ -17,6 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AssignExecutorsModal } from '@/components/requests/assign-executors-modal';
 import { CompleteTaskModal } from '@/components/requests/complete-task-modal';
+import { EditRequestGroupModal } from '@/components/requests/edit-request-group-modal';
 import { RatingModal } from '@/components/requests/rating-modal';
 import { RedirectModal } from '@/components/requests/redirect-modal';
 import { RejectModal } from '@/components/requests/reject-modal';
@@ -39,11 +40,13 @@ import {
   redirectRequest,
   rejectRequest,
   toggleLongTermRequest,
+  updateRequestGroup,
   uploadRequestPhotos,
   type AcceptSubRequestPayload,
   type ExecutorInCategory,
   type RequestGroup,
   type SubRequest,
+  type UpdateRequestGroupPayload,
 } from '@/lib/api';
 import { PageLoader, Select } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
@@ -122,6 +125,7 @@ export default function RequestDetailScreen() {
   const [showClientRatingModal, setShowClientRatingModal] = useState(false);
   const [showRedirectModal, setShowRedirectModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const [taskForComplete, setTaskForComplete] = useState<SubRequest | null>(null);
   const [subForReject, setSubForReject] = useState<SubRequest | null>(null);
@@ -136,6 +140,7 @@ export default function RequestDetailScreen() {
   const [rejectError, setRejectError] = useState<string | null>(null);
   const [redirectError, setRedirectError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
   const [rejectGroupReason, setRejectGroupReason] = useState('');
   const [editableRequestType, setEditableRequestType] = useState<string>('normal');
   const [subRequestSettings, setSubRequestSettings] = useState<Record<number, { sla: string; complexity: string }>>({});
@@ -188,7 +193,12 @@ export default function RequestDetailScreen() {
   }, [id, numId, isGuest, guestRequests]);
 
   useEffect(() => {
-    if (role === 'department-head' || role === 'executor') {
+    if (
+      role === 'department-head' ||
+      role === 'executor' ||
+      role === 'admin-worker' ||
+      role === 'manager'
+    ) {
       getServiceCategories().then((res) => {
         if (res.ok && res.data) {
           setCategories(res.data.map((c) => ({ id: c.id, name: c.name })));
@@ -506,6 +516,27 @@ export default function RequestDetailScreen() {
     [refetch, showToast]
   );
 
+  const handleEditRequestGroup = useCallback(
+    async (payload: UpdateRequestGroupPayload) => {
+      if (!request) return;
+      setActionLoading(true);
+      setEditError(null);
+      try {
+        const res = await updateRequestGroup(request.id, payload);
+        if (res.ok) {
+          showToast({ title: 'Заявка обновлена', variant: 'success' });
+          setShowEditModal(false);
+          refetch();
+        } else {
+          setEditError(res.error);
+        }
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [request, refetch, showToast]
+  );
+
   const [showAcceptGroupModal, setShowAcceptGroupModal] = useState(false);
   const [showRejectGroupModal, setShowRejectGroupModal] = useState(false);
 
@@ -660,6 +691,10 @@ export default function RequestDetailScreen() {
             onAdminCompleteGroup={handleAdminCompleteGroup}
             onAdminAcceptGroup={() => setShowAcceptGroupModal(true)}
             onAdminRejectGroup={() => setShowRejectGroupModal(true)}
+            onEditRequestGroup={() => {
+              setEditError(null);
+              setShowEditModal(true);
+            }}
           />
         )}
       </View>
@@ -1104,6 +1139,19 @@ export default function RequestDetailScreen() {
         userServiceCategoryId={user?.service_category_id}
         loading={actionLoading}
         error={assignError}
+      />
+
+      <EditRequestGroupModal
+        visible={showEditModal}
+        request={request}
+        categories={categories}
+        loading={actionLoading}
+        error={editError}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditError(null);
+        }}
+        onSubmit={handleEditRequestGroup}
       />
 
     </ThemedView>
