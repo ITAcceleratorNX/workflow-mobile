@@ -76,10 +76,16 @@ export async function request<T>(
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      console.error(`[API Error] ${path}:`, res.status, data);
+      const isUnauthorizedWithoutToken = res.status === 401 && !token;
+      if (!isUnauthorizedWithoutToken) {
+        console.error(`[API Error] ${path}:`, res.status, data);
+      }
       if (res.status === 401) {
-        useAuthStore.getState().clearAuth();
-        router.replace('/login');
+        // При logout токен уже очищен — не триггерим лишний clearAuth/redirect повторно.
+        if (token) {
+          useAuthStore.getState().clearAuth();
+          router.replace('/login');
+        }
         return { ok: false, error: 'Сессия истекла. Войдите снова.' };
       }
       const error =
@@ -614,6 +620,21 @@ export interface AcceptSubRequestPayload {
   category_id?: number;
 }
 
+export interface UpdateSubRequestPayload {
+  id: number;
+  category_id?: number;
+  complexity?: string;
+  sla?: string;
+  title?: string;
+  description?: string;
+}
+
+export interface UpdateRequestGroupPayload {
+  request_type?: string;
+  location_detail?: string;
+  sub_requests?: UpdateSubRequestPayload[];
+}
+
 /** Принять/отклонить группу заявок (admin-worker). patch_code: 1 = accept (с sub_requests, request_type, location_detail), 2 = reject (rejection_reason) */
 export async function patchRequestGroup(
   id: number,
@@ -628,6 +649,19 @@ export async function patchRequestGroup(
   const result = await request<RequestGroup>(`/request-groups/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ patch_code: patchCode, ...body }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+/** Обновить группу заявок (admin-worker, manager) */
+export async function updateRequestGroup(
+  id: number,
+  body: UpdateRequestGroupPayload
+): Promise<{ ok: true; data: RequestGroup } | { ok: false; error: string }> {
+  const result = await request<RequestGroup>(`/request-groups/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: result.data! };
@@ -840,6 +874,19 @@ export async function assignExecutorsToRequest(
   const result = await request<unknown>(
     `/request-executors/${subRequestId}/assign`,
     { method: 'POST', body: JSON.stringify({ executors }) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Изменить исполнителей на подзаявку (department-head) */
+export async function changeExecutorsToRequest(
+    subRequestId: number,
+    executors: Array<{ id: number; role: 'executor' | 'leader' }>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(
+      `/request-executors/${subRequestId}/change`,
+      { method: 'PUT', body: JSON.stringify({ executors }) }
   );
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
