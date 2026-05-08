@@ -453,6 +453,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   taskToggleBtn: {
+    flexShrink: 0,
     width: 24,
     height: 24,
     alignItems: 'center',
@@ -491,13 +492,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   weekTaskTitle: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 15,
     fontWeight: '500',
   },
   weekTaskTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 8,
   },
   weekTaskTime: {

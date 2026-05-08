@@ -1,6 +1,10 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { Picker } from '@react-native-picker/picker';
 import { useNavigation } from '@react-navigation/native';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from 'react';
 import {
@@ -11,30 +15,26 @@ import {
   Modal,
   Platform,
   Pressable,
+  TextInput as RNTextInput,
   ScrollView,
   StyleSheet,
   Switch,
-  TextInput as RNTextInput,
   View,
 } from 'react-native';
-import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import { Picker } from '@react-native-picker/picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import {
   collectTeamMemberOptions,
   TaskAssigneesPickerOverlay,
   TaskTeamPickerOverlay,
 } from '@/components/tasks/task-assignment-pickers';
 import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { useToast } from '@/context/toast-context';
 import { useTeams } from '@/hooks/use-teams';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
-import type { Team } from '@/lib/teams-api';
 import {
   formatRequestDate,
   formatTaskTime,
@@ -47,10 +47,10 @@ import {
   normalizeRecurrenceFromApi,
   type TaskRecurrencePayload,
 } from '@/lib/task-recurrence';
+import type { Team } from '@/lib/teams-api';
 import type { TaskPriority, UserTask, UserTaskAttachment } from '@/lib/user-tasks-api';
 import { deleteUserTaskAttachment, getUserTaskAttachments, uploadUserTaskAttachments } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
-import { useToast } from '@/context/toast-context';
 
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: 'low', label: 'Низкий' },
@@ -119,6 +119,15 @@ export default function TaskDetailsScreen() {
   const primary = useThemeColor({}, 'primary');
   const cardBg = useThemeColor({}, 'cardBackground');
   const border = useThemeColor({}, 'border');
+
+  /** Единые цвета Switch — без ios_backgroundColor на iOS выключенный трек выглядит иначе, чем у соседних. */
+  const detailSwitchProps = useMemo(() => {
+    const common = {
+      trackColor: { false: border, true: primary } as const,
+      thumbColor: '#fff' as const,
+    };
+    return Platform.OS === 'ios' ? { ...common, ios_backgroundColor: border } : common;
+  }, [border, primary]);
 
   const { tasks, updateTask, removeTask, toggleComplete } = useTodoList();
 
@@ -859,13 +868,14 @@ export default function TaskDetailsScreen() {
                 ) : null}
               </View>
             </Pressable>
-            <Switch
-              value={scheduledEnabled}
-              onValueChange={handleToggleSchedule}
-              disabled={!canEditDetails}
-              trackColor={{ false: border, true: primary }}
-              thumbColor="#fff"
-            />
+            <View style={styles.rowSwitchCell}>
+              <Switch
+                value={scheduledEnabled}
+                onValueChange={handleToggleSchedule}
+                disabled={!canEditDetails}
+                {...detailSwitchProps}
+              />
+            </View>
           </View>
         </View>
 
@@ -1013,13 +1023,14 @@ export default function TaskDetailsScreen() {
               <MaterialIcons name="notifications" size={20} color={textMuted} />
               <ThemedText style={[styles.rowTitle, { color: text }]}>Включить напоминания</ThemedText>
             </View>
-            <Switch
-              value={!task.reminders_disabled}
-              onValueChange={handleToggleReminders}
-              disabled={!canEditDetails}
-              trackColor={{ false: border, true: primary }}
-              thumbColor="#fff"
-            />
+            <View style={styles.rowSwitchCell}>
+              <Switch
+                value={!task.reminders_disabled}
+                onValueChange={handleToggleReminders}
+                disabled={!canEditDetails}
+                {...detailSwitchProps}
+              />
+            </View>
           </View>
           <View style={[styles.remindersHintWrap, { borderColor: border }]}>
             <ThemedText style={[styles.remindersHint, { color: textMuted }]}>
@@ -1085,12 +1096,13 @@ export default function TaskDetailsScreen() {
               <MaterialIcons name="task-alt" size={20} color={textMuted} />
               <ThemedText style={[styles.rowTitle, { color: text }]}>Выполнено</ThemedText>
             </View>
-            <Switch
-              value={task.completed}
-              onValueChange={() => void handleCompleteSwitch()}
-              trackColor={{ false: border, true: primary }}
-              thumbColor="#fff"
-            />
+            <View style={styles.rowSwitchCell}>
+              <Switch
+                value={task.completed}
+                onValueChange={() => void handleCompleteSwitch()}
+                {...detailSwitchProps}
+              />
+            </View>
           </View>
           <View style={[styles.divider, { backgroundColor: border }]} />
           <Pressable
@@ -1395,6 +1407,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
     gap: 10,
+  },
+  rowSwitchCell: {
+    flexShrink: 0,
   },
   rowRight: {
     flexDirection: 'row',
