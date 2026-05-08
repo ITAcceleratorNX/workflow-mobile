@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   type LayoutChangeEvent,
   Pressable,
   ScrollView,
@@ -21,6 +23,7 @@ import { useAuthStore } from '@/stores/auth-store';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const CHECK_ORANGE = '#EA580C';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -57,7 +60,7 @@ export function CalendarTab() {
     return getMonthRange(selectedDate);
   }, [selectedDate, viewMode]);
 
-  const { tasks, loading } = useCalendarTasks(start, end);
+  const { tasks, loading, toggleComplete, togglingTaskIds } = useCalendarTasks(start, end);
 
   const primary = useThemeColor({}, 'primary');
   const text = useThemeColor({}, 'text');
@@ -119,10 +122,76 @@ export function CalendarTab() {
 
   const dayScrollRef = useRef<ScrollView>(null);
   const hourRowYRef = useRef<number[]>([]);
+  const toggleScaleMapRef = useRef<Record<number, Animated.Value>>({});
 
   const onHourRowLayout = useCallback((hour: number, e: LayoutChangeEvent) => {
     hourRowYRef.current[hour] = e.nativeEvent.layout.y;
   }, []);
+
+  const getToggleScale = useCallback((taskId: number) => {
+    if (!toggleScaleMapRef.current[taskId]) {
+      toggleScaleMapRef.current[taskId] = new Animated.Value(1);
+    }
+    return toggleScaleMapRef.current[taskId];
+  }, []);
+
+  const animateToggleCheck = useCallback(
+    (taskId: number) => {
+      const scale = getToggleScale(taskId);
+      scale.setValue(0.86);
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.12,
+          duration: 120,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(scale, {
+          toValue: 1,
+          speed: 20,
+          bounciness: 10,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    },
+    [getToggleScale]
+  );
+
+  const renderTaskToggle = useCallback(
+    (task: CalendarTask) => {
+      const isToggling = togglingTaskIds.includes(task.id);
+      const scale = getToggleScale(task.id);
+      return (
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation();
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (!task.completed) animateToggleCheck(task.id);
+            void toggleComplete(task);
+          }}
+          disabled={isToggling}
+          hitSlop={8}
+          style={styles.taskToggleBtn}
+        >
+          <Animated.View style={{ transform: [{ scale }] }}>
+            <View
+              style={[
+                styles.taskToggleCircle,
+                {
+                  borderColor: task.completed ? CHECK_ORANGE : textMuted,
+                  backgroundColor: task.completed ? CHECK_ORANGE : 'transparent',
+                  opacity: isToggling ? 0.7 : 1,
+                },
+              ]}
+            >
+              {task.completed ? <MaterialIcons name="check" size={14} color="#FFFFFF" /> : null}
+            </View>
+          </Animated.View>
+        </Pressable>
+      );
+    },
+    [animateToggleCheck, getToggleScale, toggleComplete, togglingTaskIds, textMuted]
+  );
 
   useEffect(() => {
     if (loading || viewMode !== 'day') return;
@@ -200,13 +269,22 @@ export function CalendarTab() {
                   <Pressable
                     key={task.id}
                     onPress={() => openTaskDetails(task)}
-                    style={[styles.taskChip, { backgroundColor: `${primary}80` }]}
+                    style={[
+                      styles.taskChip,
+                      { backgroundColor: task.completed ? 'rgba(148,163,184,0.26)' : `${primary}80` },
+                    ]}
                   >
-                    <ThemedText style={styles.taskChipTitle} numberOfLines={1}>
-                      {task.title}
-                    </ThemedText>
+                    <View style={styles.taskChipTopRow}>
+                      <ThemedText
+                        style={[styles.taskChipTitle, task.completed && styles.taskCompletedTitle]}
+                        numberOfLines={1}
+                      >
+                        {task.title}
+                      </ThemedText>
+                      {renderTaskToggle(task)}
+                    </View>
                     <View style={styles.taskChipMeta}>
-                      <ThemedText style={[styles.taskChipTime, { color: textMuted }]}>
+                      <ThemedText style={[styles.taskChipTime, { color: task.completed ? '#CBD5E1' : textMuted }]}>
                         {formatTaskTime(task.scheduled_at)}
                       </ThemedText>
                     </View>
@@ -225,11 +303,27 @@ export function CalendarTab() {
               <Pressable
                 key={task.id}
                 onPress={() => openTaskDetails(task)}
-                style={[styles.weekTask, { backgroundColor: cardBg, borderColor: border }]}
+                style={[
+                  styles.weekTask,
+                  {
+                    backgroundColor: task.completed ? 'rgba(148,163,184,0.14)' : cardBg,
+                    borderColor: task.completed ? 'rgba(148,163,184,0.45)' : border,
+                  },
+                ]}
               >
-                <ThemedText style={[styles.weekTaskTitle, { color: text }]} numberOfLines={1}>
-                  {task.title}
-                </ThemedText>
+                <View style={styles.weekTaskTitleRow}>
+                  <ThemedText
+                    style={[
+                      styles.weekTaskTitle,
+                      { color: task.completed ? textMuted : text },
+                      task.completed && styles.taskCompletedTitle,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {task.title}
+                  </ThemedText>
+                  {renderTaskToggle(task)}
+                </View>
                 <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
                   {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
                 </ThemedText>
@@ -248,11 +342,27 @@ export function CalendarTab() {
               <Pressable
                 key={task.id}
                 onPress={() => openTaskDetails(task)}
-                style={[styles.weekTask, { backgroundColor: cardBg, borderColor: border }]}
+                style={[
+                  styles.weekTask,
+                  {
+                    backgroundColor: task.completed ? 'rgba(148,163,184,0.14)' : cardBg,
+                    borderColor: task.completed ? 'rgba(148,163,184,0.45)' : border,
+                  },
+                ]}
               >
-                <ThemedText style={[styles.weekTaskTitle, { color: text }]} numberOfLines={1}>
-                  {task.title}
-                </ThemedText>
+                <View style={styles.weekTaskTitleRow}>
+                  <ThemedText
+                    style={[
+                      styles.weekTaskTitle,
+                      { color: task.completed ? textMuted : text },
+                      task.completed && styles.taskCompletedTitle,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {task.title}
+                  </ThemedText>
+                  {renderTaskToggle(task)}
+                </View>
                 <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
                   {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
                 </ThemedText>
@@ -330,10 +440,34 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
   },
+  taskChipTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   taskChipTitle: {
+    flex: 1,
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '500',
+  },
+  taskToggleBtn: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskToggleCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taskCompletedTitle: {
+    textDecorationLine: 'line-through',
   },
   taskChipTime: {
     fontSize: 11,
@@ -359,6 +493,12 @@ const styles = StyleSheet.create({
   weekTaskTitle: {
     fontSize: 15,
     fontWeight: '500',
+  },
+  weekTaskTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   weekTaskTime: {
     fontSize: 12,
