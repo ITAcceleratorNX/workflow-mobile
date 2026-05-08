@@ -42,10 +42,11 @@ export default function TabLayout() {
           route.name === 'help' ? 0 : isCreateRequest || isRequestDetail ? 0 : contentPaddingBottom;
         return {
           headerShown: false,
-            tabBarShowLabel: false,
-            tabBarTransparent: true,
-            tabBarStyle: { position: 'absolute' },
-            sceneStyle: { paddingBottom: 0 },
+          tabBarShowLabel: false,
+          tabBarTransparent: true,
+          tabBarStyle: { position: 'absolute' },
+          /** Запас под кастомный absolute BottomNav; 0 там, где навбар скрыт (help, create, карточка заявки). */
+          sceneStyle: { paddingBottom },
         };
       }}>
       <Tabs.Screen name="index" options={{ title: 'Главная' }} />

@@ -76,10 +76,16 @@ export async function request<T>(
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      console.error(`[API Error] ${path}:`, res.status, data);
+      const isUnauthorizedWithoutToken = res.status === 401 && !token;
+      if (!isUnauthorizedWithoutToken) {
+        console.error(`[API Error] ${path}:`, res.status, data);
+      }
       if (res.status === 401) {
-        useAuthStore.getState().clearAuth();
-        router.replace('/login');
+        // При logout токен уже очищен — не триггерим лишний clearAuth/redirect повторно.
+        if (token) {
+          useAuthStore.getState().clearAuth();
+          router.replace('/login');
+        }
         return { ok: false, error: 'Сессия истекла. Войдите снова.' };
       }
       const error =

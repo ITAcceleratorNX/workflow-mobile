@@ -300,6 +300,7 @@ function RequestCard({
 export default function RequestsListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const token = useAuthStore((s: AuthState) => s.token);
   const role = useAuthStore((s: AuthState) => s.role) as RequestGroupsRole | null;
   const isGuest = useAuthStore((s) => s.isGuest);
   const guestRequests = useGuestDemoStore((s) => s.requests);
@@ -341,6 +342,19 @@ export default function RequestsListScreen() {
 
   const load = useCallback(
     async (pageNum: number = 1) => {
+      // После logout стор уже очищен: не отправляем защищенный запрос без токена.
+      if (!isGuest && (!token || !role)) {
+        setError(null);
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
+        setList([]);
+        setSegments(null);
+        setHasMore(false);
+        setPage(1);
+        return;
+      }
+
       // Для демо-гостя работаем только с мок-данными, без запросов к API
       if (isGuest) {
         setError(null);
@@ -404,7 +418,7 @@ export default function RequestsListScreen() {
       setPage(pageNum);
       setLoading(false);
     },
-    [role, filterStatus, filterPriority, filterOffice, filterPeriod, isGuest, guestRequests]
+    [token, role, filterStatus, filterPriority, filterOffice, filterPeriod, isGuest, guestRequests]
   );
 
   useEffect(() => {
