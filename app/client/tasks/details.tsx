@@ -20,6 +20,7 @@ import {
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { Picker } from '@react-native-picker/picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -34,7 +35,12 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTeams } from '@/hooks/use-teams';
 import { useTodoList } from '@/hooks/use-todo-list';
 import type { Team } from '@/lib/teams-api';
-import { formatTaskTime, toAppDateKey, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
+import {
+  formatRequestDate,
+  formatTaskTime,
+  toAppDateKey,
+  toUtcIsoFromAppDateTime,
+} from '@/lib/dateTimeUtils';
 import {
   defaultRecurrenceNone,
   formatRecurrenceSummaryCompactRu,
@@ -45,13 +51,6 @@ import type { TaskPriority, UserTask, UserTaskAttachment } from '@/lib/user-task
 import { deleteUserTaskAttachment, getUserTaskAttachments, uploadUserTaskAttachments } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
-
-const REMIND_BEFORE_OPTIONS: { value: number | null; label: string }[] = [
-  { value: null, label: 'По умолчанию' },
-  { value: 5, label: '5 мин' },
-  { value: 15, label: '15 мин' },
-  { value: 30, label: '30 мин' },
-];
 
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
   { value: 'low', label: 'Низкий' },
@@ -81,6 +80,26 @@ function sameAssigneeIds(a: { id: number }[], b: { id: number }[]): boolean {
   const sa = [...a.map((x) => x.id)].sort((x, y) => x - y);
   const sb = [...b.map((x) => x.id)].sort((x, y) => x - y);
   return sa.every((v, i) => v === sb[i]);
+}
+
+function buildRemindTimingSelectValue(t: UserTask): string {
+  const m = t.remind_before_minutes;
+  if (m == null) return 'default';
+  return `before_${m}`;
+}
+
+function buildRemindTimingSelectOptions(t: UserTask): { value: string; label: string }[] {
+  const opts: { value: string; label: string }[] = [
+    { value: 'default', label: 'По умолчанию' },
+    { value: 'before_5', label: 'За 5 мин до срока' },
+    { value: 'before_15', label: 'За 15 мин до срока' },
+    { value: 'before_30', label: 'За 30 мин до срока' },
+  ];
+  const m = t.remind_before_minutes;
+  if (m != null && ![5, 15, 30].includes(m)) {
+    opts.push({ value: `before_${m}`, label: `За ${m} мин до срока` });
+  }
+  return opts;
 }
 
 export default function TaskDetailsScreen() {
@@ -125,6 +144,7 @@ export default function TaskDetailsScreen() {
   const taskRef = useRef(task);
   const canEditDetailsRef = useRef(canEditDetails);
   const titleDraftRef = useRef(titleDraft);
+  const completeToggleBusyRef = useRef(false);
   taskRef.current = task;
   canEditDetailsRef.current = canEditDetails;
   titleDraftRef.current = titleDraft;
@@ -140,26 +160,27 @@ export default function TaskDetailsScreen() {
     defaultRecurrenceNone()
   );
 
-  const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
+  const [priorityPickerOpen, setPriorityPickerOpen] = useState(false);
+  const [priorityPickerDraft, setPriorityPickerDraft] = useState<TaskPriority>('medium');
+  const [remindTimingPickerOpen, setRemindTimingPickerOpen] = useState(false);
+  const [remindTimingPickerDraft, setRemindTimingPickerDraft] = useState('default');
+
   const [pickerSheet, setPickerSheet] = useState<'team' | 'assignees' | null>(null);
   /** Черновик исполнителей в модалке (как в TaskAddSheet), коммит при закрытии пикера. */
   const [assigneesDraft, setAssigneesDraft] = useState<{ id: number; full_name: string }[]>([]);
   const assigneesDraftRef = useRef<{ id: number; full_name: string }[]>([]);
   /** Снимок исполнителей на момент открытия модалки — закрытие без изменений не шлёт PATCH (в т.ч. без гонки с async update). */
   const assigneesSeedAtOpenRef = useRef<{ id: number; full_name: string }[]>([]);
-  const [priority, setPriority] = useState<TaskPriority>('medium');
 
   const [attachments, setAttachments] = useState<UserTaskAttachment[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
 
-  /** Поля задачи по значению, не по ссылке на `task`: иначе любой refresh списка затирает черновик заголовка при вводе. */
+  /** Заголовок: только id/title — не цепляем remind/priority, чтобы не было гонок с PATCH при быстром UI. */
   useEffect(() => {
     if (!task) return;
     setTitleDraft(task.title ?? '');
-    setRemindBeforeMinutes(task.remind_before_minutes ?? null);
-    setPriority(task.priority ?? 'medium');
-  }, [task, remindBeforeMinutes]);
+  }, [task?.id, task?.title]);
 
   useEffect(() => {
     let cancelled = false;
@@ -306,19 +327,79 @@ export default function TaskDetailsScreen() {
     closeScheduleModal,
   ]);
 
-  const handleRemindBeforeChange = useCallback(async (value: number | null) => {
-    if (!task || !canEditDetails) return;
-    setRemindBeforeMinutes(value);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await updateTask(task, { remind_before_minutes: value });
-  }, [task, canEditDetails, updateTask]);
+  /** PATCH напоминания из колесика (только «по умолчанию» и «за N мин»). */
+  const applyReminderTimingFromPicker = useCallback(
+    async (val: string) => {
+      const t = taskRef.current;
+      if (!t || !canEditDetailsRef.current || t.reminders_disabled) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (val === 'default') {
+        await updateTask(t, { remind_before_minutes: null, remind_at: null });
+        return;
+      }
+      if (val.startsWith('before_')) {
+        const mins = parseInt(val.slice('before_'.length), 10);
+        if (!Number.isFinite(mins)) return;
+        await updateTask(t, { remind_before_minutes: mins, remind_at: null });
+      }
+    },
+    [updateTask]
+  );
 
-  const handlePriorityChange = useCallback(async (value: TaskPriority) => {
-    if (!task || !canEditDetails) return;
-    setPriority(value);
+  const applyPriorityFromPicker = useCallback(
+    async (next: TaskPriority) => {
+      const t = taskRef.current;
+      if (!t || !canEditDetailsRef.current) return;
+      if (!PRIORITY_OPTIONS.some((o) => o.value === next)) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await updateTask(t, { priority: next });
+    },
+    [updateTask]
+  );
+
+  const openPriorityPicker = useCallback(() => {
+    Keyboard.dismiss();
+    const t = taskRef.current;
+    if (!t || !canEditDetailsRef.current) return;
+    setPriorityPickerDraft(t.priority ?? 'medium');
+    setPriorityPickerOpen(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await updateTask(task, { priority: value });
-  }, [task, canEditDetails, updateTask]);
+  }, []);
+
+  const closePriorityPicker = useCallback(() => setPriorityPickerOpen(false), []);
+
+  const confirmPriorityPicker = useCallback(async () => {
+    setPriorityPickerOpen(false);
+    await applyPriorityFromPicker(priorityPickerDraft);
+  }, [priorityPickerDraft, applyPriorityFromPicker]);
+
+  const openRemindTimingPicker = useCallback(() => {
+    Keyboard.dismiss();
+    const t = taskRef.current;
+    if (!t || !canEditDetailsRef.current || t.reminders_disabled) return;
+    setRemindTimingPickerDraft(buildRemindTimingSelectValue(t));
+    setRemindTimingPickerOpen(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  const closeRemindTimingPicker = useCallback(() => setRemindTimingPickerOpen(false), []);
+
+  const confirmRemindTimingPicker = useCallback(() => {
+    setRemindTimingPickerOpen(false);
+    void applyReminderTimingFromPicker(remindTimingPickerDraft);
+  }, [remindTimingPickerDraft, applyReminderTimingFromPicker]);
+
+  const handleCompleteSwitch = useCallback(async () => {
+    const t = taskRef.current;
+    if (!t || completeToggleBusyRef.current) return;
+    completeToggleBusyRef.current = true;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await toggleComplete(t);
+    } finally {
+      completeToggleBusyRef.current = false;
+    }
+  }, [toggleComplete]);
 
   const handlePickMedia = useCallback(async () => {
     if (!task || !canEditDetails || attachmentsUploading) return;
@@ -538,6 +619,26 @@ export default function TaskDetailsScreen() {
       return next;
     });
   }, []);
+
+  const remindTimingSelectOptions = useMemo(() => {
+    if (!task) return [];
+    return buildRemindTimingSelectOptions(task);
+  }, [task]);
+
+  const remindTimingSummaryLabel = useMemo(() => {
+    if (!task) return '';
+    const opts = remindTimingSelectOptions;
+    const v = buildRemindTimingSelectValue(task);
+    const fromList = opts.find((o) => o.value === v)?.label;
+    if (fromList) return fromList;
+    if (task.remind_at) return formatRequestDate(task.remind_at);
+    return 'По умолчанию';
+  }, [task, remindTimingSelectOptions]);
+
+  const prioritySummaryLabel = useMemo(() => {
+    if (!task) return '';
+    return PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label ?? '';
+  }, [task]);
 
   if (!task) {
     return (
@@ -863,40 +964,44 @@ export default function TaskDetailsScreen() {
 
         <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Приоритет</ThemedText>
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
-          <View style={styles.remindBeforeSection}>
+          <Pressable
+            onPress={() => {
+              if (!canEditDetails) {
+                notifyCreatorOnly();
+                return;
+              }
+              openPriorityPicker();
+            }}
+            disabled={!canEditDetails}
+            style={({ pressed }) => [
+              styles.row,
+              pressed && canEditDetails && styles.rowPressablePressed,
+              !canEditDetails && { opacity: 0.85 },
+            ]}
+          >
             <View style={styles.rowLeft}>
               <MaterialIcons name="flag" size={20} color={textMuted} />
               <ThemedText style={[styles.rowTitle, { color: text }]}>Уровень</ThemedText>
             </View>
-            <View style={styles.remindBeforeBlocks}>
-              {PRIORITY_OPTIONS.map((o) => {
-                const isSelected = priority === o.value;
-                const disabled = !canEditDetails;
-                return (
-                  <Pressable
-                    key={o.value}
-                    onPress={() => !disabled && handlePriorityChange(o.value)}
-                    disabled={disabled}
-                    style={[
-                      styles.remindBeforeBlock,
-                      { borderColor: border, backgroundColor: cardBg },
-                      isSelected && { borderColor: primary, backgroundColor: `${primary}18` },
-                      disabled && { opacity: 0.6 },
-                    ]}
-                  >
-                    <ThemedText
-                      style={[
-                        styles.remindBeforeBlockText,
-                        { color: isSelected ? primary : text },
-                      ]}
-                    >
-                      {o.label}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.rowRight}>
+              <ThemedText
+                style={[
+                  styles.rowValue,
+                  {
+                    color: textMuted,
+                    flexShrink: 1,
+                    textDecorationLine: canEditDetails ? 'underline' : 'none',
+                  },
+                ]}
+                numberOfLines={2}
+              >
+                {prioritySummaryLabel}
+              </ThemedText>
+              {canEditDetails ? (
+                <MaterialIcons name="chevron-right" size={22} color={textMuted} />
+              ) : null}
             </View>
-          </View>
+          </Pressable>
         </View>
 
         <View style={{ height: 16 }} />
@@ -917,63 +1022,76 @@ export default function TaskDetailsScreen() {
             />
           </View>
           <View style={[styles.remindersHintWrap, { borderColor: border }]}>
-              <ThemedText style={[styles.remindersHint, { color: textMuted }]}>
-                Пуш по времени в календаре или по кнопке в уведомлении
-              </ThemedText>
-            </View>
-            <View style={[styles.divider, { backgroundColor: border }]} />
-            <View style={styles.remindBeforeSection}>
-              <View style={styles.rowLeft}>
-                <MaterialIcons name="alarm" size={20} color={textMuted} />
-                <ThemedText style={[styles.rowTitle, { color: text }]}>
-                  Когда напомнить
-                </ThemedText>
-              </View>
-              <View style={styles.remindBeforeBlocks}>
-                {REMIND_BEFORE_OPTIONS.map((o) => {
-                  const isSelected = (o.value === null && remindBeforeMinutes === null) || (o.value !== null && remindBeforeMinutes === o.value);
-                  const disabled = !canEditDetails || task.reminders_disabled;
-                  return (
-                    <Pressable
-                      key={o.value ?? 'default'}
-                      onPress={() => !disabled && handleRemindBeforeChange(o.value)}
-                      disabled={disabled}
-                      style={[
-                        styles.remindBeforeBlock,
-                        { borderColor: border, backgroundColor: cardBg },
-                        isSelected && { borderColor: primary, backgroundColor: `${primary}18` },
-                        disabled && { opacity: 0.6 },
-                      ]}
-                    >
-                      <ThemedText
-                        style={[
-                          styles.remindBeforeBlockText,
-                          { color: isSelected ? primary : text },
-                        ]}
-                      >
-                        {o.label}
-                      </ThemedText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
+            <ThemedText style={[styles.remindersHint, { color: textMuted }]}>
+              Пуш по времени в календаре или по кнопке в уведомлении
+            </ThemedText>
           </View>
+          <View style={[styles.divider, { backgroundColor: border }]} />
+          <Pressable
+            onPress={() => {
+              if (!canEditDetails) {
+                notifyCreatorOnly();
+                return;
+              }
+              if (task.reminders_disabled) return;
+              openRemindTimingPicker();
+            }}
+            disabled={!canEditDetails || task.reminders_disabled}
+            style={({ pressed }) => [
+              styles.row,
+              pressed && canEditDetails && !task.reminders_disabled && styles.rowPressablePressed,
+              (!canEditDetails || task.reminders_disabled) && { opacity: 0.55 },
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <MaterialIcons name="alarm" size={20} color={textMuted} />
+              <ThemedText style={[styles.rowTitle, { color: text }]}>Когда напомнить</ThemedText>
+            </View>
+            <View style={styles.rowRight}>
+              <ThemedText
+                style={[
+                  styles.rowValue,
+                  {
+                    color: textMuted,
+                    flexShrink: 1,
+                    textAlign: 'right',
+                    textDecorationLine:
+                      canEditDetails && !task.reminders_disabled ? 'underline' : 'none',
+                  },
+                ]}
+                numberOfLines={2}
+              >
+                {remindTimingSummaryLabel}
+              </ThemedText>
+              {canEditDetails && !task.reminders_disabled ? (
+                <MaterialIcons name="chevron-right" size={22} color={textMuted} />
+              ) : null}
+            </View>
+          </Pressable>
+          <View style={[styles.remindersFootnoteWrap, { borderTopColor: border }]}>
+            <ThemedText style={[styles.remindersTimingFootnote, { color: textMuted }]}>
+              {task.scheduled_at
+                ? `Напоминание «за N минут» считается от времени срока: ${scheduledPrimaryLine}`
+                : 'Без срока в календаре используется системная логика напоминаний.'}
+            </ThemedText>
+          </View>
+        </View>
 
         <View style={{ height: 16 }} />
 
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
-          <Pressable
-            onPress={() => toggleComplete(task)}
-            style={styles.linkRow}
-          >
+          <View style={styles.row}>
             <View style={styles.rowLeft}>
-              <MaterialIcons name={task.completed ? 'check-box' : 'check-box-outline-blank'} size={20} color={primary} />
-              <ThemedText style={[styles.rowTitle, { color: text }]}>
-                {task.completed ? 'Снять выполнено' : 'Отметить выполнено'}
-              </ThemedText>
+              <MaterialIcons name="task-alt" size={20} color={textMuted} />
+              <ThemedText style={[styles.rowTitle, { color: text }]}>Выполнено</ThemedText>
             </View>
-          </Pressable>
+            <Switch
+              value={task.completed}
+              onValueChange={() => void handleCompleteSwitch()}
+              trackColor={{ false: border, true: primary }}
+              thumbColor="#fff"
+            />
+          </View>
           <View style={[styles.divider, { backgroundColor: border }]} />
           <Pressable
             disabled={!canEditDetails}
@@ -1040,6 +1158,144 @@ export default function TaskDetailsScreen() {
           </View>
         </Modal>
       ) : null}
+
+      <Modal
+        visible={priorityPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closePriorityPicker}
+      >
+        <View style={styles.reminderTimePickerRoot}>
+          <Pressable
+            style={styles.reminderTimePickerBackdrop}
+            onPress={closePriorityPicker}
+            accessibilityRole="button"
+            accessibilityLabel="Закрыть"
+          />
+          <View
+            style={[
+              styles.reminderTimePickerSheet,
+              {
+                backgroundColor: background,
+                paddingBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            <View style={[styles.reminderTimePickerToolbar, { borderBottomColor: border }]}>
+              <Pressable
+                onPress={closePriorityPicker}
+                hitSlop={12}
+                style={[styles.reminderTimePickerToolbarSide, { alignItems: 'flex-start' }]}
+              >
+                <ThemedText style={{ color: primary, fontSize: 17 }}>Отмена</ThemedText>
+              </Pressable>
+              <ThemedText style={[styles.reminderTimePickerToolbarTitle, { color: text }]}>
+                Приоритет
+              </ThemedText>
+              <Pressable
+                onPress={() => void confirmPriorityPicker()}
+                hitSlop={12}
+                style={[styles.reminderTimePickerToolbarSide, { alignItems: 'flex-end' }]}
+              >
+                <ThemedText style={{ color: primary, fontSize: 17, fontWeight: '700' }}>Готово</ThemedText>
+              </Pressable>
+            </View>
+            <View style={styles.reminderTimePickerWheelWrap}>
+              <Picker
+                selectedValue={priorityPickerDraft}
+                onValueChange={(v) => {
+                  setPriorityPickerDraft(v as TaskPriority);
+                  void Haptics.selectionAsync();
+                }}
+                style={Platform.OS === 'ios' ? styles.taskDetailPickerIOS : styles.taskDetailPickerAndroid}
+                itemStyle={
+                  Platform.OS === 'ios' ? { color: text, fontSize: 22 } : undefined
+                }
+                {...(Platform.OS === 'ios' ? { selectionColor: primary } : {})}
+                {...(Platform.OS === 'android' ? { mode: 'dropdown' as const } : {})}
+              >
+                {PRIORITY_OPTIONS.map((o) => (
+                  <Picker.Item
+                    key={o.value}
+                    label={o.label}
+                    value={o.value}
+                    color={Platform.OS === 'ios' ? text : undefined}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={remindTimingPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeRemindTimingPicker}
+      >
+        <View style={styles.reminderTimePickerRoot}>
+          <Pressable
+            style={styles.reminderTimePickerBackdrop}
+            onPress={closeRemindTimingPicker}
+            accessibilityRole="button"
+            accessibilityLabel="Закрыть"
+          />
+          <View
+            style={[
+              styles.reminderTimePickerSheet,
+              {
+                backgroundColor: background,
+                paddingBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            <View style={[styles.reminderTimePickerToolbar, { borderBottomColor: border }]}>
+              <Pressable
+                onPress={closeRemindTimingPicker}
+                hitSlop={12}
+                style={[styles.reminderTimePickerToolbarSide, { alignItems: 'flex-start' }]}
+              >
+                <ThemedText style={{ color: primary, fontSize: 17 }}>Отмена</ThemedText>
+              </Pressable>
+              <ThemedText style={[styles.reminderTimePickerToolbarTitle, { color: text }]}>
+                Напоминание
+              </ThemedText>
+              <Pressable
+                onPress={confirmRemindTimingPicker}
+                hitSlop={12}
+                style={[styles.reminderTimePickerToolbarSide, { alignItems: 'flex-end' }]}
+              >
+                <ThemedText style={{ color: primary, fontSize: 17, fontWeight: '700' }}>Готово</ThemedText>
+              </Pressable>
+            </View>
+            <View style={styles.reminderTimePickerWheelWrap}>
+              <Picker
+                selectedValue={remindTimingPickerDraft}
+                onValueChange={(v) => {
+                  setRemindTimingPickerDraft(String(v));
+                  void Haptics.selectionAsync();
+                }}
+                style={Platform.OS === 'ios' ? styles.taskDetailPickerIOS : styles.taskDetailPickerAndroid}
+                itemStyle={
+                  Platform.OS === 'ios' ? { color: text, fontSize: 22 } : undefined
+                }
+                {...(Platform.OS === 'ios' ? { selectionColor: primary } : {})}
+                {...(Platform.OS === 'android' ? { mode: 'dropdown' as const } : {})}
+              >
+                {remindTimingSelectOptions.map((o) => (
+                  <Picker.Item
+                    key={o.value}
+                    label={o.label}
+                    value={o.value}
+                    color={Platform.OS === 'ios' ? text : undefined}
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {!isGuest && task ? (
         <>
@@ -1271,6 +1527,59 @@ const styles = StyleSheet.create({
   remindBeforeBlockText: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  taskDetailPickerIOS: {
+    width: '100%',
+    height: 216,
+  },
+  taskDetailPickerAndroid: {
+    width: '100%',
+    minHeight: 120,
+    maxHeight: 220,
+  },
+  remindersFootnoteWrap: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  remindersTimingFootnote: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  reminderTimePickerRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  reminderTimePickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  reminderTimePickerSheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+  },
+  reminderTimePickerToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  reminderTimePickerToolbarSide: {
+    flex: 1,
+  },
+  reminderTimePickerToolbarTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  reminderTimePickerWheelWrap: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
   },
   scheduleModalRoot: {
     flex: 1,
