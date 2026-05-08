@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   LayoutAnimation,
   Modal,
@@ -14,6 +21,8 @@ import { Circle, Path, Svg } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
+import { Radius, Spacing } from '@/constants/theme';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { formatDateForApi, formatTimeOnly } from '@/lib/dateTimeUtils';
 import { getHealthyInsight, type HealthyInsightResponse } from '@/lib/healthy-api';
 import {
@@ -33,19 +42,69 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// ===== Design tokens (выровнены с health-screen) =====
+// ===== Design tokens =====
+// Нейтрали (фон/текст) — через InsightThemeContext + useThemeColor.
+// Насыщенные акценты метрик — общая палитра для light/dark.
 
-const COLORS = {
-  cardBg: '#2A2A2A',
-  cardBgSubtle: '#242424',
-  trackBg: '#3A3A3A',
-  divider: 'rgba(255,255,255,0.06)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#A0A0A5',
-  textMuted: '#6E6E73',
+type InsightThemeColors = {
+  cardBg: string;
+  cardBgSubtle: string;
+  trackBg: string;
+  divider: string;
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  accent: string;
+  accentSoft: string;
+};
 
-  accent: '#F35713',
-  accentSoft: 'rgba(243, 87, 19, 0.18)',
+const InsightThemeContext = createContext<InsightThemeColors | null>(null);
+
+function useHealthyInsightThemeColors(): InsightThemeColors {
+  const cardBg = useThemeColor({}, 'surfaceElevated');
+  const cardBgSubtle = useThemeColor({}, 'surface');
+  const trackBg = useThemeColor({}, 'surfaceMuted');
+  const divider = useThemeColor({}, 'divider');
+  const textPrimary = useThemeColor({}, 'text');
+  const textSecondary = useThemeColor({}, 'textSecondary');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const accent = useThemeColor({}, 'primary');
+  const accentSoft = useThemeColor({}, 'accentSoft');
+  return useMemo(
+    () => ({
+      cardBg,
+      cardBgSubtle,
+      trackBg,
+      divider,
+      textPrimary,
+      textSecondary,
+      textMuted,
+      accent,
+      accentSoft,
+    }),
+    [
+      cardBg,
+      cardBgSubtle,
+      trackBg,
+      divider,
+      textPrimary,
+      textSecondary,
+      textMuted,
+      accent,
+      accentSoft,
+    ]
+  );
+}
+
+function useInsightTheme(): InsightThemeColors {
+  const ctx = useContext(InsightThemeContext);
+  if (!ctx) {
+    throw new Error('useInsightTheme must be used within HealthyAiInsights');
+  }
+  return ctx;
+}
+
+const PALETTE = {
   blue: '#4FC3F7',
   blueSoft: 'rgba(79, 195, 247, 0.18)',
   indigo: '#7B6FF7',
@@ -60,7 +119,7 @@ const COLORS = {
   yellowSoft: 'rgba(255, 193, 7, 0.18)',
   red: '#FF5252',
   redSoft: 'rgba(255, 82, 82, 0.18)',
-};
+} as const;
 
 const PERIODS: { key: HealthyInsightPeriod; label: string }[] = [
   { key: 'day', label: 'День' },
@@ -84,22 +143,30 @@ function metricIcon(id: HealthyMetricId): React.ComponentProps<typeof MaterialIc
 
 function statusVisual(tone: HealthyInsightResult['statusTone']) {
   if (tone === 'positive') {
-    return { color: COLORS.green, bg: COLORS.greenSoft, icon: 'check-circle' as const };
+    return { color: PALETTE.green, bg: PALETTE.greenSoft, icon: 'check-circle' as const };
   }
   if (tone === 'attention') {
-    return { color: COLORS.orange, bg: COLORS.orangeSoft, icon: 'priority-high' as const };
+    return { color: PALETTE.orange, bg: PALETTE.orangeSoft, icon: 'priority-high' as const };
   }
-  return { color: COLORS.indigo, bg: COLORS.indigoSoft, icon: 'auto-awesome' as const };
+  return { color: PALETTE.indigo, bg: PALETTE.indigoSoft, icon: 'auto-awesome' as const };
 }
 
-function dynamicsVisual(label: HealthyInsightResult['dynamicsLabel']) {
+function dynamicsVisual(
+  label: HealthyInsightResult['dynamicsLabel'],
+  neutrals: Pick<InsightThemeColors, 'textSecondary' | 'trackBg'>
+) {
   if (label === 'better') {
-    return { text: 'Лучше', color: COLORS.green, bg: COLORS.greenSoft, icon: 'trending-up' as const };
+    return { text: 'Лучше', color: PALETTE.green, bg: PALETTE.greenSoft, icon: 'trending-up' as const };
   }
   if (label === 'worse') {
-    return { text: 'Тяжелее', color: COLORS.orange, bg: COLORS.orangeSoft, icon: 'trending-down' as const };
+    return { text: 'Тяжелее', color: PALETTE.orange, bg: PALETTE.orangeSoft, icon: 'trending-down' as const };
   }
-  return { text: 'Стабильно', color: COLORS.textSecondary, bg: COLORS.trackBg, icon: 'trending-flat' as const };
+  return {
+    text: 'Стабильно',
+    color: neutrals.textSecondary,
+    bg: neutrals.trackBg,
+    icon: 'trending-flat' as const,
+  };
 }
 
 function pct(v: number | null | undefined): string {
@@ -172,6 +239,7 @@ function MetricBar({
   cur: number | null | undefined;
   prev: number | null | undefined;
 }) {
+  const n = useInsightTheme();
   if (cur == null && prev == null) return null;
   const d = delta(cur, prev);
   const dPositive = cur != null && prev != null && cur > prev;
@@ -182,22 +250,22 @@ function MetricBar({
   return (
     <View style={styles.metricBarRow}>
       <View style={styles.metricBarLabelCol}>
-        <MaterialIcons name={icon} size={15} color={COLORS.textSecondary} />
-        <ThemedText style={[styles.metricBarLabel, { color: COLORS.textSecondary }]}>{label}</ThemedText>
+        <MaterialIcons name={icon} size={15} color={n.textSecondary} />
+        <ThemedText style={[styles.metricBarLabel, { color: n.textSecondary }]}>{label}</ThemedText>
       </View>
       <View style={styles.metricBarTrackCol}>
-        <View style={[styles.metricBarTrack, { backgroundColor: COLORS.trackBg }]}>
-          <View style={[styles.metricBarFill, { width: `${curFill * 100}%`, backgroundColor: COLORS.accent }]} />
+        <View style={[styles.metricBarTrack, { backgroundColor: n.trackBg }]}>
+          <View style={[styles.metricBarFill, { width: `${curFill * 100}%`, backgroundColor: n.accent }]} />
         </View>
-        <View style={[styles.metricBarTrack, { backgroundColor: COLORS.trackBg, marginTop: 3, opacity: 0.55 }]}>
-          <View style={[styles.metricBarFill, { width: `${prevFill * 100}%`, backgroundColor: COLORS.textSecondary }]} />
+        <View style={[styles.metricBarTrack, { backgroundColor: n.trackBg, marginTop: 3, opacity: 0.55 }]}>
+          <View style={[styles.metricBarFill, { width: `${prevFill * 100}%`, backgroundColor: n.textSecondary }]} />
         </View>
       </View>
       <View style={styles.metricBarValueCol}>
-        <ThemedText style={[styles.metricBarPct, { color: COLORS.textPrimary }]}>{pct(cur)}</ThemedText>
+        <ThemedText style={[styles.metricBarPct, { color: n.textPrimary }]}>{pct(cur)}</ThemedText>
         {d != null && (
           <ThemedText style={[styles.metricBarDelta, {
-            color: dPositive ? COLORS.green : dNegative ? COLORS.orange : COLORS.textSecondary,
+            color: dPositive ? PALETTE.green : dNegative ? PALETTE.orange : n.textSecondary,
           }]}>{d}</ThemedText>
         )}
       </View>
@@ -248,14 +316,18 @@ function InsightModal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const c = useInsightTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.modalHeader}>
-            <ThemedText style={[styles.modalTitle, { color: COLORS.textPrimary }]}>{title}</ThemedText>
+        <Pressable
+          style={[styles.modalCard, { backgroundColor: c.cardBg }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={[styles.modalHeader, { borderBottomColor: c.divider }]}>
+            <ThemedText style={[styles.modalTitle, { color: c.textPrimary }]}>{title}</ThemedText>
             <Pressable onPress={onClose} hitSlop={12}>
-              <MaterialIcons name="close" size={22} color={COLORS.textSecondary} />
+              <MaterialIcons name="close" size={22} color={c.textSecondary} />
             </Pressable>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
@@ -286,28 +358,33 @@ function SectionRow({
   count?: number;
   onPress: () => void;
 }) {
+  const c = useInsightTheme();
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.sectionRow, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.sectionRow,
+        { borderBottomColor: c.divider },
+        pressed && styles.cardPressed,
+      ]}
     >
       <IconBubble icon={icon} color={iconColor} bg={iconBg} size={18} />
       <View style={styles.sectionRowBody}>
         <View style={styles.sectionRowTitleRow}>
-          <ThemedText style={[styles.sectionRowTitle, { color: COLORS.textPrimary }]}>{title}</ThemedText>
+          <ThemedText style={[styles.sectionRowTitle, { color: c.textPrimary }]}>{title}</ThemedText>
           {count != null && count > 0 && (
-            <View style={[styles.countBadge, { backgroundColor: COLORS.trackBg }]}>
-              <ThemedText style={[styles.countBadgeText, { color: COLORS.textSecondary }]}>{count}</ThemedText>
+            <View style={[styles.countBadge, { backgroundColor: c.trackBg }]}>
+              <ThemedText style={[styles.countBadgeText, { color: c.textSecondary }]}>{count}</ThemedText>
             </View>
           )}
         </View>
         {hint ? (
-          <ThemedText style={[styles.sectionRowHint, { color: COLORS.textSecondary }]} numberOfLines={1}>
+          <ThemedText style={[styles.sectionRowHint, { color: c.textSecondary }]} numberOfLines={1}>
             {hint}
           </ThemedText>
         ) : null}
       </View>
-      <MaterialIcons name="chevron-right" size={22} color={COLORS.textMuted} />
+      <MaterialIcons name="chevron-right" size={22} color={c.textMuted} />
     </Pressable>
   );
 }
@@ -316,16 +393,17 @@ function SectionRow({
 
 function StatusHero({ result }: { result: HealthyInsightResult }) {
   const visual = statusVisual(result.statusTone);
+  const c = useInsightTheme();
   return (
-    <View style={[styles.card, styles.heroCard]}>
+    <View style={[styles.card, styles.heroCard, { backgroundColor: c.cardBg }]}>
       <View style={styles.heroHeader}>
         <IconBubble icon={visual.icon} color={visual.color} bg={visual.bg} size={20} />
-        <ThemedText style={[styles.heroLabel, { color: COLORS.textSecondary }]}>Статус</ThemedText>
+        <ThemedText style={[styles.heroLabel, { color: c.textSecondary }]}>Статус</ThemedText>
       </View>
-      <ThemedText style={[styles.heroTitle, { color: COLORS.textPrimary }]} numberOfLines={3}>
+      <ThemedText style={[styles.heroTitle, { color: c.textPrimary }]} numberOfLines={3}>
         {result.statusLabel}
       </ThemedText>
-      <ThemedText style={[styles.heroBody, { color: COLORS.textSecondary }]}>
+      <ThemedText style={[styles.heroBody, { color: c.textSecondary }]}>
         {result.summary}
       </ThemedText>
     </View>
@@ -334,14 +412,18 @@ function StatusHero({ result }: { result: HealthyInsightResult }) {
 
 function DynamicsCard({ result }: { result: HealthyInsightResult }) {
   if (!result.dynamicsLabel || !result.dynamicsSummary?.trim()) return null;
-  const cfg = dynamicsVisual(result.dynamicsLabel);
+  const c = useInsightTheme();
+  const cfg = dynamicsVisual(result.dynamicsLabel, {
+    textSecondary: c.textSecondary,
+    trackBg: c.trackBg,
+  });
   return (
-    <View style={[styles.card, styles.dynamicsCard]}>
+    <View style={[styles.card, styles.dynamicsCard, { backgroundColor: c.cardBg }]}>
       <View style={[styles.dynamicsBadge, { backgroundColor: cfg.bg }]}>
         <MaterialIcons name={cfg.icon} size={14} color={cfg.color} />
         <ThemedText style={[styles.dynamicsBadgeText, { color: cfg.color }]}>{cfg.text}</ThemedText>
       </View>
-      <ThemedText style={[styles.dynamicsSummary, { color: COLORS.textSecondary }]}>
+      <ThemedText style={[styles.dynamicsSummary, { color: c.textSecondary }]}>
         {result.dynamicsSummary}
       </ThemedText>
     </View>
@@ -361,36 +443,39 @@ function HighlightCard({
   title: string;
   body: string;
 }) {
+  const c = useInsightTheme();
   return (
-    <View style={[styles.card, styles.highlightCard]}>
+    <View style={[styles.card, styles.highlightCard, { backgroundColor: c.cardBg }]}>
       <IconBubble icon={icon} color={iconColor} bg={iconBg} size={18} />
       <View style={styles.highlightBody}>
-        <ThemedText style={[styles.highlightTitle, { color: COLORS.textPrimary }]}>{title}</ThemedText>
-        <ThemedText style={[styles.highlightText, { color: COLORS.textSecondary }]}>{body}</ThemedText>
+        <ThemedText style={[styles.highlightTitle, { color: c.textPrimary }]}>{title}</ThemedText>
+        <ThemedText style={[styles.highlightText, { color: c.textSecondary }]}>{body}</ThemedText>
       </View>
     </View>
   );
 }
 
 function SupportCard({ text }: { text: string }) {
+  const c = useInsightTheme();
   return (
-    <View style={[styles.card, styles.supportCard]}>
-      <IconBubble icon="favorite-border" color={COLORS.accent} bg={COLORS.accentSoft} size={16} />
-      <ThemedText style={[styles.supportText, { color: COLORS.textSecondary }]}>{text}</ThemedText>
+    <View style={[styles.card, styles.supportCard, { backgroundColor: c.cardBg }]}>
+      <IconBubble icon="favorite-border" color={c.accent} bg={c.accentSoft} size={16} />
+      <ThemedText style={[styles.supportText, { color: c.textSecondary }]}>{text}</ThemedText>
     </View>
   );
 }
 
 function LowDataBanner({ hints }: { hints: string[] }) {
+  const c = useInsightTheme();
   return (
-    <View style={[styles.card, styles.lowDataBanner]}>
-      <IconBubble icon="info-outline" color={COLORS.accent} bg={COLORS.accentSoft} size={18} />
+    <View style={[styles.card, styles.lowDataBanner, { backgroundColor: c.cardBg }]}>
+      <IconBubble icon="info-outline" color={c.accent} bg={c.accentSoft} size={18} />
       <View style={styles.highlightBody}>
-        <ThemedText style={[styles.highlightTitle, { color: COLORS.textPrimary }]}>
+        <ThemedText style={[styles.highlightTitle, { color: c.textPrimary }]}>
           Недостаточно данных
         </ThemedText>
         {hints.length > 0 && (
-          <ThemedText style={[styles.highlightText, { color: COLORS.textSecondary }]}>
+          <ThemedText style={[styles.highlightText, { color: c.textSecondary }]}>
             Не хватает: {hints.join(', ')}.
           </ThemedText>
         )}
@@ -410,13 +495,14 @@ function ListBlock({
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
   color: string;
 }) {
+  const c = useInsightTheme();
   if (!items.length) return null;
   return (
     <View style={styles.modalList}>
       {items.map((line, i) => (
         <View key={`l-${i}`} style={styles.modalListItem}>
           <MaterialIcons name={icon} size={16} color={color} style={styles.modalListIcon} />
-          <ThemedText style={[styles.modalListText, { color: COLORS.textSecondary }]}>{line}</ThemedText>
+          <ThemedText style={[styles.modalListText, { color: c.textSecondary }]}>{line}</ThemedText>
         </View>
       ))}
     </View>
@@ -424,24 +510,26 @@ function ListBlock({
 }
 
 function ModalSubTitle({ children }: { children: React.ReactNode }) {
+  const c = useInsightTheme();
   return (
-    <ThemedText style={[styles.modalSubTitle, { color: COLORS.textPrimary }]}>{children}</ThemedText>
+    <ThemedText style={[styles.modalSubTitle, { color: c.textPrimary }]}>{children}</ThemedText>
   );
 }
 
 function ComparisonModalBody({ result }: { result: HealthyInsightResult }) {
+  const c = useInsightTheme();
   const ratios = result.metricRatios;
   return (
     <>
       {ratios && (
         <>
           <View style={styles.metricBarLegendRow}>
-            <View style={[styles.metricBarLegendDot, { backgroundColor: COLORS.accent }]} />
-            <ThemedText style={[styles.metricBarLegendLabel, { color: COLORS.textSecondary }]}>Сейчас</ThemedText>
-            <View style={[styles.metricBarLegendDot, { backgroundColor: COLORS.textSecondary, opacity: 0.55, marginLeft: 14 }]} />
-            <ThemedText style={[styles.metricBarLegendLabel, { color: COLORS.textSecondary }]}>Прошлый период</ThemedText>
+            <View style={[styles.metricBarLegendDot, { backgroundColor: c.accent }]} />
+            <ThemedText style={[styles.metricBarLegendLabel, { color: c.textSecondary }]}>Сейчас</ThemedText>
+            <View style={[styles.metricBarLegendDot, { backgroundColor: c.textSecondary, opacity: 0.55, marginLeft: 14 }]} />
+            <ThemedText style={[styles.metricBarLegendLabel, { color: c.textSecondary }]}>Прошлый период</ThemedText>
           </View>
-          <View style={{ marginTop: 10 }}>
+          <View style={{ marginTop: Spacing.sm + 2 }}>
             <MetricBar label="Сон" icon="bedtime" cur={ratios.cur.sleep} prev={ratios.prev.sleep} />
             <MetricBar label="Настроение" icon="sentiment-satisfied" cur={ratios.cur.mood} prev={ratios.prev.mood} />
             <MetricBar label="Шаги" icon="directions-walk" cur={ratios.cur.steps} prev={ratios.prev.steps} />
@@ -451,7 +539,7 @@ function ComparisonModalBody({ result }: { result: HealthyInsightResult }) {
       {(result.vsPreviousPeriod ?? []).length > 0 && (
         <>
           <ModalSubTitle>Что изменилось</ModalSubTitle>
-          <ListBlock items={result.vsPreviousPeriod ?? []} icon="swap-horiz" color={COLORS.textSecondary} />
+          <ListBlock items={result.vsPreviousPeriod ?? []} icon="swap-horiz" color={c.textSecondary} />
         </>
       )}
     </>
@@ -459,27 +547,28 @@ function ComparisonModalBody({ result }: { result: HealthyInsightResult }) {
 }
 
 function TrendsModalBody({ result }: { result: HealthyInsightResult }) {
+  const c = useInsightTheme();
   const sp = result.sparklines;
   if (!sp) return null;
   const items: { values: (number | null)[]; color: string; label: string }[] = [];
-  if (sp.sleep.some((v) => v != null)) items.push({ values: sp.sleep, color: COLORS.indigo, label: 'Сон' });
-  if (sp.mood.some((v) => v != null)) items.push({ values: sp.mood, color: COLORS.green, label: 'Настроение' });
-  if (sp.steps.some((v) => v != null)) items.push({ values: sp.steps, color: COLORS.orange, label: 'Шаги' });
+  if (sp.sleep.some((v) => v != null)) items.push({ values: sp.sleep, color: PALETTE.indigo, label: 'Сон' });
+  if (sp.mood.some((v) => v != null)) items.push({ values: sp.mood, color: PALETTE.green, label: 'Настроение' });
+  if (sp.steps.some((v) => v != null)) items.push({ values: sp.steps, color: PALETTE.orange, label: 'Шаги' });
 
   if (items.length === 0) {
     return (
-      <ThemedText style={[styles.modalText, { color: COLORS.textSecondary }]}>
+      <ThemedText style={[styles.modalText, { color: c.textSecondary }]}>
         Недостаточно отметок для построения тренда.
       </ThemedText>
     );
   }
 
   return (
-    <View style={{ gap: 14 }}>
+    <View style={{ gap: Spacing.md + 2 }}>
       {items.map((it) => (
         <View key={it.label} style={styles.trendRow}>
           <View style={styles.trendLabelCol}>
-            <ThemedText style={[styles.trendLabel, { color: COLORS.textPrimary }]}>{it.label}</ThemedText>
+            <ThemedText style={[styles.trendLabel, { color: c.textPrimary }]}>{it.label}</ThemedText>
           </View>
           <MiniSparkline values={it.values} color={it.color} width={180} height={50} />
         </View>
@@ -489,6 +578,7 @@ function TrendsModalBody({ result }: { result: HealthyInsightResult }) {
 }
 
 function HelpfulModalBody({ result }: { result: HealthyInsightResult }) {
+  const c = useInsightTheme();
   const links = result.metricLinks ?? [];
   const habits = result.helpfulHabits ?? [];
   return (
@@ -496,17 +586,17 @@ function HelpfulModalBody({ result }: { result: HealthyInsightResult }) {
       {links.length > 0 && (
         <>
           <ModalSubTitle>Связи между метриками</ModalSubTitle>
-          <ListBlock items={links} icon="timeline" color={COLORS.indigo} />
+          <ListBlock items={links} icon="timeline" color={PALETTE.indigo} />
         </>
       )}
       {habits.length > 0 && (
         <>
           <ModalSubTitle>Что помогает по журналу</ModalSubTitle>
-          <ListBlock items={habits} icon="eco" color={COLORS.green} />
+          <ListBlock items={habits} icon="eco" color={PALETTE.green} />
         </>
       )}
       {links.length === 0 && habits.length === 0 && (
-        <ThemedText style={[styles.modalText, { color: COLORS.textSecondary }]}>
+        <ThemedText style={[styles.modalText, { color: c.textSecondary }]}>
           Пока недостаточно повторяющихся данных, чтобы выделить связи.
         </ThemedText>
       )}
@@ -515,6 +605,7 @@ function HelpfulModalBody({ result }: { result: HealthyInsightResult }) {
 }
 
 function StrengthsWeakModalBody({ result }: { result: HealthyInsightResult }) {
+  const c = useInsightTheme();
   const hasStrengths = result.strengths.length > 0;
   const hasWeak = result.weakPoints.length > 0 || result.weaknessesNarrative.length > 0;
   const hasImproved = result.improved.length > 0;
@@ -522,7 +613,7 @@ function StrengthsWeakModalBody({ result }: { result: HealthyInsightResult }) {
 
   if (!hasStrengths && !hasWeak && !hasImproved && !hasWorsened) {
     return (
-      <ThemedText style={[styles.modalText, { color: COLORS.textSecondary }]}>
+      <ThemedText style={[styles.modalText, { color: c.textSecondary }]}>
         Картина выглядит ровной — без выраженных сильных и слабых сторон.
       </ThemedText>
     );
@@ -533,13 +624,13 @@ function StrengthsWeakModalBody({ result }: { result: HealthyInsightResult }) {
       {hasStrengths && (
         <>
           <ModalSubTitle>Сильные стороны</ModalSubTitle>
-          <ListBlock items={result.strengths} icon="check-circle" color={COLORS.green} />
+          <ListBlock items={result.strengths} icon="check-circle" color={PALETTE.green} />
         </>
       )}
       {hasImproved && (
         <>
           <ModalSubTitle>Что улучшилось</ModalSubTitle>
-          <ListBlock items={result.improved} icon="trending-up" color={COLORS.green} />
+          <ListBlock items={result.improved} icon="trending-up" color={PALETTE.green} />
         </>
       )}
       {hasWeak && (
@@ -547,16 +638,16 @@ function StrengthsWeakModalBody({ result }: { result: HealthyInsightResult }) {
           <ModalSubTitle>Зоны внимания</ModalSubTitle>
           {result.weakPoints.map((w) => (
             <View key={w.id} style={styles.modalListItem}>
-              <MaterialIcons name={metricIcon(w.id)} size={16} color={COLORS.orange} style={styles.modalListIcon} />
-              <ThemedText style={[styles.modalListText, { color: COLORS.textSecondary }]}>{w.label}</ThemedText>
+              <MaterialIcons name={metricIcon(w.id)} size={16} color={PALETTE.orange} style={styles.modalListIcon} />
+              <ThemedText style={[styles.modalListText, { color: c.textSecondary }]}>{w.label}</ThemedText>
             </View>
           ))}
           {result.weaknessesNarrative
             .filter((line) => !result.weakPoints.some((w) => w.label === line))
             .map((line, i) => (
               <View key={`wn-${i}`} style={styles.modalListItem}>
-                <MaterialIcons name="remove-circle-outline" size={16} color={COLORS.orange} style={styles.modalListIcon} />
-                <ThemedText style={[styles.modalListText, { color: COLORS.textSecondary }]}>{line}</ThemedText>
+                <MaterialIcons name="remove-circle-outline" size={16} color={PALETTE.orange} style={styles.modalListIcon} />
+                <ThemedText style={[styles.modalListText, { color: c.textSecondary }]}>{line}</ThemedText>
               </View>
             ))}
         </>
@@ -564,7 +655,7 @@ function StrengthsWeakModalBody({ result }: { result: HealthyInsightResult }) {
       {hasWorsened && (
         <>
           <ModalSubTitle>Что просело</ModalSubTitle>
-          <ListBlock items={result.worsened} icon="trending-down" color={COLORS.orange} />
+          <ListBlock items={result.worsened} icon="trending-down" color={PALETTE.orange} />
         </>
       )}
     </>
@@ -572,15 +663,16 @@ function StrengthsWeakModalBody({ result }: { result: HealthyInsightResult }) {
 }
 
 function PatternsModalBody({ result }: { result: HealthyInsightResult }) {
+  const c = useInsightTheme();
   return (
     <>
       {result.patternsLine && (
-        <ThemedText style={[styles.modalText, { color: COLORS.textSecondary }]}>{result.patternsLine}</ThemedText>
+        <ThemedText style={[styles.modalText, { color: c.textSecondary }]}>{result.patternsLine}</ThemedText>
       )}
       {result.monthlyDynamics && (
         <>
           <ModalSubTitle>Динамика месяца</ModalSubTitle>
-          <ThemedText style={[styles.modalText, { color: COLORS.textSecondary }]}>{result.monthlyDynamics}</ThemedText>
+          <ThemedText style={[styles.modalText, { color: c.textSecondary }]}>{result.monthlyDynamics}</ThemedText>
         </>
       )}
     </>
@@ -601,6 +693,7 @@ type ModalKey =
 
 function InsightBody({ result }: { result: HealthyInsightResult }) {
   const [openModal, setOpenModal] = useState<ModalKey>(null);
+  const c = useInsightTheme();
 
   // Для day отделяем actionToday от рекомендаций, чтобы не дублировать
   const filteredRecommendations =
@@ -646,8 +739,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
       {!result.lowData && isDay && !!result.actionToday?.trim() && (
         <HighlightCard
           icon="bolt"
-          iconColor={COLORS.accent}
-          iconBg={COLORS.accentSoft}
+          iconColor={c.accent}
+          iconBg={c.accentSoft}
           title="Один шаг сегодня"
           body={result.actionToday}
         />
@@ -656,8 +749,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
       {!result.lowData && !isDay && !!focusBody?.trim() && (
         <HighlightCard
           icon={result.period === 'week' ? 'center-focus-strong' : 'flag'}
-          iconColor={COLORS.accent}
-          iconBg={COLORS.accentSoft}
+          iconColor={c.accent}
+          iconBg={c.accentSoft}
           title={result.period === 'week' ? 'Фокус недели' : 'Фокус месяца'}
           body={focusBody}
         />
@@ -665,12 +758,12 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
 
       {(showCompare || showTrends || showHelpful || showStrengths || showPatterns
         || showWeakPointsForDay || showRecommendations || showRationale) && (
-        <View style={styles.sectionList}>
+        <View style={[styles.sectionList, { backgroundColor: c.cardBg }]}>
           {showCompare && (
             <SectionRow
               icon="compare-arrows"
-              iconColor={COLORS.blue}
-              iconBg={COLORS.blueSoft}
+              iconColor={PALETTE.blue}
+              iconBg={PALETTE.blueSoft}
               title="Сравнение с прошлым периодом"
               hint="Сон, настроение, шаги — на графике"
               onPress={() => setOpenModal('compare')}
@@ -679,8 +772,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
           {showTrends && (
             <SectionRow
               icon="show-chart"
-              iconColor={COLORS.indigo}
-              iconBg={COLORS.indigoSoft}
+              iconColor={PALETTE.indigo}
+              iconBg={PALETTE.indigoSoft}
               title={result.period === 'week' ? 'Тренд за неделю' : 'Тренд за месяц'}
               hint="Мини-графики по метрикам"
               onPress={() => setOpenModal('trends')}
@@ -689,8 +782,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
           {showHelpful && (
             <SectionRow
               icon="eco"
-              iconColor={COLORS.green}
-              iconBg={COLORS.greenSoft}
+              iconColor={PALETTE.green}
+              iconBg={PALETTE.greenSoft}
               title="Связи и помощники"
               hint="Что в журнале коррелирует с лучшим самочувствием"
               count={(result.metricLinks?.length ?? 0) + (result.helpfulHabits?.length ?? 0)}
@@ -700,8 +793,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
           {showStrengths && (
             <SectionRow
               icon="balance"
-              iconColor={COLORS.orange}
-              iconBg={COLORS.orangeSoft}
+              iconColor={PALETTE.orange}
+              iconBg={PALETTE.orangeSoft}
               title="Сильные стороны и зоны внимания"
               hint="Что держится и что просело"
               onPress={() => setOpenModal('strengths')}
@@ -710,8 +803,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
           {showPatterns && (
             <SectionRow
               icon="auto-graph"
-              iconColor={COLORS.pink}
-              iconBg={COLORS.pinkSoft}
+              iconColor={PALETTE.pink}
+              iconBg={PALETTE.pinkSoft}
               title="Паттерны месяца"
               hint="Что повторяется в ваших данных"
               onPress={() => setOpenModal('patterns')}
@@ -720,8 +813,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
           {showWeakPointsForDay && (
             <SectionRow
               icon="priority-high"
-              iconColor={COLORS.orange}
-              iconBg={COLORS.orangeSoft}
+              iconColor={PALETTE.orange}
+              iconBg={PALETTE.orangeSoft}
               title="Главные просадки сегодня"
               count={result.weakPoints.length}
               onPress={() => setOpenModal('strengths')}
@@ -730,8 +823,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
           {showRecommendations && (
             <SectionRow
               icon="lightbulb-outline"
-              iconColor={COLORS.yellow}
-              iconBg={COLORS.yellowSoft}
+              iconColor={PALETTE.yellow}
+              iconBg={PALETTE.yellowSoft}
               title="Рекомендации"
               count={filteredRecommendations.length}
               onPress={() => setOpenModal('recommendations')}
@@ -740,8 +833,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
           {showRationale && (
             <SectionRow
               icon="psychology"
-              iconColor={COLORS.indigo}
-              iconBg={COLORS.indigoSoft}
+              iconColor={PALETTE.indigo}
+              iconBg={PALETTE.indigoSoft}
               title="Почему такой вывод"
               hint="Как AI пришёл к этому статусу"
               onPress={() => setOpenModal('rationale')}
@@ -753,8 +846,8 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
       {!!result.positiveHighlight?.trim() && !result.lowData && (
         <HighlightCard
           icon="wb-sunny"
-          iconColor={COLORS.green}
-          iconBg={COLORS.greenSoft}
+          iconColor={PALETTE.green}
+          iconBg={PALETTE.greenSoft}
           title="Позитивный сигнал"
           body={result.positiveHighlight}
         />
@@ -787,11 +880,11 @@ function InsightBody({ result }: { result: HealthyInsightResult }) {
       </InsightModal>
 
       <InsightModal visible={openModal === 'recommendations'} onClose={() => setOpenModal(null)} title="Рекомендации">
-        <ListBlock items={filteredRecommendations} icon="check-circle-outline" color={COLORS.yellow} />
+        <ListBlock items={filteredRecommendations} icon="check-circle-outline" color={PALETTE.yellow} />
       </InsightModal>
 
       <InsightModal visible={openModal === 'rationale'} onClose={() => setOpenModal(null)} title="Почему такой вывод">
-        <ThemedText style={[styles.modalText, { color: COLORS.textSecondary }]}>{result.rationale}</ThemedText>
+        <ThemedText style={[styles.modalText, { color: c.textSecondary }]}>{result.rationale}</ThemedText>
       </InsightModal>
     </Animated.View>
   );
@@ -909,19 +1002,25 @@ export function HealthyAiInsights() {
         ? 'Локальный режим'
         : 'Подготовка анализа...';
 
+  const insightTheme = useHealthyInsightThemeColors();
+
   return (
+    <InsightThemeContext.Provider value={insightTheme}>
     <View style={styles.root}>
       {/* Period tabs */}
-      <View style={[styles.segment, { backgroundColor: COLORS.cardBgSubtle }]}>
+      <View style={[styles.segment, { backgroundColor: insightTheme.cardBgSubtle }]}>
         {PERIODS.map(({ key, label }) => {
           const active = period === key;
           return (
             <Pressable
               key={key}
               onPress={() => onTab(key)}
-              style={[styles.segmentItem, active && { backgroundColor: COLORS.trackBg }]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={label}
+              style={[styles.segmentItem, active && { backgroundColor: insightTheme.trackBg }]}
             >
-              <ThemedText style={[styles.segmentLabel, { color: active ? COLORS.textPrimary : COLORS.textSecondary }]}>
+              <ThemedText style={[styles.segmentLabel, { color: active ? insightTheme.textPrimary : insightTheme.textSecondary }]}>
                 {label}
               </ThemedText>
             </Pressable>
@@ -931,11 +1030,12 @@ export function HealthyAiInsights() {
 
       {/* Meta */}
       <View style={styles.metaRow}>
-        <ThemedText style={[styles.metaText, { color: COLORS.textMuted }]}>{metaText}</ThemedText>
+        <ThemedText style={[styles.metaText, { color: insightTheme.textMuted }]}>{metaText}</ThemedText>
       </View>
 
       <InsightBody key={period} result={resolvedInsight} />
     </View>
+    </InsightThemeContext.Provider>
   );
 }
 
@@ -972,10 +1072,9 @@ const styles = StyleSheet.create({
 
   // Generic card
   card: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   cardPressed: { opacity: 0.85 },
 
@@ -1027,19 +1126,17 @@ const styles = StyleSheet.create({
 
   // Section list (rows similar to Settings list)
   sectionList: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    marginBottom: 12,
+    marginBottom: Spacing.md,
   },
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    gap: 14,
+    paddingVertical: Spacing.md + 2,
+    paddingHorizontal: Spacing.md + 2,
+    gap: Spacing.md + 2,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.divider,
   },
   sectionRowBody: { flex: 1, gap: 2 },
   sectionRowTitleRow: {
@@ -1088,7 +1185,6 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxHeight: '85%',
-    backgroundColor: COLORS.cardBg,
     borderRadius: 18,
     overflow: 'hidden',
   },
@@ -1097,10 +1193,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.divider,
   },
   modalTitle: { fontSize: 17, fontWeight: '700' },
   modalScroll: { maxHeight: 520 },

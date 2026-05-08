@@ -30,9 +30,13 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { FontSizes, LineHeights, Spacing } from '@/constants/theme';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const errorColor = useThemeColor({}, 'error');
   const textMuted = useThemeColor({}, 'textMuted');
 
@@ -174,7 +178,13 @@ export default function RegisterScreen() {
         style={styles.keyboard}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop: Math.max(insets.top, Spacing.huge) + Spacing.md,
+              paddingBottom: Math.max(insets.bottom, Spacing.huge) + Spacing.md,
+            },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -385,12 +395,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 40,
-    gap: 32,
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.huge,
   },
   header: {
-    gap: 12,
+    gap: Spacing.md,
   },
   title: {
     fontSize: 28,
@@ -398,31 +407,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subtitle: {
-    fontSize: 18,
-    lineHeight: 26,
+    fontSize: FontSizes.title + 1,
+    lineHeight: LineHeights.headline,
   },
   form: {
-    gap: 24,
+    gap: Spacing.xxl,
   },
   field: {
-    gap: 8,
+    gap: Spacing.sm,
   },
   label: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: FontSizes.body + 1,
+    lineHeight: LineHeights.body + 2,
     fontWeight: '500',
   },
   smsHint: {
-    fontSize: 14,
+    fontSize: FontSizes.bodySmall,
     textAlign: 'center',
   },
   error: {
-    fontSize: 12,
+    fontSize: FontSizes.caption,
   },
   errorCenter: {
     textAlign: 'center',
   },
   footer: {
-    marginTop: 8,
+    marginTop: Spacing.sm,
   },
 });

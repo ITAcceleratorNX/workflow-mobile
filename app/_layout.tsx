@@ -62,7 +62,7 @@ export default function RootLayout() {
               <Stack.Screen name="steps" />
               <Stack.Screen name="notifications" />
             </Stack>
-            <StatusBar style="auto" />
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
           </ToastProvider>
         </ThemeProvider>
       </GestureHandlerRootView>
