@@ -840,6 +840,19 @@ export async function assignExecutorsToRequest(
   return { ok: true };
 }
 
+/** Изменить исполнителей на подзаявку (department-head) */
+export async function changeExecutorsToRequest(
+    subRequestId: number,
+    executors: Array<{ id: number; role: 'executor' | 'leader' }>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(
+      `/request-executors/${subRequestId}/change`,
+      { method: 'PUT', body: JSON.stringify({ executors }) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
 /** Создать группу заявок (FormData с photos) */
 export async function createRequestGroup(
   formData: FormData

@@ -24,7 +24,7 @@ import { RequestActionMenu, type RequestUserRole } from '@/components/requests/r
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
-  assignExecutorsToRequest,
+  changeExecutorsToRequest,
   completeRequest,
   deleteRequest,
   executeRequest,
@@ -369,7 +369,7 @@ export default function RequestDetailScreen() {
       setActionLoading(true);
       setAssignError(null);
       try {
-        const res = await assignExecutorsToRequest(subForAssign.id, execs);
+        const res = await changeExecutorsToRequest(subForAssign.id, execs);
         if (res.ok) {
           showToast({ title: 'Исполнители назначены', variant: 'success' });
           setShowAssignModal(false);
