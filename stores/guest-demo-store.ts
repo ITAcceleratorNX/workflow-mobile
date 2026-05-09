@@ -28,8 +28,6 @@ interface GuestDemoState {
   clearRequests: () => void;
 }
 
-let nextGuestId = -1;
-
 export const useGuestDemoStore = create<GuestDemoState>()(
   persist(
     (set, get) => ({
@@ -37,7 +35,8 @@ export const useGuestDemoStore = create<GuestDemoState>()(
       requests: [],
 
       addBooking: (booking) => {
-        const id = nextGuestId--;
+        const ids = get().bookings.map((b) => b.id);
+        const id = (ids.length ? Math.min(...ids) : 0) - 1;
         const newBooking: GuestDemoBooking = { ...booking, id };
         set((state) => ({
           bookings: [...state.bookings, newBooking].sort(
@@ -55,7 +54,8 @@ export const useGuestDemoStore = create<GuestDemoState>()(
       clearBookings: () => set({ bookings: [] }),
 
       addRequest: (request) => {
-        const id = nextGuestId--;
+        const ids = get().requests.map((r) => r.id);
+        const id = (ids.length ? Math.min(...ids) : 0) - 1;
         const created_date = new Date().toISOString();
         const newRequest: GuestDemoRequest = {
           ...request,

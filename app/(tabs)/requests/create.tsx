@@ -45,7 +45,6 @@ import {
   hasRoomsForLocation,
 } from '@/lib/office-locations';
 import { findNearestOffice } from '@/lib/nearest-office';
-import { compressRequestPhotos } from '@/lib/request-photo-compression';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -546,6 +545,7 @@ export default function CreateRequestScreen() {
     ];
     formData.append('sub_requests', JSON.stringify(subRequestsData));
 
+    const { compressRequestPhotos } = await import('@/lib/request-photo-compression');
     const compressedBeforePhotos = await compressRequestPhotos(photos, 'request_before');
     compressedBeforePhotos.forEach((photo) => {
       formData.append('photos', {

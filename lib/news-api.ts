@@ -60,11 +60,14 @@ function toDisplayItem(item: ApiNewsItem): NewsDisplayItem {
   };
 }
 
-/** Публичный запрос без обязательной авторизации */
+/** Публичный запрос без обязательной авторизации (не шлём guest-demo — иначе бэкенд может ответить 401). */
 async function publicRequest<T>(path: string): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
+  const rawToken = useAuthStore.getState().token;
+  const useBearer =
+    typeof rawToken === 'string' && rawToken.length > 0 && rawToken !== 'guest-demo';
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...(useAuthStore.getState().token ? { Authorization: `Bearer ${useAuthStore.getState().token}` } : {}),
+    ...(useBearer ? { Authorization: `Bearer ${rawToken}` } : {}),
   };
   try {
     const res = await fetch(`${apiBaseUrl}${path}`, { headers });
@@ -84,7 +87,8 @@ async function authRequest<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
-  const token = useAuthStore.getState().token;
+  const rawToken = useAuthStore.getState().token;
+  const token = rawToken && rawToken !== 'guest-demo' ? rawToken : null;
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -179,7 +183,8 @@ export async function createNews(params: {
     } as unknown as Blob);
   }
 
-  const token = useAuthStore.getState().token;
+  const raw = useAuthStore.getState().token;
+  const token = raw && raw !== 'guest-demo' ? raw : null;
   const headers: HeadersInit = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
@@ -263,7 +268,8 @@ export async function updateNews(
     } as unknown as Blob);
   }
 
-  const token = useAuthStore.getState().token;
+  const raw = useAuthStore.getState().token;
+  const token = raw && raw !== 'guest-demo' ? raw : null;
   const headers: HeadersInit = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };

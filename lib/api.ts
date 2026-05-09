@@ -1,10 +1,16 @@
 import { router } from 'expo-router';
 
 import { config } from '@/lib/config';
-import { compressRequestPhotos } from '@/lib/request-photo-compression';
 import { useAuthStore } from '@/stores/auth-store';
 
 const { apiBaseUrl } = config;
+
+const HEALTHY_SYNC_VERSION = 'healthy.v1' as const;
+
+function pathWithoutQuery(p: string): string {
+  const q = p.indexOf('?');
+  return q === -1 ? p : p.slice(0, q);
+}
 
 type RequestOptions = RequestInit & { params?: Record<string, string> };
 
@@ -63,6 +69,48 @@ export async function request<T>(
     }
   }
 
+  if (isGuestToken) {
+    const method = (init.method ?? 'GET').toUpperCase();
+    const base = pathWithoutQuery(path);
+
+    if (method === 'GET' && (base === '/offices' || base.startsWith('/offices/'))) {
+      if (base === '/offices') {
+        return { ok: true, data: [GUEST_DEMO_OFFICE] as T };
+      }
+      const m = /^\/offices\/(\d+)$/.exec(base);
+      if (m) {
+        const oid = Number(m[1]);
+        if (oid === GUEST_DEMO_OFFICE.id) {
+          return { ok: true, data: GUEST_DEMO_OFFICE as T };
+        }
+        return { ok: false, error: 'Офис не найден' };
+      }
+    }
+
+    if (method === 'GET' && base === '/meeting-rooms') {
+      const q = path.includes('?') ? path.slice(path.indexOf('?') + 1) : '';
+      const officeParam = new URLSearchParams(q).get('office_id');
+      const oid = officeParam != null ? Number(officeParam) : NaN;
+      if (!officeParam || oid === GUEST_DEMO_OFFICE.id) {
+        return { ok: true, data: GUEST_DEMO_MEETING_ROOMS as T };
+      }
+      return { ok: true, data: [] as T };
+    }
+
+    if (method === 'POST' && base === '/healthy/sync') {
+      return {
+        ok: true,
+        data: {
+          ok: true,
+          data: {
+            version: HEALTHY_SYNC_VERSION,
+            sync_result: { ok: true, synced_dates: [], profile_updated: false },
+          },
+        } as T,
+      };
+    }
+  }
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -82,7 +130,8 @@ export async function request<T>(
       }
       if (res.status === 401) {
         // При logout токен уже очищен — не триггерим лишний clearAuth/redirect повторно.
-        if (token) {
+        // Демо-сессию не сбрасываем из‑за ответа API (guest-demo не валиден на бэкенде).
+        if (token && token !== 'guest-demo') {
           useAuthStore.getState().clearAuth();
           router.replace('/login');
         }
@@ -127,8 +176,11 @@ async function requestFormData<T>(
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401) {
-        useAuthStore.getState().clearAuth();
-        router.replace('/login');
+        const t = useAuthStore.getState().token;
+        if (t && t !== 'guest-demo') {
+          useAuthStore.getState().clearAuth();
+          router.replace('/login');
+        }
         return { ok: false, error: 'Сессия истекла. Войдите снова.' };
       }
       const error =
@@ -816,6 +868,7 @@ export async function uploadRequestPhotos(
   photos: { uri: string; type?: string }[],
   photoType: 'before' | 'after' = 'after'
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { compressRequestPhotos } = await import('@/lib/request-photo-compression');
   const formData = new FormData();
   const compressedPhotos = await compressRequestPhotos(
     photos.map((p) => p.uri),
@@ -1512,6 +1565,44 @@ export interface MeetingRoom {
   /** Одно фото — если бэкенд отдаёт только photo */
   photo?: string | null;
 }
+
+/** Тот же офис, что в демо на экране создания заявки (`requests/create.tsx`). */
+const GUEST_DEMO_OFFICE: Office = {
+  id: 1,
+  name: 'Офис (демо)',
+  city: 'Алматы',
+  address: 'ул. Демо, 1',
+  lat: 43.238949,
+  lon: 76.889709,
+};
+
+const GUEST_DEMO_MEETING_ROOMS: MeetingRoom[] = [
+  {
+    id: 101,
+    name: 'Переговорная «Орёл» (демо)',
+    floor: 3,
+    capacity: 8,
+    office_id: 1,
+    office: GUEST_DEMO_OFFICE,
+    status: 'available',
+    isActive: true,
+    room_type: 'meeting',
+    photos: [],
+  },
+  {
+    id: 102,
+    name: 'Переговорная «Ястреб» (демо)',
+    floor: 5,
+    capacity: 4,
+    office_id: 1,
+    office: GUEST_DEMO_OFFICE,
+    status: 'available',
+    isActive: true,
+    room_type: 'meeting',
+    photos: [],
+    description: null,
+  },
+];
 
 export interface MeetingRoomBooking {
   id: number;

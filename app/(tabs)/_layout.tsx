@@ -5,6 +5,7 @@ import React, { useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav, BOTTOM_NAV_ROW_HEIGHT, bottomNavBottomInset } from '@/components/bottom-nav';
+import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 import { usePedometer } from '@/hooks/use-pedometer';
 import { useSleepNotifications } from '@/hooks/use-sleep-notifications';
 import { useStepsSync } from '@/hooks/use-steps-sync';
@@ -12,6 +13,7 @@ import { useDeepLinkStore } from '@/stores/deep-link-store';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const hideBookingFormNav = useBookingTabUiStore((s) => s.hideBottomNavForBookingForm);
   const router = useRouter();
   const pendingRequestId = useDeepLinkStore((s) => s.pendingRequestId);
   const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
@@ -39,7 +41,13 @@ export default function TabLayout() {
         const isCreateRequest = route.name === 'requests' && nestedRoute === 'create';
         const isRequestDetail = route.name === 'requests' && nestedRoute === '[id]';
         const paddingBottom =
-          route.name === 'help' ? 0 : isCreateRequest || isRequestDetail ? 0 : contentPaddingBottom;
+          route.name === 'help'
+            ? 0
+            : isCreateRequest || isRequestDetail
+              ? 0
+              : route.name === 'booking' && hideBookingFormNav
+                ? 0
+                : contentPaddingBottom;
         return {
           headerShown: false,
           tabBarShowLabel: false,

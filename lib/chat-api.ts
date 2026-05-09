@@ -18,6 +18,14 @@ async function authRequest<T>(
     return { ok: false, error: 'Не авторизован', unauthorized: true };
   }
 
+  if (token === 'guest-demo') {
+    return {
+      ok: false,
+      error: 'В демо-режиме чат недоступен',
+      unauthorized: false,
+    };
+  }
+
   const url = `${apiBaseUrl}${path}`;
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -30,8 +38,10 @@ async function authRequest<T>(
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
-      useAuthStore.getState().clearAuth();
-      router.replace('/login');
+      if (token !== 'guest-demo') {
+        useAuthStore.getState().clearAuth();
+        router.replace('/login');
+      }
       return {
         ok: false,
         error: 'Сессия истекла. Войдите снова.',

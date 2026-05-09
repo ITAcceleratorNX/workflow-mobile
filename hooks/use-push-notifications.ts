@@ -174,10 +174,22 @@ export function usePushNotifications(): void {
       const requestId = parseId(data?.request_id ?? data?.requestId);
       const id = requestGroupId ?? requestId;
       if (id != null && !Number.isNaN(id)) {
-        router.push(`/(tabs)/requests/${id}` as const);
+        const guest = useAuthStore.getState().isGuest;
+        const authToken = useAuthStore.getState().token;
+        if (guest || authToken === 'guest-demo') {
+          showToast({
+            title: 'Демо-режим',
+            description:
+              'Переход к заявке из уведомления доступен после входа в аккаунт. Откройте заявку в списке заявок.',
+            variant: 'default',
+            duration: 4500,
+          });
+        } else {
+          router.push(`/(tabs)/requests/${id}` as const);
+        }
       }
       void clearBadge();
     });
     return () => sub.remove();
-  }, [router, handleTaskReminderResponse]);
+  }, [router, handleTaskReminderResponse, showToast]);
 }

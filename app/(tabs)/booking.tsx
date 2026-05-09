@@ -712,7 +712,10 @@ export default function BookingScreen() {
             <MaterialIcons name="arrow-back" size={24} color="#fff" />
             <BookingText style={styles.backTextWhite}>Назад</BookingText>
           </Pressable>
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.formContent}>
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={[styles.formContent, { paddingBottom: insets.bottom + 28 }]}
+          >
             <View style={styles.roomImageContainer}>
               {showFormImages ? (
                 <>
