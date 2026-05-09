@@ -45,6 +45,22 @@ const TYPE_OPTIONS = [
   { value: 'planned', label: 'Плановая' },
 ];
 
+/** Короткая дата для карточки списка (высота ≈ высоте превью). */
+function formatCardDateShort(createdDate: string | undefined): string {
+  if (!createdDate) return '—';
+  const d = new Date(createdDate);
+  if (Number.isNaN(d.getTime())) return '—';
+  const datePart = d.toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+  });
+  const timePart = d.toLocaleTimeString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${datePart}, ${timePart}`;
+}
+
 /** Опции статуса по ролям (kcell-service-front). client: без просрочено; admin-worker: + назначен, долгосрочные, отклонено; department-head: + отклонено, долгосрочные; executor: статус + тип для вкладки «Мои заявки»; manager: базовые + долгосрочные (без назначен/отклонено). */
 function getStatusOptionsForRole(
   role: RequestGroupsRole | null
@@ -184,31 +200,18 @@ function RequestCard({
 
   const isExecutor = usesExecutorRequestCard(role);
   const typeLabel = getTypeLabel(request.request_type ?? 'normal');
-  const serviceTypeBadgeText = `Тип: ${getServiceTypeLabel(request)}`;
   const statusLabel = getStatusLabel(request.status);
-  const formattedDateLong = request.created_date
-    ? new Date(request.created_date).toLocaleDateString('ru-RU', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      }) +
-      ' г. в ' +
-      new Date(request.created_date).toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : '—';
+  const serviceName = getServiceTypeLabel(request);
+  const dateShort = formatCardDateShort(request.created_date);
   const photoUrl = getFirstPhotoUrl(request);
-  const locationText =
-    request.location_detail?.trim() ||
-    request.location?.trim() ||
-    'Местоположение не указано';
+  const officeText = request.office?.name?.trim() || '—';
+  const serviceAndOffice = `${serviceName} · ${officeText}`;
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Заявка ${request.id}, ${statusLabel}`}
+      accessibilityLabel={`Заявка ${request.id}, ${statusLabel}, ${serviceName}, ${officeText}`}
       style={({ pressed }) => [styles.card, { opacity: pressed ? 0.85 : 1 }]}
     >
       <View style={[styles.photoWrap, { backgroundColor: surfaceMuted }]}>
@@ -222,104 +225,85 @@ function RequestCard({
           <View
             style={[styles.photoPlaceholder, { backgroundColor: surfaceElevated }]}
           >
-            <MaterialIcons name="image" size={32} color={textMuted} />
+            <MaterialIcons name="image" size={28} color={textMuted} />
           </View>
         )}
       </View>
 
       <View style={styles.cardContent}>
         {isExecutor ? (
-          <>
+          <View style={styles.cardContentInner}>
             <ThemedText
-              style={[styles.executorBlockLine, { color: textMuted }]}
-              numberOfLines={2}
+              style={[styles.cardCompactLine1, { color: textMuted }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
-              Блок: {getExecutorBlockLine(request)}
+              {getExecutorBlockLine(request)}
             </ThemedText>
             <ThemedText
-              style={[styles.executorRequestTitle, { color: text }]}
-              numberOfLines={2}
+              style={[styles.cardCompactLine2, styles.cardCompactExecutorTitle, { color: text }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
               {getExecutorRequestTitle(request)}
             </ThemedText>
-            <View style={styles.badges}>
-              <View
-                style={[
-                  styles.badgeStatus,
-                  styles.badgeStatusWide,
-                  { backgroundColor: surfaceMuted },
-                ]}
-              >
-                <ThemedText
-                  style={[styles.badgeStatusText, { color: textSecondary }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {statusLabel}
-                </ThemedText>
-              </View>
-            </View>
-          </>
-        ) : (
-          <>
             <ThemedText
-              style={[styles.cardTitle, { color: text }]}
+              style={[styles.cardCompactLine3, { color: textSecondary }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {statusLabel}
+            </ThemedText>
+          </View>
+        ) : (
+          <View style={styles.cardContentInner}>
+            <View style={styles.cardTitleRow}>
+              <View style={styles.cardTitleLeft}>
+                <ThemedText
+                  style={[styles.cardCompactId, { color: text }]}
+                  numberOfLines={1}
+                >
+                  #{request.id}
+                </ThemedText>
+                {request.request_type && request.request_type !== 'normal' ? (
+                  <View style={[styles.badgeTypeMini, { backgroundColor: successSoft }]}>
+                    <ThemedText
+                      style={[styles.badgeTypeMiniText, { color: success }]}
+                      numberOfLines={1}
+                    >
+                      {typeLabel}
+                    </ThemedText>
+                  </View>
+                ) : null}
+              </View>
+              <ThemedText
+                style={[styles.cardCompactStatus, { color: textMuted }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {statusLabel}
+              </ThemedText>
+            </View>
+            <ThemedText
+              style={[styles.cardCompactLine2, { color: textMuted }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {serviceAndOffice}
+            </ThemedText>
+            <ThemedText
+              style={[styles.cardCompactLine3, { color: textMuted }]}
               numberOfLines={1}
             >
-              Заявка #{request.id}
+              {dateShort}
             </ThemedText>
-            <View style={styles.badges}>
-              <View style={[styles.badgeType, { backgroundColor: successSoft }]}>
-                <ThemedText
-                  style={[styles.badgeText, { color: success }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {typeLabel}
-                </ThemedText>
-              </View>
-              <View style={[styles.badgeStatus, { backgroundColor: surfaceMuted }]}>
-                <ThemedText
-                  style={[styles.badgeStatusText, { color: textSecondary }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {statusLabel}
-                </ThemedText>
-              </View>
-            </View>
-          </>
+          </View>
         )}
-        {!isExecutor && (
-          <ThemedText
-            style={[styles.cardMetaMuted, { color: textMuted }]}
-            numberOfLines={1}
-          >
-            {serviceTypeBadgeText}
-          </ThemedText>
-        )}
-        {!isExecutor && (
-          <ThemedText
-            style={[styles.cardLocation, { color: textMuted }]}
-            numberOfLines={2}
-          >
-            {locationText}
-          </ThemedText>
-        )}
-        <View style={styles.cardDateRow}>
-          <MaterialIcons name="schedule" size={15} color={textMuted} />
-          <ThemedText
-            style={[styles.cardDate, { color: textMuted }]}
-            numberOfLines={1}
-          >
-            {formattedDateLong}
-          </ThemedText>
-        </View>
       </View>
 
       <MaterialIcons
         name="chevron-right"
-        size={24}
+        size={22}
         color={textMuted}
         style={styles.chevron}
       />
@@ -411,8 +395,10 @@ export default function RequestsListScreen() {
         const statusForApi =
           filterStatus === 'all' || filterStatus === 'long_term' ? 'all' : filterStatus;
         params = { status: statusForApi, priority: filterPriority };
-        if (role === 'manager') {
+        if (role === 'manager' || role === 'admin-worker') {
           if (filterOffice && filterOffice !== 'all') params.office_id = filterOffice;
+        }
+        if (role === 'manager') {
           if (filterPeriod && filterPeriod !== 'all') {
             const now = new Date();
             let from: Date;
@@ -459,7 +445,7 @@ export default function RequestsListScreen() {
   }, [role]);
 
   useEffect(() => {
-    if (role === 'manager') {
+    if (role === 'manager' || role === 'admin-worker') {
       getOffices().then(setOffices);
     }
   }, [role]);
@@ -512,11 +498,13 @@ export default function RequestsListScreen() {
         filterPriority === 'all' || (r.request_type ?? 'normal') === filterPriority;
       base = base.filter((r) => statusOk(r) && typeOk(r));
     }
-    if (role === 'manager') {
+    if (role === 'manager' || role === 'admin-worker') {
       if (filterOffice && filterOffice !== 'all') {
         const officeId = parseInt(filterOffice, 10);
         base = base.filter((r) => r.office_id === officeId);
       }
+    }
+    if (role === 'manager') {
       if (filterPeriod && filterPeriod !== 'all') {
         const now = new Date();
         let from: Date;
@@ -611,7 +599,7 @@ export default function RequestsListScreen() {
             />
           </View>
         </View>
-        {role === 'manager' && (
+        {(role === 'manager' || role === 'admin-worker') && (
           <View style={styles.filtersRow}>
             <View style={styles.filterItem}>
               <Select
@@ -621,14 +609,16 @@ export default function RequestsListScreen() {
                 placeholder="Офис"
               />
             </View>
-            <View style={styles.filterItem}>
-              <Select
-                value={filterPeriod}
-                onValueChange={setFilterPeriod}
-                options={PERIOD_OPTIONS}
-                placeholder="Период"
-              />
-            </View>
+            {role === 'manager' && (
+              <View style={styles.filterItem}>
+                <Select
+                  value={filterPeriod}
+                  onValueChange={setFilterPeriod}
+                  options={PERIOD_OPTIONS}
+                  placeholder="Период"
+                />
+              </View>
+            )}
           </View>
         )}
 
@@ -824,7 +814,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: CARD_GAP,
     marginBottom: Spacing.lg,
     backgroundColor: 'transparent',
@@ -849,80 +839,66 @@ const styles = StyleSheet.create({
   cardContent: {
     flex: 1,
     minWidth: 0,
+    height: CARD_PHOTO_HEIGHT,
+    justifyContent: 'center',
   },
-  cardTitle: {
-    fontSize: FontSizes.title,
-    lineHeight: LineHeights.title,
-    fontWeight: '600',
-    marginBottom: Spacing.xs + 2,
+  cardContentInner: {
+    height: CARD_PHOTO_HEIGHT,
+    justifyContent: 'space-between',
+    minWidth: 0,
   },
-  executorBlockLine: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginBottom: Spacing.xs,
-    letterSpacing: 0.2,
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    minWidth: 0,
   },
-  executorRequestTitle: {
-    fontSize: FontSizes.title,
+  cardTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    flexShrink: 0,
+  },
+  cardCompactId: {
+    fontSize: FontSizes.body,
+    lineHeight: 20,
     fontWeight: '700',
-    marginBottom: Spacing.xs + 2,
-    lineHeight: LineHeights.title,
   },
-  cardMetaMuted: {
+  cardCompactStatus: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+    textAlign: 'right',
+    minWidth: 0,
+  },
+  cardCompactLine1: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  cardCompactLine2: {
     fontSize: 13,
     lineHeight: 18,
-    marginBottom: Spacing.xs + 2,
+    fontWeight: '500',
   },
-  badges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs + 2,
-    maxWidth: '100%',
+  cardCompactLine3: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '400',
   },
-  badgeType: {
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: 5,
+  badgeTypeMini: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: Radius.pill,
-    maxWidth: '48%',
-    flexShrink: 1,
-    minWidth: 0,
+    maxWidth: 88,
   },
-  badgeStatus: {
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: 5,
-    borderRadius: Radius.pill,
-    maxWidth: '48%',
-    flexShrink: 1,
-    minWidth: 0,
+  badgeTypeMiniText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
-  badgeStatusWide: {
-    maxWidth: '100%',
-    alignSelf: 'flex-start',
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  badgeStatusText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  cardLocation: {
-    fontSize: FontSizes.bodySmall,
-    lineHeight: 19,
-    marginBottom: Spacing.xs + 2,
-  },
-  cardDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs + 2,
-    marginTop: 2,
-  },
-  cardDate: {
-    fontSize: 13,
-    flex: 1,
+  cardCompactExecutorTitle: {
+    fontWeight: '700',
   },
   chevron: {
     flexShrink: 0,

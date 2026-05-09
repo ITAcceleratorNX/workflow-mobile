@@ -4,11 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Image,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -17,6 +15,11 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AssignExecutorsModal } from '@/components/requests/assign-executors-modal';
 import { CompleteTaskModal } from '@/components/requests/complete-task-modal';
+import {
+  AdminAcceptRequestModal,
+  AdminRejectRequestModal,
+  type AdminAcceptRequestPayload,
+} from '@/components/requests/admin-request-decision-modals';
 import { EditRequestGroupModal } from '@/components/requests/edit-request-group-modal';
 import { RatingModal } from '@/components/requests/rating-modal';
 import { RedirectModal } from '@/components/requests/redirect-modal';
@@ -30,6 +33,7 @@ import {
   deleteRequest,
   executeRequest,
   getExecutors,
+  getOffices,
   getRequestGroupById,
   getServiceCategories,
   patchRequestGroup,
@@ -42,24 +46,18 @@ import {
   toggleLongTermRequest,
   updateRequestGroup,
   uploadRequestPhotos,
-  type AcceptSubRequestPayload,
   type ExecutorInCategory,
+  type Office,
   type RequestGroup,
   type SubRequest,
   type UpdateRequestGroupPayload,
 } from '@/lib/api';
-import { PageLoader, Select } from '@/components/ui';
+import { PageLoader } from '@/components/ui';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  REQUEST_TYPE_OPTIONS,
-  SLA_OPTIONS,
-  COMPLEXITY_OPTIONS,
-  getStatusLabel,
-  getTypeLabel,
-} from '@/constants/requests';
+import { getStatusLabel, getTypeLabel } from '@/constants/requests';
 
 function PhotoGrid({
   photos,
@@ -117,12 +115,7 @@ export default function RequestDetailScreen() {
   const mutedColor = useThemeColor({}, 'textMuted');
   const primaryColor = useThemeColor({}, 'primary');
   const borderColor = useThemeColor({}, 'border');
-  const backgroundColor = useThemeColor({}, 'background');
-  const cardBackground = useThemeColor({}, 'cardBackground');
   const onPrimary = useThemeColor({}, 'onPrimary');
-  const successColor = useThemeColor({}, 'success');
-  const dangerColor = useThemeColor({}, 'danger');
-  const dividerColor = useThemeColor({}, 'divider');
 
   const [request, setRequest] = useState<RequestGroup | null>(null);
   const [loading, setLoading] = useState(true);
@@ -151,11 +144,9 @@ export default function RequestDetailScreen() {
   const [redirectError, setRedirectError] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
-  const [rejectGroupReason, setRejectGroupReason] = useState('');
-  const [editableRequestType, setEditableRequestType] = useState<string>('normal');
-  const [subRequestSettings, setSubRequestSettings] = useState<Record<number, { sla: string; complexity: string }>>({});
-  const [locationDetail, setLocationDetail] = useState('');
-  const [acceptFormError, setAcceptFormError] = useState<string | null>(null);
+  const [offices, setOffices] = useState<Office[]>([]);
+  const [adminAcceptError, setAdminAcceptError] = useState<string | null>(null);
+  const [adminRejectError, setAdminRejectError] = useState<string | null>(null);
 
   const numId = id ? parseInt(id, 10) : NaN;
 
@@ -221,6 +212,9 @@ export default function RequestDetailScreen() {
           setExecutors(res.data);
         }
       });
+    }
+    if (role === 'admin-worker') {
+      getOffices().then(setOffices);
     }
   }, [role]);
 
@@ -438,77 +432,48 @@ export default function RequestDetailScreen() {
     [goBack, showToast, isGuest, request]
   );
 
-  useEffect(() => {
-    if (request && role === 'admin-worker' && request.status === 'in_progress') {
-      setEditableRequestType(request.request_type ?? 'normal');
-      setLocationDetail(request.location_detail ?? '');
-      setSubRequestSettings({});
-      setAcceptFormError(null);
-    }
-  }, [request?.id, request?.status, request?.request_type, request?.location_detail, role]);
+  const handleAdminAccept = useCallback(
+    async (body: AdminAcceptRequestPayload) => {
+      if (!request) return;
+      setAdminAcceptError(null);
+      setActionLoading(true);
+      try {
+        const res = await patchRequestGroup(request.id, 1, body);
+        if (res.ok) {
+          showToast({ title: 'Заявка принята в работу', variant: 'success' });
+          refetch();
+          setShowAcceptGroupModal(false);
+        } else {
+          setAdminAcceptError(res.error);
+        }
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [request, refetch, showToast]
+  );
 
-  const handleAcceptGroupSubmit = useCallback(async () => {
-    if (!request) return;
-    if (editableRequestType !== 'planned') {
-      const allHave = (request.requests ?? []).every((sr) => {
-        const s = subRequestSettings[sr.id];
-        return s?.sla && s?.complexity;
-      });
-      if (!allHave) {
-        setAcceptFormError('Укажите время выполнения и сложность для всех подзаявок');
-        return;
+  const handleAdminReject = useCallback(
+    async (rejection_reason: string) => {
+      if (!request) return;
+      setAdminRejectError(null);
+      setActionLoading(true);
+      try {
+        const res = await patchRequestGroup(request.id, 2, { rejection_reason });
+        if (res.ok) {
+          showToast({ title: 'Заявка отклонена', variant: 'success' });
+          refetch();
+          setShowRejectGroupModal(false);
+          goBack();
+        } else {
+          setAdminRejectError(res.error);
+        }
+      } finally {
+        setActionLoading(false);
       }
-    }
-    setAcceptFormError(null);
-    setActionLoading(true);
-    try {
-      const sub_requests: AcceptSubRequestPayload[] = (request.requests ?? []).map((sr) => {
-        const s = subRequestSettings[sr.id];
-        return {
-          id: sr.id,
-          sla: editableRequestType === 'planned' ? null : s?.sla ?? null,
-          complexity: editableRequestType === 'planned' ? null : s?.complexity ?? null,
-          category_id: sr.category_id,
-        };
-      });
-      const res = await patchRequestGroup(request.id, 1, {
-        request_type: editableRequestType,
-        location_detail: locationDetail.trim() || undefined,
-        sub_requests,
-      });
-      if (res.ok) {
-        showToast({ title: 'Заявка принята в работу', variant: 'success' });
-        refetch();
-        setShowAcceptGroupModal(false);
-      } else {
-        setAcceptFormError(res.error);
-      }
-    } finally {
-      setActionLoading(false);
-    }
-  }, [request, editableRequestType, subRequestSettings, locationDetail, refetch, showToast]);
-
-  const handleRejectGroup = useCallback(async () => {
-    if (!request || !rejectGroupReason.trim()) return;
-    setActionLoading(true);
-    setAcceptFormError(null);
-    try {
-      const res = await patchRequestGroup(request.id, 2, {
-        rejection_reason: rejectGroupReason.trim(),
-      });
-      if (res.ok) {
-        showToast({ title: 'Заявка отклонена', variant: 'success' });
-        setRejectGroupReason('');
-        refetch();
-        setShowRejectGroupModal(false);
-        goBack();
-      } else {
-        setAcceptFormError(res.error);
-      }
-    } finally {
-      setActionLoading(false);
-    }
-  }, [request, rejectGroupReason, refetch, showToast, goBack]);
+    },
+    [request, refetch, showToast, goBack]
+  );
 
   const handleToggleLongTerm = useCallback(
     async (requestId: number, _requestGroupId: number, currentStatus: boolean) => {
@@ -699,8 +664,14 @@ export default function RequestDetailScreen() {
             onRateClient={() => setShowClientRatingModal(true)}
             onToggleLongTerm={handleToggleLongTerm}
             onAdminCompleteGroup={handleAdminCompleteGroup}
-            onAdminAcceptGroup={() => setShowAcceptGroupModal(true)}
-            onAdminRejectGroup={() => setShowRejectGroupModal(true)}
+            onAdminAcceptGroup={() => {
+              setAdminAcceptError(null);
+              setShowAcceptGroupModal(true);
+            }}
+            onAdminRejectGroup={() => {
+              setAdminRejectError(null);
+              setShowRejectGroupModal(true);
+            }}
             onEditRequestGroup={() => {
               setEditError(null);
               setShowEditModal(true);
@@ -824,6 +795,15 @@ export default function RequestDetailScreen() {
 
         <View style={styles.block}>
           <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
+            Офис
+          </ThemedText>
+          <ThemedText style={{ color: textColor }}>
+            {request.office?.name || '—'}
+          </ThemedText>
+        </View>
+
+        <View style={styles.block}>
+          <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
             Дата создания
           </ThemedText>
           <ThemedText style={{ color: textColor }}>
@@ -877,242 +857,31 @@ export default function RequestDetailScreen() {
         loading={actionLoading}
       />
 
-      {/* Модалка для принятия заявки администратором */}
       {role === 'admin-worker' && request.status === 'in_progress' && (
-        <Modal
-          visible={showAcceptGroupModal}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setShowAcceptGroupModal(false)}
-        >
-          <Pressable
-            style={styles.backdrop}
-            onPress={() => setShowAcceptGroupModal(false)}
-          >
-            <View
-              style={[
-                styles.acceptRejectModalSheet,
-                { backgroundColor: cardBackground, borderColor },
-              ]}
-            >
-              <View style={[styles.handle, { backgroundColor: dividerColor }]} />
-              <ThemedText style={[styles.acceptRejectBlockTitle, { color: textColor }]}>
-                Принять заявку
-              </ThemedText>
-
-              <ScrollView style={styles.actionsList} bounces={false}>
-                <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
-                  Тип заявки
-                </ThemedText>
-                <View style={styles.acceptModalSelectWrap}>
-                  <Select
-                    value={editableRequestType}
-                    onValueChange={setEditableRequestType}
-                    options={REQUEST_TYPE_OPTIONS}
-                    placeholder="Выберите тип"
-                  />
-                </View>
-
-                {editableRequestType !== 'planned' && (
-                  <>
-                    <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
-                      Время и сложность по подзаявкам
-                    </ThemedText>
-                    {(request.requests ?? []).map((sr) => (
-                      <View key={sr.id} style={[styles.acceptModalSubBlock, { borderColor }]}>
-                        <ThemedText style={[styles.acceptModalSubTitle, { color: textColor }]}>
-                          {sr.title || `Подзаявка #${sr.id}`}
-                        </ThemedText>
-                        <View style={styles.acceptModalRow}>
-                          <View style={styles.acceptModalField}>
-                            <ThemedText
-                              style={[styles.acceptModalFieldLabel, { color: mutedColor }]}
-                            >
-                              Время (SLA)
-                            </ThemedText>
-                            <Select
-                              value={subRequestSettings[sr.id]?.sla ?? ''}
-                              onValueChange={(v) =>
-                                setSubRequestSettings((prev) => ({
-                                  ...prev,
-                                  [sr.id]: {
-                                    sla: v,
-                                    complexity: prev[sr.id]?.complexity ?? '',
-                                  },
-                                }))
-                              }
-                              options={SLA_OPTIONS}
-                              placeholder="Выберите"
-                            />
-                          </View>
-                          <View style={styles.acceptModalField}>
-                            <ThemedText
-                              style={[styles.acceptModalFieldLabel, { color: mutedColor }]}
-                            >
-                              Сложность
-                            </ThemedText>
-                            <Select
-                              value={subRequestSettings[sr.id]?.complexity ?? ''}
-                              onValueChange={(v) =>
-                                setSubRequestSettings((prev) => ({
-                                  ...prev,
-                                  [sr.id]: {
-                                    sla: prev[sr.id]?.sla ?? '',
-                                    complexity: v,
-                                  },
-                                }))
-                              }
-                              options={COMPLEXITY_OPTIONS}
-                              placeholder="Выберите"
-                            />
-                          </View>
-                        </View>
-                      </View>
-                    ))}
-                  </>
-                )}
-
-                <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
-                  Локация в офисе (необязательно)
-                </ThemedText>
-                <TextInput
-                  style={[
-                    styles.acceptRejectBlockInput,
-                    {
-                      color: textColor,
-                      borderColor,
-                      backgroundColor,
-                    },
-                  ]}
-                  placeholder="Укажите локацию"
-                  placeholderTextColor={mutedColor}
-                  value={locationDetail}
-                  onChangeText={setLocationDetail}
-                />
-
-                {acceptFormError ? (
-                  <ThemedText style={[styles.acceptModalError, { color: dangerColor }]}>
-                    {acceptFormError}
-                  </ThemedText>
-                ) : null}
-              </ScrollView>
-
-              <View style={styles.acceptRejectBlockButtons}>
-                <Pressable
-                  onPress={handleAcceptGroupSubmit}
-                  disabled={actionLoading}
-                  accessibilityRole="button"
-                  accessibilityLabel="Принять заявку"
-                  style={[
-                    styles.acceptRejectBlockBtn,
-                    { backgroundColor: successColor },
-                  ]}
-                >
-                  <MaterialIcons name="check-circle" size={20} color={onPrimary} />
-                  <ThemedText style={[styles.acceptRejectLabel, { color: onPrimary }]}>
-                    {actionLoading ? '...' : 'Принять'}
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  onPress={() => setShowAcceptGroupModal(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Отмена"
-                  style={[
-                    styles.acceptRejectBlockBtn,
-                    { backgroundColor: dangerColor },
-                  ]}
-                >
-                  <MaterialIcons name="cancel" size={20} color={onPrimary} />
-                  <ThemedText style={[styles.acceptRejectLabel, { color: onPrimary }]}>
-                    Отмена
-                  </ThemedText>
-                </Pressable>
-              </View>
-            </View>
-          </Pressable>
-        </Modal>
-      )}
-
-      {/* Модалка для отклонения заявки администратором */}
-      {role === 'admin-worker' && request.status === 'in_progress' && (
-        <Modal
-          visible={showRejectGroupModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowRejectGroupModal(false)}
-        >
-          <Pressable
-            style={styles.backdrop}
-            onPress={() => setShowRejectGroupModal(false)}
-          >
-            <View
-              style={[
-                styles.acceptRejectModalSheet,
-                { backgroundColor: cardBackground, borderColor },
-              ]}
-            >
-              <View style={[styles.handle, { backgroundColor: dividerColor }]} />
-              <ThemedText style={[styles.acceptRejectBlockTitle, { color: textColor }]}>
-                Отклонить заявку
-              </ThemedText>
-              <ThemedText style={[styles.acceptModalLabel, { color: mutedColor }]}>
-                Укажите причину отклонения
-              </ThemedText>
-              <TextInput
-                style={[
-                  styles.rejectGroupInput,
-                  {
-                    color: textColor,
-                    borderColor,
-                    backgroundColor,
-                  },
-                ]}
-                placeholder="Причина отклонения..."
-                placeholderTextColor={mutedColor}
-                value={rejectGroupReason}
-                onChangeText={setRejectGroupReason}
-                multiline
-              />
-              {acceptFormError ? (
-                <ThemedText style={[styles.acceptModalError, { color: dangerColor }]}>
-                  {acceptFormError}
-                </ThemedText>
-              ) : null}
-
-              <View style={styles.acceptRejectBlockButtons}>
-                <Pressable
-                  onPress={handleRejectGroup}
-                  disabled={!rejectGroupReason.trim() || actionLoading}
-                  accessibilityRole="button"
-                  accessibilityLabel="Отклонить заявку"
-                  style={[
-                    styles.acceptRejectBlockBtn,
-                    { backgroundColor: dangerColor },
-                  ]}
-                >
-                  <MaterialIcons name="cancel" size={20} color={onPrimary} />
-                  <ThemedText style={[styles.acceptRejectLabel, { color: onPrimary }]}>
-                    {actionLoading ? '...' : 'Отклонить'}
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  onPress={() => setShowRejectGroupModal(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Закрыть"
-                  style={[
-                    styles.acceptRejectBlockBtn,
-                    { backgroundColor: successColor },
-                  ]}
-                >
-                  <MaterialIcons name="check-circle" size={20} color={onPrimary} />
-                  <ThemedText style={[styles.acceptRejectLabel, { color: onPrimary }]}>
-                    Закрыть
-                  </ThemedText>
-                </Pressable>
-              </View>
-            </View>
-          </Pressable>
-        </Modal>
+        <>
+          <AdminAcceptRequestModal
+            visible={showAcceptGroupModal}
+            request={request}
+            offices={offices}
+            loading={actionLoading}
+            error={adminAcceptError}
+            onClose={() => {
+              setShowAcceptGroupModal(false);
+              setAdminAcceptError(null);
+            }}
+            onAccept={handleAdminAccept}
+          />
+          <AdminRejectRequestModal
+            visible={showRejectGroupModal}
+            loading={actionLoading}
+            error={adminRejectError}
+            onClose={() => {
+              setShowRejectGroupModal(false);
+              setAdminRejectError(null);
+            }}
+            onReject={handleAdminReject}
+          />
+        </>
       )}
 
       <RejectModal
@@ -1301,156 +1070,6 @@ const styles = StyleSheet.create({
   photoModalHint: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
-    marginTop: 12,
-  },
-  acceptRejectLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  acceptRejectBlock: {
-    marginTop: 24,
-    marginBottom: 32,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  acceptRejectBlockTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  acceptRejectBlockInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    minHeight: 44,
-    marginBottom: 16,
-  },
-  acceptRejectBlockButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  acceptRejectBlockBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  acceptRejectBlockBtnAccept: {},
-  acceptRejectBlockBtnReject: {},
-  acceptRejectModalSheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-    maxHeight: '80%',
-    borderTopWidth: 1,
-  },
-  /** Полоска «ручка» внизу модалки */
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  actionsList: {
-    flexGrow: 0,
-    maxHeight: 420,
-  },
-  rejectGroupContent: {
-    borderRadius: 16,
-    padding: 24,
-  },
-  rejectGroupTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  rejectGroupSubtitle: {
-    fontSize: 14,
-    marginBottom: 16,
-  },
-  rejectGroupInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    minHeight: 80,
-    marginBottom: 20,
-  },
-  rejectGroupButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rejectGroupBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  rejectGroupBtnDanger: {
-    backgroundColor: '#EF4444',
-    borderColor: '#EF4444',
-  },
-  rejectGroupBtnDangerText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  acceptModalContent: {
-    borderRadius: 16,
-    padding: 24,
-    maxHeight: '85%',
-  },
-  acceptModalScroll: {
-    maxHeight: 400,
-  },
-  acceptModalLabel: {
-    fontSize: 12,
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  acceptModalSelectWrap: {
-    marginBottom: 16,
-  },
-  acceptModalSubBlock: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-  },
-  acceptModalSubTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  acceptModalRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  acceptModalField: {
-    flex: 1,
-    gap: 6,
-  },
-  acceptModalFieldLabel: {
-    fontSize: 11,
-  },
-  acceptModalButtons: {
-    marginTop: 16,
-  },
-  acceptModalBtnSuccess: {
-    backgroundColor: '#22C55E',
-    borderColor: '#22C55E',
-  },
-  acceptModalError: {
-    fontSize: 14,
     marginTop: 12,
   },
 });

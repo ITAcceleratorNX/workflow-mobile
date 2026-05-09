@@ -1,5 +1,4 @@
-import { MaterialIcons } from '@expo/vector-icons';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Keyboard,
   Modal,
@@ -10,12 +9,17 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { Select } from '@/components/ui';
 import { COMPLEXITY_OPTIONS, REQUEST_TYPE_OPTIONS, SLA_OPTIONS } from '@/constants/requests';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import type { RequestGroup, UpdateRequestGroupPayload } from '@/lib/api';
+
+import { useBottomSheetScrollMetrics } from './use-bottom-sheet-scroll-metrics';
+import { useSheetPanDismiss } from './use-sheet-pan-dismiss';
 
 type EditableSubRequestState = {
   title: string;
@@ -54,8 +58,19 @@ export function EditRequestGroupModal({
   const [locationDetail, setLocationDetail] = useState('');
   const [subRequests, setSubRequests] = useState<Record<number, EditableSubRequestState>>({});
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const canDismissByPullRef = useRef(true);
-  const isClosingByPullRef = useRef(false);
+
+  const {
+    scrollViewStyle,
+    onScrollContentSizeChange,
+    scrollEnabled,
+    sheetPaddingBottom,
+  } = useBottomSheetScrollMetrics({ visible, keyboardVisible });
+
+  const { panGesture, sheetAnimatedStyle } = useSheetPanDismiss({
+    visible,
+    onClose,
+    dismissAllowed: !loading,
+  });
 
   useEffect(() => {
     if (!visible || !request) return;
@@ -177,51 +192,42 @@ export function EditRequestGroupModal({
   const typeDisabled = request?.request_type === 'planned';
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      allowSwipeDismissal
-      onRequestClose={onClose}
-    >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable
-          onPress={() => {}}
-          style={[
-            styles.sheet,
-            { backgroundColor: cardBackground, borderColor },
-          ]}
-        >
-          <View style={styles.handle} />
-          <ThemedText style={[styles.title, { color: textColor }]}>
-            Редактировать заявку
-          </ThemedText>
-
-          <ScrollView
-            style={styles.content}
-            bounces={Platform.OS === 'ios'}
-            alwaysBounceVertical={Platform.OS === 'ios'}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-            contentContainerStyle={styles.contentContainer}
-            onScrollBeginDrag={(e) => {
-              canDismissByPullRef.current = e.nativeEvent.contentOffset.y <= 0;
-            }}
-            onScrollEndDrag={(e) => {
-              const y = e.nativeEvent.contentOffset.y;
-              if (
-                y < -70 &&
-                canDismissByPullRef.current &&
-                !isClosingByPullRef.current
-              ) {
-                isClosingByPullRef.current = true;
-                onClose();
-                setTimeout(() => {
-                  isClosingByPullRef.current = false;
-                }, 250);
-              }
-            }}
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <GestureHandlerRootView style={styles.gestureRoot}>
+        <View style={styles.overlay}>
+          <Pressable style={styles.backdrop} onPress={onClose} />
+          <Animated.View
+            style={[
+              styles.sheet,
+              sheetAnimatedStyle,
+              {
+                backgroundColor: cardBackground,
+                borderColor,
+                paddingBottom: sheetPaddingBottom,
+              },
+            ]}
           >
+            <GestureDetector gesture={panGesture}>
+              <View style={styles.sheetGrabRegion}>
+                <View style={styles.sheetHandleHit}>
+                  <View style={styles.handle} />
+                </View>
+                <ThemedText style={[styles.title, { color: textColor }]}>
+                  Редактировать заявку
+                </ThemedText>
+              </View>
+            </GestureDetector>
+
+            <ScrollView
+              style={[styles.content, scrollViewStyle]}
+              scrollEnabled={scrollEnabled}
+              bounces={scrollEnabled && Platform.OS === 'ios'}
+              alwaysBounceVertical={scrollEnabled && Platform.OS === 'ios'}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              contentContainerStyle={styles.contentContainer}
+              onContentSizeChange={onScrollContentSizeChange}
+            >
               <ThemedText style={[styles.label, { color: mutedColor }]}>Тип заявки</ThemedText>
               <Select
                 value={requestType}
@@ -374,17 +380,24 @@ export function EditRequestGroupModal({
               <ThemedText style={[styles.actionLabel, { color: textColor }]}>Отмена</ThemedText>
             </Pressable>
           </View>
-        </Pressable>
-      </Pressable>
+          </Animated.View>
+        </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  gestureRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  overlay: {
+    flex: 1,
     justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   sheet: {
     borderTopLeftRadius: 20,
@@ -392,9 +405,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 16,
     maxHeight: '92%',
-    minHeight: '70%',
+  },
+  sheetGrabRegion: {
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+  },
+  sheetHandleHit: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 4,
+    paddingBottom: 8,
+    minHeight: 36,
   },
   handle: {
     width: 40,
@@ -402,7 +424,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(148,163,184,0.8)',
     alignSelf: 'center',
-    marginBottom: 12,
   },
   title: {
     fontSize: 20,
@@ -410,12 +431,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
   },
-  content: {
-    flexGrow: 0,
-    maxHeight: '72%',
-  },
+  content: {},
   contentContainer: {
-    paddingBottom: 20,
+    paddingBottom: 8,
   },
   keyboardToolbar: {
     alignItems: 'flex-end',

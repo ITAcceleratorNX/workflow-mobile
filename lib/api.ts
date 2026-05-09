@@ -642,6 +642,7 @@ export async function patchRequestGroup(
   body?: {
     request_type?: string;
     location_detail?: string;
+    office_id?: number;
     rejection_reason?: string;
     sub_requests?: AcceptSubRequestPayload[];
   }
