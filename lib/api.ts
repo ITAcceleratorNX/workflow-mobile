@@ -982,6 +982,7 @@ export interface RegistrationRequestItem {
   id: number;
   phone: string;
   full_name: string;
+  office_id?: number;
   office: { name: string };
   role: string;
   service_category_id?: number;
@@ -990,31 +991,59 @@ export interface RegistrationRequestItem {
   created_at: string;
 }
 
+export interface RegistrationRequestsListMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export async function getRegistrationRequests(filters?: {
   status?: string;
   office_id?: string;
   date_from?: string;
   date_to?: string;
+  page?: string;
+  page_size?: string;
 }): Promise<
-  { ok: true; data: RegistrationRequestItem[] } | { ok: false; error: string }
+  | { ok: true; data: RegistrationRequestItem[]; meta: RegistrationRequestsListMeta }
+  | { ok: false; error: string }
 > {
   const params: Record<string, string> = {};
   if (filters?.status) params.status = filters.status;
   if (filters?.office_id) params.office_id = filters.office_id;
   if (filters?.date_from) params.date_from = filters.date_from;
   if (filters?.date_to) params.date_to = filters.date_to;
+  if (filters?.page) params.page = filters.page;
+  if (filters?.page_size) params.page_size = filters.page_size;
   const qs = Object.keys(params).length ? `?${new URLSearchParams(params).toString()}` : '';
-  const result = await request<{ success?: boolean; data: RegistrationRequestItem[] }>(
-    `/registration-requests${qs}`
-  );
+  const result = await request<{
+    success?: boolean;
+    data?: RegistrationRequestItem[];
+    meta?: RegistrationRequestsListMeta;
+  }>(`/registration-requests${qs}`);
   if (!result.ok) return { ok: false, error: result.error };
   const raw = result.data;
-  const list = Array.isArray((raw as { data?: RegistrationRequestItem[] })?.data)
-    ? (raw as { data: RegistrationRequestItem[] }).data
-    : Array.isArray(raw)
-      ? (raw as RegistrationRequestItem[])
-      : [];
-  return { ok: true, data: list };
+  const list = Array.isArray(raw?.data) ? raw.data : [];
+  const meta = raw?.meta;
+  const pageSize =
+    meta?.pageSize != null && Number.isFinite(meta.pageSize) ? meta.pageSize : 20;
+  const total = meta?.total != null && Number.isFinite(meta.total) ? meta.total : list.length;
+  const page = meta?.page != null && Number.isFinite(meta.page) ? meta.page : 1;
+  const totalPages =
+    meta?.totalPages != null && Number.isFinite(meta.totalPages) && meta.totalPages > 0
+      ? meta.totalPages
+      : Math.max(1, Math.ceil(total / (pageSize || 1)));
+  return {
+    ok: true,
+    data: list,
+    meta: {
+      total,
+      page,
+      pageSize,
+      totalPages,
+    },
+  };
 }
 
 export async function approveRegistrationRequest(requestId: number): Promise<
