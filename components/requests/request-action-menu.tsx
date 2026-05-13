@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, Share, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -38,6 +39,7 @@ interface RequestActionMenuProps {
   onAdminCompleteGroup?: () => void;
   onAdminAcceptGroup?: () => void;
   onAdminRejectGroup?: () => void;
+  onEditRequestGroup?: () => void;
 }
 
 export function RequestActionMenu({
@@ -60,6 +62,7 @@ export function RequestActionMenu({
   onAdminCompleteGroup,
   onAdminAcceptGroup,
   onAdminRejectGroup,
+  onEditRequestGroup,
 }: RequestActionMenuProps) {
   const [visible, setVisible] = useState(false);
   const primary = useThemeColor({}, 'primary');
@@ -67,8 +70,8 @@ export function RequestActionMenu({
   const textMuted = useThemeColor({}, 'textMuted');
   const border = useThemeColor({}, 'border');
   const cardBackground = useThemeColor({}, 'cardBackground');
+  const insets = useSafeAreaInsets();
 
-  const target = subRequest ?? request;
   const isSub = !!subRequest;
 
   const handleShare = () => {
@@ -115,6 +118,7 @@ export function RequestActionMenu({
     onAdminCompleteGroup,
     onAdminAcceptGroup,
     onAdminRejectGroup,
+    onEditRequestGroup,
   });
   if (actions.length === 0) return null;
 
@@ -146,22 +150,28 @@ export function RequestActionMenu({
       <Modal
         visible={visible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setVisible(false)}
       >
-        <Pressable
-          style={styles.backdrop}
-          onPress={() => setVisible(false)}
-        >
-          <View style={[styles.sheet, { backgroundColor: cardBackground, borderColor: border }]}>
+        <Pressable style={styles.backdrop} onPress={() => setVisible(false)}>
+          <Pressable
+            onPress={() => {}}
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: cardBackground,
+                borderColor: border,
+                paddingBottom: 16 + insets.bottom,
+              },
+            ]}
+          >
             <View style={styles.handle} />
-            <ThemedText style={[styles.sheetTitle, { color: text }]}>
-              Действия
-            </ThemedText>
+            <ThemedText style={[styles.sheetTitle, { color: text }]}>Действия</ThemedText>
             <ThemedText style={[styles.sheetSubtitle, { color: textMuted }]}>
-              Заявка #{isSub && subRequest ? subRequest.id : request.id}
+              Заявка #
+              {isSub && subRequest ? `${request.id}/${subRequest.id}` : request.id}
             </ThemedText>
-            <ScrollView style={styles.actionsList} bounces={false}>
+            <View style={styles.actionsList}>
               {actions.map((action, i) => (
                 <Pressable
                   key={i}
@@ -197,8 +207,8 @@ export function RequestActionMenu({
                   </ThemedText>
                 </Pressable>
               ))}
-            </ScrollView>
-          </View>
+            </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </>
@@ -216,48 +226,48 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
   },
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-    maxHeight: '70%',
-    borderTopWidth: 1,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    maxHeight: '92%',
   },
   handle: {
     width: 40,
     height: 4,
-    borderRadius: 2,
-    backgroundColor: '#6B7280',
+    borderRadius: 999,
+    backgroundColor: 'rgba(148,163,184,0.8)',
     alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sheetTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '700',
     marginBottom: 4,
   },
   sheetSubtitle: {
     fontSize: 14,
-    marginBottom: 16,
+    marginBottom: 10,
   },
   actionsList: {
-    maxHeight: 300,
+    flexGrow: 0,
   },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    paddingVertical: 14,
+    gap: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
     borderLeftWidth: 3,
     borderLeftColor: 'transparent',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   actionDestructive: {},
   actionLabel: {

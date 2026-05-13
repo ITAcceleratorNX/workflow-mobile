@@ -9,9 +9,16 @@ import { MaterialIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import type { SleepRating } from '@/stores/sleep-store';
-import { useSleepStore } from '@/stores/sleep-store';
+import { getScheduledSleepMinutes, useSleepStore } from '@/stores/sleep-store';
 
 import { formatDateForApi } from '@/lib/dateTimeUtils';
+
+/** Коэффициент оценки: насколько фактический сон отличается от запланированного */
+const RATING_FACTOR: Record<SleepRating, number> = {
+  good: 1.0,
+  ok: 0.85,
+  poor: 0.70,
+};
 
 const COLORS = {
   overlay: 'rgba(0,0,0,0.6)',
@@ -36,14 +43,23 @@ export interface SleepSurveyOverlayProps {
 
 export function SleepSurveyOverlay({ visible, onClose }: SleepSurveyOverlayProps) {
   const setSleepRating = useSleepStore((s) => s.setSleepRating);
+  const setLastNightSleep = useSleepStore((s) => s.setLastNightSleep);
+  const settings = useSleepStore((s) => s.settings);
 
   const handleSelect = useCallback(
     (rating: SleepRating) => {
       const dateKey = formatDateForApi(new Date());
       setSleepRating(dateKey, rating);
+
+      // Оцениваем продолжительность сна по расписанию × коэффициент рейтинга
+      const scheduled = getScheduledSleepMinutes(settings);
+      if (scheduled > 0) {
+        setLastNightSleep(Math.round(scheduled * RATING_FACTOR[rating]));
+      }
+
       onClose();
     },
-    [setSleepRating, onClose]
+    [setSleepRating, setLastNightSleep, settings, onClose]
   );
 
   return (

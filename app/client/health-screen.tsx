@@ -27,6 +27,8 @@ import Svg, {
 import { ThemedText } from '@/components/themed-text';
 import { MoodCheckInCard } from '@/components/mood-check-in-card';
 import { HealthyAiInsights } from '@/components/healthy-ai-insights';
+import { Radius, Spacing } from '@/constants/theme';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { useHealthySync } from '@/hooks/use-healthy-sync';
 import { formatDateForApi } from '@/lib/dateTimeUtils';
 import { buildHealthyInsight } from '@/lib/healthy-ai-insights';
@@ -44,18 +46,11 @@ const STEPS_PANEL_IMAGE = require('@/assets/images/footsteps-8682406.png');
 
 // ===== Design tokens =====
 
-const COLORS = {
-  background: '#1A1A1A',
-  cardBg: '#2A2A2A',
-  cardBgSubtle: '#242424',
-  trackBg: '#3A3A3A',
-  divider: 'rgba(255,255,255,0.06)',
-
-  textPrimary: '#FFFFFF',
-  textSecondary: '#A0A0A5',
-  textMuted: '#6E6E73',
-
-  accent: '#F35713',
+/**
+ * Палитра иллюстративных акцентов — одинаковая в обеих темах.
+ * Soft-варианты с прозрачностью читаются и на светлом, и на тёмном фоне.
+ */
+const PALETTE = {
   blue: '#4FC3F7',
   blueSoft: 'rgba(79, 195, 247, 0.18)',
   indigo: '#7B6FF7',
@@ -70,7 +65,57 @@ const COLORS = {
   yellowSoft: 'rgba(255, 193, 7, 0.18)',
   red: '#FF5252',
   redSoft: 'rgba(255, 82, 82, 0.18)',
-};
+} as const;
+
+/**
+ * Динамические нейтральные цвета — берутся из активной темы.
+ * Используется во всех «контейнерах» экрана, чтобы обеспечить адаптацию dark/light.
+ */
+function useHealthColors() {
+  const background = useThemeColor({}, 'background');
+  const surface = useThemeColor({}, 'surface');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const divider = useThemeColor({}, 'divider');
+  const text = useThemeColor({}, 'text');
+  const textSecondary = useThemeColor({}, 'textSecondary');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const primary = useThemeColor({}, 'primary');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const accentSoft = useThemeColor({}, 'accentSoft');
+
+  return useMemo(
+    () => ({
+      background,
+      // карточки и поднятые поверхности
+      cardBg: surfaceElevated,
+      cardBgSubtle: surface,
+      trackBg: surfaceMuted,
+      divider,
+      // текст
+      textPrimary: text,
+      textSecondary,
+      textMuted,
+      // бренд
+      accent: primary,
+      accentSoft,
+      onAccent: onPrimary,
+    }),
+    [
+      background,
+      surfaceElevated,
+      surface,
+      surfaceMuted,
+      divider,
+      text,
+      textSecondary,
+      textMuted,
+      primary,
+      onPrimary,
+      accentSoft,
+    ]
+  );
+}
 
 type HealthyTab = 'today' | 'insight' | 'settings';
 
@@ -95,6 +140,8 @@ function formatLiters(ml: number): string {
 }
 
 // ===== Illustrations (SVG) =====
+// Иллюстрации — самодостаточный «арт» со своим внутренним фоном.
+// Они одинаково корректно смотрятся в обеих темах и не привязаны к токенам.
 
 const ILLUSTRATION_W = 140;
 const ILLUSTRATION_H = 96;
@@ -251,21 +298,28 @@ function TopTabs({
   active: HealthyTab;
   onChange: (t: HealthyTab) => void;
 }) {
+  const colors = useHealthColors();
   return (
-    <View style={styles.tabsBar}>
+    <View style={[styles.tabsBar, { backgroundColor: colors.cardBgSubtle }]}>
       {TABS.map((t) => {
         const isActive = active === t.key;
         return (
           <Pressable
             key={t.key}
             onPress={() => onChange(t.key)}
-            style={[styles.tabItem, isActive && styles.tabItemActive]}
+            accessibilityRole="tab"
+            accessibilityLabel={t.label}
+            accessibilityState={{ selected: isActive }}
+            style={[
+              styles.tabItem,
+              isActive && { backgroundColor: colors.trackBg },
+            ]}
             hitSlop={6}
           >
             <ThemedText
               style={[
                 styles.tabLabel,
-                { color: isActive ? COLORS.textPrimary : COLORS.textSecondary },
+                { color: isActive ? colors.textPrimary : colors.textSecondary },
               ]}
             >
               {t.label}
@@ -280,6 +334,7 @@ function TopTabs({
 // ===== Today: AI Summary =====
 
 function TodayAiSummary({ onPressMore }: { onPressMore: () => void }) {
+  const colors = useHealthColors();
   const todayKey = useMemo(() => formatDateForApi(new Date()), []);
   const goalSleepMinutes = useSleepStore((s) => s.settings.goalMinutes);
   const lastNightSleepMinutes = useSleepStore((s) => s.lastNightSleepMinutes);
@@ -359,23 +414,41 @@ function TodayAiSummary({ onPressMore }: { onPressMore: () => void }) {
   );
 
   return (
-    <View style={[styles.card, styles.aiSummaryCard]}>
+    <View
+      style={[styles.card, styles.aiSummaryCard, { backgroundColor: colors.cardBg }]}
+    >
       <View style={styles.aiSummaryHeader}>
-        <View style={[styles.iconBubble, { backgroundColor: COLORS.indigoSoft }]}>
-          <MaterialIcons name="auto-awesome" size={18} color={COLORS.indigo} />
+        <View style={[styles.iconBubble, { backgroundColor: PALETTE.indigoSoft }]}>
+          <MaterialIcons name="auto-awesome" size={18} color={PALETTE.indigo} />
         </View>
-        <ThemedText style={[styles.aiSummaryLabel, { color: COLORS.textSecondary }]}>
+        <ThemedText
+          style={[styles.aiSummaryLabel, { color: colors.textSecondary }]}
+        >
           Твоя цель:
         </ThemedText>
       </View>
-      <ThemedText style={[styles.aiSummaryTitle, { color: COLORS.textPrimary }]} numberOfLines={3}>
+      <ThemedText
+        style={[styles.aiSummaryTitle, { color: colors.textPrimary }]}
+        numberOfLines={3}
+      >
         {insight.statusLabel}
       </ThemedText>
-      <ThemedText style={[styles.aiSummaryBody, { color: COLORS.textSecondary }]} numberOfLines={3}>
+      <ThemedText
+        style={[styles.aiSummaryBody, { color: colors.textSecondary }]}
+        numberOfLines={3}
+      >
         {insight.summary}
       </ThemedText>
-      <Pressable onPress={onPressMore} style={styles.aiSummaryMoreBtn} hitSlop={8}>
-        <ThemedText style={[styles.aiSummaryMoreText, { color: COLORS.textPrimary }]}>
+      <Pressable
+        onPress={onPressMore}
+        accessibilityRole="button"
+        accessibilityLabel="Подробнее об AI-инсайте"
+        style={[styles.aiSummaryMoreBtn, { backgroundColor: colors.trackBg }]}
+        hitSlop={8}
+      >
+        <ThemedText
+          style={[styles.aiSummaryMoreText, { color: colors.textPrimary }]}
+        >
           Подробнее
         </ThemedText>
       </Pressable>
@@ -404,34 +477,50 @@ function MiniCard({
   onPress?: () => void;
   emptyHint?: string;
 }) {
+  const colors = useHealthColors();
   return (
     <Pressable
-      style={({ pressed }) => [styles.miniCard, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.miniCard,
+        { backgroundColor: colors.cardBg },
+        pressed && styles.cardPressed,
+      ]}
       onPress={onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={title}
     >
       <View style={[styles.miniCardIcon, { backgroundColor: iconBg }]}>
         <MaterialIcons name={iconName} size={22} color={iconColor} />
       </View>
       <View style={styles.miniCardBody}>
-        <ThemedText style={[styles.miniCardTitle, { color: COLORS.textPrimary }]}>
+        <ThemedText style={[styles.miniCardTitle, { color: colors.textPrimary }]}>
           {title}
         </ThemedText>
         {primaryLine ? (
-          <ThemedText style={[styles.miniCardPrimary, { color: COLORS.textPrimary }]} numberOfLines={1}>
+          <ThemedText
+            style={[styles.miniCardPrimary, { color: colors.textPrimary }]}
+            numberOfLines={1}
+          >
             {primaryLine}
           </ThemedText>
         ) : (
-          <ThemedText style={[styles.miniCardEmpty, { color: COLORS.textSecondary }]} numberOfLines={1}>
+          <ThemedText
+            style={[styles.miniCardEmpty, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
             {emptyHint ?? 'Нет данных'}
           </ThemedText>
         )}
         {subtitle ? (
-          <ThemedText style={[styles.miniCardSub, { color: COLORS.textSecondary }]} numberOfLines={1}>
+          <ThemedText
+            style={[styles.miniCardSub, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
             {subtitle}
           </ThemedText>
         ) : null}
       </View>
-      <MaterialIcons name="chevron-right" size={22} color={COLORS.textMuted} />
+      <MaterialIcons name="chevron-right" size={22} color={colors.textMuted} />
     </Pressable>
   );
 }
@@ -462,30 +551,39 @@ function VisualMiniCard({
   emptyHint?: string;
   illustration: React.ReactNode;
 }) {
+  const colors = useHealthColors();
   return (
     <Pressable
-      style={({ pressed }) => [styles.visualCard, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.visualCard,
+        { backgroundColor: colors.cardBg },
+        pressed && styles.cardPressed,
+      ]}
       onPress={onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={title}
     >
       <View style={styles.visualCardLeft}>
         <View style={styles.visualCardHeader}>
           <View style={[styles.visualCardIcon, { backgroundColor: iconBg }]}>
             <MaterialIcons name={iconName} size={16} color={iconColor} />
           </View>
-          <ThemedText style={[styles.visualCardTitle, { color: COLORS.textPrimary }]}>
+          <ThemedText
+            style={[styles.visualCardTitle, { color: colors.textPrimary }]}
+          >
             {title}
           </ThemedText>
         </View>
         {primaryLine ? (
           <ThemedText
-            style={[styles.visualCardPrimary, { color: COLORS.textPrimary }]}
+            style={[styles.visualCardPrimary, { color: colors.textPrimary }]}
             numberOfLines={1}
           >
             {primaryLine}
           </ThemedText>
         ) : (
           <ThemedText
-            style={[styles.visualCardEmpty, { color: COLORS.textSecondary }]}
+            style={[styles.visualCardEmpty, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             {emptyHint ?? 'Нет данных'}
@@ -493,7 +591,7 @@ function VisualMiniCard({
         )}
         {subtitle ? (
           <ThemedText
-            style={[styles.visualCardSub, { color: COLORS.textSecondary }]}
+            style={[styles.visualCardSub, { color: colors.textSecondary }]}
             numberOfLines={1}
           >
             {subtitle}
@@ -518,8 +616,8 @@ function SleepMiniCard({ onPress }: { onPress: () => void }) {
   return (
     <VisualMiniCard
       iconName="nightlight-round"
-      iconColor={COLORS.indigo}
-      iconBg={COLORS.indigoSoft}
+      iconColor={PALETTE.indigo}
+      iconBg={PALETTE.indigoSoft}
       title="Сон"
       primaryLine={primary}
       subtitle={subtitle}
@@ -549,8 +647,8 @@ function WaterMiniCard({ onPress }: { onPress: () => void }) {
   return (
     <VisualMiniCard
       iconName="water-drop"
-      iconColor={COLORS.blue}
-      iconBg={COLORS.blueSoft}
+      iconColor={PALETTE.blue}
+      iconBg={PALETTE.blueSoft}
       title="Вода"
       primaryLine={totalMl > 0 ? primary : undefined}
       subtitle={totalMl > 0 ? undefined : 'Добавьте воду'}
@@ -574,8 +672,8 @@ function StepsMiniCard({ onPress }: { onPress: () => void }) {
   return (
     <VisualMiniCard
       iconName="directions-walk"
-      iconColor={COLORS.orange}
-      iconBg={COLORS.orangeSoft}
+      iconColor={PALETTE.orange}
+      iconBg={PALETTE.orangeSoft}
       title="Шаги"
       primaryLine={primary}
       subtitle={subtitle}
@@ -639,12 +737,18 @@ function SettingsRow({
   onPress: () => void;
   isLast?: boolean;
 }) {
+  const colors = useHealthColors();
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => [
         styles.settingsRow,
-        !isLast && styles.settingsRowDivider,
+        !isLast && {
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.divider,
+        },
         pressed && styles.cardPressed,
       ]}
     >
@@ -652,21 +756,24 @@ function SettingsRow({
         <MaterialIcons name={iconName} size={20} color={iconColor} />
       </View>
       <View style={styles.settingsTextWrap}>
-        <ThemedText style={[styles.settingsLabel, { color: COLORS.textPrimary }]}>
+        <ThemedText style={[styles.settingsLabel, { color: colors.textPrimary }]}>
           {label}
         </ThemedText>
         {sublabel ? (
-          <ThemedText style={[styles.settingsSubLabel, { color: COLORS.textSecondary }]}>
+          <ThemedText
+            style={[styles.settingsSubLabel, { color: colors.textSecondary }]}
+          >
             {sublabel}
           </ThemedText>
         ) : null}
       </View>
-      <MaterialIcons name="chevron-right" size={22} color={COLORS.textMuted} />
+      <MaterialIcons name="chevron-right" size={22} color={colors.textMuted} />
     </Pressable>
   );
 }
 
 function WaterNormaModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const colors = useHealthColors();
   const manualGoalMl = useWaterStore((s) => s.manualGoalMl);
   const setManualGoal = useWaterStore((s) => s.setManualGoal);
   const heightCm = useStepsStore((s) => s.settings.heightCm);
@@ -704,19 +811,22 @@ function WaterNormaModal({ visible, onClose }: { visible: boolean; onClose: () =
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[styles.modalCard, { backgroundColor: colors.cardBg }]}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View style={styles.modalHeader}>
-            <ThemedText style={[styles.modalTitle, { color: COLORS.textPrimary }]}>
+            <ThemedText style={[styles.modalTitle, { color: colors.textPrimary }]}>
               Норма воды
             </ThemedText>
             <Pressable onPress={onClose} hitSlop={12}>
-              <MaterialIcons name="close" size={22} color={COLORS.textSecondary} />
+              <MaterialIcons name="close" size={22} color={colors.textSecondary} />
             </Pressable>
           </View>
-          <ThemedText style={[styles.modalBody, { color: COLORS.textSecondary }]}>
+          <ThemedText style={[styles.modalBody, { color: colors.textSecondary }]}>
             Авто-расчёт: {formatLiters(autoGoalMl)} (по росту, весу, шагам и сну)
           </ThemedText>
-          <ThemedText style={[styles.modalSection, { color: COLORS.textSecondary }]}>
+          <ThemedText style={[styles.modalSection, { color: colors.textSecondary }]}>
             Своя цель в мл
           </ThemedText>
           <TextInput
@@ -724,23 +834,40 @@ function WaterNormaModal({ visible, onClose }: { visible: boolean; onClose: () =
             onChangeText={setDraft}
             keyboardType="number-pad"
             placeholder="например, 2500"
-            placeholderTextColor={COLORS.textMuted}
-            style={styles.modalInput}
+            placeholderTextColor={colors.textMuted}
+            style={[
+              styles.modalInput,
+              { backgroundColor: colors.trackBg, color: colors.textPrimary },
+            ]}
           />
           <View style={styles.modalActions}>
             <Pressable
               onPress={handleAuto}
-              style={({ pressed }) => [styles.modalSecondaryBtn, pressed && styles.cardPressed]}
+              style={({ pressed }) => [
+                styles.modalSecondaryBtn,
+                { backgroundColor: colors.trackBg },
+                pressed && styles.cardPressed,
+              ]}
             >
-              <ThemedText style={[styles.modalSecondaryText, { color: COLORS.textPrimary }]}>
+              <ThemedText
+                style={[styles.modalSecondaryText, { color: colors.textPrimary }]}
+              >
                 Авто-расчёт
               </ThemedText>
             </Pressable>
             <Pressable
               onPress={handleApply}
-              style={({ pressed }) => [styles.modalPrimaryBtn, pressed && styles.cardPressed]}
+              style={({ pressed }) => [
+                styles.modalPrimaryBtn,
+                { backgroundColor: colors.accent },
+                pressed && styles.cardPressed,
+              ]}
             >
-              <ThemedText style={styles.modalPrimaryText}>Сохранить</ThemedText>
+              <ThemedText
+                style={[styles.modalPrimaryText, { color: colors.onAccent }]}
+              >
+                Сохранить
+              </ThemedText>
             </Pressable>
           </View>
         </Pressable>
@@ -750,6 +877,7 @@ function WaterNormaModal({ visible, onClose }: { visible: boolean; onClose: () =
 }
 
 function GoalsSummaryModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const colors = useHealthColors();
   const sleepGoalMin = useSleepStore((s) => s.settings.goalMinutes);
   const stepsGoal = useStepsStore((s) => s.settings.goalSteps);
   const manualWaterMl = useWaterStore((s) => s.manualGoalMl);
@@ -765,37 +893,47 @@ function GoalsSummaryModal({ visible, onClose }: { visible: boolean; onClose: ()
     ? `${formatLiters(manualWaterMl)} (вручную)`
     : `${formatLiters(autoWaterMl)} (авто)`;
 
+  const dividerStyle = {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+  } as const;
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[styles.modalCard, { backgroundColor: colors.cardBg }]}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View style={styles.modalHeader}>
-            <ThemedText style={[styles.modalTitle, { color: COLORS.textPrimary }]}>
+            <ThemedText style={[styles.modalTitle, { color: colors.textPrimary }]}>
               Текущие цели
             </ThemedText>
             <Pressable onPress={onClose} hitSlop={12}>
-              <MaterialIcons name="close" size={22} color={COLORS.textSecondary} />
+              <MaterialIcons name="close" size={22} color={colors.textSecondary} />
             </Pressable>
           </View>
-          <View style={styles.goalRow}>
-            <ThemedText style={[styles.goalLabel, { color: COLORS.textSecondary }]}>Сон</ThemedText>
-            <ThemedText style={[styles.goalValue, { color: COLORS.textPrimary }]}>
+          <View style={[styles.goalRow, dividerStyle]}>
+            <ThemedText style={[styles.goalLabel, { color: colors.textSecondary }]}>Сон</ThemedText>
+            <ThemedText style={[styles.goalValue, { color: colors.textPrimary }]}>
               {Math.floor(sleepGoalMin / 60)}ч{sleepGoalMin % 60 ? ` ${sleepGoalMin % 60}м` : ''}
             </ThemedText>
           </View>
-          <View style={styles.goalRow}>
-            <ThemedText style={[styles.goalLabel, { color: COLORS.textSecondary }]}>Вода</ThemedText>
-            <ThemedText style={[styles.goalValue, { color: COLORS.textPrimary }]}>
+          <View style={[styles.goalRow, dividerStyle]}>
+            <ThemedText style={[styles.goalLabel, { color: colors.textSecondary }]}>Вода</ThemedText>
+            <ThemedText style={[styles.goalValue, { color: colors.textPrimary }]}>
               {waterDisplay}
             </ThemedText>
           </View>
-          <View style={styles.goalRow}>
-            <ThemedText style={[styles.goalLabel, { color: COLORS.textSecondary }]}>Шаги</ThemedText>
-            <ThemedText style={[styles.goalValue, { color: COLORS.textPrimary }]}>
+          <View style={[styles.goalRow, dividerStyle]}>
+            <ThemedText style={[styles.goalLabel, { color: colors.textSecondary }]}>Шаги</ThemedText>
+            <ThemedText style={[styles.goalValue, { color: colors.textPrimary }]}>
               {stepsGoal != null ? stepsGoal.toLocaleString('ru-RU') : '—'}
             </ThemedText>
           </View>
-          <ThemedText style={[styles.modalBody, { color: COLORS.textMuted, marginTop: 12 }]}>
+          <ThemedText
+            style={[styles.modalBody, { color: colors.textMuted, marginTop: Spacing.md }]}
+          >
             Изменить цели можно в разделах «Сон», «Вода» и «Шаги».
           </ThemedText>
         </Pressable>
@@ -817,50 +955,54 @@ function SettingsTabContent({
   onOpenWaterNorma: () => void;
   onOpenGoals: () => void;
 }) {
+  const colors = useHealthColors();
   return (
-    <Animated.View entering={FadeIn.duration(180)} style={styles.settingsList}>
+    <Animated.View
+      entering={FadeIn.duration(180)}
+      style={[styles.settingsList, { backgroundColor: colors.cardBg }]}
+    >
       <SettingsRow
         iconName="nightlight-round"
-        iconColor={COLORS.indigo}
-        iconBg={COLORS.indigoSoft}
+        iconColor={PALETTE.indigo}
+        iconBg={PALETTE.indigoSoft}
         label="Сон"
         sublabel="Режим сна"
         onPress={onOpenSleep}
       />
       <SettingsRow
         iconName="water-drop"
-        iconColor={COLORS.blue}
-        iconBg={COLORS.blueSoft}
+        iconColor={PALETTE.blue}
+        iconBg={PALETTE.blueSoft}
         label="Вода"
         sublabel="Норма воды"
         onPress={onOpenWaterNorma}
       />
       <SettingsRow
         iconName="directions-walk"
-        iconColor={COLORS.pink}
-        iconBg={COLORS.pinkSoft}
+        iconColor={PALETTE.pink}
+        iconBg={PALETTE.pinkSoft}
         label="Шаги"
         sublabel="Цель шагов"
         onPress={onOpenSteps}
       />
       <SettingsRow
         iconName="notifications"
-        iconColor={COLORS.yellow}
-        iconBg={COLORS.yellowSoft}
+        iconColor={PALETTE.yellow}
+        iconBg={PALETTE.yellowSoft}
         label="Уведомления"
         onPress={onOpenNotifications}
       />
       <SettingsRow
         iconName="emoji-events"
-        iconColor={COLORS.accent}
-        iconBg="rgba(243, 87, 19, 0.18)"
+        iconColor={colors.accent}
+        iconBg={colors.accentSoft}
         label="Цели"
         onPress={onOpenGoals}
       />
       <SettingsRow
         iconName="straighten"
-        iconColor={COLORS.green}
-        iconBg={COLORS.greenSoft}
+        iconColor={PALETTE.green}
+        iconBg={PALETTE.greenSoft}
         label="Рост и вес"
         onPress={onOpenSteps}
         isLast
@@ -878,6 +1020,7 @@ function WaterAddModal({
   visible: boolean;
   onClose: () => void;
 }) {
+  const colors = useHealthColors();
   const todayKey = useMemo(() => formatDateForApi(new Date()), []);
   const addWater = useWaterStore((s) => s.addWater);
 
@@ -892,13 +1035,16 @@ function WaterAddModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[styles.modalCard, { backgroundColor: colors.cardBg }]}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View style={styles.modalHeader}>
-            <ThemedText style={[styles.modalTitle, { color: COLORS.textPrimary }]}>
+            <ThemedText style={[styles.modalTitle, { color: colors.textPrimary }]}>
               Добавить воду
             </ThemedText>
             <Pressable onPress={onClose} hitSlop={12}>
-              <MaterialIcons name="close" size={22} color={COLORS.textSecondary} />
+              <MaterialIcons name="close" size={22} color={colors.textSecondary} />
             </Pressable>
           </View>
           <View style={styles.portionGrid}>
@@ -906,12 +1052,15 @@ function WaterAddModal({
               <Pressable
                 key={ml}
                 onPress={() => handleAdd(ml)}
+                accessibilityRole="button"
+                accessibilityLabel={`Добавить ${ml >= 1000 ? `${ml / 1000} литра` : `${ml} миллилитров`}`}
                 style={({ pressed }) => [
                   styles.portionBtn,
+                  { backgroundColor: colors.trackBg },
                   pressed && styles.cardPressed,
                 ]}
               >
-                <ThemedText style={[styles.portionText, { color: COLORS.textPrimary }]}>
+                <ThemedText style={[styles.portionText, { color: colors.textPrimary }]}>
                   {ml >= 1000 ? `${ml / 1000} л` : `${ml} мл`}
                 </ThemedText>
               </Pressable>
@@ -928,6 +1077,7 @@ function WaterAddModal({
 export default function ClientHealthScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const colors = useHealthColors();
   const [tab, setTab] = useState<HealthyTab>('today');
   const [waterAddVisible, setWaterAddVisible] = useState(false);
   const [waterNormaVisible, setWaterNormaVisible] = useState(false);
@@ -943,16 +1093,23 @@ export default function ClientHealthScreen() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: colors.background, paddingTop: insets.top },
+      ]}
+    >
       <View style={styles.header}>
         <Pressable
           onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Назад"
           style={styles.backButton}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <MaterialIcons name="chevron-left" size={26} color={COLORS.textPrimary} />
+          <MaterialIcons name="chevron-left" size={26} color={colors.textPrimary} />
         </Pressable>
-        <ThemedText style={[styles.headerTitle, { color: COLORS.textPrimary }]}>
+        <ThemedText style={[styles.headerTitle, { color: colors.textPrimary }]}>
           Healthy
         </ThemedText>
         <View style={styles.headerSide} />
@@ -966,7 +1123,7 @@ export default function ClientHealthScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 28 },
+          { paddingBottom: insets.bottom + Spacing.huge },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -998,18 +1155,23 @@ export default function ClientHealthScreen() {
 }
 
 // ===== Styles =====
+// Структурные стили (размеры/радиусы/отступы) — без цветов.
+// Цвета подставляются inline в JSX через useHealthColors().
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1 },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  scrollContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+  },
 
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
+    paddingHorizontal: Spacing.md,
     paddingTop: 4,
     paddingBottom: 4,
     minHeight: 44,
@@ -1029,25 +1191,21 @@ const styles = StyleSheet.create({
 
   // Tabs
   tabsBarWrap: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 6,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xs + 2,
   },
   tabsBar: {
     flexDirection: 'row',
-    backgroundColor: COLORS.cardBgSubtle,
-    borderRadius: 14,
+    borderRadius: Radius.lg - 2,
     padding: 4,
   },
   tabItem: {
     flex: 1,
     paddingVertical: 9,
-    borderRadius: 10,
+    borderRadius: Radius.md - 2,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  tabItemActive: {
-    backgroundColor: COLORS.trackBg,
   },
   tabLabel: {
     fontSize: 14,
@@ -1056,21 +1214,20 @@ const styles = StyleSheet.create({
 
   // Generic card
   card: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   cardPressed: { opacity: 0.85 },
 
   // AI summary
   aiSummaryCard: {
-    paddingVertical: 16,
+    paddingVertical: Spacing.lg,
   },
   aiSummaryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Spacing.sm + 2,
     marginBottom: 6,
   },
   aiSummaryLabel: {
@@ -1086,14 +1243,13 @@ const styles = StyleSheet.create({
   aiSummaryBody: {
     fontSize: 13,
     lineHeight: 18,
-    marginBottom: 10,
+    marginBottom: Spacing.sm + 2,
   },
   aiSummaryMoreBtn: {
     alignSelf: 'flex-end',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: COLORS.trackBg,
+    paddingHorizontal: Spacing.md + 2,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md - 2,
   },
   aiSummaryMoreText: {
     fontSize: 13,
@@ -1104,16 +1260,15 @@ const styles = StyleSheet.create({
   miniCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    gap: 14,
+    borderRadius: Radius.lg,
+    padding: Spacing.md + 2,
+    marginBottom: Spacing.md,
+    gap: Spacing.md + 2,
   },
   miniCardIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1147,9 +1302,8 @@ const styles = StyleSheet.create({
 
   // Visual mini card (with right-side illustration)
   visualCard: {
-    backgroundColor: COLORS.cardBg,
     borderRadius: 18,
-    marginBottom: 12,
+    marginBottom: Spacing.md,
     height: ILLUSTRATION_H,
     overflow: 'hidden',
     flexDirection: 'row',
@@ -1157,15 +1311,15 @@ const styles = StyleSheet.create({
   },
   visualCardLeft: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: Spacing.sm + 2,
+    paddingHorizontal: Spacing.lg,
     justifyContent: 'center',
     gap: 3,
   },
   visualCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing.sm,
     marginBottom: 2,
   },
   visualCardIcon: {
@@ -1211,25 +1365,20 @@ const styles = StyleSheet.create({
 
   // Settings list
   settingsList: {
-    backgroundColor: COLORS.cardBg,
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
   },
   settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    gap: 14,
-  },
-  settingsRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.divider,
+    paddingVertical: Spacing.md + 2,
+    paddingHorizontal: Spacing.md + 2,
+    gap: Spacing.md + 2,
   },
   settingsIconBubble: {
     width: 32,
     height: 32,
-    borderRadius: 10,
+    borderRadius: Radius.md - 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1248,14 +1397,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: Spacing.xl,
   },
   modalCard: {
     width: '100%',
-    backgroundColor: COLORS.cardBg,
     borderRadius: 18,
-    padding: 20,
-    gap: 8,
+    padding: Spacing.xl - 4,
+    gap: Spacing.sm,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1273,27 +1421,24 @@ const styles = StyleSheet.create({
   },
   modalSection: {
     fontSize: 13,
-    marginTop: 8,
+    marginTop: Spacing.sm,
   },
   modalInput: {
-    backgroundColor: COLORS.trackBg,
-    color: COLORS.textPrimary,
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md + 2,
     fontSize: 15,
     marginTop: 4,
   },
   modalActions: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
+    gap: Spacing.sm + 2,
+    marginTop: Spacing.md + 2,
   },
   modalSecondaryBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.trackBg,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   modalSecondaryText: {
@@ -1302,23 +1447,19 @@ const styles = StyleSheet.create({
   },
   modalPrimaryBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.accent,
+    paddingVertical: Spacing.md,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   modalPrimaryText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#fff',
   },
   goalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.divider,
+    paddingVertical: Spacing.sm,
   },
   goalLabel: {
     fontSize: 14,
@@ -1332,15 +1473,14 @@ const styles = StyleSheet.create({
   portionGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: Spacing.sm + 2,
     marginTop: 4,
   },
   portionBtn: {
     flexBasis: '30%',
     flexGrow: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: COLORS.trackBg,
+    paddingVertical: Spacing.md + 2,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   portionText: {

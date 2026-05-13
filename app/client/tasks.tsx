@@ -1,13 +1,16 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
   SectionList,
   ScrollView,
   StyleSheet,
+  UIManager,
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -50,7 +53,26 @@ const MONTH_SHORT_RU = ['янв', 'фев', 'мар', 'апр', 'май', 'ию�
 
 const UPCOMING_CALENDAR_DAYS_BACK = 0;
 const UPCOMING_CALENDAR_DAYS_FORWARD = 180;
+/** Шаг между левыми краями ячеек: ширина ячейки + gap в upcomingStripRow */
 const UPCOMING_DAY_ITEM_WIDTH = 50;
+const UPCOMING_DAY_CELL_WIDTH = 42;
+const UPCOMING_STRIP_PADDING_RIGHT = 16;
+/** Сумма paddingHorizontal у topBar — ширина области горизонтального ScrollView */
+const UPCOMING_STRIP_VIEWPORT_INSET = 32;
+
+function upcomingStripScrollToSelectedX(idx: number, viewportWidth: number, daysCount: number): number {
+  const stride = UPCOMING_DAY_ITEM_WIDTH;
+  const contentWidth =
+    daysCount * stride - (stride - UPCOMING_DAY_CELL_WIDTH) + UPCOMING_STRIP_PADDING_RIGHT;
+  const centerInContent = idx * stride + UPCOMING_DAY_CELL_WIDTH / 2;
+  const target = centerInContent - viewportWidth / 2;
+  const maxScroll = Math.max(0, contentWidth - viewportWidth);
+  return Math.max(0, Math.min(maxScroll, target));
+}
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 function addDays(base: Date, amount: number): Date {
   const d = new Date(base);
@@ -152,17 +174,22 @@ export default function TasksScreen() {
     });
   }, [todayKey]);
 
+  const stripViewportWidth = useMemo(
+    () => Math.max(1, Dimensions.get('window').width - UPCOMING_STRIP_VIEWPORT_INSET),
+    []
+  );
+
   useEffect(() => {
     if (mainView !== 'upcoming') return;
     const activeKey = upcomingDate ?? tomorrowKey;
     const idx = upcomingStripDays.findIndex((d) => d.key === activeKey);
     if (idx < 0) return;
-    const x = Math.max(0, idx * UPCOMING_DAY_ITEM_WIDTH - 80);
+    const x = upcomingStripScrollToSelectedX(idx, stripViewportWidth, upcomingStripDays.length);
     requestAnimationFrame(() => {
-      upcomingScrollRef.current?.scrollTo({ x, animated: false });
+      upcomingScrollRef.current?.scrollTo({ x, animated: true });
     });
     setUpcomingVisibleDateKey(activeKey);
-  }, [mainView, upcomingDate, tomorrowKey, upcomingStripDays]);
+  }, [mainView, upcomingDate, tomorrowKey, upcomingStripDays, stripViewportWidth]);
 
   const upcomingMonthLabel = useMemo(() => {
     const selected = new Date(`${upcomingVisibleDateKey ?? upcomingDate ?? tomorrowKey}T12:00:00`);
@@ -376,7 +403,7 @@ export default function TasksScreen() {
                     0,
                     Math.min(
                       upcomingStripDays.length - 1,
-                      Math.round((x + 60) / UPCOMING_DAY_ITEM_WIDTH)
+                      Math.round((x + stripViewportWidth / 2) / UPCOMING_DAY_ITEM_WIDTH)
                     )
                   );
                   const visibleKey = upcomingStripDays[idx]?.key ?? null;
@@ -393,6 +420,13 @@ export default function TasksScreen() {
                       key={d.key}
                       onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        LayoutAnimation.configureNext(
+                          LayoutAnimation.create(
+                            165,
+                            LayoutAnimation.Types.easeInEaseOut,
+                            LayoutAnimation.Properties.opacity
+                          )
+                        );
                         setUpcomingDate(d.key);
                       }}
                       style={styles.upcomingDayCell}
@@ -406,7 +440,12 @@ export default function TasksScreen() {
                           isSelected && { backgroundColor: primary },
                         ]}
                       >
-                        <ThemedText style={{ color: isSelected ? '#fff' : headerText, fontWeight: isSelected ? '700' : '500' }}>
+                        <ThemedText
+                          style={{
+                            color: isSelected ? '#fff' : headerText,
+                            fontWeight: '600',
+                          }}
+                        >
                           {d.dayNumber}
                         </ThemedText>
                       </View>
@@ -667,7 +706,7 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   upcomingDayCell: {
-    width: 42,
+    width: UPCOMING_DAY_CELL_WIDTH,
     alignItems: 'center',
     gap: 6,
   },

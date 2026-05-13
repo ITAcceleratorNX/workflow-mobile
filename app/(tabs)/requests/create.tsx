@@ -9,6 +9,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -63,16 +64,11 @@ function getOfficeAddressForLocations(office: Office): string {
   return office.name;
 }
 
-const KCELL = {
-  primary: '#F35713',
-  primaryDark: '#E25B21',
-  cardBg: '#212121',
-  cardBgSelected: '#212121',
-  cardBorder: '#2A2A2A',
-  muted: '#8E8E93',
-  gradientFrom: '#114A65',
-  gradientTo: '#B8400E',
-} as const;
+/**
+ * Декоративный градиент-плейсхолдер для карточек офисов без фото.
+ * Это арт-цвета бренда, не часть theme system, — оставлены как есть.
+ */
+const OFFICE_GRADIENT: [string, string] = ['#114A65', '#B8400E'];
 
 /** Резерв под нижнюю панель действий (кнопки + отступы), чтобы контент не уезжал под футер */
 const FOOTER_BTN_MIN_HEIGHT = 52;
@@ -101,6 +97,10 @@ export default function CreateRequestScreen() {
   const borderColor = useThemeColor({}, 'border');
   const backgroundColor = useThemeColor({}, 'background');
   const cardBackground = useThemeColor({}, 'cardBackground');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const dangerColor = useThemeColor({}, 'danger');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const accentSoft = useThemeColor({}, 'accentSoft');
   const insets = useSafeAreaInsets();
   /** Минимум 8 — чтобы на устройствах без home indicator кнопки не прилипали к краю */
   const footerBottomInset = Math.max(insets.bottom, 8);
@@ -181,6 +181,7 @@ export default function CreateRequestScreen() {
   const [completionDate, setCompletionDate] = useState(new Date());
   const [afterPhotos, setAfterPhotos] = useState<string[]>([]);
   const [isDetectingNearestOffice, setIsDetectingNearestOffice] = useState(false);
+  const dismissKeyboard = useCallback(() => Keyboard.dismiss(), []);
 
   const selectedOffice =
     locationSource === 'cabinet' && selectedCabinetRoom
@@ -544,11 +545,13 @@ export default function CreateRequestScreen() {
     ];
     formData.append('sub_requests', JSON.stringify(subRequestsData));
 
-    photos.forEach((uri) => {
+    const { compressRequestPhotos } = await import('@/lib/request-photo-compression');
+    const compressedBeforePhotos = await compressRequestPhotos(photos, 'request_before');
+    compressedBeforePhotos.forEach((photo) => {
       formData.append('photos', {
-        uri,
-        type: 'image/jpeg',
-        name: `photo_${Date.now()}.jpg`,
+        uri: photo.uri,
+        type: photo.type,
+        name: photo.name,
       } as unknown as Blob);
     });
 
@@ -731,8 +734,8 @@ export default function CreateRequestScreen() {
                         locationSource === 'office' && { backgroundColor: primaryColor },
                       ]}
                     >
-                      <MaterialIcons name="business" size={18} color={locationSource === 'office' ? '#FFF' : mutedColor} />
-                      <ThemedText style={[styles.toggleLabel, { color: locationSource === 'office' ? '#FFF' : mutedColor }]}>
+                      <MaterialIcons name="business" size={18} color={locationSource === 'office' ? onPrimary : mutedColor} />
+                      <ThemedText style={[styles.toggleLabel, { color: locationSource === 'office' ? onPrimary : mutedColor }]}>
                         Офис
                       </ThemedText>
                     </Pressable>
@@ -751,8 +754,8 @@ export default function CreateRequestScreen() {
                         locationSource === 'cabinet' && { backgroundColor: primaryColor },
                       ]}
                     >
-                      <MaterialIcons name="home" size={18} color={locationSource === 'cabinet' ? '#FFF' : mutedColor} />
-                      <ThemedText style={[styles.toggleLabel, { color: locationSource === 'cabinet' ? '#FFF' : mutedColor }]}>
+                      <MaterialIcons name="home" size={18} color={locationSource === 'cabinet' ? onPrimary : mutedColor} />
+                      <ThemedText style={[styles.toggleLabel, { color: locationSource === 'cabinet' ? onPrimary : mutedColor }]}>
                         Кабинет (умный дом)
                       </ThemedText>
                     </Pressable>
@@ -777,7 +780,7 @@ export default function CreateRequestScreen() {
                           selectedCabinetRoom?.id === room.id && themeStyles.chipActive,
                         ]}
                       >
-                        <ThemedText style={[styles.chipText, { color: selectedCabinetRoom?.id === room.id ? '#FFF' : textColor }]}>
+                        <ThemedText style={[styles.chipText, { color: selectedCabinetRoom?.id === room.id ? onPrimary : textColor }]}>
                           {room.name}
                         </ThemedText>
                       </Pressable>
@@ -791,10 +794,15 @@ export default function CreateRequestScreen() {
                   </ThemedText>
                   <Pressable
                     onPress={handleDetectNearestOffice}
-                    style={styles.geoButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="Определить ближайший офис"
+                    style={[
+                      styles.geoButton,
+                      { borderColor: primaryColor, backgroundColor: accentSoft },
+                    ]}
                   >
-                    <MaterialIcons name="my-location" size={18} color="#FFFFFF" />
-                    <ThemedText style={styles.geoButtonText}>
+                    <MaterialIcons name="my-location" size={18} color={primaryColor} />
+                    <ThemedText style={[styles.geoButtonText, { color: primaryColor }]}>
                       {isDetectingNearestOffice ? 'Определяем ближайший офис...' : 'Определить ближайший офис'}
                     </ThemedText>
                   </Pressable>
@@ -812,7 +820,7 @@ export default function CreateRequestScreen() {
                         <ThemedText
                           style={[
                             styles.officeChipText,
-                            { color: selectedOfficeId === office.id ? '#FFF' : textColor },
+                            { color: selectedOfficeId === office.id ? onPrimary : textColor },
                           ]}
                           numberOfLines={1}
                         >
@@ -844,7 +852,7 @@ export default function CreateRequestScreen() {
                               />
                             ) : (
                               <LinearGradient
-                                colors={[KCELL.gradientFrom, KCELL.gradientTo]}
+                                colors={OFFICE_GRADIENT}
                                 style={styles.officeCardImagePlaceholder}
                               >
                                 <MaterialIcons name="location-on" size={32} color="rgba(255,255,255,0.5)" />
@@ -913,7 +921,7 @@ export default function CreateRequestScreen() {
                               selectedBlock === b && themeStyles.chipActive,
                             ]}
                           >
-                            <ThemedText style={[styles.chipText, { color: selectedBlock === b ? '#FFF' : textColor }]}>
+                            <ThemedText style={[styles.chipText, { color: selectedBlock === b ? onPrimary : textColor }]}>
                               {b}
                             </ThemedText>
                           </Pressable>
@@ -937,7 +945,7 @@ export default function CreateRequestScreen() {
                                   selectedLocation === loc && themeStyles.chipActive,
                                 ]}
                               >
-                                <ThemedText style={[styles.chipText, { color: selectedLocation === loc ? '#FFF' : textColor }]}>
+                                <ThemedText style={[styles.chipText, { color: selectedLocation === loc ? onPrimary : textColor }]}>
                                   {loc}
                                 </ThemedText>
                               </Pressable>
@@ -953,7 +961,7 @@ export default function CreateRequestScreen() {
                                 selectedLocation === 'Другое' && themeStyles.chipActive,
                               ]}
                             >
-                              <ThemedText style={[styles.chipText, { color: selectedLocation === 'Другое' ? '#FFF' : textColor }]}>
+                              <ThemedText style={[styles.chipText, { color: selectedLocation === 'Другое' ? onPrimary : textColor }]}>
                                 Другое
                               </ThemedText>
                             </Pressable>
@@ -966,6 +974,8 @@ export default function CreateRequestScreen() {
                                 placeholderTextColor={mutedColor}
                                 value={customLocation}
                                 onChangeText={setCustomLocation}
+                                returnKeyType="done"
+                                onSubmitEditing={dismissKeyboard}
                               />
                             </View>
                           )}
@@ -988,7 +998,7 @@ export default function CreateRequestScreen() {
                                       selectedRoom === room && themeStyles.chipActive,
                                     ]}
                                   >
-                                    <ThemedText style={[styles.chipText, { color: selectedRoom === room ? '#FFF' : textColor }]}>
+                                    <ThemedText style={[styles.chipText, { color: selectedRoom === room ? onPrimary : textColor }]}>
                                       {room}
                                     </ThemedText>
                                   </Pressable>
@@ -1001,7 +1011,7 @@ export default function CreateRequestScreen() {
                                     selectedRoom === 'Другое' && themeStyles.chipActive,
                                   ]}
                                 >
-                                  <ThemedText style={[styles.chipText, { color: selectedRoom === 'Другое' ? '#FFF' : textColor }]}>
+                                  <ThemedText style={[styles.chipText, { color: selectedRoom === 'Другое' ? onPrimary : textColor }]}>
                                     Другое
                                   </ThemedText>
                                 </Pressable>
@@ -1014,6 +1024,8 @@ export default function CreateRequestScreen() {
                                     placeholderTextColor={mutedColor}
                                     value={customRoom}
                                     onChangeText={setCustomRoom}
+                                    returnKeyType="done"
+                                    onSubmitEditing={dismissKeyboard}
                                   />
                                 </View>
                               )}
@@ -1026,6 +1038,8 @@ export default function CreateRequestScreen() {
                                 placeholderTextColor={mutedColor}
                                 value={customRoom}
                                 onChangeText={setCustomRoom}
+                                returnKeyType="done"
+                                onSubmitEditing={dismissKeyboard}
                               />
                             </View>
                           )}
@@ -1041,6 +1055,8 @@ export default function CreateRequestScreen() {
                         placeholderTextColor={mutedColor}
                         value={customLocationDetail}
                         onChangeText={setCustomLocationDetail}
+                        returnKeyType="done"
+                        onSubmitEditing={dismissKeyboard}
                       />
                     </View>
                   )}
@@ -1068,7 +1084,7 @@ export default function CreateRequestScreen() {
                     }}
                     style={[styles.chip, { borderColor }, requestType === t.value && themeStyles.chipActive]}
                   >
-                    <ThemedText style={[styles.chipText, { color: requestType === t.value ? '#FFF' : textColor }]}>
+                    <ThemedText style={[styles.chipText, { color: requestType === t.value ? onPrimary : textColor }]}>
                       {t.label}
                     </ThemedText>
                   </Pressable>
@@ -1084,6 +1100,8 @@ export default function CreateRequestScreen() {
                     placeholderTextColor={mutedColor}
                     value={plannedDate}
                     onChangeText={setPlannedDate}
+                    returnKeyType="done"
+                    onSubmitEditing={dismissKeyboard}
                   />
                 </View>
               )}
@@ -1107,7 +1125,7 @@ export default function CreateRequestScreen() {
                           recurrenceType === opt.value && themeStyles.chipActive,
                         ]}
                       >
-                        <ThemedText style={[styles.chipText, { color: recurrenceType === opt.value ? '#FFF' : textColor }]}>
+                        <ThemedText style={[styles.chipText, { color: recurrenceType === opt.value ? onPrimary : textColor }]}>
                           {opt.label}
                         </ThemedText>
                       </Pressable>
@@ -1125,7 +1143,7 @@ export default function CreateRequestScreen() {
                           recurrenceInterval === n && themeStyles.chipActive,
                         ]}
                       >
-                        <ThemedText style={[styles.chipText, { color: recurrenceInterval === n ? '#FFF' : textColor }]}>
+                        <ThemedText style={[styles.chipText, { color: recurrenceInterval === n ? onPrimary : textColor }]}>
                           Каждые {n}
                         </ThemedText>
                       </Pressable>
@@ -1141,6 +1159,8 @@ export default function CreateRequestScreen() {
                       const d = new Date(v);
                       if (!isNaN(d.getTime())) setRecurrenceStartDate(d);
                     }}
+                    returnKeyType="done"
+                    onSubmitEditing={dismissKeyboard}
                   />
                 </View>
               )}
@@ -1161,7 +1181,7 @@ export default function CreateRequestScreen() {
                       categoryId === c.id && themeStyles.chipActive,
                     ]}
                   >
-                    <ThemedText style={[styles.chipText, { color: categoryId === c.id ? '#FFF' : textColor }]}>
+                    <ThemedText style={[styles.chipText, { color: categoryId === c.id ? onPrimary : textColor }]}>
                       {c.name}
                     </ThemedText>
                   </Pressable>
@@ -1185,7 +1205,7 @@ export default function CreateRequestScreen() {
                           title === sub.name && themeStyles.chipActive,
                         ]}
                       >
-                        <ThemedText style={[styles.chipText, { color: title === sub.name ? '#FFF' : textColor }]}>
+                        <ThemedText style={[styles.chipText, { color: title === sub.name ? onPrimary : textColor }]}>
                           {sub.name}
                         </ThemedText>
                       </Pressable>
@@ -1203,6 +1223,8 @@ export default function CreateRequestScreen() {
                     placeholderTextColor={mutedColor}
                     value={title}
                     onChangeText={setTitle}
+                    returnKeyType="done"
+                    onSubmitEditing={dismissKeyboard}
                   />
                 </View>
               )}
@@ -1219,7 +1241,7 @@ export default function CreateRequestScreen() {
                     onPress={() => setCreateMode('create')}
                     style={[styles.modeBtn, { borderColor }, createMode === 'create' && themeStyles.chipActive]}
                   >
-                    <ThemedText style={[styles.chipText, { color: createMode === 'create' ? '#FFF' : textColor }]}>
+                    <ThemedText style={[styles.chipText, { color: createMode === 'create' ? onPrimary : textColor }]}>
                       Создать
                     </ThemedText>
                   </Pressable>
@@ -1227,7 +1249,7 @@ export default function CreateRequestScreen() {
                     onPress={() => setCreateMode('createAndComplete')}
                     style={[styles.modeBtn, { borderColor }, createMode === 'createAndComplete' && themeStyles.chipActive]}
                   >
-                    <ThemedText style={[styles.chipText, { color: createMode === 'createAndComplete' ? '#FFF' : textColor }]}>
+                    <ThemedText style={[styles.chipText, { color: createMode === 'createAndComplete' ? onPrimary : textColor }]}>
                       С завершением
                     </ThemedText>
                   </Pressable>
@@ -1246,6 +1268,9 @@ export default function CreateRequestScreen() {
                 onChangeText={setDescription}
                 multiline
                 numberOfLines={4}
+                returnKeyType="done"
+                blurOnSubmit
+                onSubmitEditing={dismissKeyboard}
               />
 
               <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Фото (до 3 шт.)</ThemedText>
@@ -1275,7 +1300,7 @@ export default function CreateRequestScreen() {
                         onPress={() => setComplexity(c.value)}
                         style={[styles.chip, { borderColor }, complexity === c.value && themeStyles.chipActive]}
                       >
-                        <ThemedText style={[styles.chipText, { color: complexity === c.value ? '#FFF' : textColor }]}>
+                        <ThemedText style={[styles.chipText, { color: complexity === c.value ? onPrimary : textColor }]}>
                           {c.label}
                         </ThemedText>
                       </Pressable>
@@ -1290,7 +1315,7 @@ export default function CreateRequestScreen() {
                         onPress={() => setSla(s.value)}
                         style={[styles.chip, { borderColor }, sla === s.value && themeStyles.chipActive]}
                       >
-                        <ThemedText style={[styles.chipText, { color: sla === s.value ? '#FFF' : textColor }]}>
+                        <ThemedText style={[styles.chipText, { color: sla === s.value ? onPrimary : textColor }]}>
                           {s.label}
                         </ThemedText>
                       </Pressable>
@@ -1351,7 +1376,7 @@ export default function CreateRequestScreen() {
                                 </ThemedText>
                                 {executorData.role === 'leader' && (
                                   <View style={[styles.executorLeaderBadge, { backgroundColor: primaryColor }]}>
-                                    <ThemedText style={styles.executorLeaderBadgeText}>Лидер</ThemedText>
+                                    <ThemedText style={[styles.executorLeaderBadgeText, { color: onPrimary }]}>Лидер</ThemedText>
                                   </View>
                                 )}
                               </View>
@@ -1411,6 +1436,8 @@ export default function CreateRequestScreen() {
                       const d = new Date(v);
                       if (!isNaN(d.getTime())) setCompletionDate(d);
                     }}
+                    returnKeyType="done"
+                    onSubmitEditing={dismissKeyboard}
                   />
                   <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Комментарий о выполненной работе *</ThemedText>
                   <TextInput
@@ -1423,6 +1450,9 @@ export default function CreateRequestScreen() {
                     value={completionComment}
                     onChangeText={setCompletionComment}
                     multiline
+                    returnKeyType="done"
+                    blurOnSubmit
+                    onSubmitEditing={dismissKeyboard}
                   />
 
                   <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Фото результата *</ThemedText>
@@ -1447,7 +1477,7 @@ export default function CreateRequestScreen() {
           )}
 
         {error && (
-          <ThemedText style={styles.errorText}>{error}</ThemedText>
+          <ThemedText style={[styles.errorText, { color: dangerColor }]}>{error}</ThemedText>
         )}
       </ScrollView>
 
@@ -1497,7 +1527,7 @@ export default function CreateRequestScreen() {
                     styles.footerBtnPressed,
                 ]}
               >
-                <ThemedText style={[styles.footerBtnLabel, styles.footerBtnLabelOnPrimary]}>
+                <ThemedText style={[styles.footerBtnLabel, { color: onPrimary }]}>
                   Дальше
                 </ThemedText>
               </Pressable>
@@ -1528,9 +1558,9 @@ export default function CreateRequestScreen() {
                 ]}
               >
                 {submitting ? (
-                  <ActivityIndicator color="#FFF" size="small" />
+                  <ActivityIndicator color={onPrimary} size="small" />
                 ) : (
-                  <ThemedText style={[styles.footerBtnLabel, styles.footerBtnLabelOnPrimary]}>
+                  <ThemedText style={[styles.footerBtnLabel, { color: onPrimary }]}>
                     Создать заявку
                   </ThemedText>
                 )}
@@ -1643,13 +1673,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#F35713',
-    backgroundColor: '#2A2A2A',
     gap: 6,
   },
   geoButtonText: {
     fontSize: 12,
-    color: '#FFFFFF',
     fontWeight: '500',
   },
   officeGrid: {
@@ -1808,7 +1835,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   executorLeaderBadgeText: {
-    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -1865,7 +1891,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    color: '#EF4444',
     fontSize: 14,
     marginBottom: 16,
   },
@@ -1901,9 +1926,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  footerBtnLabelOnPrimary: {
-    color: '#FFFFFF',
-  },
+  footerBtnLabelOnPrimary: {},
   footerBtnPressed: {
     opacity: 0.88,
   },

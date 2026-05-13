@@ -19,9 +19,11 @@ import { useToast } from '@/context/toast-context';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   type RegistrationRequestItem,
+  type Office,
   type OfficeUser,
   type ServiceCategory,
   type ExecutorInCategory,
+  getOffices,
   getRegistrationRequests,
   approveRegistrationRequest,
   rejectRegistrationRequest,
@@ -62,6 +64,13 @@ export default function AdminWorkerUsersScreen() {
   const primary = useThemeColor({}, 'primary');
   const gray600 = useThemeColor({}, 'gray600');
   const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const border = useThemeColor({}, 'border');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const success = useThemeColor({}, 'success');
+  const successSoft = useThemeColor({}, 'successSoft');
+  const danger = useThemeColor({}, 'danger');
+  const dangerSoft = useThemeColor({}, 'dangerSoft');
+  const accentSoft = useThemeColor({}, 'accentSoft');
 
   const initialTab: TabType = tab === 'management' ? 'management' : 'requests';
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
@@ -75,19 +84,49 @@ export default function AdminWorkerUsersScreen() {
     date_to: '',
   });
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showOfficeDropdown, setShowOfficeDropdown] = useState(false);
   const [actionRequestId, setActionRequestId] = useState<number | null>(null);
+  const [offices, setOffices] = useState<Office[]>([]);
+  const [filterOfficeId, setFilterOfficeId] = useState('');
+  const [requestPage, setRequestPage] = useState(1);
+  const [requestMeta, setRequestMeta] = useState({
+    total: 0,
+    page: 1,
+    pageSize: 20,
+    totalPages: 1,
+  });
+
+  useEffect(() => {
+    getOffices().then(setOffices);
+  }, []);
 
   const loadRequests = useCallback(async () => {
     setRequestsLoading(true);
-    const params: { status?: string; date_from?: string; date_to?: string } = {};
+    const params: {
+      status?: string;
+      date_from?: string;
+      date_to?: string;
+      office_id?: string;
+      page?: string;
+      page_size?: string;
+    } = {
+      page: String(requestPage),
+      page_size: '20',
+    };
     if (filters.status) params.status = filters.status;
     if (filters.date_from) params.date_from = filters.date_from;
     if (filters.date_to) params.date_to = filters.date_to;
+    if (filterOfficeId) params.office_id = filterOfficeId;
     const result = await getRegistrationRequests(params);
-    if (result.ok) setRequests(result.data);
-    else setRequests([]);
+    if (result.ok) {
+      setRequests(result.data);
+      setRequestMeta(result.meta);
+    } else {
+      setRequests([]);
+      setRequestMeta({ total: 0, page: 1, pageSize: 20, totalPages: 1 });
+    }
     setRequestsLoading(false);
-  }, [filters.status, filters.date_from, filters.date_to]);
+  }, [filters.status, filters.date_from, filters.date_to, filterOfficeId, requestPage]);
 
   useEffect(() => {
     loadRequests();
@@ -277,6 +316,11 @@ export default function AdminWorkerUsersScreen() {
     [executors, selectedExecutorId]
   );
 
+  const registrationOfficeLabel = useMemo(() => {
+    if (!filterOfficeId) return 'Все офисы';
+    return offices.find((o) => String(o.id) === filterOfficeId)?.name ?? 'Офис';
+  }, [filterOfficeId, offices]);
+
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
       <View style={styles.header}>
@@ -331,10 +375,64 @@ export default function AdminWorkerUsersScreen() {
           </ThemedText>
 
           <View style={styles.field}>
+            <ThemedText style={[styles.label, { color: textMuted }]}>Офис</ThemedText>
+            <Pressable
+              style={[styles.selectTrigger, { borderColor: border, backgroundColor: surfaceElevated }]}
+              onPress={() => {
+                setShowOfficeDropdown((v) => !v);
+                setShowStatusDropdown(false);
+              }}
+            >
+              <ThemedText style={[styles.selectTriggerText, { color: text }]}>{registrationOfficeLabel}</ThemedText>
+              <MaterialIcons
+                name={showOfficeDropdown ? 'expand-less' : 'expand-more'}
+                size={22}
+                color={textMuted}
+              />
+            </Pressable>
+            {showOfficeDropdown && (
+              <View style={[styles.dropdown, { backgroundColor: surfaceElevated, borderWidth: 1, borderColor: border }]}>
+                <Pressable
+                  style={[
+                    styles.dropdownItem,
+                    !filterOfficeId && { backgroundColor: accentSoft },
+                  ]}
+                  onPress={() => {
+                    setFilterOfficeId('');
+                    setRequestPage(1);
+                    setShowOfficeDropdown(false);
+                  }}
+                >
+                  <ThemedText style={[styles.dropdownItemText, { color: text }]}>Все офисы</ThemedText>
+                </Pressable>
+                {offices.map((o) => (
+                  <Pressable
+                    key={o.id}
+                    style={[
+                      styles.dropdownItem,
+                      filterOfficeId === String(o.id) && { backgroundColor: accentSoft },
+                    ]}
+                    onPress={() => {
+                      setFilterOfficeId(String(o.id));
+                      setRequestPage(1);
+                      setShowOfficeDropdown(false);
+                    }}
+                  >
+                    <ThemedText style={[styles.dropdownItemText, { color: text }]}>{o.name}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.field}>
             <ThemedText style={[styles.label, { color: textMuted }]}>Статус</ThemedText>
             <Pressable
-              style={[styles.selectTrigger, { borderColor: gray600, backgroundColor: screenBg }]}
-              onPress={() => setShowStatusDropdown((v) => !v)}
+              style={[styles.selectTrigger, { borderColor: border, backgroundColor: surfaceElevated }]}
+              onPress={() => {
+                setShowStatusDropdown((v) => !v);
+                setShowOfficeDropdown(false);
+              }}
             >
               <ThemedText style={[styles.selectTriggerText, { color: text }]}>
                 {filters.status ? REGISTRATION_STATUS_LABELS[filters.status] ?? filters.status : 'Все статусы'}
@@ -346,26 +444,30 @@ export default function AdminWorkerUsersScreen() {
               />
             </Pressable>
             {showStatusDropdown && (
-              <View style={[styles.dropdown, { backgroundColor: screenBg }]}>
+              <View style={[styles.dropdown, { backgroundColor: surfaceElevated, borderWidth: 1, borderColor: border }]}>
                 <Pressable
-                  style={[styles.dropdownItem, !filters.status && styles.dropdownItemActive]}
+                  style={[styles.dropdownItem, !filters.status && { backgroundColor: accentSoft }]}
                   onPress={() => {
                     setFilters((f) => ({ ...f, status: '' }));
+                    setRequestPage(1);
                     setShowStatusDropdown(false);
                   }}
                 >
-                  <ThemedText style={styles.dropdownItemText}>Все статусы</ThemedText>
+                  <ThemedText style={[styles.dropdownItemText, { color: text }]}>Все статусы</ThemedText>
                 </Pressable>
                 {(['pending', 'approved', 'rejected'] as const).map((s) => (
                   <Pressable
                     key={s}
-                    style={[styles.dropdownItem, filters.status === s && styles.dropdownItemActive]}
+                    style={[styles.dropdownItem, filters.status === s && { backgroundColor: accentSoft }]}
                     onPress={() => {
                       setFilters((f) => ({ ...f, status: s }));
+                      setRequestPage(1);
                       setShowStatusDropdown(false);
                     }}
                   >
-                    <ThemedText style={styles.dropdownItemText}>{REGISTRATION_STATUS_LABELS[s]}</ThemedText>
+                    <ThemedText style={[styles.dropdownItemText, { color: text }]}>
+                      {REGISTRATION_STATUS_LABELS[s]}
+                    </ThemedText>
                   </Pressable>
                 ))}
               </View>
@@ -382,18 +484,37 @@ export default function AdminWorkerUsersScreen() {
           ) : (
             <View style={styles.requestList}>
               {requests.map((req) => (
-                <View key={req.id} style={[styles.requestCard, { backgroundColor: gray600 }]}>
+                <View
+                  key={req.id}
+                  style={[styles.registrationCard, { borderColor: border, backgroundColor: surfaceElevated }]}
+                >
                   <View style={styles.requestCardHeader}>
-                    <ThemedText style={styles.requestName}>{req.full_name}</ThemedText>
-                    <View style={[styles.badge, req.status === 'pending' && { backgroundColor: primary }]}>
-                      <ThemedText style={styles.badgeText}>
+                    <ThemedText style={[styles.requestName, { color: text }]} numberOfLines={2}>
+                      {req.full_name}
+                    </ThemedText>
+                    <View
+                      style={[
+                        styles.registrationStatusPill,
+                        {
+                          backgroundColor:
+                            req.status === 'pending' ? accentSoft : req.status === 'approved' ? successSoft : dangerSoft,
+                        },
+                      ]}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.registrationStatusPillText,
+                          {
+                            color:
+                              req.status === 'pending' ? primary : req.status === 'approved' ? success : danger,
+                          },
+                        ]}
+                      >
                         {REGISTRATION_STATUS_LABELS[req.status] ?? req.status}
                       </ThemedText>
                     </View>
                   </View>
-                  <ThemedText style={[styles.requestMeta, { color: textMuted }]}>
-                    Телефон: {req.phone}
-                  </ThemedText>
+                  <ThemedText style={[styles.requestMeta, { color: textMuted }]}>Телефон: {req.phone}</ThemedText>
                   <ThemedText style={[styles.requestMeta, { color: textMuted }]}>
                     Офис: {req.office?.name ?? '—'}
                   </ThemedText>
@@ -411,22 +532,38 @@ export default function AdminWorkerUsersScreen() {
                   {req.status === 'pending' && (
                     <View style={styles.requestActions}>
                       <Pressable
-                        style={[styles.approveBtn, actionRequestId === req.id && styles.buttonDisabled]}
+                        style={[
+                          styles.registrationActionBtn,
+                          {
+                            borderColor: success,
+                            backgroundColor: successSoft,
+                            minHeight: 44,
+                          },
+                          actionRequestId === req.id && styles.buttonDisabled,
+                        ]}
                         onPress={() => handleApprove(req.id)}
                         disabled={actionRequestId === req.id}
                       >
                         {actionRequestId === req.id ? (
-                          <ActivityIndicator size="small" color="#fff" />
+                          <ActivityIndicator size="small" color={success} />
                         ) : (
-                          <ThemedText style={styles.actionBtnText}>Одобрить</ThemedText>
+                          <ThemedText style={[styles.registrationActionBtnLabel, { color: success }]}>Одобрить</ThemedText>
                         )}
                       </Pressable>
                       <Pressable
-                        style={[styles.rejectBtn, actionRequestId === req.id && styles.buttonDisabled]}
+                        style={[
+                          styles.registrationActionBtn,
+                          {
+                            borderColor: danger,
+                            backgroundColor: dangerSoft,
+                            minHeight: 44,
+                          },
+                          actionRequestId === req.id && styles.buttonDisabled,
+                        ]}
                         onPress={() => handleReject(req.id)}
                         disabled={actionRequestId === req.id}
                       >
-                        <ThemedText style={styles.actionBtnText}>Отклонить</ThemedText>
+                        <ThemedText style={[styles.registrationActionBtnLabel, { color: danger }]}>Отклонить</ThemedText>
                       </Pressable>
                     </View>
                   )}
@@ -434,6 +571,38 @@ export default function AdminWorkerUsersScreen() {
               ))}
             </View>
           )}
+
+          {!requestsLoading && requestMeta.total > 0 ? (
+            <View style={[styles.paginationBar, { borderTopColor: border }]}>
+              <ThemedText style={[styles.paginationInfo, { color: textMuted }]}>
+                Страница {requestMeta.page} из {requestMeta.totalPages} · Всего {requestMeta.total}
+              </ThemedText>
+              <View style={styles.paginationButtons}>
+                <Pressable
+                  style={[
+                    styles.paginationBtn,
+                    { borderColor: border, backgroundColor: surfaceElevated },
+                    requestMeta.page <= 1 && styles.buttonDisabled,
+                  ]}
+                  onPress={() => setRequestPage((p) => Math.max(1, p - 1))}
+                  disabled={requestMeta.page <= 1}
+                >
+                  <ThemedText style={[styles.paginationBtnText, { color: text }]}>Назад</ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.paginationBtn,
+                    { borderColor: border, backgroundColor: surfaceElevated },
+                    requestMeta.page >= requestMeta.totalPages && styles.buttonDisabled,
+                  ]}
+                  onPress={() => setRequestPage((p) => Math.min(requestMeta.totalPages, p + 1))}
+                  disabled={requestMeta.page >= requestMeta.totalPages}
+                >
+                  <ThemedText style={[styles.paginationBtnText, { color: text }]}>Вперёд</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
         </ScrollView>
       )}
 
@@ -799,9 +968,10 @@ const styles = StyleSheet.create({
   requestList: {
     gap: 12,
   },
-  requestCard: {
+  registrationCard: {
     borderRadius: 12,
     padding: 16,
+    borderWidth: 1,
   },
   requestCardHeader: {
     flexDirection: 'row',
@@ -813,47 +983,65 @@ const styles = StyleSheet.create({
   requestName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    flex: 1,
+    minWidth: 0,
   },
   requestMeta: {
     fontSize: 14,
     marginBottom: 2,
   },
-  badge: {
-    paddingHorizontal: 8,
+  registrationStatusPill: {
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 8,
   },
-  badgePending: {},
-  badgeText: {
+  registrationStatusPillText: {
     fontSize: 12,
-    color: '#fff',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   requestActions: {
     flexDirection: 'row',
     gap: 12,
     marginTop: 12,
   },
-  approveBtn: {
+  registrationActionBtn: {
     flex: 1,
-    backgroundColor: '#16A34A',
-    paddingVertical: 10,
+    borderWidth: 1.5,
     borderRadius: 10,
     alignItems: 'center',
-  },
-  rejectBtn: {
-    flex: 1,
-    backgroundColor: '#DC2626',
+    justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
   },
-  actionBtnText: {
-    color: '#fff',
+  registrationActionBtnLabel: {
+    fontSize: 15,
     fontWeight: '600',
-    fontSize: 14,
+  },
+  paginationBar: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+  },
+  paginationInfo: {
+    fontSize: 13,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  paginationButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  paginationBtn: {
+    flex: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 12,
+  },
+  paginationBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   buttonDisabled: {
     opacity: 0.5,

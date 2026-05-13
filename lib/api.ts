@@ -5,6 +5,13 @@ import { useAuthStore } from '@/stores/auth-store';
 
 const { apiBaseUrl } = config;
 
+const HEALTHY_SYNC_VERSION = 'healthy.v1' as const;
+
+function pathWithoutQuery(p: string): string {
+  const q = p.indexOf('?');
+  return q === -1 ? p : p.slice(0, q);
+}
+
 type RequestOptions = RequestInit & { params?: Record<string, string> };
 
 export async function request<T>(
@@ -62,6 +69,48 @@ export async function request<T>(
     }
   }
 
+  if (isGuestToken) {
+    const method = (init.method ?? 'GET').toUpperCase();
+    const base = pathWithoutQuery(path);
+
+    if (method === 'GET' && (base === '/offices' || base.startsWith('/offices/'))) {
+      if (base === '/offices') {
+        return { ok: true, data: [GUEST_DEMO_OFFICE] as T };
+      }
+      const m = /^\/offices\/(\d+)$/.exec(base);
+      if (m) {
+        const oid = Number(m[1]);
+        if (oid === GUEST_DEMO_OFFICE.id) {
+          return { ok: true, data: GUEST_DEMO_OFFICE as T };
+        }
+        return { ok: false, error: 'Офис не найден' };
+      }
+    }
+
+    if (method === 'GET' && base === '/meeting-rooms') {
+      const q = path.includes('?') ? path.slice(path.indexOf('?') + 1) : '';
+      const officeParam = new URLSearchParams(q).get('office_id');
+      const oid = officeParam != null ? Number(officeParam) : NaN;
+      if (!officeParam || oid === GUEST_DEMO_OFFICE.id) {
+        return { ok: true, data: GUEST_DEMO_MEETING_ROOMS as T };
+      }
+      return { ok: true, data: [] as T };
+    }
+
+    if (method === 'POST' && base === '/healthy/sync') {
+      return {
+        ok: true,
+        data: {
+          ok: true,
+          data: {
+            version: HEALTHY_SYNC_VERSION,
+            sync_result: { ok: true, synced_dates: [], profile_updated: false },
+          },
+        } as T,
+      };
+    }
+  }
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -75,10 +124,17 @@ export async function request<T>(
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      console.error(`[API Error] ${path}:`, res.status, data);
+      const isUnauthorizedWithoutToken = res.status === 401 && !token;
+      if (!isUnauthorizedWithoutToken) {
+        console.error(`[API Error] ${path}:`, res.status, data);
+      }
       if (res.status === 401) {
-        useAuthStore.getState().clearAuth();
-        router.replace('/login');
+        // При logout токен уже очищен — не триггерим лишний clearAuth/redirect повторно.
+        // Демо-сессию не сбрасываем из‑за ответа API (guest-demo не валиден на бэкенде).
+        if (token && token !== 'guest-demo') {
+          useAuthStore.getState().clearAuth();
+          router.replace('/login');
+        }
         return { ok: false, error: 'Сессия истекла. Войдите снова.' };
       }
       const error =
@@ -120,8 +176,11 @@ async function requestFormData<T>(
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401) {
-        useAuthStore.getState().clearAuth();
-        router.replace('/login');
+        const t = useAuthStore.getState().token;
+        if (t && t !== 'guest-demo') {
+          useAuthStore.getState().clearAuth();
+          router.replace('/login');
+        }
         return { ok: false, error: 'Сессия истекла. Войдите снова.' };
       }
       const error =
@@ -613,6 +672,21 @@ export interface AcceptSubRequestPayload {
   category_id?: number;
 }
 
+export interface UpdateSubRequestPayload {
+  id: number;
+  category_id?: number;
+  complexity?: string;
+  sla?: string;
+  title?: string;
+  description?: string;
+}
+
+export interface UpdateRequestGroupPayload {
+  request_type?: string;
+  location_detail?: string;
+  sub_requests?: UpdateSubRequestPayload[];
+}
+
 /** Принять/отклонить группу заявок (admin-worker). patch_code: 1 = accept (с sub_requests, request_type, location_detail), 2 = reject (rejection_reason) */
 export async function patchRequestGroup(
   id: number,
@@ -620,6 +694,7 @@ export async function patchRequestGroup(
   body?: {
     request_type?: string;
     location_detail?: string;
+    office_id?: number;
     rejection_reason?: string;
     sub_requests?: AcceptSubRequestPayload[];
   }
@@ -627,6 +702,19 @@ export async function patchRequestGroup(
   const result = await request<RequestGroup>(`/request-groups/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ patch_code: patchCode, ...body }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+/** Обновить группу заявок (admin-worker, manager) */
+export async function updateRequestGroup(
+  id: number,
+  body: UpdateRequestGroupPayload
+): Promise<{ ok: true; data: RequestGroup } | { ok: false; error: string }> {
+  const result = await request<RequestGroup>(`/request-groups/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: result.data! };
@@ -780,12 +868,17 @@ export async function uploadRequestPhotos(
   photos: { uri: string; type?: string }[],
   photoType: 'before' | 'after' = 'after'
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { compressRequestPhotos } = await import('@/lib/request-photo-compression');
   const formData = new FormData();
-  photos.forEach((p, i) => {
+  const compressedPhotos = await compressRequestPhotos(
+    photos.map((p) => p.uri),
+    `request_${photoType}`
+  );
+  compressedPhotos.forEach((p) => {
     formData.append('photos', {
       uri: p.uri,
-      type: p.type ?? 'image/jpeg',
-      name: `photo_${i}_${Date.now()}.jpg`,
+      type: p.type,
+      name: p.name,
     } as unknown as Blob);
   });
   formData.append('type', photoType);
@@ -840,6 +933,19 @@ export async function assignExecutorsToRequest(
   return { ok: true };
 }
 
+/** Изменить исполнителей на подзаявку (department-head) */
+export async function changeExecutorsToRequest(
+    subRequestId: number,
+    executors: Array<{ id: number; role: 'executor' | 'leader' }>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(
+      `/request-executors/${subRequestId}/change`,
+      { method: 'PUT', body: JSON.stringify({ executors }) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
 /** Создать группу заявок (FormData с photos) */
 export async function createRequestGroup(
   formData: FormData
@@ -876,6 +982,7 @@ export interface RegistrationRequestItem {
   id: number;
   phone: string;
   full_name: string;
+  office_id?: number;
   office: { name: string };
   role: string;
   service_category_id?: number;
@@ -884,31 +991,59 @@ export interface RegistrationRequestItem {
   created_at: string;
 }
 
+export interface RegistrationRequestsListMeta {
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export async function getRegistrationRequests(filters?: {
   status?: string;
   office_id?: string;
   date_from?: string;
   date_to?: string;
+  page?: string;
+  page_size?: string;
 }): Promise<
-  { ok: true; data: RegistrationRequestItem[] } | { ok: false; error: string }
+  | { ok: true; data: RegistrationRequestItem[]; meta: RegistrationRequestsListMeta }
+  | { ok: false; error: string }
 > {
   const params: Record<string, string> = {};
   if (filters?.status) params.status = filters.status;
   if (filters?.office_id) params.office_id = filters.office_id;
   if (filters?.date_from) params.date_from = filters.date_from;
   if (filters?.date_to) params.date_to = filters.date_to;
+  if (filters?.page) params.page = filters.page;
+  if (filters?.page_size) params.page_size = filters.page_size;
   const qs = Object.keys(params).length ? `?${new URLSearchParams(params).toString()}` : '';
-  const result = await request<{ success?: boolean; data: RegistrationRequestItem[] }>(
-    `/registration-requests${qs}`
-  );
+  const result = await request<{
+    success?: boolean;
+    data?: RegistrationRequestItem[];
+    meta?: RegistrationRequestsListMeta;
+  }>(`/registration-requests${qs}`);
   if (!result.ok) return { ok: false, error: result.error };
   const raw = result.data;
-  const list = Array.isArray((raw as { data?: RegistrationRequestItem[] })?.data)
-    ? (raw as { data: RegistrationRequestItem[] }).data
-    : Array.isArray(raw)
-      ? (raw as RegistrationRequestItem[])
-      : [];
-  return { ok: true, data: list };
+  const list = Array.isArray(raw?.data) ? raw.data : [];
+  const meta = raw?.meta;
+  const pageSize =
+    meta?.pageSize != null && Number.isFinite(meta.pageSize) ? meta.pageSize : 20;
+  const total = meta?.total != null && Number.isFinite(meta.total) ? meta.total : list.length;
+  const page = meta?.page != null && Number.isFinite(meta.page) ? meta.page : 1;
+  const totalPages =
+    meta?.totalPages != null && Number.isFinite(meta.totalPages) && meta.totalPages > 0
+      ? meta.totalPages
+      : Math.max(1, Math.ceil(total / (pageSize || 1)));
+  return {
+    ok: true,
+    data: list,
+    meta: {
+      total,
+      page,
+      pageSize,
+      totalPages,
+    },
+  };
 }
 
 export async function approveRegistrationRequest(requestId: number): Promise<
@@ -1459,6 +1594,44 @@ export interface MeetingRoom {
   /** Одно фото — если бэкенд отдаёт только photo */
   photo?: string | null;
 }
+
+/** Тот же офис, что в демо на экране создания заявки (`requests/create.tsx`). */
+const GUEST_DEMO_OFFICE: Office = {
+  id: 1,
+  name: 'Офис (демо)',
+  city: 'Алматы',
+  address: 'ул. Демо, 1',
+  lat: 43.238949,
+  lon: 76.889709,
+};
+
+const GUEST_DEMO_MEETING_ROOMS: MeetingRoom[] = [
+  {
+    id: 101,
+    name: 'Переговорная «Орёл» (демо)',
+    floor: 3,
+    capacity: 8,
+    office_id: 1,
+    office: GUEST_DEMO_OFFICE,
+    status: 'available',
+    isActive: true,
+    room_type: 'meeting',
+    photos: [],
+  },
+  {
+    id: 102,
+    name: 'Переговорная «Ястреб» (демо)',
+    floor: 5,
+    capacity: 4,
+    office_id: 1,
+    office: GUEST_DEMO_OFFICE,
+    status: 'available',
+    isActive: true,
+    room_type: 'meeting',
+    photos: [],
+    description: null,
+  },
+];
 
 export interface MeetingRoomBooking {
   id: number;

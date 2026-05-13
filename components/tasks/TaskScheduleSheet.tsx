@@ -28,6 +28,11 @@ import {
     WEEKDAY_SHORT,
 } from '@/lib/task-schedule-helpers';
 
+function monthStartFromApiDateKey(dateKey: string): Date {
+  const d = new Date(`${dateKey}T12:00:00`);
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
 export type TaskScheduleSheetColors = {
   sheetBackground: string;
   bannerBackground: string;
@@ -157,6 +162,17 @@ export function TaskScheduleSheetContent({
 
   const weekendShortcutKey = useMemo(() => nextWeekendDayKey(todayKey), [todayKey]);
   const nextWeekShortcutKey = useMemo(() => nextMondayAfterToday(todayKey), [todayKey]);
+
+  const pickScheduledDate = useCallback(
+    (dateKey: string | null) => {
+      onScheduledDateChange(dateKey);
+      if (dateKey) {
+        onCalendarMonthChange(monthStartFromApiDateKey(dateKey));
+      }
+    },
+    [onScheduledDateChange, onCalendarMonthChange]
+  );
+
   const monthCells = useMemo(
     () => buildMonthCells(calendarMonth.getFullYear(), calendarMonth.getMonth()),
     [calendarMonth]
@@ -206,7 +222,7 @@ export function TaskScheduleSheetContent({
         <Pressable
           style={[styles.shortcutRow, { borderBottomColor: border }]}
           onPress={() => {
-            onScheduledDateChange(tomorrowKey);
+            pickScheduledDate(tomorrowKey);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
         >
@@ -220,7 +236,7 @@ export function TaskScheduleSheetContent({
         <Pressable
           style={[styles.shortcutRow, { borderBottomColor: border }]}
           onPress={() => {
-            onScheduledDateChange(weekendShortcutKey);
+            pickScheduledDate(weekendShortcutKey);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
         >
@@ -234,7 +250,7 @@ export function TaskScheduleSheetContent({
         <Pressable
           style={[styles.shortcutRow, { borderBottomColor: border }]}
           onPress={() => {
-            onScheduledDateChange(nextWeekShortcutKey);
+            pickScheduledDate(nextWeekShortcutKey);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
         >
@@ -304,7 +320,7 @@ export function TaskScheduleSheetContent({
               <Pressable
                 key={cell.dateKey}
                 onPress={() => {
-                  onScheduledDateChange(cell.dateKey);
+                  pickScheduledDate(cell.dateKey);
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 }}
                 style={[

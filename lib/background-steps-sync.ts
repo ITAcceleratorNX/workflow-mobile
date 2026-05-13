@@ -5,12 +5,10 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as BackgroundTask from 'expo-background-task';
-import { Pedometer } from 'expo-sensors';
-import { Platform } from 'react-native';
 import * as TaskManager from 'expo-task-manager';
 
 import { config } from '@/lib/config';
-import { startOfDay } from '@/lib/steps-utils';
+import { fetchStepsTodayFromPedometer, parsePersisted } from '@/lib/background-sync-utils';
 
 const BACKGROUND_STEPS_TASK = 'background-steps-sync';
 
@@ -28,33 +26,6 @@ interface PersistedStepsState {
   };
 }
 
-function parsePersisted<T>(raw: string | null): T | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as { state?: T } | T;
-    return (parsed && typeof parsed === 'object' && 'state' in parsed ? parsed.state : parsed) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchStepsToday(): Promise<number> {
-  if (Platform.OS === 'ios') {
-    const start = startOfDay(new Date());
-    const end = new Date();
-    const result = await Pedometer.getStepCountAsync(start, end);
-    return result?.steps ?? 0;
-  }
-  // Фолбэк: используем getStepCountAsync и на других платформах.
-  try {
-    const start = startOfDay(new Date());
-    const end = new Date();
-    const result = await Pedometer.getStepCountAsync(start, end);
-    return result?.steps ?? 0;
-  } catch {
-    return 0;
-  }
-}
 
 async function syncStepsToServerBackground(payload: {
   token: string;
@@ -94,7 +65,7 @@ TaskManager.defineTask(BACKGROUND_STEPS_TASK, async () => {
 
     const stepsRaw = await AsyncStorage.getItem('steps-storage');
     const stepsState = parsePersisted<PersistedStepsState>(stepsRaw);
-    const stepsToday = await fetchStepsToday();
+    const stepsToday = await fetchStepsTodayFromPedometer();
     const settings = stepsState?.settings ?? {};
     const goalSteps = settings.goalSteps ?? null;
     const noActivityIntervalHours = settings.noActivityIntervalHours ?? 2;
@@ -121,11 +92,17 @@ export async function registerBackgroundStepsTask(): Promise<void> {
   const status = await BackgroundTask.getStatusAsync();
   if (status === BackgroundTask.BackgroundTaskStatus.Restricted) return;
 
+  const already = await TaskManager.isTaskRegisteredAsync(BACKGROUND_STEPS_TASK);
+  if (already) return;
+
   await BackgroundTask.registerTaskAsync(BACKGROUND_STEPS_TASK, {
     minimumInterval: 15,
   });
 }
 
 export async function unregisterBackgroundStepsTask(): Promise<void> {
-  await BackgroundTask.unregisterTaskAsync(BACKGROUND_STEPS_TASK);
+  const already = await TaskManager.isTaskRegisteredAsync(BACKGROUND_STEPS_TASK);
+  if (already) {
+    await BackgroundTask.unregisterTaskAsync(BACKGROUND_STEPS_TASK);
+  }
 }

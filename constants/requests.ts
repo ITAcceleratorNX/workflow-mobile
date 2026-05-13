@@ -52,3 +52,38 @@ export function getStatusLabel(status: string): string {
 export function getTypeLabel(type: string): string {
   return TYPE_LABELS[type] ?? 'Обычная';
 }
+
+/**
+ * Единый текст типа услуги для карточек (клиент, администратор офиса, офис-менеджер):
+ * «Клининг», «КТО», «Административная» и синонимы из API.
+ */
+export function formatServiceCategoryDisplayName(
+  apiCategoryName: string | undefined | null
+): string {
+  const t = apiCategoryName?.trim() ?? '';
+  if (!t) return 'Не указано';
+  const lower = t.toLowerCase();
+
+  if (lower.includes('клининг') || lower.includes('cleaning')) {
+    return 'Клининг';
+  }
+  if (
+    lower.includes('административ') ||
+    lower.includes('administrativ') ||
+    lower.includes('администрация')
+  ) {
+    return 'Административная';
+  }
+  if (
+    lower === 'кто' ||
+    lower === 'kto' ||
+    lower === 'cto' ||
+    lower.includes('техобслуж') ||
+    lower.includes('техническое обслуживание') ||
+    (lower.includes('кто') && lower.length <= 24)
+  ) {
+    return 'КТО';
+  }
+
+  return t;
+}

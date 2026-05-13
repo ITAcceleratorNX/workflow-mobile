@@ -40,6 +40,7 @@ export interface GetActionsParams {
   onAdminCompleteGroup?: () => void;
   onAdminAcceptGroup?: () => void;
   onAdminRejectGroup?: () => void;
+  onEditRequestGroup?: () => void;
 }
 
 export function getRequestActions(params: GetActionsParams): ActionItem[] {
@@ -64,6 +65,7 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
     onAdminCompleteGroup,
     onAdminAcceptGroup,
     onAdminRejectGroup,
+    onEditRequestGroup,
   } = params;
 
   const actions: ActionItem[] = [];
@@ -179,6 +181,17 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
         label: 'Удалить',
         onClick: () => onDelete(deleteTarget),
         variant: 'destructive',
+      });
+    }
+    if (
+      request.status !== 'completed' &&
+      onEditRequestGroup
+    ) {
+      actions.push({
+        icon: 'edit',
+        label: 'Редактировать заявку',
+        onClick: onEditRequestGroup,
+        variant: 'primary',
       });
     }
   }
@@ -305,6 +318,17 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
         label: 'Удалить заявку',
         onClick: () => onDelete(subRequest),
         variant: 'destructive',
+      });
+    }
+    if (
+      request.status !== 'completed' &&
+      onEditRequestGroup
+    ) {
+      actions.push({
+        icon: 'edit',
+        label: 'Редактировать заявку',
+        onClick: onEditRequestGroup,
+        variant: 'primary',
       });
     }
   } else if (userRole === 'admin-worker' && !isSub) {

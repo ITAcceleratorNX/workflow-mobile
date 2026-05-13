@@ -18,6 +18,26 @@ async function authRequest<T>(
     return { ok: false, error: 'Не авторизован', unauthorized: true };
   }
 
+  const basePath = path.split('?')[0];
+  const method = (options.method ?? 'GET').toUpperCase();
+
+  if (token === 'guest-demo') {
+    if (basePath === '/notifications/me') {
+      return {
+        ok: true,
+        data: {
+          notifications: [],
+          total: 0,
+          totalPages: 0,
+        } as T,
+      };
+    }
+    if (method === 'PATCH' && /^\/notifications\/\d+\/read$/.test(basePath)) {
+      return { ok: true, data: {} as T };
+    }
+    return { ok: false, error: 'В демо-режиме недоступно' };
+  }
+
   const url = `${apiBaseUrl}${path}`;
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -30,8 +50,10 @@ async function authRequest<T>(
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
-      useAuthStore.getState().clearAuth();
-      router.replace('/login');
+      if (token !== 'guest-demo') {
+        useAuthStore.getState().clearAuth();
+        router.replace('/login');
+      }
       return {
         ok: false,
         error: 'Сессия истекла. Войдите снова.',
