@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system';
-import * as ImageManipulator from 'expo-image-manipulator';
+import type { Action } from 'expo-image-manipulator';
 import { Image } from 'react-native';
 
 const REQUEST_PHOTO_MAX_DIMENSION = 1600;
@@ -43,10 +43,16 @@ export async function compressRequestPhoto(
   prefix: string
 ): Promise<CompressedRequestPhoto> {
   try {
+    // Lazy-load so missing native module (e.g. stale iOS binary) does not break module exports.
+    const ImageManipulator = await import('expo-image-manipulator');
+    if (typeof ImageManipulator.manipulateAsync !== 'function') {
+      throw new Error('expo-image-manipulator native module unavailable');
+    }
+
     const size = await getImageSize(uri);
     const maxSide = size ? Math.max(size.width, size.height) : 0;
     const shouldResize = maxSide > REQUEST_PHOTO_MAX_DIMENSION;
-    const actions: ImageManipulator.Action[] = shouldResize
+    const actions: Action[] = shouldResize
       ? size!.width >= size!.height
         ? [{ resize: { width: REQUEST_PHOTO_MAX_DIMENSION } }]
         : [{ resize: { height: REQUEST_PHOTO_MAX_DIMENSION } }]
