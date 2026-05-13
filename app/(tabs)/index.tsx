@@ -96,6 +96,12 @@ const DEPARTMENT_HEAD_MANAGEMENT_CARDS: {
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }[] = [
   {
+    key: 'location-templates',
+    title: 'Шаблоны локаций',
+    subtitle: 'Блок, этаж и помещения для заявок в вашем офисе',
+    icon: 'place',
+  },
+  {
     key: 'statistics',
     title: 'Аналитика',
     subtitle: 'SLA, оценки, статистика по заявкам',
@@ -115,12 +121,6 @@ const MANAGER_MANAGEMENT_CARDS: {
     title: 'Управление офисами',
     subtitle: 'Добавление и управление офисами компании',
     icon: 'business',
-  },
-  {
-    key: 'location-templates',
-    title: 'Шаблоны локаций',
-    subtitle: 'Блок, этаж и помещения для заявок в вашем офисе',
-    icon: 'place',
   },
   {
     key: 'categories',
@@ -284,8 +284,12 @@ function ExecutorManagementScreen({
 
   const handleOpen = useCallback(
     (key: ExecutorCardKey) => {
-      // department-head: только Аналитика, свой эндпоинт /analytics/stats/department-head
+      // department-head: шаблоны локаций своего офиса + аналитика
       if (executorRole === 'department-head') {
+        if (key === 'location-templates') {
+          router.push('/department-head/office-location-catalog');
+          return;
+        }
         if (key === 'statistics') router.push('/department-head/statistics');
         return;
       }
@@ -293,9 +297,6 @@ function ExecutorManagementScreen({
       switch (key) {
         case 'office':
           router.push('/admin-worker/office');
-          break;
-        case 'location-templates':
-          router.push('/manager/office-location-catalog');
           break;
         case 'categories':
           router.push('/admin-worker/categories');

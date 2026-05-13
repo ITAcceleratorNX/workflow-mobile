@@ -1,20 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  OfficeLocationCatalogFormModal,
+  type OfficeLocationCatalogFormValues,
+} from '@/components/office-location-catalog-form-modal';
 import { ScreenHeader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -29,7 +22,8 @@ import {
 } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 
-export default function ManagerOfficeLocationCatalogScreen() {
+/** Шаблоны локаций офиса — настраивает офис-менеджер (роль department-head) для своего офиса. */
+export default function DepartmentHeadOfficeLocationCatalogScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { show: showToast } = useToast();
@@ -48,12 +42,17 @@ export default function ManagerOfficeLocationCatalogScreen() {
   const [rows, setRows] = useState<OfficeLocationCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [formBlock, setFormBlock] = useState('');
-  const [formFloor, setFormFloor] = useState('');
-  const [formRoom, setFormRoom] = useState('');
-  const [formSort, setFormSort] = useState('0');
+  const [formDefaults, setFormDefaults] = useState({
+    block: '',
+    floor_zone: '',
+    room: '',
+    sort_order: 0,
+  });
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const autoOpenedCreateRef = useRef(false);
 
   const load = useCallback(async () => {
     if (officeId == null) {
@@ -74,67 +73,75 @@ export default function ManagerOfficeLocationCatalogScreen() {
 
   useEffect(() => {
     if (role == null) return;
-    if (role !== 'manager') {
+    if (role !== 'department-head') {
       router.back();
       return;
     }
     load();
   }, [role, load, router]);
 
-  const openAdd = () => {
+  /** При первом заходе с пустым списком — сразу открыть шторку создания (как при «создании»). */
+  useEffect(() => {
+    if (loading || officeId == null || rows.length > 0 || autoOpenedCreateRef.current) return;
+    autoOpenedCreateRef.current = true;
     setEditingId(null);
-    setFormBlock('');
-    setFormFloor('');
-    setFormRoom('');
-    setFormSort(String(rows.length > 0 ? Math.max(...rows.map((r) => r.sort_order ?? 0)) + 1 : 0));
+    setModalMode('create');
+    setSaveError(null);
+    setFormDefaults({ block: '', floor_zone: '', room: '', sort_order: 0 });
     setModalOpen(true);
-  };
+  }, [loading, officeId, rows.length]);
+
+  const openAdd = useCallback(() => {
+    setEditingId(null);
+    setModalMode('create');
+    setSaveError(null);
+    setFormDefaults({
+      block: '',
+      floor_zone: '',
+      room: '',
+      sort_order: rows.length > 0 ? Math.max(...rows.map((r) => r.sort_order ?? 0)) + 1 : 0,
+    });
+    setModalOpen(true);
+  }, [rows]);
 
   const openEdit = (item: OfficeLocationCatalogItem) => {
     setEditingId(item.id);
-    setFormBlock(item.block);
-    setFormFloor(item.floor_zone);
-    setFormRoom(item.room);
-    setFormSort(String(item.sort_order ?? 0));
+    setModalMode('edit');
+    setSaveError(null);
+    setFormDefaults({
+      block: item.block,
+      floor_zone: item.floor_zone,
+      room: item.room,
+      sort_order: item.sort_order ?? 0,
+    });
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
     setEditingId(null);
+    setSaveError(null);
   };
 
-  const saveForm = async () => {
+  const handleModalSubmit = async (values: OfficeLocationCatalogFormValues) => {
     if (officeId == null) return;
-    const sortNum = Number(formSort);
-    if (Number.isNaN(sortNum)) {
-      showToast({ title: 'Некорректный порядок', variant: 'destructive' });
-      return;
-    }
     setSaving(true);
+    setSaveError(null);
     try {
       if (editingId == null) {
         const res = await createOfficeLocationCatalogRow(officeId, {
-          block: formBlock.trim(),
-          floor_zone: formFloor.trim(),
-          room: formRoom.trim(),
-          sort_order: sortNum,
+          ...values,
           is_active: true,
         });
         if (!res.ok) {
-          showToast({ title: res.error, variant: 'destructive' });
+          setSaveError(res.error);
           return;
         }
         showToast({ title: 'Шаблон добавлен', variant: 'success' });
       } else {
-        const res = await updateOfficeLocationCatalogRow(officeId, editingId, {
-          block: formBlock.trim(),
-          floor_zone: formFloor.trim(),
-          room: formRoom.trim(),
-          sort_order: sortNum,
-        });
+        const res = await updateOfficeLocationCatalogRow(officeId, editingId, values);
         if (!res.ok) {
-          showToast({ title: res.error, variant: 'destructive' });
+          setSaveError(res.error);
           return;
         }
         showToast({ title: 'Сохранено', variant: 'success' });
@@ -178,13 +185,26 @@ export default function ManagerOfficeLocationCatalogScreen() {
     await load();
   };
 
-  if (role !== 'manager') {
+  if (role !== 'department-head') {
     return null;
   }
 
   return (
     <ThemedView style={[styles.screen, { paddingTop: insets.top, backgroundColor: bg }]}>
       <ScreenHeader title="Шаблоны локаций" onBack={() => router.back()} />
+
+      <OfficeLocationCatalogFormModal
+        visible={modalOpen}
+        mode={modalMode}
+        loading={saving}
+        error={saveError}
+        defaultBlock={formDefaults.block}
+        defaultFloorZone={formDefaults.floor_zone}
+        defaultRoom={formDefaults.room}
+        defaultSortOrder={formDefaults.sort_order}
+        onClose={closeModal}
+        onSubmit={handleModalSubmit}
+      />
 
       {officeId == null ? (
         <View style={styles.center}>
@@ -203,7 +223,16 @@ export default function ManagerOfficeLocationCatalogScreen() {
               Блок, этаж и помещение — клиенты увидят эти варианты при создании заявки в вашем офисе.
             </ThemedText>
             {rows.length === 0 ? (
-              <ThemedText style={{ color: muted, marginTop: 16 }}>Пока нет шаблонов. Добавьте первый.</ThemedText>
+              <Pressable
+                onPress={openAdd}
+                style={[styles.emptyCta, { borderColor: border, backgroundColor: card }]}
+              >
+                <MaterialIcons name="add-circle-outline" size={28} color={primary} />
+                <ThemedText style={[styles.emptyCtaTitle, { color: text }]}>Добавить шаблон</ThemedText>
+                <ThemedText style={[styles.emptyCtaSub, { color: muted }]}>
+                  Откроется форма в том же виде, что и при редактировании заявки
+                </ThemedText>
+              </Pressable>
             ) : (
               rows.map((item) => (
                 <View
@@ -254,67 +283,6 @@ export default function ManagerOfficeLocationCatalogScreen() {
           </Pressable>
         </>
       )}
-
-      <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={closeModal}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalBackdrop}
-        >
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeModal} />
-          <View style={[styles.modalCard, { backgroundColor: card, borderColor: border }]}>
-            <ThemedText type="subtitle" style={{ color: text, marginBottom: 12 }}>
-              {editingId == null ? 'Новый шаблон' : 'Редактирование'}
-            </ThemedText>
-            <ThemedText style={[styles.label, { color: muted }]}>Блок</ThemedText>
-            <TextInput
-              value={formBlock}
-              onChangeText={setFormBlock}
-              placeholder="Например: А"
-              placeholderTextColor={muted}
-              style={[styles.input, { color: text, borderColor: border, backgroundColor: bg }]}
-            />
-            <ThemedText style={[styles.label, { color: muted }]}>Этаж / зона</ThemedText>
-            <TextInput
-              value={formFloor}
-              onChangeText={setFormFloor}
-              placeholder="Например: 2 этаж"
-              placeholderTextColor={muted}
-              style={[styles.input, { color: text, borderColor: border, backgroundColor: bg }]}
-            />
-            <ThemedText style={[styles.label, { color: muted }]}>Помещение</ThemedText>
-            <TextInput
-              value={formRoom}
-              onChangeText={setFormRoom}
-              placeholder="Название помещения"
-              placeholderTextColor={muted}
-              style={[styles.input, { color: text, borderColor: border, backgroundColor: bg }]}
-            />
-            <ThemedText style={[styles.label, { color: muted }]}>Порядок сортировки</ThemedText>
-            <TextInput
-              value={formSort}
-              onChangeText={setFormSort}
-              keyboardType="number-pad"
-              style={[styles.input, { color: text, borderColor: border, backgroundColor: bg }]}
-            />
-            <View style={styles.modalButtons}>
-              <Pressable onPress={closeModal} style={[styles.btn, styles.btnFirst, { borderColor: border }]}>
-                <ThemedText style={{ color: text }}>Отмена</ThemedText>
-              </Pressable>
-              <Pressable
-                onPress={saveForm}
-                disabled={saving}
-                style={[styles.btn, { backgroundColor: primary, opacity: saving ? 0.6 : 1 }]}
-              >
-                {saving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <ThemedText style={{ color: '#fff' }}>Сохранить</ThemedText>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </ThemedView>
   );
 }
@@ -324,6 +292,15 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   scroll: { padding: 16, paddingBottom: 100 },
   hint: { fontSize: 14, lineHeight: 20, marginBottom: 8 },
+  emptyCta: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  emptyCtaTitle: { fontSize: 17, fontWeight: '700', marginTop: 10 },
+  emptyCtaSub: { fontSize: 13, textAlign: 'center', lineHeight: 18, marginTop: 6 },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -352,39 +329,4 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
   },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  modalCard: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: 20,
-    paddingBottom: 32,
-  },
-  label: { fontSize: 12, marginTop: 10, marginBottom: 4 },
-  input: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 20,
-  },
-  btn: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    minWidth: 100,
-    alignItems: 'center',
-    marginLeft: 12,
-  },
-  btnFirst: { marginLeft: 0 },
 });
