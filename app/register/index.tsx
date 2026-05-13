@@ -334,6 +334,8 @@ export default function RegisterScreen() {
                   setFormData((p) => ({ ...p, password: t }))
                 }
                 secureTextEntry
+                textContentType="newPassword"
+                autoComplete="password-new"
               />
               <TextInput
                 label="Подтвердите пароль"
@@ -343,6 +345,8 @@ export default function RegisterScreen() {
                   setFormData((p) => ({ ...p, confirm_password: t }))
                 }
                 secureTextEntry
+                textContentType="newPassword"
+                autoComplete="password-new"
               />
               {formErrors ? (
                 <ThemedText style={[styles.error, { color: errorColor }]}>
