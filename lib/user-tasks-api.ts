@@ -52,6 +52,8 @@ export interface UserTask {
   executor_id?: number | null;
   team?: TaskTeamRef | null;
   executor?: TaskExecutorRef | null;
+  /** true: задача с вкладки «Входящие», остаётся там даже с scheduled_at и после выполнения */
+  inbox: boolean;
 }
 
 function unwrapTaskPayload(raw: unknown): UserTask {
@@ -67,7 +69,7 @@ function unwrapTaskPayload(raw: unknown): UserTask {
 
 function normalizeUserTaskRow(t: UserTask): UserTask {
   const rec = normalizeRecurrenceFromApi(t);
-  return { ...t, ...rec };
+  return { ...t, ...rec, inbox: Boolean(t.inbox) };
 }
 
 export type UserTaskAttachmentKind = 'image' | 'video' | 'document';
@@ -184,6 +186,7 @@ export async function createUserTask(body: {
   recurrence_interval?: number;
   recurrence_custom_unit?: RecurrenceCustomUnit | null;
   recurrence_weekdays?: number[] | null;
+  inbox?: boolean;
 }): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
   const result = await request<{ task: UserTask }>('/user-tasks', {
     method: 'POST',
@@ -213,6 +216,7 @@ export async function updateUserTask(
     recurrence_interval: number;
     recurrence_custom_unit: RecurrenceCustomUnit | null;
     recurrence_weekdays: number[] | null;
+    inbox: boolean;
   }>
 ): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
   const result = await request<{ task: UserTask }>(`/user-tasks/${id}`, {

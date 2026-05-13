@@ -76,7 +76,8 @@ export interface TaskAddSheetProps {
       assignees?: { id: number; full_name: string }[];
     },
     priority?: TaskPriority,
-    recurrence?: TaskRecurrencePayload
+    recurrence?: TaskRecurrencePayload,
+    options?: { inbox?: boolean }
   ) => Promise<unknown>;
 }
 
@@ -229,7 +230,7 @@ export function TaskAddSheet({
     setPriority('medium');
     setRemindersDisabled(false);
     setRemindBeforeMinutes(null);
-    if (mainView === 'inbox' || mainView === 'completed') setScheduledDate(null);
+    if (mainView === 'completed') setScheduledDate(null);
     else if (mainView === 'today') setScheduledDate(todayKey);
     else setScheduledDate(defaultDateKey ?? tomorrowKey);
     setTeamId(null);
@@ -470,7 +471,8 @@ export function TaskAddSheet({
       remindBeforeMinutes,
       { team_id: teamId, assignees },
       priority,
-      recurrenceDraft
+      recurrenceDraft,
+      { inbox: mainView === 'inbox' }
     );
     setSaving(false);
     if (created) {
@@ -493,6 +495,7 @@ export function TaskAddSheet({
     assignees,
     allowEmptyTitleFromNlp,
     recurrenceDraft,
+    mainView,
   ]);
 
   const canSubmit =
