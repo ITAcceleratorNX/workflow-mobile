@@ -124,6 +124,8 @@ export function TextInput({
           placeholderTextColor={textMuted}
           value={value}
           onChangeText={onChangeText}
+          /** iOS: фиксируем LTR, иначе плейсхолдер редко рендерится с лишними пробелами между символами. */
+          writingDirection="ltr"
           secureTextEntry={isPassword && !showPassword}
           onBlur={handleBlur}
           onFocus={handleFocus}
@@ -190,12 +192,15 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     position: 'relative',
+    width: '100%',
+    alignSelf: 'stretch',
   },
   inputRowFlex: {
     flex: 1,
     minWidth: 0,
   },
   input: {
+    width: '100%',
     minHeight: 44,
     paddingHorizontal: Spacing.md + 2,
     paddingVertical: Spacing.sm + 2,
@@ -204,6 +209,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     fontSize: FontSizes.body + 1,
     lineHeight: LineHeights.body,
+    /** iOS: без явного left плейсхолдер иногда «разъезжается» по ширине (как justify). */
+    textAlign: 'left',
+    /** Сброс разрежённых букв, если где-то выше задан letterSpacing. */
+    letterSpacing: 0,
   },
   inputFlex: {
     width: '100%',

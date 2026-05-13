@@ -25,6 +25,7 @@ import Svg, {
 } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
+import { MoodCheckInCard } from '@/components/mood-check-in-card';
 import { HealthyAiInsights } from '@/components/healthy-ai-insights';
 import { Radius, Spacing } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -683,136 +684,6 @@ function StepsMiniCard({ onPress }: { onPress: () => void }) {
   );
 }
 
-// ===== Today: Mood quick check-in =====
-
-/** Минималистичные круглые «смайлы» как на макете: жёлто-оранжевые → красно-оранжевые */
-type MoodFaceVariant = 'happy' | 'neutral' | 'sad' | 'verySad';
-
-const MOOD_FACE_FILL_WARM = '#FFCC80';
-const MOOD_FACE_FILL_SAD = '#FF8A65';
-const MOOD_FACE_STROKE = '#3E2723';
-const MOOD_FACE_LINE = '#1A1A1A';
-
-const QUICK_MOODS: { value: number; variant: MoodFaceVariant }[] = [
-  { value: 85, variant: 'happy' },
-  { value: 60, variant: 'neutral' },
-  { value: 35, variant: 'sad' },
-  { value: 15, variant: 'verySad' },
-];
-
-function MoodFaceIcon({ variant }: { variant: MoodFaceVariant }) {
-  const warm = variant === 'happy' || variant === 'neutral';
-  const fill = warm ? MOOD_FACE_FILL_WARM : MOOD_FACE_FILL_SAD;
-
-  const mouth =
-    variant === 'happy' ? (
-      <Path
-        d="M 13 23 Q 20 30 27 23"
-        stroke={MOOD_FACE_LINE}
-        strokeWidth={1.7}
-        fill="none"
-        strokeLinecap="round"
-      />
-    ) : variant === 'neutral' ? (
-      <Path
-        d="M 13 24 L 27 24"
-        stroke={MOOD_FACE_LINE}
-        strokeWidth={1.7}
-        strokeLinecap="round"
-      />
-    ) : variant === 'sad' ? (
-      <Path
-        d="M 13 25 Q 20 21 27 25"
-        stroke={MOOD_FACE_LINE}
-        strokeWidth={1.7}
-        fill="none"
-        strokeLinecap="round"
-      />
-    ) : (
-      <Path
-        d="M 13 26 Q 20 17 27 26"
-        stroke={MOOD_FACE_LINE}
-        strokeWidth={1.7}
-        fill="none"
-        strokeLinecap="round"
-      />
-    );
-
-  return (
-    <Svg width={36} height={36} viewBox="0 0 40 40">
-      <Circle
-        cx={20}
-        cy={20}
-        r={16}
-        fill={fill}
-        stroke={MOOD_FACE_STROKE}
-        strokeWidth={1.15}
-      />
-      <Circle cx={14} cy={16} r={1.85} fill={MOOD_FACE_LINE} />
-      <Circle cx={26} cy={16} r={1.85} fill={MOOD_FACE_LINE} />
-      {mouth}
-    </Svg>
-  );
-}
-
-function MoodMiniCard() {
-  const colors = useHealthColors();
-  const todayKey = useMemo(() => formatDateForApi(new Date()), []);
-  const moodToday = useMoodStore((s) => s.records[todayKey] ?? null);
-  const setMood = useMoodStore((s) => s.setMood);
-
-  const handleSelect = useCallback(
-    (value: number) => {
-      setMood(todayKey, {
-        moodValue: value,
-        energy: moodToday?.energy ?? 'medium',
-        stress: moodToday?.stress ?? 'medium',
-      });
-    },
-    [setMood, todayKey, moodToday?.energy, moodToday?.stress]
-  );
-
-  return (
-    <View style={[styles.miniCardTall, { backgroundColor: colors.cardBg }]}>
-      <View style={styles.miniCardTallHeader}>
-        <View style={[styles.miniCardIcon, { backgroundColor: PALETTE.greenSoft }]}>
-          <MaterialIcons name="mood" size={22} color={PALETTE.green} />
-        </View>
-        <View style={styles.miniCardTallTitleBlock}>
-          <ThemedText style={[styles.miniCardTitle, { color: colors.textPrimary }]}>
-            Настроение
-          </ThemedText>
-          <ThemedText style={[styles.miniCardSub, { color: colors.textSecondary }]}>
-            {moodToday ? 'Как ты себя чувствуешь?' : 'Отметьте настроение'}
-          </ThemedText>
-        </View>
-      </View>
-      <View style={styles.moodRow}>
-        {QUICK_MOODS.map((m) => {
-          const isSelected =
-            moodToday != null && Math.abs(moodToday.moodValue - m.value) < 13;
-          return (
-            <Pressable
-              key={m.value}
-              onPress={() => handleSelect(m.value)}
-              accessibilityRole="button"
-              accessibilityLabel={`Настроение ${m.value}`}
-              accessibilityState={{ selected: !!isSelected }}
-              style={[
-                styles.moodPill,
-                { backgroundColor: colors.trackBg },
-                isSelected && styles.moodPillActive,
-              ]}
-            >
-              <MoodFaceIcon variant={m.variant} />
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 // ===== Today tab =====
 
 function TodayTabContent({
@@ -832,7 +703,7 @@ function TodayTabContent({
       <SleepMiniCard onPress={onOpenSleep} />
       <WaterMiniCard onPress={onOpenWaterAdd} />
       <StepsMiniCard onPress={onOpenSteps} />
-      <MoodMiniCard />
+      <MoodCheckInCard />
     </Animated.View>
   );
 }
@@ -1490,39 +1361,6 @@ const styles = StyleSheet.create({
   stepsPanelImage: {
     width: ILLUSTRATION_W * 0.78,
     height: ILLUSTRATION_H * 0.78,
-  },
-
-  // Mood quick check-in
-  miniCardTall: {
-    borderRadius: Radius.lg,
-    padding: Spacing.md + 2,
-    marginBottom: Spacing.md,
-  },
-  miniCardTallHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md + 2,
-    marginBottom: Spacing.md + 2,
-  },
-  miniCardTallTitleBlock: {
-    flex: 1,
-    gap: 2,
-  },
-  moodRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm + 2,
-  },
-  moodPill: {
-    flex: 1,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moodPillActive: {
-    backgroundColor: 'rgba(255, 204, 128, 0.22)',
-    borderWidth: 1,
-    borderColor: MOOD_FACE_FILL_WARM,
   },
 
   // Settings list

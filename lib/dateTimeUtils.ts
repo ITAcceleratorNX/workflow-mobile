@@ -190,6 +190,20 @@ export function toAppDateKey(value: DateInput): string {
   }
 }
 
+/** Сегодняшний YYYY-MM-DD в Asia/Almaty (списки задач: Сегодня, выполненные за день). */
+export function todayTaskDateKey(): string {
+  return toAppDateKey(new Date());
+}
+
+/** Сдвиг календарной даты YYYY-MM-DD на N дней (по UTC-календарю; для «завтра» относительно ключа дня в Almaty). */
+export function addCalendarDaysToDateKey(dateKey: string, days: number): string {
+  const [y, m, d] = dateKey.split('-').map((x) => parseInt(x, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return dateKey;
+  const t = Date.UTC(y, m - 1, d + days);
+  const dt = new Date(t);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
+
 /** Время HH:mm в Asia/Almaty для задач (как formatTimeOnly, с fallback на UTC при сбое Intl) */
 export function formatTaskTime(value: DateInput): string {
   const formatted = formatTimeOnly(value);

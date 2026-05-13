@@ -35,7 +35,7 @@ function buildScheduleLine(
 
   const dStr = dateStr!;
 
-  if (sectionId === 'today') {
+  if (sectionId === 'today' || sectionId === 'done-today') {
     if (timeStr) return { text: timeStr, showClock: true };
     return { text: formatSectionDateLabel(dStr, todayKey), showClock: false };
   }

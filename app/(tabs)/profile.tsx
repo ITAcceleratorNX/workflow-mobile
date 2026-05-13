@@ -381,13 +381,15 @@ export default function ProfileScreen() {
                         )}
                       </View>
                     </View>
-                    <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: border }]}>
-                      <MaterialIcons name="business" size={22} color={textMuted} />
-                      <ThemedText style={[styles.infoLabel, { color: textMuted }]}>Офис</ThemedText>
-                      <ThemedText style={[styles.infoValue, { color: text }]} numberOfLines={1}>
-                        {user?.office?.name ?? '—'}
-                      </ThemedText>
-                    </View>
+                    {role !== 'admin-worker' ? (
+                      <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: border }]}>
+                        <MaterialIcons name="business" size={22} color={textMuted} />
+                        <ThemedText style={[styles.infoLabel, { color: textMuted }]}>Офис</ThemedText>
+                        <ThemedText style={[styles.infoValue, { color: text }]} numberOfLines={1}>
+                          {user?.office?.name ?? '—'}
+                        </ThemedText>
+                      </View>
+                    ) : null}
                     <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
                       <MaterialIcons name="tag" size={22} color={textMuted} />
                       <ThemedText style={[styles.infoLabel, { color: textMuted }]}>ID</ThemedText>
@@ -560,12 +562,14 @@ export default function ProfileScreen() {
                     </View>
                   </View>
 
-                  <View style={styles.field}>
-                    <ThemedText style={[styles.label, { color: text }]}>Офис</ThemedText>
-                    <ThemedText style={[styles.readOnlyValue, { color: textMuted }]}>
-                      {user?.office?.name ?? '—'}
-                    </ThemedText>
-                  </View>
+                  {role !== 'admin-worker' ? (
+                    <View style={styles.field}>
+                      <ThemedText style={[styles.label, { color: text }]}>Офис</ThemedText>
+                      <ThemedText style={[styles.readOnlyValue, { color: textMuted }]}>
+                        {user?.office?.name ?? '—'}
+                      </ThemedText>
+                    </View>
+                  ) : null}
 
                   <View style={styles.editActions}>
                     <Pressable

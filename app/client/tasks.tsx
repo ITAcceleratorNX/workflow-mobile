@@ -27,7 +27,7 @@ import { TeamsInboxPanel } from '@/components/tasks/TeamsInboxPanel';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
 import { useAuthStore } from '@/stores/auth-store';
-import { formatDateForApi } from '@/lib/dateTimeUtils';
+import { addCalendarDaysToDateKey, todayTaskDateKey } from '@/lib/dateTimeUtils';
 import type { UserTask } from '@/lib/user-tasks-api';
 import { CalendarTab } from '@/components/tasks/CalendarTab';
 import {
@@ -53,6 +53,11 @@ const MONTH_SHORT_RU = ['янв', 'фев', 'мар', 'апр', 'май', 'ию�
 
 const UPCOMING_CALENDAR_DAYS_BACK = 0;
 const UPCOMING_CALENDAR_DAYS_FORWARD = 180;
+/**
+ * Глубина полосы «Выполненные» (как горизонт у «Предстоящие»): дни слева направо
+ * от (сегодня − N) до сегодня включительно.
+ */
+const COMPLETED_CALENDAR_DAYS_HISTORY = UPCOMING_CALENDAR_DAYS_FORWARD;
 /** Шаг между левыми краями ячеек: ширина ячейки + gap в upcomingStripRow */
 const UPCOMING_DAY_ITEM_WIDTH = 50;
 const UPCOMING_DAY_CELL_WIDTH = 42;
@@ -74,12 +79,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-function addDays(base: Date, amount: number): Date {
-  const d = new Date(base);
-  d.setDate(d.getDate() + amount);
-  return d;
-}
-
 function parseMainView(params: {
   tab?: string | string[];
   filter?: string | string[];
@@ -94,6 +93,13 @@ function parseMainView(params: {
   if (filter === 'all') return 'inbox';
   /** Без явного tab/filter — по умолчанию входящие (без даты у новой задачи). */
   return 'inbox';
+}
+
+function weekdayShortRuForDateKey(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map((x) => parseInt(x, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return '';
+  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return WEEKDAY_SHORT_RU[wd];
 }
 
 export default function TasksScreen() {
@@ -129,6 +135,10 @@ export default function TasksScreen() {
   const [upcomingVisibleDateKey, setUpcomingVisibleDateKey] = useState<string | null>(null);
   const upcomingScrollRef = useRef<ScrollView | null>(null);
 
+  const [completedDateKey, setCompletedDateKey] = useState<string>(() => todayTaskDateKey());
+  const [completedVisibleDateKey, setCompletedVisibleDateKey] = useState<string | null>(null);
+  const completedScrollRef = useRef<ScrollView | null>(null);
+
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [teamsPanelOpen, setTeamsPanelOpen] = useState(false);
   const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
@@ -145,12 +155,8 @@ export default function TasksScreen() {
     }
   }, [paramView, router]);
 
-  const todayKey = formatDateForApi(new Date());
-  const tomorrowKey = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return formatDateForApi(d);
-  }, []);
+  const todayKey = todayTaskDateKey();
+  const tomorrowKey = useMemo(() => addCalendarDaysToDateKey(todayKey, 1), [todayKey]);
 
   useEffect(() => {
     if (upcomingDate) return;
@@ -163,13 +169,33 @@ export default function TasksScreen() {
   }, [upcomingVisibleDateKey, upcomingDate, tomorrowKey]);
 
   const upcomingStripDays = useMemo((): CalendarStripDay[] => {
-    const start = addDays(new Date(`${todayKey}T12:00:00`), -UPCOMING_CALENDAR_DAYS_BACK);
-    return Array.from({ length: UPCOMING_CALENDAR_DAYS_BACK + UPCOMING_CALENDAR_DAYS_FORWARD + 1 }, (_, idx) => {
-      const d = addDays(start, idx);
+    return Array.from(
+      { length: UPCOMING_CALENDAR_DAYS_BACK + UPCOMING_CALENDAR_DAYS_FORWARD + 1 },
+      (_, idx) => {
+        const dayOffset = idx - UPCOMING_CALENDAR_DAYS_BACK;
+        const key = addCalendarDaysToDateKey(todayKey, dayOffset);
+        const dayPart = key.split('-')[2];
+        const dayNumber = dayPart ? parseInt(dayPart, 10) : 1;
+        return {
+          key,
+          dayNumber: Number.isFinite(dayNumber) ? dayNumber : 1,
+          weekdayLabel: weekdayShortRuForDateKey(key),
+        };
+      }
+    );
+  }, [todayKey]);
+
+  const completedStripDays = useMemo((): CalendarStripDay[] => {
+    const n = COMPLETED_CALENDAR_DAYS_HISTORY;
+    return Array.from({ length: n + 1 }, (_, idx) => {
+      const offset = idx - n;
+      const key = addCalendarDaysToDateKey(todayKey, offset);
+      const dayPart = key.split('-')[2];
+      const dayNumber = dayPart ? parseInt(dayPart, 10) : 1;
       return {
-        key: formatDateForApi(d),
-        dayNumber: d.getDate(),
-        weekdayLabel: WEEKDAY_SHORT_RU[d.getDay()],
+        key,
+        dayNumber: Number.isFinite(dayNumber) ? dayNumber : 1,
+        weekdayLabel: weekdayShortRuForDateKey(key),
       };
     });
   }, [todayKey]);
@@ -191,14 +217,30 @@ export default function TasksScreen() {
     setUpcomingVisibleDateKey(activeKey);
   }, [mainView, upcomingDate, tomorrowKey, upcomingStripDays, stripViewportWidth]);
 
+  useEffect(() => {
+    if (mainView !== 'completed') return;
+    const idx = completedStripDays.findIndex((d) => d.key === completedDateKey);
+    if (idx < 0) return;
+    const x = upcomingStripScrollToSelectedX(idx, stripViewportWidth, completedStripDays.length);
+    requestAnimationFrame(() => {
+      completedScrollRef.current?.scrollTo({ x, animated: true });
+    });
+    setCompletedVisibleDateKey(completedDateKey);
+  }, [mainView, completedDateKey, completedStripDays, stripViewportWidth]);
+
   const upcomingMonthLabel = useMemo(() => {
     const selected = new Date(`${upcomingVisibleDateKey ?? upcomingDate ?? tomorrowKey}T12:00:00`);
     return `${MONTH_SHORT_RU[selected.getMonth()]}. ${selected.getFullYear()}`;
   }, [upcomingVisibleDateKey, upcomingDate, tomorrowKey]);
 
+  const completedMonthLabel = useMemo(() => {
+    const selected = new Date(`${completedVisibleDateKey ?? completedDateKey}T12:00:00`);
+    return `${MONTH_SHORT_RU[selected.getMonth()]}. ${selected.getFullYear()}`;
+  }, [completedVisibleDateKey, completedDateKey]);
+
   const sections = useMemo((): TaskSectionRow[] => {
     if (mainView === 'completed') {
-      const done = getCompletedTasks(tasks);
+      const done = getCompletedTasks(tasks, completedDateKey);
       if (done.length === 0) return [];
       return [{ title: '', data: done, sectionId: 'completed' }];
     }
@@ -229,7 +271,7 @@ export default function TasksScreen() {
         return dayKey >= upcomingDate;
       })
       .map((s) => ({ title: s.title, data: s.tasks, sectionId: s.id }));
-  }, [tasks, mainView, todayKey, upcomingDate]);
+  }, [tasks, mainView, todayKey, upcomingDate, completedDateKey]);
 
   const openAddSheet = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -297,15 +339,15 @@ export default function TasksScreen() {
   const emptyCopy = useMemo(() => {
     if (mainView === 'completed') {
       return {
-        title: 'Нет выполненных задач',
-        subtitle: 'Завершённые задачи появятся здесь',
+        title: 'Нет выполненных за этот день',
+        subtitle: 'Выберите другую дату в полосе календаря выше',
         icon: 'check-circle-outline' as const,
       };
     }
     if (mainView === 'inbox') {
       return {
         title: 'Входящие пусты',
-        subtitle: 'Добавьте задачу без даты — потом назначите день',
+        subtitle: 'Добавьте задачу — без срока или с датой, она останется во входящих',
         icon: 'inbox' as const,
       };
     }
@@ -428,6 +470,77 @@ export default function TasksScreen() {
                           )
                         );
                         setUpcomingDate(d.key);
+                      }}
+                      style={styles.upcomingDayCell}
+                    >
+                      <ThemedText style={[styles.upcomingWeekday, { color: isSelected ? primary : headerSubtitle }]}>
+                        {d.weekdayLabel}
+                      </ThemedText>
+                      <View
+                        style={[
+                          styles.upcomingDayCircle,
+                          isSelected && { backgroundColor: primary },
+                        ]}
+                      >
+                        <ThemedText
+                          style={{
+                            color: isSelected ? '#fff' : headerText,
+                            fontWeight: '600',
+                          }}
+                        >
+                          {d.dayNumber}
+                        </ThemedText>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+          {mainView === 'completed' && (
+            <View style={styles.upcomingCalendarInline}>
+              <View style={styles.upcomingCalendarHeader}>
+                <ThemedText style={[styles.upcomingMonthTitle, { color: headerText }]}>
+                  {completedMonthLabel}
+                </ThemedText>
+              </View>
+              <ScrollView
+                ref={completedScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.upcomingStripRow}
+                keyboardShouldPersistTaps="handled"
+                onScroll={(e) => {
+                  const x = e.nativeEvent.contentOffset.x;
+                  const idx = Math.max(
+                    0,
+                    Math.min(
+                      completedStripDays.length - 1,
+                      Math.round((x + stripViewportWidth / 2) / UPCOMING_DAY_ITEM_WIDTH)
+                    )
+                  );
+                  const visibleKey = completedStripDays[idx]?.key ?? null;
+                  if (visibleKey && visibleKey !== completedVisibleDateKey) {
+                    setCompletedVisibleDateKey(visibleKey);
+                  }
+                }}
+                scrollEventThrottle={16}
+              >
+                {completedStripDays.map((d) => {
+                  const isSelected = d.key === completedDateKey;
+                  return (
+                    <Pressable
+                      key={d.key}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        LayoutAnimation.configureNext(
+                          LayoutAnimation.create(
+                            165,
+                            LayoutAnimation.Types.easeInEaseOut,
+                            LayoutAnimation.Properties.opacity
+                          )
+                        );
+                        setCompletedDateKey(d.key);
                       }}
                       style={styles.upcomingDayCell}
                     >

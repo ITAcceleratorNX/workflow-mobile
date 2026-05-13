@@ -33,6 +33,7 @@ const USER_TASK_API_PATCH_KEYS = [
   'recurrence_interval',
   'recurrence_custom_unit',
   'recurrence_weekdays',
+  'inbox',
 ] as const;
 
 function pickUserTaskApiPatch(updates: Partial<UserTask>): Parameters<typeof updateUserTask>[1] {
@@ -126,7 +127,8 @@ export function useTodoList(filter: TaskFilter = 'all') {
         assignees?: { id: number; full_name: string }[];
       },
       priority: TaskPriority = 'medium',
-      recurrence?: TaskRecurrencePayload
+      recurrence?: TaskRecurrencePayload,
+      options?: { inbox?: boolean }
     ) => {
       if (!token || isGuest) {
         showToast({
@@ -141,6 +143,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
       const assignees = assignment?.assignees ?? [];
       const assigneeIds = assignees.map((a) => a.id);
       const rec = recurrence ?? defaultRecurrenceNone();
+      const inboxFlag = options?.inbox === true;
       const optimistic: UserTask = {
         id: optimisticId,
         creator_id: 0,
@@ -148,6 +151,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
         completed: false,
         completed_at: null,
         scheduled_at: scheduledAt ?? null,
+        inbox: inboxFlag,
         deadline_from: null,
         deadline_to: null,
         deadline_time: null,
@@ -173,6 +177,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
       const res = await createUserTask({
         title,
         scheduled_at: scheduledAt ?? null,
+        inbox: inboxFlag,
         deadline_from: null,
         deadline_to: null,
         deadline_time: null,
