@@ -85,6 +85,9 @@ export async function request<T>(
         }
         return { ok: false, error: 'Офис не найден' };
       }
+      if (method === 'GET' && /^\/offices\/\d+\/location-catalog$/.test(base)) {
+        return { ok: true, data: { items: [] } as T };
+      }
     }
 
     if (method === 'GET' && base === '/meeting-rooms') {
@@ -342,6 +345,78 @@ export async function updateOfficeWithPhoto(
 
 export async function deleteOffice(id: number): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await request<undefined>(`/offices/${id}`, { method: 'DELETE' });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Шаблон локации офиса (блок / этаж / помещение) из БД */
+export interface OfficeLocationCatalogItem {
+  id: number;
+  office_id: number;
+  block: string;
+  floor_zone: string;
+  room: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export async function getOfficeLocationCatalog(
+  officeId: number,
+  params?: { includeInactive?: boolean }
+): Promise<{ ok: true; data: OfficeLocationCatalogItem[] } | { ok: false; error: string }> {
+  const result = await request<{ items: OfficeLocationCatalogItem[] }>(`/offices/${officeId}/location-catalog`, {
+    params: params?.includeInactive ? { includeInactive: '1' } : undefined,
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  const items = result.data?.items;
+  return { ok: true, data: Array.isArray(items) ? items : [] };
+}
+
+export async function createOfficeLocationCatalogRow(
+  officeId: number,
+  body: {
+    block: string;
+    floor_zone: string;
+    room: string;
+    sort_order?: number;
+    is_active?: boolean;
+  }
+): Promise<{ ok: true; data: OfficeLocationCatalogItem } | { ok: false; error: string }> {
+  const result = await request<OfficeLocationCatalogItem>(`/offices/${officeId}/location-catalog`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function updateOfficeLocationCatalogRow(
+  officeId: number,
+  rowId: number,
+  body: Partial<{
+    block: string;
+    floor_zone: string;
+    room: string;
+    sort_order: number;
+    is_active: boolean;
+  }>
+): Promise<{ ok: true; data: OfficeLocationCatalogItem } | { ok: false; error: string }> {
+  const result = await request<OfficeLocationCatalogItem>(`/offices/${officeId}/location-catalog/${rowId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function deleteOfficeLocationCatalogRow(
+  officeId: number,
+  rowId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<undefined>(`/offices/${officeId}/location-catalog/${rowId}`, {
+    method: 'DELETE',
+  });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
 }

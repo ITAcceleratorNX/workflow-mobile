@@ -86,7 +86,8 @@ type ExecutorCardKey =
   | 'office'
   | 'categories'
   | 'subcategories'
-  | 'registration-requests';
+  | 'registration-requests'
+  | 'location-templates';
 
 const DEPARTMENT_HEAD_MANAGEMENT_CARDS: {
   key: ExecutorCardKey;
@@ -114,6 +115,12 @@ const MANAGER_MANAGEMENT_CARDS: {
     title: 'Управление офисами',
     subtitle: 'Добавление и управление офисами компании',
     icon: 'business',
+  },
+  {
+    key: 'location-templates',
+    title: 'Шаблоны локаций',
+    subtitle: 'Блок, этаж и помещения для заявок в вашем офисе',
+    icon: 'place',
   },
   {
     key: 'categories',
@@ -286,6 +293,9 @@ function ExecutorManagementScreen({
       switch (key) {
         case 'office':
           router.push('/admin-worker/office');
+          break;
+        case 'location-templates':
+          router.push('/manager/office-location-catalog');
           break;
         case 'categories':
           router.push('/admin-worker/categories');

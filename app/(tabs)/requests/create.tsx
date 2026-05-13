@@ -31,6 +31,7 @@ import {
   getClientRoomSubscriptions,
   getExecutors,
   getOffices,
+  getOfficeLocationCatalog,
   getServiceCategories,
   type ExecutorInCategory,
   type Office,
@@ -38,12 +39,13 @@ import {
   type RequestGroup,
 } from '@/lib/api';
 import {
-  getBlocksForOffice,
-  getLocationsForBlock,
-  getRoomsForLocation,
-  hasLocationsForBlock,
-  hasRoomsForLocation,
-} from '@/lib/office-locations';
+  getBlocksFromCatalog,
+  getFloorZonesForBlock,
+  getRoomsForFloorZone,
+  hasFloorZonesForBlock,
+  hasRoomsForFloorZone,
+  type OfficeLocationCatalogRow,
+} from '@/lib/office-location-catalog-utils';
 import { findNearestOffice } from '@/lib/nearest-office';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
@@ -58,11 +60,6 @@ const REQUEST_TYPES: { value: string; label: string }[] = [
   { value: 'planned', label: 'Плановая' },
   { value: 'recurring', label: 'Повторяющаяся задача' },
 ];
-
-/** Как в kcell: для справочника офисов используем office.name (совпадает с address в officeLocationsData) */
-function getOfficeAddressForLocations(office: Office): string {
-  return office.name;
-}
 
 /**
  * Декоративный градиент-плейсхолдер для карточек офисов без фото.
@@ -160,6 +157,8 @@ export default function CreateRequestScreen() {
   const [customLocation, setCustomLocation] = useState('');
   const [customRoom, setCustomRoom] = useState('');
   const [customLocationDetail, setCustomLocationDetail] = useState('');
+  const [locationCatalogRows, setLocationCatalogRows] = useState<OfficeLocationCatalogRow[]>([]);
+  const [locationCatalogLoading, setLocationCatalogLoading] = useState(false);
 
   const [requestType, setRequestType] = useState('normal');
   const [plannedDate, setPlannedDate] = useState('');
@@ -187,18 +186,19 @@ export default function CreateRequestScreen() {
     locationSource === 'cabinet' && selectedCabinetRoom
       ? offices.find((o) => o.id === selectedCabinetRoom.office_id)
       : offices.find((o) => o.id === selectedOfficeId);
-  const officeAddress = selectedOffice ? getOfficeAddressForLocations(selectedOffice) : '';
-  const blocks = officeAddress && locationSource === 'office' ? getBlocksForOffice(officeAddress) : [];
+  const blocks =
+    selectedOfficeId && locationSource === 'office' ? getBlocksFromCatalog(locationCatalogRows) : [];
   const locationForRooms = selectedLocation === 'Другое' ? '' : selectedLocation;
-  const hasLocations = selectedBlock ? hasLocationsForBlock(officeAddress, selectedBlock) : false;
-  const locations = hasLocations && selectedBlock ? getLocationsForBlock(officeAddress, selectedBlock) : [];
+  const hasLocations = selectedBlock ? hasFloorZonesForBlock(locationCatalogRows, selectedBlock) : false;
+  const locations =
+    hasLocations && selectedBlock ? getFloorZonesForBlock(locationCatalogRows, selectedBlock) : [];
   const hasRooms =
     selectedBlock && (hasLocations ? selectedLocation : true)
-      ? hasRoomsForLocation(officeAddress, selectedBlock, locationForRooms)
+      ? hasRoomsForFloorZone(locationCatalogRows, selectedBlock, locationForRooms)
       : false;
   const rooms =
     hasRooms && selectedBlock
-      ? getRoomsForLocation(officeAddress, selectedBlock, locationForRooms)
+      ? getRoomsForFloorZone(locationCatalogRows, selectedBlock, locationForRooms)
       : [];
   const selectedCategory = categories.find((c) => c.id === categoryId);
 
@@ -277,6 +277,32 @@ export default function CreateRequestScreen() {
     };
     load();
   }, [role, user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isGuest || locationSource !== 'office' || !selectedOfficeId) {
+      setLocationCatalogRows([]);
+      setLocationCatalogLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+    setLocationCatalogLoading(true);
+    setLocationCatalogRows([]);
+    (async () => {
+      const res = await getOfficeLocationCatalog(selectedOfficeId);
+      if (cancelled) return;
+      if (res.ok) {
+        setLocationCatalogRows(res.data);
+      } else {
+        setLocationCatalogRows([]);
+      }
+      setLocationCatalogLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, locationSource, selectedOfficeId]);
 
   useEffect(() => {
     setSelectedBlock('');
@@ -902,6 +928,10 @@ export default function CreateRequestScreen() {
                   <ThemedText style={[styles.stepHint, { color: mutedColor }]}>
                     {selectedOffice?.name}
                   </ThemedText>
+
+                  {locationCatalogLoading && (
+                    <ActivityIndicator style={{ marginVertical: 12 }} color={primaryColor} />
+                  )}
 
                   {blocks.length > 0 ? (
                     <>
