@@ -1151,6 +1151,88 @@ export interface OfficeUser {
   phone: string;
   role: string;
   office_id?: number;
+  office?: { id: number; name: string };
+}
+
+function normalizeManagementUser(raw: unknown): OfficeUser | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const id = Number(o.id);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const first = typeof o.first_name === 'string' ? o.first_name.trim() : '';
+  const last = typeof o.last_name === 'string' ? o.last_name.trim() : '';
+  const combined = [first, last].filter(Boolean).join(' ');
+  const full_name =
+    (typeof o.full_name === 'string' && o.full_name.trim()) ||
+    (typeof o.fullName === 'string' && o.fullName.trim()) ||
+    combined ||
+    `Пользователь #${id}`;
+  const phone = typeof o.phone === 'string' ? o.phone : '';
+  const role = typeof o.role === 'string' ? o.role : '';
+  const officeIdRaw = o.office_id ?? o.officeId;
+  const office_id =
+    typeof officeIdRaw === 'number' && Number.isFinite(officeIdRaw)
+      ? officeIdRaw
+      : typeof officeIdRaw === 'string' && officeIdRaw.trim() !== ''
+        ? Number(officeIdRaw)
+        : undefined;
+  let office: { id: number; name: string } | undefined;
+  const off = o.office;
+  if (off && typeof off === 'object') {
+    const oo = off as Record<string, unknown>;
+    const oid = Number(oo.id);
+    const oname = typeof oo.name === 'string' ? oo.name : '';
+    if (Number.isFinite(oid) && oname) office = { id: oid, name: oname };
+  }
+  return { id, full_name, phone, role, office_id, office };
+}
+
+const USERS_MANAGEMENT_PAGE_SIZE = 100;
+
+/** Список пользователей для админ-экрана: GET /users с опциональным office_id, все страницы. */
+export async function getUsersForManagement(options?: {
+  officeId?: string;
+}): Promise<{ ok: true; data: OfficeUser[] } | { ok: false; error: string }> {
+  const officeId = options?.officeId?.trim();
+  const all: OfficeUser[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const params: Record<string, string> = {
+      page: String(page),
+      limit: String(USERS_MANAGEMENT_PAGE_SIZE),
+    };
+    if (officeId) params.office_id = officeId;
+
+    const result = await request<{
+      success?: boolean;
+      users?: unknown[];
+      total?: number;
+      totalPages?: number;
+      currentPage?: number;
+    }>('/users', { params });
+
+    if (!result.ok) return { ok: false, error: result.error };
+
+    const body = result.data;
+    const users = Array.isArray(body?.users) ? body.users : [];
+    const rawTp = typeof body?.totalPages === 'number' ? body.totalPages : 1;
+    totalPages = rawTp < 1 ? 1 : rawTp;
+
+    for (const row of users) {
+      const u = normalizeManagementUser(row);
+      if (u) all.push(u);
+    }
+
+    page += 1;
+    if (page > 2000) {
+      return { ok: false, error: 'Слишком большой список пользователей' };
+    }
+  } while (page <= totalPages);
+
+  all.sort((a, b) => a.full_name.localeCompare(b.full_name, 'ru'));
+  return { ok: true, data: all };
 }
 
 export async function getOfficeUsers(officeId: number): Promise<
