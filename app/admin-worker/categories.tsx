@@ -164,6 +164,17 @@ export default function AdminWorkerCategoriesScreen() {
     );
   }, [categories]);
 
+  /** Подкатегории только выбранной категории (та же выборка, что и для создания). */
+  const subcategoriesForSelectedCategory = useMemo(() => {
+    if (selectedCategoryForSub == null) return [];
+    return allSubcategories.filter((s) => s.category_id === selectedCategoryForSub);
+  }, [allSubcategories, selectedCategoryForSub]);
+
+  useEffect(() => {
+    setSubcategoryToDelete(null);
+    setShowSubcategoryDropdown(false);
+  }, [selectedCategoryForSub]);
+
   const handleCreateCategory = useCallback(async () => {
     const name = newCategoryName.trim();
     if (!name) return;
@@ -238,9 +249,9 @@ export default function AdminWorkerCategoriesScreen() {
 
   const subcategoryForDeleteLabel = useMemo(() => {
     if (subcategoryToDelete == null) return null;
-    const s = allSubcategories.find((x) => x.id === subcategoryToDelete);
-    return s ? `${s.categoryName} → ${s.name}` : null;
-  }, [subcategoryToDelete, allSubcategories]);
+    const s = subcategoriesForSelectedCategory.find((x) => x.id === subcategoryToDelete);
+    return s ? s.name : null;
+  }, [subcategoryToDelete, subcategoriesForSelectedCategory]);
 
   const selectedCategoryName = useMemo(() => {
     if (selectedCategoryForSub == null) return null;
@@ -426,7 +437,10 @@ export default function AdminWorkerCategoriesScreen() {
                 </ThemedText>
                 <Pressable
                   style={styles.selectTrigger}
-                  onPress={() => setShowCategorySelectDropdown((v) => !v)}
+                  onPress={() => {
+                    setShowCategorySelectDropdown((v) => !v);
+                    setShowSubcategoryDropdown(false);
+                  }}
                 >
                   <ThemedText style={[styles.selectTriggerText, { color: selectedCategoryName ? text : textMuted }]}>
                     {selectedCategoryName ?? 'Выберите категорию'}
@@ -482,12 +496,23 @@ export default function AdminWorkerCategoriesScreen() {
                 <ThemedText style={[styles.label, { color: textMuted }]}>
                   Удалить подкатегорию
                 </ThemedText>
+                <ThemedText style={[styles.hintInline, { color: textMuted }]}>
+                  Показываются только подкатегории выбранной выше категории.
+                </ThemedText>
                 <Pressable
-                  style={styles.selectTrigger}
-                  onPress={() => setShowSubcategoryDropdown((v) => !v)}
+                  style={[styles.selectTrigger, !selectedCategoryForSub && styles.buttonDisabled]}
+                  onPress={() => {
+                    if (selectedCategoryForSub) {
+                      setShowSubcategoryDropdown((v) => !v);
+                      setShowCategorySelectDropdown(false);
+                    }
+                  }}
+                  disabled={!selectedCategoryForSub}
                 >
                   <ThemedText style={[styles.selectTriggerText, { color: subcategoryForDeleteLabel ? text : textMuted }]}>
-                    {subcategoryForDeleteLabel ?? 'Выберите подкатегорию для удаления'}
+                    {!selectedCategoryForSub
+                      ? 'Сначала выберите категорию'
+                      : (subcategoryForDeleteLabel ?? 'Выберите подкатегорию для удаления')}
                   </ThemedText>
                   <MaterialIcons
                     name={showSubcategoryDropdown ? 'expand-less' : 'expand-more'}
@@ -495,21 +520,28 @@ export default function AdminWorkerCategoriesScreen() {
                     color={textMuted}
                   />
                 </Pressable>
-                {showSubcategoryDropdown && (
+                {showSubcategoryDropdown && selectedCategoryForSub ? (
                   <View style={styles.dropdown}>
-                    {allSubcategories.map((sub) => (
-                      <Pressable
-                        key={sub.id}
-                        style={[styles.dropdownItem, sub.id === subcategoryToDelete && styles.dropdownItemActive]}
-                        onPress={() => setSubcategoryToDelete(sub.id)}
-                      >
-                        <ThemedText style={styles.dropdownItemText}>
-                          {sub.categoryName} → {sub.name}
-                        </ThemedText>
-                      </Pressable>
-                    ))}
+                    {subcategoriesForSelectedCategory.length === 0 ? (
+                      <ThemedText style={[styles.dropdownItemText, styles.dropdownEmpty, { color: textMuted }]}>
+                        В этой категории пока нет подкатегорий
+                      </ThemedText>
+                    ) : (
+                      subcategoriesForSelectedCategory.map((sub) => (
+                        <Pressable
+                          key={sub.id}
+                          style={[styles.dropdownItem, sub.id === subcategoryToDelete && styles.dropdownItemActive]}
+                          onPress={() => {
+                            setSubcategoryToDelete(sub.id);
+                            setShowSubcategoryDropdown(false);
+                          }}
+                        >
+                          <ThemedText style={styles.dropdownItemText}>{sub.name}</ThemedText>
+                        </Pressable>
+                      ))
+                    )}
                   </View>
-                )}
+                ) : null}
                 <Pressable
                   style={[styles.dangerButton, (!subcategoryToDelete || isDeletingSubcategory) && styles.buttonDisabled]}
                   onPress={handleDeleteSubcategory}
@@ -745,6 +777,16 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     marginBottom: 8,
+  },
+  hintInline: {
+    fontSize: 12,
+    marginTop: -4,
+    marginBottom: 8,
+    lineHeight: 16,
+  },
+  dropdownEmpty: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   row: {
     flexDirection: 'row',
