@@ -207,7 +207,9 @@ function AdminWorkerManagementScreen({ hasNotifications }: { hasNotifications: b
     <ThemedView
       style={[styles.adminContainer, { paddingTop: insets.top + 16, backgroundColor: background }]}
     >
-      <ScrollView contentContainerStyle={styles.adminContent}>
+      <ScrollView
+        contentContainerStyle={[styles.adminContent, { paddingBottom: insets.bottom + 100 }]}
+      >
         <View style={styles.adminHeaderRow}>
           <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
             Управление системой
@@ -256,6 +258,7 @@ function AdminWorkerManagementScreen({ hasNotifications }: { hasNotifications: b
             </Pressable>
           ))}
         </View>
+        <TasksSection layout="embedded" />
       </ScrollView>
     </ThemedView>
   );
@@ -316,7 +319,9 @@ function ExecutorManagementScreen({
     <ThemedView
       style={[styles.adminContainer, { paddingTop: insets.top + 16, backgroundColor: background }]}
     >
-      <ScrollView contentContainerStyle={styles.adminContent}>
+      <ScrollView
+        contentContainerStyle={[styles.adminContent, { paddingBottom: insets.bottom + 100 }]}
+      >
         <View style={styles.adminHeaderRow}>
           <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
             Управление
@@ -365,6 +370,7 @@ function ExecutorManagementScreen({
             </Pressable>
           ))}
         </View>
+        {executorRole === 'department-head' ? <TasksSection layout="embedded" /> : null}
       </ScrollView>
     </ThemedView>
   );
@@ -392,7 +398,9 @@ function ExecutorCabinetScreen({ hasNotifications }: { hasNotifications: boolean
     <ThemedView
       style={[styles.adminContainer, { paddingTop: insets.top + 16, backgroundColor: background }]}
     >
-      <ScrollView contentContainerStyle={styles.adminContent}>
+      <ScrollView
+        contentContainerStyle={[styles.adminContent, { paddingBottom: insets.bottom + 100 }]}
+      >
         <View style={styles.adminHeaderRow}>
           <ThemedText type="title" style={[styles.adminTitle, { color: text }]}>
             Мой кабинет
@@ -441,6 +449,7 @@ function ExecutorCabinetScreen({ hasNotifications }: { hasNotifications: boolean
             </Pressable>
           ))}
         </View>
+        <TasksSection layout="embedded" />
       </ScrollView>
     </ThemedView>
   );

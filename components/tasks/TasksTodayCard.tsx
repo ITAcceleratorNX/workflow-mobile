@@ -8,9 +8,14 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 
 interface TasksTodayCardProps {
   onPress: () => void;
+  /**
+   * Родитель уже задаёт горизонтальные отступы (например ScrollView с paddingHorizontal).
+   * Без этого карточка с marginHorizontal визуально уже сетки карточек.
+   */
+  flushHorizontal?: boolean;
 }
 
-export function TasksTodayCard({ onPress }: TasksTodayCardProps) {
+export function TasksTodayCard({ onPress, flushHorizontal = false }: TasksTodayCardProps) {
   const { stats, loading } = useTodayTasks();
   const primary = useThemeColor({}, 'primary');
   const text = useThemeColor({}, 'text');
@@ -29,7 +34,11 @@ export function TasksTodayCard({ onPress }: TasksTodayCardProps) {
   return (
     <Pressable
       onPress={handlePress}
-      style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}
+      style={[
+        styles.card,
+        flushHorizontal && styles.cardFlushHorizontal,
+        { backgroundColor: cardBg, borderColor: border },
+      ]}
     >
       <View style={styles.header}>
         <View style={styles.left}>
@@ -74,6 +83,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 12,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  cardFlushHorizontal: {
+    marginHorizontal: 0,
+    marginBottom: 0,
   },
   header: {
     flexDirection: 'row',
