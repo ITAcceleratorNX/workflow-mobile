@@ -12,6 +12,8 @@ type Props = {
   description?: string;
   imageUrl?: string | null;
   rightSlot?: React.ReactNode;
+  /** Блок под карточкой (не внутри основного Pressable), напр. реакции */
+  footerSlot?: React.ReactNode;
   onPress?: () => void;
 };
 
@@ -22,6 +24,7 @@ export function NewsListItem({
   description,
   imageUrl,
   rightSlot,
+  footerSlot,
   onPress,
 }: Props) {
   const text = useThemeColor({}, 'text');
@@ -30,8 +33,8 @@ export function NewsListItem({
   const border = useThemeColor({}, 'border');
   const cardBg = useThemeColor({}, 'cardBackground');
 
-  const content = (
-    <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
+  const topBlock = (
+    <>
       <View style={styles.imageWrap}>
         {imageUrl ? (
           <Image source={{ uri: imageUrl }} style={styles.image} contentFit="cover" />
@@ -65,15 +68,23 @@ export function NewsListItem({
           </ThemedText>
         ) : null}
       </View>
+    </>
+  );
+
+  const content = (
+    <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
+      {onPress ? (
+        <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}>
+          {topBlock}
+        </Pressable>
+      ) : (
+        topBlock
+      )}
+      {footerSlot ? <View style={styles.footer}>{footerSlot}</View> : null}
     </View>
   );
 
-  if (!onPress) return content;
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}>
-      {content}
-    </Pressable>
-  );
+  return content;
 }
 
 const styles = StyleSheet.create({
@@ -134,6 +145,10 @@ const styles = StyleSheet.create({
   desc: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  footer: {
+    paddingHorizontal: 12,
+    paddingBottom: 10,
   },
 });
 

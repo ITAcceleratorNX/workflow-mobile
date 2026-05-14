@@ -1,5 +1,14 @@
-import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput as RNTextInput, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput as RNTextInput,
+  View,
+} from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,12 +21,23 @@ import { Button } from '@/components/ui';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { useToast } from '@/context/toast-context';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { createNews, updateNews, type NotificationType } from '@/lib/news-api';
+import {
+  clampNewsScheduleDate,
+  formatNewsScheduleDateTime,
+  getNewsScheduleMaximumDate,
+  getNewsScheduleMinimumDate,
+} from '@/lib/dateTimeUtils';
+import {
+  createNews,
+  updateNews,
+  type NotificationType,
+  type NewsPublishMode,
+} from '@/lib/news-api';
 
 const NOTIFICATION_OPTIONS: { value: NotificationType; label: string }[] = [
-  { value: 'none', label: 'Без пуша' },
-  { value: 'push_sound', label: 'Пуш со звуком' },
-  { value: 'push_silent', label: 'Пуш без звука' },
+  { value: 'none', label: 'Без уведомления' },
+  { value: 'push_sound', label: 'Уведомление со звуком' },
+  { value: 'push_silent', label: 'Уведомление без звука' },
 ];
 
 type FormState = {
@@ -45,11 +65,26 @@ export default function AdminWorkerNewsEditorScreen() {
     title?: string;
     content?: string;
     imageUrl?: string;
+    status?: string;
+    publishedAt?: string;
   }>();
 
   const mode = params.mode === 'edit' ? 'edit' : 'create';
   const editingId = mode === 'edit' ? params.id ?? null : null;
   const initialImageUrl = typeof params.imageUrl === 'string' ? params.imageUrl : '';
+  const editingIsScheduled = mode === 'edit' && editingId != null && params.status === 'scheduled';
+  const showPublishSchedule = mode === 'create' || editingIsScheduled;
+
+  const initialScheduledAt = useMemo(() => {
+    let d: Date;
+    if (typeof params.publishedAt === 'string' && params.publishedAt.length > 0) {
+      const parsed = new Date(params.publishedAt);
+      d = Number.isNaN(parsed.getTime()) ? new Date(Date.now() + 60 * 60 * 1000) : parsed;
+    } else {
+      d = new Date(Date.now() + 60 * 60 * 1000);
+    }
+    return clampNewsScheduleDate(d);
+  }, [params.publishedAt]);
 
   const [form, setForm] = useState<FormState>(() => ({
     title: typeof params.title === 'string' ? params.title : '',
@@ -57,10 +92,24 @@ export default function AdminWorkerNewsEditorScreen() {
     notification_type: 'none',
     image: null,
   }));
+  const [publishMode, setPublishMode] = useState<NewsPublishMode>(() =>
+    editingIsScheduled ? 'schedule' : 'now'
+  );
+  const [scheduledAt, setScheduledAt] = useState<Date>(initialScheduledAt);
+  const [androidPickerVisible, setAndroidPickerVisible] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (publishMode === 'schedule') {
+      setScheduledAt((prev) => clampNewsScheduleDate(prev));
+    }
+  }, [publishMode]);
+
   const headerTitle = useMemo(() => (mode === 'edit' ? 'Редактировать новость' : 'Новая новость'), [mode]);
+
+  const scheduleMin = getNewsScheduleMinimumDate();
+  const scheduleMax = getNewsScheduleMaximumDate();
 
   const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -96,23 +145,59 @@ export default function AdminWorkerNewsEditorScreen() {
       return;
     }
 
+    if (showPublishSchedule && publishMode === 'schedule') {
+      const minD = getNewsScheduleMinimumDate();
+      const maxD = getNewsScheduleMaximumDate();
+      if (scheduledAt.getTime() < minD.getTime()) {
+        setFormError('Укажите дату и время публикации в будущем');
+        return;
+      }
+      if (scheduledAt.getTime() > maxD.getTime()) {
+        setFormError('Дата публикации не может быть позже чем через год');
+        return;
+      }
+    }
+
     setSubmitting(true);
-    const payload = {
+    const basePayload = {
       title,
       content,
       notification_type: form.notification_type,
       image: form.image ?? undefined,
     };
-    const res =
-      mode === 'edit' && editingId
-        ? await updateNews(parseInt(editingId, 10), payload)
-        : await createNews(payload);
+
+    let res:
+      | { ok: true; data: unknown }
+      | { ok: false; error: string };
+
+    if (mode === 'edit' && editingId) {
+      if (editingIsScheduled) {
+        res = await updateNews(parseInt(editingId, 10), {
+          ...basePayload,
+          publish_mode: publishMode,
+          ...(publishMode === 'schedule' ? { published_at: scheduledAt.toISOString() } : {}),
+        });
+      } else {
+        res = await updateNews(parseInt(editingId, 10), basePayload);
+      }
+    } else {
+      res = await createNews({
+        ...basePayload,
+        publish_mode: publishMode === 'schedule' ? 'schedule' : 'now',
+        ...(publishMode === 'schedule' ? { published_at: scheduledAt.toISOString() } : {}),
+      });
+    }
     setSubmitting(false);
 
     if (res.ok) {
       showToast({
-        title: mode === 'edit' ? 'Сохранено' : 'Создано',
-        description: mode === 'edit' ? 'Новость обновлена' : 'Новость добавлена',
+        title: mode === 'edit' ? 'Сохранено' : 'Готово',
+        description:
+          mode === 'edit'
+            ? 'Новость обновлена'
+            : publishMode === 'schedule'
+              ? 'Новость запланирована'
+              : 'Новость добавлена',
         variant: 'success',
       });
       router.back();
@@ -120,7 +205,25 @@ export default function AdminWorkerNewsEditorScreen() {
       setFormError(res.error);
       showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
     }
-  }, [form, mode, editingId, router, showToast]);
+  }, [
+    form,
+    mode,
+    editingId,
+    editingIsScheduled,
+    showPublishSchedule,
+    publishMode,
+    scheduledAt,
+    router,
+    showToast,
+  ]);
+
+  const onAndroidScheduleChange = useCallback(
+    (event: { type?: string }, date?: Date) => {
+      setAndroidPickerVisible(false);
+      if (event.type === 'set' && date) setScheduledAt(clampNewsScheduleDate(date));
+    },
+    []
+  );
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
@@ -159,8 +262,69 @@ export default function AdminWorkerNewsEditorScreen() {
             />
           </View>
 
+          {showPublishSchedule ? (
+            <View style={styles.field}>
+              <ThemedText style={[styles.label, { color: textMuted }]}>Публикация</ThemedText>
+              <View style={styles.radioRow}>
+                <Pressable
+                  style={[styles.radio, publishMode === 'now' && { backgroundColor: primary }]}
+                  onPress={() => setPublishMode('now')}
+                >
+                  <ThemedText style={[styles.radioText, publishMode === 'now' && styles.radioTextActive]}>
+                    Сейчас
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[styles.radio, publishMode === 'schedule' && { backgroundColor: primary }]}
+                  onPress={() => setPublishMode('schedule')}
+                >
+                  <ThemedText style={[styles.radioText, publishMode === 'schedule' && styles.radioTextActive]}>
+                    Запланировать
+                  </ThemedText>
+                </Pressable>
+              </View>
+
+              {publishMode === 'schedule' ? (
+                <View style={styles.scheduleBlock}>
+                  {Platform.OS === 'android' ? (
+                    <>
+                      <Pressable
+                        style={[styles.scheduleTap, { borderColor: border }]}
+                        onPress={() => setAndroidPickerVisible(true)}
+                      >
+                        <MaterialIcons name="event" size={22} color={textMuted} />
+                        <ThemedText style={{ color: text, fontSize: 16 }}>
+                          {formatNewsScheduleDateTime(scheduledAt)}
+                        </ThemedText>
+                      </Pressable>
+                      {androidPickerVisible ? (
+                        <DateTimePicker
+                          value={scheduledAt}
+                          mode="datetime"
+                          display="default"
+                          minimumDate={scheduleMin}
+                          maximumDate={scheduleMax}
+                          onChange={onAndroidScheduleChange}
+                        />
+                      ) : null}
+                    </>
+                  ) : (
+                    <DateTimePicker
+                      value={scheduledAt}
+                      mode="datetime"
+                      display="spinner"
+                      minimumDate={scheduleMin}
+                      maximumDate={scheduleMax}
+                      onChange={(_, date) => date && setScheduledAt(clampNewsScheduleDate(date))}
+                    />
+                  )}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={styles.field}>
-            <ThemedText style={[styles.label, { color: textMuted }]}>Пуш-уведомление</ThemedText>
+            <ThemedText style={[styles.label, { color: textMuted }]}>Уведомление</ThemedText>
             <View style={styles.radioRow}>
               {NOTIFICATION_OPTIONS.map((opt) => (
                 <Pressable
@@ -168,7 +332,9 @@ export default function AdminWorkerNewsEditorScreen() {
                   style={[styles.radio, form.notification_type === opt.value && { backgroundColor: primary }]}
                   onPress={() => setForm((f) => ({ ...f, notification_type: opt.value }))}
                 >
-                  <ThemedText style={[styles.radioText, form.notification_type === opt.value && styles.radioTextActive]}>
+                  <ThemedText
+                    style={[styles.radioText, form.notification_type === opt.value && styles.radioTextActive]}
+                  >
                     {opt.label}
                   </ThemedText>
                 </Pressable>
@@ -201,12 +367,12 @@ export default function AdminWorkerNewsEditorScreen() {
               onPress={handleSave}
               disabled={submitting}
             />
-            {submitting && (
+            {submitting ? (
               <View style={styles.submittingRow}>
                 <ActivityIndicator size="small" color={primary} />
                 <ThemedText style={[styles.submittingText, { color: textMuted }]}>Пожалуйста, подождите…</ThemedText>
               </View>
-            )}
+            ) : null}
           </View>
         </ScrollView>
       </View>
@@ -244,6 +410,16 @@ const styles = StyleSheet.create({
   },
   radioText: { fontSize: 14, color: '#9CA3AF' },
   radioTextActive: { color: '#fff' },
+  scheduleBlock: { marginTop: 12 },
+  scheduleTap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
   imagePicker: {
     borderWidth: 1,
     borderRadius: 12,
@@ -261,4 +437,3 @@ const styles = StyleSheet.create({
   submittingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' },
   submittingText: { fontSize: 14 },
 });
-

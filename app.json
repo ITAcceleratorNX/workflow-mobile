@@ -9,8 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "version": "1.0.3",
-      "buildNumber": "17",
+      "version": "1.0.4",
+      "buildNumber": "19",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {

@@ -5,10 +5,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { NewsReactionsRow } from '@/components/news/news-reactions-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { getNewsById } from '@/lib/news-api';
+import { getNewsById, recordNewsView } from '@/lib/news-api';
+import type { NewsReactionCounts, NewsReactionKind } from '@/lib/news-reactions';
+import { emptyReactionCounts, normalizeReactionCounts } from '@/lib/news-reactions';
+import { useAuthStore } from '@/stores/auth-store';
 
 export default function NewsDetailScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -28,6 +32,12 @@ export default function NewsDetailScreen() {
   const [desc, setDesc] = useState('');
   const [image, setImage] = useState<string | null>(null);
   const [dateLabel, setDateLabel] = useState<string | null>(null);
+  const [reactionCounts, setReactionCounts] = useState<NewsReactionCounts>(() => emptyReactionCounts());
+  const [myReaction, setMyReaction] = useState<NewsReactionKind | null>(null);
+  const numericNewsId = id && Number.isFinite(Number(id)) ? Number(id) : null;
+
+  const token = useAuthStore((s) => s.token);
+  const canReact = typeof token === 'string' && token.length > 0 && token !== 'guest-demo';
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -51,12 +61,19 @@ export default function NewsDetailScreen() {
     setDesc(item.desc);
     setImage(item.image || null);
     setDateLabel(item.date ?? null);
+    setReactionCounts(normalizeReactionCounts(item.reaction_counts));
+    setMyReaction(item.my_reaction ?? null);
     setLoading(false);
   }, [id]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (numericNewsId == null || !canReact) return;
+    void recordNewsView(numericNewsId);
+  }, [numericNewsId, canReact]);
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
@@ -110,6 +127,18 @@ export default function NewsDetailScreen() {
             <ThemedText style={[styles.desc, { color: subtitle }]}>
               {desc}
             </ThemedText>
+            {numericNewsId != null ? (
+              <NewsReactionsRow
+                newsId={numericNewsId}
+                reactionCounts={reactionCounts}
+                myReaction={myReaction}
+                canInteract={canReact}
+                onUpdated={(p) => {
+                  setReactionCounts(p.reaction_counts);
+                  setMyReaction(p.my_reaction);
+                }}
+              />
+            ) : null}
           </View>
         </ScrollView>
       )}

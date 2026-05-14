@@ -26,6 +26,8 @@ import {
   unhideNews,
   type NewsDisplayItem,
 } from '@/lib/news-api';
+import { formatNewsScheduleDateTime } from '@/lib/dateTimeUtils';
+import { NEWS_REACTION_OPTIONS, emptyReactionCounts } from '@/lib/news-reactions';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
@@ -37,6 +39,7 @@ function formatNewsDate(dateStr: string): string {
 const STATUS_OPTIONS = [
   { value: '', label: 'Все' },
   { value: 'active', label: 'Активные' },
+  { value: 'scheduled', label: 'Запланированные' },
   { value: 'hidden', label: 'Скрытые' },
   { value: 'archived', label: 'Архив' },
 ] as const;
@@ -50,16 +53,19 @@ export default function AdminWorkerNewsScreen() {
   const gray600 = useThemeColor({}, 'gray600');
   const screenBg = useThemeColor({}, 'screenBackgroundDark');
   const border = useThemeColor({}, 'border');
+  const cardBg = useThemeColor({}, 'cardBackground');
 
   const [items, setItems] = useState<NewsDisplayItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'active' | 'hidden' | 'archived' | ''>('');
+  const [statusFilter, setStatusFilter] = useState<'active' | 'hidden' | 'archived' | 'scheduled' | ''>('');
   const [actionId, setActionId] = useState<string | null>(null);
 
   const loadList = useCallback(async () => {
     setLoading(true);
     const status = statusFilter || undefined;
-    const res = await getNewsAdminList(status as 'active' | 'hidden' | 'archived' | undefined);
+    const res = await getNewsAdminList(
+      status as 'active' | 'hidden' | 'archived' | 'scheduled' | undefined
+    );
     if (res.ok) setItems(res.data);
     else setItems([]);
     setLoading(false);
@@ -89,6 +95,8 @@ export default function AdminWorkerNewsScreen() {
           title: item.title,
           content: item.desc,
           imageUrl: item.image || '',
+          status: item.status ?? 'active',
+          publishedAt: item.publishedAtIso ?? '',
         },
       });
     },
@@ -180,75 +188,101 @@ export default function AdminWorkerNewsScreen() {
     [showToast, loadList]
   );
 
-  const sortedItems = [...items].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const sortedItems = [...items].sort((a, b) =>
+    (b.publishedAtIso ?? b.date ?? '').localeCompare(a.publishedAtIso ?? a.date ?? '')
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: NewsDisplayItem }) => {
       const status = item.status ?? 'active';
       const isBusy = actionId === item.id;
-      const statusLabel = status === 'active' ? 'Активна' : status === 'hidden' ? 'Скрыта' : 'Архив';
+      const statusLabel =
+        status === 'active'
+          ? 'Активна'
+          : status === 'scheduled'
+            ? 'Запланирована'
+            : status === 'hidden'
+              ? 'Скрыта'
+              : 'Архив';
+      const dateLabel =
+        status === 'scheduled' && item.publishedAtIso
+          ? formatNewsScheduleDateTime(item.publishedAtIso)
+          : item.date
+            ? formatNewsDate(item.date)
+            : null;
+      const rc = item.reaction_counts ?? emptyReactionCounts();
+      const reactionLine = NEWS_REACTION_OPTIONS.map((o) => `${o.emoji} ${rc[o.kind]}`).join(' / ');
       return (
-        <NewsListItem
-          title={item.title}
-          tag={item.tag || 'Новость'}
-          dateLabel={item.date ? formatNewsDate(item.date) : null}
-          description={item.desc}
-          imageUrl={item.image}
-          onPress={() => openEdit(item)}
-          rightSlot={
-            <View style={styles.overlay}>
-              <View
-                style={[
-                  styles.statusPill,
-                  status === 'active' && styles.statusActive,
-                  status === 'hidden' && styles.statusHidden,
-                  status === 'archived' && styles.statusArchived,
-                ]}
-              >
-                <ThemedText style={styles.statusText}>{statusLabel}</ThemedText>
-              </View>
-
-              <View style={styles.overlayActions}>
-                <Pressable
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    openEdit(item);
-                  }}
-                  disabled={isBusy}
-                  style={styles.overlayBtn}
-                  hitSlop={8}
+        <View style={styles.newsRowWrap}>
+          <NewsListItem
+            title={item.title}
+            tag={item.tag || 'Новость'}
+            dateLabel={dateLabel}
+            description={item.desc}
+            imageUrl={item.image}
+            onPress={() => openEdit(item)}
+            rightSlot={
+              <View style={styles.overlay}>
+                <View
+                  style={[
+                    styles.statusPill,
+                    status === 'active' && styles.statusActive,
+                    status === 'scheduled' && styles.statusScheduled,
+                    status === 'hidden' && styles.statusHidden,
+                    status === 'archived' && styles.statusArchived,
+                  ]}
                 >
-                  <MaterialIcons name="edit" size={18} color="#FFFFFF" />
-                </Pressable>
-                <Pressable onPress={() => handleDelete(item)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
-                  <MaterialIcons name="delete-outline" size={18} color="#FFFFFF" />
-                </Pressable>
-                {status === 'active' && (
-                  <Pressable onPress={() => handleHide(item.id)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
-                    {isBusy ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <MaterialIcons name="visibility-off" size={18} color="#FFFFFF" />
-                    )}
+                  <ThemedText style={styles.statusText}>{statusLabel}</ThemedText>
+                </View>
+
+                <View style={styles.overlayActions}>
+                  <Pressable
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      openEdit(item);
+                    }}
+                    disabled={isBusy}
+                    style={styles.overlayBtn}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="edit" size={18} color="#FFFFFF" />
                   </Pressable>
-                )}
-                {(status === 'active' || status === 'hidden') && (
-                  <Pressable onPress={() => handleArchive(item.id)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
-                    <MaterialIcons name="archive" size={18} color="#FFFFFF" />
+                  <Pressable onPress={() => handleDelete(item)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
+                    <MaterialIcons name="delete-outline" size={18} color="#FFFFFF" />
                   </Pressable>
-                )}
-                {(status === 'hidden' || status === 'archived') && (
-                  <Pressable onPress={() => handleUnhide(item.id)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
-                    <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
-                  </Pressable>
-                )}
+                  {status === 'active' || status === 'scheduled' ? (
+                    <Pressable onPress={() => handleHide(item.id)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
+                      {isBusy ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <MaterialIcons name="visibility-off" size={18} color="#FFFFFF" />
+                      )}
+                    </Pressable>
+                  ) : null}
+                  {(status === 'active' || status === 'hidden' || status === 'scheduled') && (
+                    <Pressable onPress={() => handleArchive(item.id)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
+                      <MaterialIcons name="archive" size={18} color="#FFFFFF" />
+                    </Pressable>
+                  )}
+                  {(status === 'hidden' || status === 'archived') && (
+                    <Pressable onPress={() => handleUnhide(item.id)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
+                      <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
+                    </Pressable>
+                  )}
+                </View>
               </View>
-            </View>
-          }
-        />
+            }
+          />
+          <View style={[styles.adminStatsBox, { borderColor: border, backgroundColor: cardBg }]}>
+            <ThemedText style={[styles.adminStatsLine, { color: textMuted }]}>
+              Просмотры: {item.view_count ?? 0}
+            </ThemedText>
+            <ThemedText style={[styles.adminStatsLine, { color: textMuted }]}>Реакции: {reactionLine}</ThemedText>
+          </View>
+        </View>
       );
     },
-    [openEdit, handleDelete, handleHide, handleArchive, handleUnhide, actionId]
+    [openEdit, handleDelete, handleHide, handleArchive, handleUnhide, actionId, textMuted, border, cardBg]
   );
 
   return (
@@ -302,6 +336,16 @@ export default function AdminWorkerNewsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  newsRowWrap: { gap: 0 },
+  adminStatsBox: {
+    marginTop: 8,
+    marginHorizontal: 0,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 4,
+  },
+  adminStatsLine: { fontSize: 13, lineHeight: 18 },
   filters: {
     marginHorizontal: 16,
     marginBottom: 12,
@@ -346,6 +390,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(17,24,39,0.65)',
   },
   statusActive: { backgroundColor: 'rgba(16,185,129,0.85)' },
+  statusScheduled: { backgroundColor: 'rgba(59,130,246,0.85)' },
   statusHidden: { backgroundColor: 'rgba(245,158,11,0.85)' },
   statusArchived: { backgroundColor: 'rgba(107,114,128,0.85)' },
   statusText: { fontSize: 11, fontWeight: '800', color: '#FFFFFF' },

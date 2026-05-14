@@ -84,6 +84,41 @@ export function formatRequestDate(iso: string): string {
   return d && t ? `${d} ${t}` : iso;
 }
 
+// --- Планирование публикации новостей (синхрон с бэкендом news.service) ---
+
+/** Допуск «чуть в прошлом» относительно часов клиента/сервера (мс). */
+export const NEWS_SCHEDULE_PAST_SLACK_MS = 60_000;
+
+/** Максимум через сколько можно запланировать публикацию (365 суток от сейчас). */
+export const NEWS_SCHEDULE_MAX_LEAD_MS = 365 * 24 * 60 * 60 * 1000;
+
+export function getNewsScheduleMinimumDate(): Date {
+  return new Date(Date.now() - NEWS_SCHEDULE_PAST_SLACK_MS);
+}
+
+export function getNewsScheduleMaximumDate(): Date {
+  return new Date(Date.now() + NEWS_SCHEDULE_MAX_LEAD_MS);
+}
+
+/** Ограничить выбранную дату интервалом [min, max] для пикера новостей. */
+export function clampNewsScheduleDate(d: Date): Date {
+  const min = getNewsScheduleMinimumDate();
+  const max = getNewsScheduleMaximumDate();
+  const t = d.getTime();
+  if (t < min.getTime()) return new Date(min);
+  if (t > max.getTime()) return new Date(max);
+  return d;
+}
+
+/** Дата и время публикации новости в UI (те же Asia/Almaty + formatDateOnly/TimeOnly). */
+export function formatNewsScheduleDateTime(value: DateInput): string {
+  const date = toDate(value);
+  if (!date) return '—';
+  const d = formatDateOnly(date);
+  const t = formatTimeOnly(date);
+  return d && t ? `${d} ${t}` : '—';
+}
+
 // --- Бронирования ---
 
 /** Час в Almaty для слота "HH:00" (сопоставление с TIME_SLOTS) */
