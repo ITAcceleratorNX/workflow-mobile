@@ -71,10 +71,7 @@ export default function ManagerStatisticsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const token = useAuthStore((s) => s.token);
-  const primary = useThemeColor({}, 'primary');
-  const gray600 = useThemeColor({}, 'gray600');
-  const screenBg = useThemeColor({}, 'screenBackgroundDark');
-  const styles = useManagerStatsStyles(primary, gray600, screenBg);
+  const styles = useManagerStatsStyles();
   const [activeTab, setActiveTab] = useState<StatsTab>('stats');
   const [rawStats, setRawStats] = useState<ManagerStatsRaw | null>(null);
   const [analyticsData, setAnalyticsData] = useState<{
@@ -183,6 +180,11 @@ export default function ManagerStatisticsScreen() {
 
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
+  const primary = useThemeColor({}, 'primary');
+  const warning = useThemeColor({}, 'warning');
+  const success = useThemeColor({}, 'success');
+  const info = useThemeColor({}, 'info');
+  const danger = useThemeColor({}, 'danger');
   const sc = stats?.statusCounts;
   const rts: Record<string, number> = stats?.requestTypeSummary ?? {};
 
@@ -236,24 +238,24 @@ export default function ManagerStatisticsScreen() {
               >
                 <View style={styles.quickStatsRow}>
                   <View style={[styles.quickStatCard, styles.quickStatNew]}>
-                    <MaterialIcons name="schedule" size={22} color="#CA8A04" />
-                    <ThemedText style={styles.quickStatValue}>{sc?.new ?? 0}</ThemedText>
-                    <ThemedText style={styles.quickStatLabel}>Новые</ThemedText>
+                    <MaterialIcons name="schedule" size={22} color={warning} />
+                    <ThemedText style={[styles.quickStatValue, { color: text }]}>{sc?.new ?? 0}</ThemedText>
+                    <ThemedText style={[styles.quickStatLabel, { color: textMuted }]}>Новые</ThemedText>
                   </View>
                   <View style={[styles.quickStatCard, styles.quickStatWork]}>
-                    <MaterialIcons name="people" size={22} color="#2563EB" />
-                    <ThemedText style={styles.quickStatValue}>{sc?.inWork ?? 0}</ThemedText>
-                    <ThemedText style={styles.quickStatLabel}>В работе</ThemedText>
+                    <MaterialIcons name="people" size={22} color={info} />
+                    <ThemedText style={[styles.quickStatValue, { color: text }]}>{sc?.inWork ?? 0}</ThemedText>
+                    <ThemedText style={[styles.quickStatLabel, { color: textMuted }]}>В работе</ThemedText>
                   </View>
                   <View style={[styles.quickStatCard, styles.quickStatDone]}>
-                    <MaterialIcons name="check-circle" size={22} color="#16A34A" />
-                    <ThemedText style={styles.quickStatValue}>{sc?.completed ?? 0}</ThemedText>
-                    <ThemedText style={styles.quickStatLabel}>Завершено</ThemedText>
+                    <MaterialIcons name="check-circle" size={22} color={success} />
+                    <ThemedText style={[styles.quickStatValue, { color: text }]}>{sc?.completed ?? 0}</ThemedText>
+                    <ThemedText style={[styles.quickStatLabel, { color: textMuted }]}>Завершено</ThemedText>
                   </View>
                   <View style={[styles.quickStatCard, styles.quickStatOverdue]}>
-                    <MaterialIcons name="warning" size={22} color="#DC2626" />
-                    <ThemedText style={styles.quickStatValue}>{sc?.overdue ?? 0}</ThemedText>
-                    <ThemedText style={styles.quickStatLabel}>Просрочено</ThemedText>
+                    <MaterialIcons name="warning" size={22} color={danger} />
+                    <ThemedText style={[styles.quickStatValue, { color: text }]}>{sc?.overdue ?? 0}</ThemedText>
+                    <ThemedText style={[styles.quickStatLabel, { color: textMuted }]}>Просрочено</ThemedText>
                   </View>
                 </View>
 
@@ -262,10 +264,10 @@ export default function ManagerStatisticsScreen() {
                     Статистика по заявкам
                   </ThemedText>
                   <StatRow label="Всего заявок" value={stats?.totalRequests ?? 0} />
-                  <StatRow label="Завершено" value={sc?.completed ?? 0} valueColor="#22C55E" />
-                  <StatRow label="В работе" value={sc?.inWork ?? 0} valueColor="#3B82F6" />
+                  <StatRow label="Завершено" value={sc?.completed ?? 0} valueColor={success} />
+                  <StatRow label="В работе" value={sc?.inWork ?? 0} valueColor={info} />
                   <StatRow label="Новые" value={sc?.new ?? 0} valueColor={primary} />
-                  <StatRow label="Просрочено" value={sc?.overdue ?? 0} valueColor="#EF4444" />
+                  <StatRow label="Просрочено" value={sc?.overdue ?? 0} valueColor={danger} />
                 </View>
 
                 <View style={styles.card}>
@@ -286,13 +288,13 @@ export default function ManagerStatisticsScreen() {
                       style={[styles.exportButton, styles.exportButtonPrimary]}
                       onPress={() => handleExport('xlsx')}
                     >
-                      <ThemedText style={styles.exportButtonText}>Excel</ThemedText>
+                      <ThemedText style={styles.exportButtonTextPrimary}>Excel</ThemedText>
                     </Pressable>
                     <Pressable
                       style={[styles.exportButton, styles.exportButtonSecondary]}
                       onPress={() => handleExport('pbix')}
                     >
-                      <ThemedText style={styles.exportButtonText}>Power BI</ThemedText>
+                      <ThemedText style={styles.exportButtonTextSecondary}>Power BI</ThemedText>
                     </Pressable>
                   </View>
                 </View>
@@ -338,23 +340,35 @@ export default function ManagerStatisticsScreen() {
   );
 }
 
-function useManagerStatsStyles(primary: string, gray600: string, screenBg: string) {
+function useManagerStatsStyles() {
+  const primary = useThemeColor({}, 'primary');
+  const background = useThemeColor({}, 'background');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const textSecondary = useThemeColor({}, 'textSecondary');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const danger = useThemeColor({}, 'danger');
+  const dangerSoft = useThemeColor({}, 'dangerSoft');
+  const border = useThemeColor({}, 'border');
+
   return useMemo(
     () =>
       StyleSheet.create({
-        container: { flex: 1, backgroundColor: screenBg },
+        container: { flex: 1, backgroundColor: background },
         tabsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 },
         tab: {
           flex: 1,
           paddingVertical: 10,
           paddingHorizontal: 16,
           borderRadius: 10,
-          backgroundColor: gray600,
+          backgroundColor: surfaceMuted,
+          borderWidth: 1,
+          borderColor: border,
           alignItems: 'center',
         },
-        tabActive: { backgroundColor: primary },
-        tabText: { fontSize: 15, fontWeight: '500', color: 'rgba(255,255,255,0.8)' },
-        tabTextActive: { color: '#fff' },
+        tabActive: { backgroundColor: primary, borderColor: primary },
+        tabText: { fontSize: 15, fontWeight: '500', color: textSecondary },
+        tabTextActive: { color: onPrimary },
         loadingBox: {
           flex: 1,
           justifyContent: 'center',
@@ -366,11 +380,11 @@ function useManagerStatsStyles(primary: string, gray600: string, screenBg: strin
           margin: 16,
           padding: 16,
           borderRadius: 12,
-          backgroundColor: 'rgba(239,68,68,0.15)',
+          backgroundColor: dangerSoft,
           borderWidth: 1,
-          borderColor: 'rgba(239,68,68,0.4)',
+          borderColor: danger,
         },
-        errorText: { color: '#FCA5A5', marginBottom: 12 },
+        errorText: { color: danger, marginBottom: 12 },
         retryButton: {
           alignSelf: 'flex-start',
           paddingVertical: 8,
@@ -378,7 +392,7 @@ function useManagerStatsStyles(primary: string, gray600: string, screenBg: strin
           backgroundColor: primary,
           borderRadius: 8,
         },
-        retryText: { color: '#fff', fontWeight: '600' },
+        retryText: { color: onPrimary, fontWeight: '600' },
         scrollContent: { paddingHorizontal: 16 },
         quickStatsRow: {
           flexDirection: 'row',
@@ -397,13 +411,15 @@ function useManagerStatsStyles(primary: string, gray600: string, screenBg: strin
         quickStatWork: { backgroundColor: 'rgba(37,99,235,0.2)' },
         quickStatDone: { backgroundColor: 'rgba(22,163,74,0.2)' },
         quickStatOverdue: { backgroundColor: 'rgba(220,38,38,0.2)' },
-        quickStatValue: { fontSize: 22, fontWeight: 'bold', color: '#fff', marginTop: 6 },
-        quickStatLabel: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+        quickStatValue: { fontSize: 22, fontWeight: 'bold', marginTop: 6 },
+        quickStatLabel: { fontSize: 12, marginTop: 2 },
         card: {
-          backgroundColor: gray600,
+          backgroundColor: surfaceElevated,
           borderRadius: 12,
           padding: 16,
           marginBottom: 16,
+          borderWidth: 1,
+          borderColor: border,
         },
         cardTitle: { fontSize: 17, fontWeight: '600', marginBottom: 16 },
         cardDescription: { fontSize: 14, lineHeight: 20, marginTop: -8, marginBottom: 8 },
@@ -416,9 +432,24 @@ function useManagerStatsStyles(primary: string, gray600: string, screenBg: strin
           justifyContent: 'center',
         },
         exportButtonPrimary: { backgroundColor: primary },
-        exportButtonSecondary: { backgroundColor: '#4B5563' },
-        exportButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+        exportButtonSecondary: {
+          backgroundColor: surfaceMuted,
+          borderWidth: 1,
+          borderColor: border,
+        },
+        exportButtonTextPrimary: { color: onPrimary, fontSize: 15, fontWeight: '600' },
+        exportButtonTextSecondary: { color: textSecondary, fontSize: 15, fontWeight: '600' },
       }),
-    [primary, gray600, screenBg],
+    [
+      primary,
+      background,
+      surfaceMuted,
+      surfaceElevated,
+      textSecondary,
+      onPrimary,
+      danger,
+      dangerSoft,
+      border,
+    ],
   );
 }

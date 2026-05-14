@@ -49,9 +49,11 @@ export default function AdminWorkerNewsScreen() {
   const router = useRouter();
   const { show: showToast } = useToast();
   const textMuted = useThemeColor({}, 'textMuted');
+  const textSecondary = useThemeColor({}, 'textSecondary');
   const primary = useThemeColor({}, 'primary');
-  const gray600 = useThemeColor({}, 'gray600');
-  const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const screenBg = useThemeColor({}, 'background');
   const border = useThemeColor({}, 'border');
   const cardBg = useThemeColor({}, 'cardBackground');
 
@@ -245,28 +247,28 @@ export default function AdminWorkerNewsScreen() {
                     style={styles.overlayBtn}
                     hitSlop={8}
                   >
-                    <MaterialIcons name="edit" size={18} color="#FFFFFF" />
+                    <MaterialIcons name="edit" size={18} color={onPrimary} />
                   </Pressable>
                   <Pressable onPress={() => handleDelete(item)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
-                    <MaterialIcons name="delete-outline" size={18} color="#FFFFFF" />
+                    <MaterialIcons name="delete-outline" size={18} color={onPrimary} />
                   </Pressable>
                   {status === 'active' || status === 'scheduled' ? (
                     <Pressable onPress={() => handleHide(item.id)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
                       {isBusy ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <ActivityIndicator size="small" color={onPrimary} />
                       ) : (
-                        <MaterialIcons name="visibility-off" size={18} color="#FFFFFF" />
+                        <MaterialIcons name="visibility-off" size={18} color={onPrimary} />
                       )}
                     </Pressable>
                   ) : null}
                   {(status === 'active' || status === 'hidden' || status === 'scheduled') && (
                     <Pressable onPress={() => handleArchive(item.id)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
-                      <MaterialIcons name="archive" size={18} color="#FFFFFF" />
+                      <MaterialIcons name="archive" size={18} color={onPrimary} />
                     </Pressable>
                   )}
                   {(status === 'hidden' || status === 'archived') && (
                     <Pressable onPress={() => handleUnhide(item.id)} disabled={isBusy} style={styles.overlayBtn} hitSlop={8}>
-                      <MaterialIcons name="visibility" size={18} color="#FFFFFF" />
+                      <MaterialIcons name="visibility" size={18} color={onPrimary} />
                     </Pressable>
                   )}
                 </View>
@@ -282,7 +284,7 @@ export default function AdminWorkerNewsScreen() {
         </View>
       );
     },
-    [openEdit, handleDelete, handleHide, handleArchive, handleUnhide, actionId, textMuted, border, cardBg]
+    [openEdit, handleDelete, handleHide, handleArchive, handleUnhide, actionId, textMuted, border, cardBg, onPrimary]
   );
 
   return (
@@ -295,18 +297,25 @@ export default function AdminWorkerNewsScreen() {
           {STATUS_OPTIONS.map((opt) => (
             <Pressable
               key={opt.value || 'all'}
-              style={[styles.chip, { backgroundColor: statusFilter === opt.value ? primary : gray600 }]}
+              style={[styles.chip, { backgroundColor: statusFilter === opt.value ? primary : surfaceMuted }]}
               onPress={() => setStatusFilter(opt.value as typeof statusFilter)}
             >
-              <ThemedText style={styles.chipText}>{opt.label}</ThemedText>
+              <ThemedText
+                style={[
+                  styles.chipText,
+                  { color: statusFilter === opt.value ? onPrimary : textSecondary },
+                ]}
+              >
+                {opt.label}
+              </ThemedText>
             </Pressable>
           ))}
         </View>
       </View>
 
       <Pressable style={[styles.addBtn, { backgroundColor: primary }]} onPress={openCreate}>
-        <MaterialIcons name="add" size={24} color="#fff" />
-        <ThemedText style={styles.addBtnText}>Добавить новость</ThemedText>
+        <MaterialIcons name="add" size={24} color={onPrimary} />
+        <ThemedText style={[styles.addBtnText, { color: onPrimary }]}>Добавить новость</ThemedText>
       </Pressable>
 
       {loading ? (
@@ -360,7 +369,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
   },
-  chipText: { fontSize: 14, color: '#fff' },
+  chipText: { fontSize: 14 },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -371,7 +380,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
   },
-  addBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  addBtnText: { fontSize: 16, fontWeight: '600' },
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { fontSize: 16 },
   listContent: { paddingHorizontal: 16, gap: 12 },

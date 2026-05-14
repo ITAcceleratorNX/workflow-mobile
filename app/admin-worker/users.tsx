@@ -60,8 +60,7 @@ export default function AdminWorkerUsersScreen() {
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
-  const gray600 = useThemeColor({}, 'gray600');
-  const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const screenBg = useThemeColor({}, 'background');
   const border = useThemeColor({}, 'border');
   const surfaceElevated = useThemeColor({}, 'surfaceElevated');
   const success = useThemeColor({}, 'success');
@@ -69,6 +68,9 @@ export default function AdminWorkerUsersScreen() {
   const danger = useThemeColor({}, 'danger');
   const dangerSoft = useThemeColor({}, 'dangerSoft');
   const accentSoft = useThemeColor({}, 'accentSoft');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const textSecondary = useThemeColor({}, 'textSecondary');
 
   const initialTab: TabType = tab === 'management' ? 'management' : 'requests';
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
@@ -369,7 +371,7 @@ export default function AdminWorkerUsersScreen() {
         </ThemedText>
       </View>
 
-      <View style={[styles.tabs, { backgroundColor: gray600 }]}>
+      <View style={[styles.tabs, { backgroundColor: surfaceMuted, borderWidth: 1, borderColor: border }]}>
         <Pressable
           style={[styles.tab, activeTab === 'requests' && { backgroundColor: primary }]}
           onPress={() => {
@@ -380,9 +382,15 @@ export default function AdminWorkerUsersScreen() {
           <MaterialIcons
             name="person-add"
             size={18}
-            color={activeTab === 'requests' ? '#fff' : 'rgba(255,255,255,0.7)'}
+            color={activeTab === 'requests' ? onPrimary : textSecondary}
           />
-          <ThemedText style={[styles.tabText, activeTab === 'requests' && styles.tabTextActive]}>
+          <ThemedText
+            style={[
+              styles.tabText,
+              { color: activeTab === 'requests' ? onPrimary : textSecondary },
+              activeTab === 'requests' && styles.tabTextSelected,
+            ]}
+          >
             Запросы
           </ThemedText>
         </Pressable>
@@ -397,9 +405,15 @@ export default function AdminWorkerUsersScreen() {
           <MaterialIcons
             name="groups"
             size={18}
-            color={activeTab === 'management' ? '#fff' : 'rgba(255,255,255,0.7)'}
+            color={activeTab === 'management' ? onPrimary : textSecondary}
           />
-          <ThemedText style={[styles.tabText, activeTab === 'management' && styles.tabTextActive]}>
+          <ThemedText
+            style={[
+              styles.tabText,
+              { color: activeTab === 'management' ? onPrimary : textSecondary },
+              activeTab === 'management' && styles.tabTextSelected,
+            ]}
+          >
             Управление
           </ThemedText>
         </Pressable>
@@ -794,9 +808,9 @@ export default function AdminWorkerUsersScreen() {
                       disabled={!selectedUserId || !newPassword || !confirmPassword || isChangingPassword}
                     >
                       {isChangingPassword ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={onPrimary} />
                       ) : (
-                        <ThemedText style={styles.primaryButtonText}>Изменить пароль</ThemedText>
+                        <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Изменить пароль</ThemedText>
                       )}
                     </Pressable>
                   </View>
@@ -879,9 +893,9 @@ export default function AdminWorkerUsersScreen() {
                       disabled={!selectedRoleUserId || !newRole || isChangingRole}
                     >
                       {isChangingRole ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={onPrimary} />
                       ) : (
-                        <ThemedText style={styles.primaryButtonText}>Изменить роль</ThemedText>
+                        <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Изменить роль</ThemedText>
                       )}
                     </Pressable>
                   </View>
@@ -981,9 +995,9 @@ export default function AdminWorkerUsersScreen() {
                   disabled={!selectedCategoryId || !selectedExecutorId || isChangingHead}
                 >
                   {isChangingHead ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={onPrimary} />
                   ) : (
-                    <ThemedText style={styles.primaryButtonText}>Сменить руководителя</ThemedText>
+                    <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Сменить руководителя</ThemedText>
                   )}
                 </Pressable>
                 {(selectedCategoryId || selectedExecutorId) && (
@@ -1049,13 +1063,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
   },
-  tabActive: {},
   tabText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
   },
-  tabTextActive: {
-    color: '#fff',
+  tabTextSelected: {
     fontWeight: '600',
   },
   scrollContent: {
@@ -1218,7 +1229,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   primaryButtonText: {
-    color: '#fff',
     fontWeight: '600',
   },
   secondaryButton: {

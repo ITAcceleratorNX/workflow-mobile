@@ -49,6 +49,260 @@ function formatExpiresAt(iso: string | null): string {
   }
 }
 
+function createSmartHomeStyles(c: {
+  screenBg: string;
+  surfaceElevated: string;
+  surfaceMuted: string;
+  border: string;
+  primary: string;
+  onPrimary: string;
+  danger: string;
+  dangerSoft: string;
+  info: string;
+  infoSoft: string;
+  text: string;
+  accentSoft: string;
+}) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.screenBg,
+    },
+    header: {
+      paddingHorizontal: 16,
+      paddingBottom: 12,
+    },
+    backButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minWidth: 44,
+      minHeight: 44,
+      marginBottom: 8,
+      justifyContent: 'center',
+    },
+    backLabel: {
+      fontSize: 16,
+      color: c.primary,
+      marginLeft: 4,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: 'bold',
+    },
+    headerDescription: {
+      fontSize: 13,
+      marginTop: 4,
+      lineHeight: 18,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+    },
+    card: {
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    cardTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      marginBottom: 4,
+    },
+    cardSubtitle: {
+      fontSize: 13,
+      marginBottom: 12,
+    },
+    fieldLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+      marginBottom: 8,
+    },
+    sectionLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      marginBottom: 8,
+      marginTop: 4,
+    },
+    contentBlock: {
+      marginTop: 16,
+    },
+    infoBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      backgroundColor: c.infoSoft,
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: c.info,
+    },
+    infoBoxText: {
+      flex: 1,
+      fontSize: 13,
+      lineHeight: 20,
+      color: c.info,
+    },
+    loader: {
+      marginVertical: 8,
+    },
+    tokenRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    tokenLabel: {
+      fontSize: 14,
+    },
+    tokenValue: {
+      fontSize: 14,
+    },
+    tokenActions: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 12,
+    },
+    buttonHalf: {
+      flex: 1,
+    },
+    primaryButton: {
+      backgroundColor: c.primary,
+      paddingVertical: 12,
+      minHeight: 44,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 12,
+    },
+    dangerButton: {
+      backgroundColor: c.danger,
+      paddingVertical: 12,
+      minHeight: 44,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    primaryButtonText: {
+      color: c.onPrimary,
+      fontWeight: '600',
+    },
+    dangerButtonText: {
+      color: c.onPrimary,
+      fontWeight: '600',
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    errorText: {
+      fontSize: 14,
+      color: c.danger,
+      marginTop: 8,
+    },
+    errorBox: {
+      backgroundColor: c.dangerSoft,
+      borderRadius: 10,
+      padding: 12,
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: c.danger,
+    },
+    errorBoxText: {
+      fontSize: 14,
+      color: c.danger,
+    },
+    groupList: {
+      marginBottom: 16,
+    },
+    placeholderText: {
+      fontSize: 14,
+      fontStyle: 'italic',
+      marginVertical: 8,
+    },
+    officeSectionTitle: {
+      fontSize: 12,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 8,
+    },
+    roomGroup: {
+      marginBottom: 12,
+    },
+    roomGroupTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      marginBottom: 6,
+    },
+    linkRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: c.surfaceMuted,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 6,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    linkDeviceName: {
+      fontSize: 15,
+      flex: 1,
+    },
+    unlinkBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      backgroundColor: c.danger,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    selectTrigger: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 8,
+    },
+    selectTriggerText: {
+      fontSize: 16,
+    },
+    dropdown: {
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 10,
+      marginBottom: 12,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    dropdownItem: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    dropdownItemActive: {
+      backgroundColor: c.accentSoft,
+    },
+    dropdownItemText: {
+      fontSize: 16,
+      color: c.text,
+    },
+    footerNote: {
+      fontSize: 12,
+      fontStyle: 'italic',
+      marginTop: 8,
+      marginBottom: 16,
+    },
+  });
+}
+
 export default function AdminWorkerSmartHomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -56,8 +310,48 @@ export default function AdminWorkerSmartHomeScreen() {
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
-  const gray600 = useThemeColor({}, 'gray600');
-  const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const screenBg = useThemeColor({}, 'background');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const border = useThemeColor({}, 'border');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const danger = useThemeColor({}, 'danger');
+  const dangerSoft = useThemeColor({}, 'dangerSoft');
+  const info = useThemeColor({}, 'info');
+  const infoSoft = useThemeColor({}, 'infoSoft');
+  const accentSoft = useThemeColor({}, 'accentSoft');
+
+  const styles = useMemo(
+    () =>
+      createSmartHomeStyles({
+        screenBg,
+        surfaceElevated,
+        surfaceMuted,
+        border,
+        primary,
+        onPrimary,
+        danger,
+        dangerSoft,
+        info,
+        infoSoft,
+        text,
+        accentSoft,
+      }),
+    [
+      screenBg,
+      surfaceElevated,
+      surfaceMuted,
+      border,
+      primary,
+      onPrimary,
+      danger,
+      dangerSoft,
+      info,
+      infoSoft,
+      text,
+      accentSoft,
+    ],
+  );
 
   // ——— Токены ———
   const [tokensMeta, setTokensMeta] = useState<{ id: number; expires_at: string | null } | null>(null);
@@ -403,7 +697,7 @@ export default function AdminWorkerSmartHomeScreen() {
                   disabled={!!tokenAction}
                 >
                   {tokenAction === 'refresh' ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={onPrimary} />
                   ) : (
                     <ThemedText style={styles.primaryButtonText}>Обновить токены</ThemedText>
                   )}
@@ -414,7 +708,7 @@ export default function AdminWorkerSmartHomeScreen() {
                   disabled={!!tokenAction}
                 >
                   {tokenAction === 'delete' ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={onPrimary} />
                   ) : (
                     <ThemedText style={styles.dangerButtonText}>Удалить токены</ThemedText>
                   )}
@@ -531,9 +825,9 @@ export default function AdminWorkerSmartHomeScreen() {
                             disabled={deletingId === link.id}
                           >
                             {deletingId === link.id ? (
-                              <ActivityIndicator size="small" color="#fff" />
+                              <ActivityIndicator size="small" color={onPrimary} />
                             ) : (
-                              <MaterialIcons name="link-off" size={18} color="#fff" />
+                              <MaterialIcons name="link-off" size={18} color={onPrimary} />
                             )}
                           </Pressable>
                         </View>
@@ -648,7 +942,7 @@ export default function AdminWorkerSmartHomeScreen() {
                 disabled={!selectedRoomId || !selectedDevice || isLinking}
               >
                 {isLinking ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={onPrimary} />
                 ) : (
                   <ThemedText style={styles.primaryButtonText}>Привязать к комнате</ThemedText>
                 )}
@@ -673,7 +967,7 @@ export default function AdminWorkerSmartHomeScreen() {
           ) : (
             <>
               <View style={styles.infoBox}>
-                <MaterialIcons name="info-outline" size={20} color="#3B82F6" />
+                <MaterialIcons name="info-outline" size={20} color={info} />
                 <ThemedText style={styles.infoBoxText}>
                   Пользователь, привязанный к комнате, сможет управлять светом и другими устройствами умного дома в этой комнате из приложения.
                 </ThemedText>
@@ -697,9 +991,9 @@ export default function AdminWorkerSmartHomeScreen() {
                         disabled={deletingSubId === sub.id}
                       >
                         {deletingSubId === sub.id ? (
-                          <ActivityIndicator size="small" color="#fff" />
+                          <ActivityIndicator size="small" color={onPrimary} />
                         ) : (
-                          <MaterialIcons name="link-off" size={18} color="#fff" />
+                          <MaterialIcons name="link-off" size={18} color={onPrimary} />
                         )}
                       </Pressable>
                     </View>
@@ -792,7 +1086,7 @@ export default function AdminWorkerSmartHomeScreen() {
                 disabled={!selectedRoomIdForSub || !selectedUserIdForSub || isCreatingSub}
               >
                 {isCreatingSub ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={onPrimary} />
                 ) : (
                   <ThemedText style={styles.primaryButtonText}>Привязать к комнате</ThemedText>
                 )}
@@ -808,238 +1102,3 @@ export default function AdminWorkerSmartHomeScreen() {
     </ThemedView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1C1C1E',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 44,
-    minHeight: 44,
-    marginBottom: 8,
-    justifyContent: 'center',
-  },
-  backLabel: {
-    fontSize: 16,
-    color: '#E25B21',
-    marginLeft: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  headerDescription: {
-    fontSize: 13,
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-  },
-  card: {
-    backgroundColor: '#3A3A3C',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  contentBlock: {
-    marginTop: 16,
-  },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: 'rgba(59,130,246,0.12)',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.3)',
-  },
-  infoBoxText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#93C5FD',
-  },
-  loader: {
-    marginVertical: 8,
-  },
-  tokenRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  tokenLabel: {
-    fontSize: 14,
-  },
-  tokenValue: {
-    fontSize: 14,
-  },
-  tokenActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-  },
-  buttonHalf: {
-    flex: 1,
-  },
-  primaryButton: {
-    backgroundColor: '#E25B21',
-    paddingVertical: 12,
-    minHeight: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  dangerButton: {
-    backgroundColor: '#DC2626',
-    paddingVertical: 12,
-    minHeight: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  dangerButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#FCA5A5',
-    marginTop: 8,
-  },
-  errorBox: {
-    backgroundColor: 'rgba(239,68,68,0.12)',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.35)',
-  },
-  errorBoxText: {
-    fontSize: 14,
-    color: '#FCA5A5',
-  },
-  groupList: {
-    marginBottom: 16,
-  },
-  placeholderText: {
-    fontSize: 14,
-    fontStyle: 'italic',
-    marginVertical: 8,
-  },
-  officeSectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  roomGroup: {
-    marginBottom: 12,
-  },
-  roomGroupTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  linkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#1C1C1E',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 6,
-  },
-  linkDeviceName: {
-    fontSize: 15,
-    flex: 1,
-  },
-  unlinkBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#DC2626',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-    backgroundColor: '#1C1C1E',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 8,
-  },
-  selectTriggerText: {
-    fontSize: 16,
-  },
-  dropdown: {
-    backgroundColor: '#1C1C1E',
-    borderRadius: 10,
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  dropdownItem: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  dropdownItemActive: {
-    backgroundColor: 'rgba(226,91,33,0.3)',
-  },
-  dropdownItemText: {
-    fontSize: 16,
-    color: '#fff',
-  },
-  footerNote: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-});
