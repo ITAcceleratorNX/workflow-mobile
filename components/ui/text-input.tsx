@@ -118,14 +118,14 @@ export function TextInput({
               color: text,
               borderColor: dynamicBorderColor,
               backgroundColor: surface,
+              /** iOS: фикcируем LTR, иначе плейсхолдер редко рендерится с лишними пробелами между символами. */
+              writingDirection: 'ltr',
             },
           ]}
           placeholder={placeholder}
           placeholderTextColor={textMuted}
           value={value}
           onChangeText={onChangeText}
-          /** iOS: фиксируем LTR, иначе плейсхолдер редко рендерится с лишними пробелами между символами. */
-          writingDirection="ltr"
           secureTextEntry={isPassword && !showPassword}
           onBlur={handleBlur}
           onFocus={handleFocus}

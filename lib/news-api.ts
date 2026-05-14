@@ -7,7 +7,7 @@
  * - GET /news/:id — одна новость
  *
  * Админские (Bearer token):
- * - POST /news — создание (multipart: title, content, notification_type, image)
+ * - POST /news — создание (multipart: title, content, notification_type, publish_mode, published_at?, image)
  * - GET /news/admin/list?status= — админская история
  * - PATCH /news/admin/:id/hide
  * - PATCH /news/admin/:id/archive
@@ -15,6 +15,8 @@
  */
 
 import { config } from '@/lib/config';
+import type { NewsReactionKind } from '@/lib/news-reactions';
+import { normalizeReactionCounts } from '@/lib/news-reactions';
 import { useAuthStore } from '@/stores/auth-store';
 
 const { apiBaseUrl } = config;
@@ -24,12 +26,15 @@ export interface ApiNewsItem {
   id: number;
   title: string;
   content: string;
-  status: 'active' | 'hidden' | 'archived';
+  status: 'active' | 'hidden' | 'archived' | 'scheduled';
   image_url?: string | null;
   image?: string | null;
   published_at: string;
   created_at?: string;
   created_by?: number;
+  view_count?: number;
+  reaction_counts?: Partial<Record<NewsReactionKind, number>> | null;
+  my_reaction?: NewsReactionKind | null;
 }
 
 type NewsListResponse = { news: ApiNewsItem[] };
@@ -43,12 +48,19 @@ export interface NewsDisplayItem {
   desc: string;
   image: string;
   date?: string;
-  status?: 'active' | 'hidden' | 'archived';
+  /** ISO 8601 с сервера (для сортировки и отображения времени публикации) */
+  publishedAtIso?: string;
+  status?: 'active' | 'hidden' | 'archived' | 'scheduled';
+  /** Статистика (из API) */
+  view_count?: number;
+  reaction_counts?: import('@/lib/news-reactions').NewsReactionCounts;
+  my_reaction?: NewsReactionKind | null;
 }
 
 function toDisplayItem(item: ApiNewsItem): NewsDisplayItem {
   const imageUrl = item.image_url ?? item.image ?? '';
-  const date = item.published_at?.slice(0, 10) ?? item.created_at?.slice(0, 10) ?? '';
+  const publishedRaw = item.published_at ?? '';
+  const date = publishedRaw ? publishedRaw.slice(0, 10) : item.created_at?.slice(0, 10) ?? '';
   return {
     id: String(item.id),
     tag: 'Новость',
@@ -56,7 +68,11 @@ function toDisplayItem(item: ApiNewsItem): NewsDisplayItem {
     desc: item.content ?? '',
     image: imageUrl,
     date,
+    publishedAtIso: publishedRaw || undefined,
     status: item.status,
+    view_count: item.view_count ?? 0,
+    reaction_counts: normalizeReactionCounts(item.reaction_counts),
+    my_reaction: item.my_reaction ?? null,
   };
 }
 
@@ -138,9 +154,49 @@ export async function getNewsById(
   return { ok: true, data: toDisplayItem(result.data) };
 }
 
+/** Засчитать просмотр (авторизованный клиент; уникально на пользователя) */
+export async function recordNewsView(
+  id: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const raw = useAuthStore.getState().token;
+  const token = raw && raw !== 'guest-demo' ? raw : null;
+  if (!token) return { ok: false, error: 'Нет авторизации' };
+  try {
+    const res = await fetch(`${apiBaseUrl}/news/${id}/view`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const err = (data as { error?: string })?.error ?? (data as { message?: string })?.message ?? 'Ошибка';
+      return { ok: false, error: err };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Сетевая ошибка' };
+  }
+}
+
+/** Поставить или сменить реакцию (одна на пользователя) */
+export async function setNewsReaction(
+  id: number,
+  reaction: NewsReactionKind
+): Promise<{ ok: true; data: ApiNewsItem } | { ok: false; error: string }> {
+  const result = await authRequest<ApiNewsItem>(`/news/${id}/reaction`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reaction }),
+  });
+  return result;
+}
+
+export type { NewsReactionKind };
+
 // ==================== Админские ====================
 
 export type NotificationType = 'none' | 'push_sound' | 'push_silent';
+
+export type NewsPublishMode = 'now' | 'schedule';
 
 /** Извлечь текст ошибки из ответа бэкенда */
 function extractError(data: unknown): string {
@@ -165,12 +221,19 @@ export async function createNews(params: {
   title: string;
   content: string;
   notification_type?: NotificationType;
+  publish_mode?: NewsPublishMode;
+  published_at?: string;
   image?: { uri: string; name?: string; type?: string } | null;
 }): Promise<{ ok: true; data: ApiNewsItem } | { ok: false; error: string }> {
   const formData = new FormData();
   formData.append('title', params.title.trim());
   formData.append('content', params.content.trim());
   formData.append('notification_type', params.notification_type ?? 'none');
+  const mode = params.publish_mode ?? 'now';
+  formData.append('publish_mode', mode);
+  if (mode === 'schedule' && params.published_at) {
+    formData.append('published_at', params.published_at);
+  }
 
   if (params.image?.uri) {
     const img = params.image;
@@ -211,7 +274,7 @@ export async function createNews(params: {
 }
 
 /** Админская история: status = active | hidden | archived или без параметра (все) */
-export async function getNewsAdminList(status?: 'active' | 'hidden' | 'archived'): Promise<
+export async function getNewsAdminList(status?: 'active' | 'hidden' | 'archived' | 'scheduled'): Promise<
   { ok: true; data: NewsDisplayItem[] } | { ok: false; error: string }
 > {
   const path = status ? `/news/admin/list?status=${status}` : '/news/admin/list';
@@ -249,6 +312,8 @@ export async function updateNews(
     title: string;
     content: string;
     notification_type?: NotificationType;
+    publish_mode?: NewsPublishMode;
+    published_at?: string;
     image?: { uri: string; name?: string; type?: string } | null;
   }
 ): Promise<{ ok: true; data: ApiNewsItem } | { ok: false; error: string }> {
@@ -256,6 +321,12 @@ export async function updateNews(
   formData.append('title', params.title.trim());
   formData.append('content', params.content.trim());
   formData.append('notification_type', params.notification_type ?? 'none');
+  if (params.publish_mode) {
+    formData.append('publish_mode', params.publish_mode);
+    if (params.publish_mode === 'schedule' && params.published_at) {
+      formData.append('published_at', params.published_at);
+    }
+  }
 
   if (params.image?.uri) {
     const img = params.image;

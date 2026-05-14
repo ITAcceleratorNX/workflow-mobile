@@ -25,6 +25,9 @@ import { useToast } from '@/context/toast-context';
 import { NEWS_ITEMS } from '@/constants/news';
 import { getNewsMain } from '@/lib/news-api';
 import type { NewsDisplayItem } from '@/lib/news-api';
+import { emptyReactionCounts } from '@/lib/news-reactions';
+import type { NewsReactionCounts, NewsReactionKind } from '@/lib/news-reactions';
+import { NewsReactionsRow } from '@/components/news/news-reactions-row';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -540,13 +543,33 @@ function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolea
   const [insightItems, setInsightItems] = useState<NewsDisplayItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
+  const insightToken = useAuthStore((s) => s.token);
+  const canReactInsights =
+    typeof insightToken === 'string' && insightToken.length > 0 && insightToken !== 'guest-demo';
+
+  const patchInsightEngagement = useCallback(
+    (newsId: string, patch: { reaction_counts: NewsReactionCounts; my_reaction: NewsReactionKind | null }) => {
+      setInsightItems((l) => l.map((it) => (it.id === newsId ? { ...it, ...patch } : it)));
+    },
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
     getNewsMain().then((res) => {
       if (cancelled) return;
       if (res.ok) setInsightItems(res.data);
-      else setInsightItems(NEWS_ITEMS.map((i) => ({ id: i.id, tag: i.tag || 'Новость', title: i.title, desc: i.desc, image: i.image, date: i.date })));
+      else setInsightItems(NEWS_ITEMS.map((i) => ({
+        id: i.id,
+        tag: i.tag || 'Новость',
+        title: i.title,
+        desc: i.desc,
+        image: i.image,
+        date: i.date,
+        view_count: 0,
+        reaction_counts: emptyReactionCounts(),
+        my_reaction: null,
+      })));
     });
     return () => { cancelled = true; };
   }, []);
@@ -555,7 +578,17 @@ function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolea
     setRefreshing(true);
     const newsPromise = getNewsMain().then((res) => {
       if (res.ok) setInsightItems(res.data);
-      else setInsightItems(NEWS_ITEMS.map((i) => ({ id: i.id, tag: i.tag || 'Новость', title: i.title, desc: i.desc, image: i.image, date: i.date })));
+      else setInsightItems(NEWS_ITEMS.map((i) => ({
+        id: i.id,
+        tag: i.tag || 'Новость',
+        title: i.title,
+        desc: i.desc,
+        image: i.image,
+        date: i.date,
+        view_count: 0,
+        reaction_counts: emptyReactionCounts(),
+        my_reaction: null,
+      })));
     });
     bumpTasks();
     await newsPromise;
@@ -644,32 +677,41 @@ function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolea
           contentContainerStyle={styles.insightsScroll}
         >
           {insightItems.slice(0, 5).map((item) => (
-            <Pressable
-              key={item.id}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push(`/client/news/${item.id}`);
-              }}
-              style={styles.insightCard}
-            >
-              <Image
-                source={{ uri: item.image || 'https://via.placeholder.com/400' }}
-                style={styles.insightCardImage}
-                contentFit="cover"
-              />
-              <View style={styles.insightTagTop}>
-                <View style={styles.insightTag}>
-                  <ThemedText style={styles.insightTagText}>{item.tag}</ThemedText>
-                </View>
-              </View>
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.7)']}
-                style={styles.insightCardOverlay}
+            <View key={item.id} style={{ width: INSIGHT_CARD_WIDTH, marginRight: 12 }}>
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push(`/client/news/${item.id}`);
+                }}
+                style={styles.insightCard}
               >
-                <ThemedText style={styles.insightTitle}>{item.title}</ThemedText>
-                <ThemedText style={styles.insightDesc} numberOfLines={3}>{item.desc}</ThemedText>
-              </LinearGradient>
-            </Pressable>
+                <Image
+                  source={{ uri: item.image || 'https://via.placeholder.com/400' }}
+                  style={styles.insightCardImage}
+                  contentFit="cover"
+                />
+                <View style={styles.insightTagTop}>
+                  <View style={styles.insightTag}>
+                    <ThemedText style={styles.insightTagText}>{item.tag}</ThemedText>
+                  </View>
+                </View>
+                <LinearGradient
+                  colors={['transparent', 'rgba(0,0,0,0.7)']}
+                  style={styles.insightCardOverlay}
+                >
+                  <ThemedText style={styles.insightTitle}>{item.title}</ThemedText>
+                  <ThemedText style={styles.insightDesc} numberOfLines={3}>{item.desc}</ThemedText>
+                </LinearGradient>
+              </Pressable>
+              <NewsReactionsRow
+                newsId={Number(item.id)}
+                reactionCounts={item.reaction_counts ?? emptyReactionCounts()}
+                myReaction={item.my_reaction ?? null}
+                canInteract={canReactInsights}
+                compact
+                onUpdated={(p) => patchInsightEngagement(item.id, p)}
+              />
+            </View>
           ))}
         </ScrollView>
 

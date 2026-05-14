@@ -19,8 +19,12 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { NEWS_ITEMS } from '@/constants/news';
 import { getNewsAll } from '@/lib/news-api';
 import type { NewsDisplayItem } from '@/lib/news-api';
+import { emptyReactionCounts } from '@/lib/news-reactions';
+import type { NewsReactionCounts, NewsReactionKind } from '@/lib/news-reactions';
 import { formatDateForApi } from '@/lib/dateTimeUtils';
 import { NewsListItem } from '@/components/news/news-list-item';
+import { NewsReactionsRow } from '@/components/news/news-reactions-row';
+import { useAuthStore } from '@/stores/auth-store';
 
 const DATE_OPTIONS = [
   { value: 'all', label: 'Все даты' },
@@ -39,6 +43,8 @@ function formatNewsDate(dateStr: string): string {
 export default function NewsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const token = useAuthStore((s) => s.token);
+  const canReact = typeof token === 'string' && token.length > 0 && token !== 'guest-demo';
   const background = useThemeColor({}, 'background');
   const headerText = useThemeColor({}, 'text');
   const headerSubtitle = useThemeColor({}, 'textMuted');
@@ -57,7 +63,17 @@ export default function NewsScreen() {
     getNewsAll().then((res) => {
       if (cancelled) return;
       if (res.ok) setNewsList(res.data);
-      else setNewsList(NEWS_ITEMS.map((i) => ({ id: i.id, tag: i.tag || 'Новость', title: i.title, desc: i.desc, image: i.image, date: i.date })));
+      else setNewsList(NEWS_ITEMS.map((i) => ({
+        id: i.id,
+        tag: i.tag || 'Новость',
+        title: i.title,
+        desc: i.desc,
+        image: i.image,
+        date: i.date,
+        view_count: 0,
+        reaction_counts: emptyReactionCounts(),
+        my_reaction: null,
+      })));
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -92,6 +108,13 @@ export default function NewsScreen() {
     return list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [searchQuery, filterDate, todayKey, newsList]);
 
+  const patchNewsEngagement = useCallback(
+    (newsId: string, patch: { reaction_counts: NewsReactionCounts; my_reaction: NewsReactionKind | null }) => {
+      setNewsList((l) => l.map((it) => (it.id === newsId ? { ...it, ...patch } : it)));
+    },
+    []
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: NewsDisplayItem }) => (
       <NewsListItem
@@ -105,9 +128,19 @@ export default function NewsScreen() {
           router.push(`/client/news/${item.id}`);
         }}
         rightSlot={<MaterialIcons name="chevron-right" size={24} color={headerSubtitle} />}
+        footerSlot={
+          <NewsReactionsRow
+            newsId={Number(item.id)}
+            reactionCounts={item.reaction_counts ?? emptyReactionCounts()}
+            myReaction={item.my_reaction ?? null}
+            canInteract={canReact}
+            compact
+            onUpdated={(p) => patchNewsEngagement(item.id, p)}
+          />
+        }
       />
     ),
-    [headerSubtitle, router]
+    [headerSubtitle, router, canReact, patchNewsEngagement]
   );
 
   return (
