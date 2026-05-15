@@ -10,12 +10,11 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { PullToRefresh } from '@/components/ui';
+import { PullToRefresh, ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -65,7 +64,6 @@ function parseFloorField(s: string): { ok: true; value: number | null } | { ok: 
 
 export default function AdminWorkerOfficeScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { show: showToast } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -528,18 +526,7 @@ export default function AdminWorkerOfficeScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <MaterialIcons name="chevron-left" size={24} color={primary} />
-          <ThemedText style={styles.backLabel}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.title}>
-          Офис
-        </ThemedText>
-        <ThemedText style={[styles.subtitle, { color: textMuted }]}>
-          Офисы, рабочие часы и переговорные
-        </ThemedText>
-      </View>
+      <ScreenHeader title="Офис" subtitle="Офисы, рабочие часы и переговорные" />
 
       {loading && offices.length === 0 ? (
         <View style={styles.loadingBox}>
@@ -1060,35 +1047,6 @@ function createOfficeStyles(c: {
   container: {
     flex: 1,
     backgroundColor: c.screenBg,
-  },
-  header: {
-    paddingLeft: 8,
-    paddingRight: 16,
-    paddingBottom: 16,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    minHeight: 44,
-    paddingVertical: 4,
-    paddingRight: 8,
-    marginLeft: -4,
-    marginBottom: 8,
-    justifyContent: 'flex-start',
-  },
-  backLabel: {
-    fontSize: 16,
-    color: c.primary,
-    marginLeft: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 4,
   },
   loadingBox: {
     flex: 1,

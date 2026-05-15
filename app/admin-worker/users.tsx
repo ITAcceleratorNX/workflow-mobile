@@ -12,7 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PageLoader } from '@/components/ui';
+import { PageLoader, ScreenHeader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -398,15 +398,7 @@ export default function AdminWorkerUsersScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <MaterialIcons name="chevron-left" size={24} color={primary} />
-          <ThemedText style={[styles.backLabel, { color: primary }]}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.title}>
-          Пользователи
-        </ThemedText>
-      </View>
+      <ScreenHeader title="Пользователи" />
 
       <View style={[styles.tabs, { backgroundColor: surfaceMuted, borderWidth: 1, borderColor: border }]}>
         <Pressable
@@ -1086,26 +1078,6 @@ export default function AdminWorkerUsersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 44,
-    minHeight: 44,
-    marginBottom: 8,
-    justifyContent: 'center',
-  },
-  backLabel: {
-    fontSize: 16,
-    marginLeft: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
   },
   tabs: {
     flexDirection: 'row',

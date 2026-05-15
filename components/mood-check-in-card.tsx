@@ -1,6 +1,5 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
 import {
-  Dimensions,
   LayoutChangeEvent,
   Pressable,
   StyleSheet,
@@ -22,24 +21,74 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
 import type { EnergyLevel, StressLevel } from '@/stores/mood-store';
 import { useMoodStore } from '@/stores/mood-store';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
 import { formatDateForApi } from '@/lib/dateTimeUtils';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_PADDING = 20;
 
-const COLORS = {
-  cardBg: '#2C2C2E',
-  trackBg: '#3A3A3C',
-  accent: '#E85D2B',
-  accentDark: '#D94F15',
-  textPrimary: '#ffffff',
-  textMuted: '#8E8E93',
-  low: '#8E8E93',
-  medium: '#E85D2B',
-  high: '#4CAF50',
-  stressHigh: '#B8400E',
+type MoodPalette = {
+  cardBg: string;
+  trackBg: string;
+  badgeBg: string;
+  recommendationTint: string;
+  accent: string;
+  textPrimary: string;
+  textMuted: string;
+  onPrimary: string;
+  moodLow: string;
+  moodMid: string;
+  moodHigh: string;
+  stressHigh: string;
+  faceBg: string;
+  faceInk: string;
 };
+
+function useMoodCheckInPalette(): MoodPalette {
+  const primary = useThemeColor({}, 'primary');
+  const text = useThemeColor({}, 'text');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const success = useThemeColor({}, 'success');
+  const danger = useThemeColor({}, 'danger');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const surfaceMuted = useThemeColor({ dark: '#3A3A3C' }, 'surfaceMuted');
+  const cardBackground = useThemeColor({}, 'cardBackground');
+  const faceBg = useThemeColor({ light: '#E5E5EA', dark: '#424244' }, 'surfaceMuted');
+  const faceInk = useThemeColor({}, 'text');
+
+  return useMemo(
+    () => ({
+      cardBg: surfaceElevated,
+      trackBg: surfaceMuted,
+      badgeBg: cardBackground,
+      recommendationTint: surfaceMuted,
+      accent: primary,
+      textPrimary: text,
+      textMuted,
+      onPrimary,
+      moodLow: textMuted,
+      moodMid: primary,
+      moodHigh: success,
+      stressHigh: danger,
+      faceBg,
+      faceInk,
+    }),
+    [
+      surfaceElevated,
+      surfaceMuted,
+      cardBackground,
+      primary,
+      text,
+      textMuted,
+      onPrimary,
+      success,
+      danger,
+      faceBg,
+      faceInk,
+    ]
+  );
+}
 
 function getMoodLabel(value: number): string {
   if (value < 33) return 'Плохо';
@@ -47,10 +96,10 @@ function getMoodLabel(value: number): string {
   return 'Отлично!';
 }
 
-function getMoodColor(value: number): string {
-  if (value < 33) return COLORS.low;
-  if (value < 67) return COLORS.medium;
-  return COLORS.high;
+function getMoodColor(value: number, p: MoodPalette): string {
+  if (value < 33) return p.moodLow;
+  if (value < 67) return p.moodMid;
+  return p.moodHigh;
 }
 
 function getRecommendation(
@@ -89,7 +138,17 @@ function getRecommendation(
 }
 
 // --- Animated Face (SVG) ---
-function MoodFace({ value }: { value: number }) {
+function MoodFace({
+  value,
+  faceBg,
+  faceInk,
+  accent,
+}: {
+  value: number;
+  faceBg: string;
+  faceInk: string;
+  accent: string;
+}) {
   const baseY = 75 - (value / 100) * 10;
   const curvature = (value - 50) * 0.2;
   const mouthPath = `M 30 ${baseY - curvature * 0.5} Q 50 ${baseY + curvature} 70 ${baseY - curvature * 0.5}`;
@@ -97,14 +156,14 @@ function MoodFace({ value }: { value: number }) {
 
   return (
     <Svg viewBox="0 0 100 100" width={120} height={120}>
-      <Circle cx="50" cy="50" r="45" fill="#424244" />
-      <Line x1="28" y1="25" x2="38" y2="25" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" />
-      <Line x1="62" y1="25" x2="72" y2="25" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" />
-      <Ellipse cx="33" cy="40" rx="5" ry="5" fill="#FFFFFF" />
-      <Ellipse cx="67" cy="40" rx="5" ry="5" fill="#FFFFFF" />
-      <Circle cx="20" cy="55" r="6" fill={COLORS.accent} opacity={cheekOpacity} />
-      <Circle cx="80" cy="55" r="6" fill={COLORS.accent} opacity={cheekOpacity} />
-      <Path d={mouthPath} stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <Circle cx="50" cy="50" r="45" fill={faceBg} />
+      <Line x1="28" y1="25" x2="38" y2="25" stroke={faceInk} strokeWidth="2.5" strokeLinecap="round" />
+      <Line x1="62" y1="25" x2="72" y2="25" stroke={faceInk} strokeWidth="2.5" strokeLinecap="round" />
+      <Ellipse cx="33" cy="40" rx="5" ry="5" fill={faceInk} />
+      <Ellipse cx="67" cy="40" rx="5" ry="5" fill={faceInk} />
+      <Circle cx="20" cy="55" r="6" fill={accent} opacity={cheekOpacity} />
+      <Circle cx="80" cy="55" r="6" fill={accent} opacity={cheekOpacity} />
+      <Path d={mouthPath} stroke={faceInk} strokeWidth="3" strokeLinecap="round" fill="none" />
     </Svg>
   );
 }
@@ -116,13 +175,17 @@ const ENERGY_HEIGHTS: Record<EnergyLevel, number> = {
   high: 1,
 };
 
-const ENERGY_COLORS: Record<EnergyLevel, string> = {
-  low: COLORS.low,
-  medium: COLORS.medium,
-  high: COLORS.high,
-};
-
-function EnergyIconCircle({ energy }: { energy: EnergyLevel }) {
+function EnergyIconCircle({
+  energy,
+  trackBg,
+  iconColor,
+  energyColors,
+}: {
+  energy: EnergyLevel;
+  trackBg: string;
+  iconColor: string;
+  energyColors: Record<EnergyLevel, string>;
+}) {
   const heightPercent = useSharedValue(ENERGY_HEIGHTS[energy]);
 
   useEffect(() => {
@@ -138,16 +201,16 @@ function EnergyIconCircle({ energy }: { energy: EnergyLevel }) {
   }));
 
   return (
-    <View style={[styles.iconCircle, { backgroundColor: COLORS.trackBg, overflow: 'hidden' }]}>
+    <View style={[styles.iconCircle, { backgroundColor: trackBg, overflow: 'hidden' }]}>
       <Animated.View
         style={[
           styles.energyBar,
-          { backgroundColor: ENERGY_COLORS[energy] },
+          { backgroundColor: energyColors[energy] },
           animatedBarStyle,
         ]}
       />
       <View style={[StyleSheet.absoluteFill, styles.iconOverlay]} pointerEvents="none">
-        <MaterialIcons name="bolt" size={40} color={COLORS.textPrimary} />
+        <MaterialIcons name="bolt" size={40} color={iconColor} />
       </View>
     </View>
   );
@@ -158,12 +221,6 @@ const STRESS_INTENSITY: Record<StressLevel, number> = {
   low: 1,
   medium: 2,
   high: 3,
-};
-
-const STRESS_COLORS: Record<StressLevel, string> = {
-  low: '#4CAF50',
-  medium: COLORS.medium,
-  high: COLORS.stressHigh,
 };
 
 function StressRing({ delay, color }: { delay: number; color: string }) {
@@ -205,13 +262,23 @@ function StressRing({ delay, color }: { delay: number; color: string }) {
   );
 }
 
-function StressIconCircle({ stress }: { stress: StressLevel }) {
+function StressIconCircle({
+  stress,
+  trackBg,
+  iconColor,
+  stressColors,
+}: {
+  stress: StressLevel;
+  trackBg: string;
+  iconColor: string;
+  stressColors: Record<StressLevel, string>;
+}) {
   const intensity = STRESS_INTENSITY[stress];
-  const color = STRESS_COLORS[stress];
+  const color = stressColors[stress];
 
   return (
     <View style={styles.stressIconWrapper}>
-      <View style={[styles.stressCircleInner, { backgroundColor: COLORS.trackBg }]} />
+      <View style={[styles.stressCircleInner, { backgroundColor: trackBg }]} />
       <View style={styles.stressRingsContainer}>
         {[...Array(intensity)].map((_, i) => (
           <View key={`${stress}-${i}`} style={styles.stressRingWrapper}>
@@ -220,7 +287,7 @@ function StressIconCircle({ stress }: { stress: StressLevel }) {
         ))}
       </View>
       <View style={[styles.stressCircleInner, styles.stressIconOverlay]} pointerEvents="none">
-        <MaterialIcons name="psychology" size={40} color={COLORS.textPrimary} />
+        <MaterialIcons name="psychology" size={40} color={iconColor} />
       </View>
     </View>
   );
@@ -231,14 +298,20 @@ function SimpleSlider({
   value,
   onValueChange,
   max = 100,
+  trackColor,
+  fillColor,
+  thumbColor,
 }: {
   value: number;
   onValueChange: (v: number) => void;
   max?: number;
+  trackColor: string;
+  fillColor: string;
+  thumbColor: string;
 }) {
   const trackRef = useRef<View>(null);
 
-  const onLayout = useCallback((e: LayoutChangeEvent) => {
+  const onLayout = useCallback((_e: LayoutChangeEvent) => {
     trackRef.current?.measureInWindow(() => {});
   }, []);
 
@@ -285,8 +358,8 @@ function SimpleSlider({
     <GestureDetector gesture={composedGesture}>
       <View style={styles.sliderTouchArea}>
         <View style={styles.sliderTrackShell}>
-          <View ref={trackRef} style={styles.sliderTrack} onLayout={onLayout}>
-            <View style={[styles.sliderFill, { width: `${percent}%` }]} />
+          <View ref={trackRef} style={[styles.sliderTrack, { backgroundColor: trackColor }]} onLayout={onLayout}>
+            <View style={[styles.sliderFill, { width: `${percent}%`, backgroundColor: fillColor }]} />
           </View>
           <View
             style={[
@@ -295,6 +368,7 @@ function SimpleSlider({
                 left: `${Math.min(percent, 98)}%`,
                 marginLeft: -thumbHalf,
                 top: thumbTop,
+                backgroundColor: thumbColor,
               },
             ]}
             pointerEvents="none"
@@ -306,6 +380,7 @@ function SimpleSlider({
 }
 
 export function MoodCheckInCard() {
+  const p = useMoodCheckInPalette();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [moodValue, setMoodValue] = useState(50);
   const [energy, setEnergy] = useState<EnergyLevel>('medium');
@@ -313,6 +388,33 @@ export function MoodCheckInCard() {
 
   const setMood = useMoodStore((s) => s.setMood);
   const todayKey = formatDateForApi(new Date());
+
+  const energyColors = useMemo<Record<EnergyLevel, string>>(
+    () => ({
+      low: p.moodLow,
+      medium: p.moodMid,
+      high: p.moodHigh,
+    }),
+    [p.moodLow, p.moodMid, p.moodHigh]
+  );
+
+  const stressColors = useMemo<Record<StressLevel, string>>(
+    () => ({
+      low: p.moodHigh,
+      medium: p.moodMid,
+      high: p.stressHigh,
+    }),
+    [p.moodHigh, p.moodMid, p.stressHigh]
+  );
+
+  const sliderChrome = useMemo(
+    () => ({
+      track: p.trackBg,
+      fill: p.accent,
+      thumb: p.textPrimary,
+    }),
+    [p.trackBg, p.accent, p.textPrimary]
+  );
 
   const energyOptions: Record<EnergyLevel, { label: string }> = {
     low: { label: 'Низкий' },
@@ -339,10 +441,10 @@ export function MoodCheckInCard() {
   }, [moodValue, energy, stress, recommendation.text, setMood, todayKey]);
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: p.cardBg }]}>
       <View style={styles.header}>
-        <MaterialIcons name="favorite" size={20} color={COLORS.accent} />
-        <ThemedText style={[styles.title, { color: COLORS.textPrimary }]}>
+        <MaterialIcons name="favorite" size={20} color={p.accent} />
+        <ThemedText style={[styles.title, { color: p.textPrimary }]}>
           Проверка настроения
         </ThemedText>
       </View>
@@ -351,32 +453,33 @@ export function MoodCheckInCard() {
         <>
           <View style={styles.stepMainColumn}>
             <View style={styles.stepVisualArea}>
-              <MoodFace value={moodValue} />
+              <MoodFace value={moodValue} faceBg={p.faceBg} faceInk={p.faceInk} accent={p.accent} />
             </View>
             <View style={styles.stepTextBlock}>
-              <ThemedText style={[styles.stepTitle, styles.stepTitleInFace, { color: COLORS.textPrimary }]}>
+              <ThemedText style={[styles.stepTitle, styles.stepTitleInFace, { color: p.textPrimary }]}>
                 Как вы себя чувствуете?
               </ThemedText>
-              <ThemedText
-                style={[styles.moodLabel, { color: getMoodColor(moodValue) }]}
-              >
+              <ThemedText style={[styles.moodLabel, { color: getMoodColor(moodValue, p) }]}>
                 {getMoodLabel(moodValue)}
               </ThemedText>
             </View>
           </View>
           <View style={styles.sliderSection}>
-            <SimpleSlider value={moodValue} onValueChange={setMoodValue} />
+            <SimpleSlider
+              value={moodValue}
+              onValueChange={setMoodValue}
+              trackColor={sliderChrome.track}
+              fillColor={sliderChrome.fill}
+              thumbColor={sliderChrome.thumb}
+            />
             <View style={styles.sliderLabels}>
-              <ThemedText style={[styles.sliderLabel, { color: COLORS.textMuted }]}>Низко</ThemedText>
-              <ThemedText style={[styles.sliderLabel, { color: COLORS.textMuted }]}>Средне</ThemedText>
-              <ThemedText style={[styles.sliderLabel, { color: COLORS.textMuted }]}>Высоко</ThemedText>
+              <ThemedText style={[styles.sliderLabel, { color: p.textMuted }]}>Низко</ThemedText>
+              <ThemedText style={[styles.sliderLabel, { color: p.textMuted }]}>Средне</ThemedText>
+              <ThemedText style={[styles.sliderLabel, { color: p.textMuted }]}>Высоко</ThemedText>
             </View>
           </View>
-          <Pressable
-            style={[styles.primaryBtn, { backgroundColor: COLORS.accent }]}
-            onPress={() => setStep(2)}
-          >
-            <ThemedText style={styles.primaryBtnText}>Далее</ThemedText>
+          <Pressable style={[styles.primaryBtn, { backgroundColor: p.accent }]} onPress={() => setStep(2)}>
+            <ThemedText style={[styles.primaryBtnText, { color: p.onPrimary }]}>Далее</ThemedText>
           </Pressable>
         </>
       )}
@@ -385,13 +488,18 @@ export function MoodCheckInCard() {
         <>
           <View style={styles.stepMainColumn}>
             <View style={styles.stepVisualArea}>
-              <EnergyIconCircle energy={energy} />
+              <EnergyIconCircle
+                energy={energy}
+                trackBg={p.trackBg}
+                iconColor={p.textPrimary}
+                energyColors={energyColors}
+              />
             </View>
             <View style={styles.stepTextBlock}>
-              <ThemedText style={[styles.stepTitle, styles.stepTitleNoExtraMb, { color: COLORS.textPrimary }]}>
+              <ThemedText style={[styles.stepTitle, styles.stepTitleNoExtraMb, { color: p.textPrimary }]}>
                 Уровень энергии
               </ThemedText>
-              <ThemedText style={[styles.stepSubtitle, styles.stepSubtitleTight, { color: COLORS.textMuted }]}>
+              <ThemedText style={[styles.stepSubtitle, styles.stepSubtitleTight, { color: p.textMuted }]}>
                 {energyOptions[energy].label}
               </ThemedText>
             </View>
@@ -399,29 +507,24 @@ export function MoodCheckInCard() {
           <View style={styles.sliderSection}>
             <SimpleSlider
               value={['low', 'medium', 'high'].indexOf(energy)}
-              onValueChange={(v) =>
-                setEnergy(['low', 'medium', 'high'][v] as EnergyLevel)
-              }
+              onValueChange={(v) => setEnergy(['low', 'medium', 'high'][v] as EnergyLevel)}
               max={2}
+              trackColor={sliderChrome.track}
+              fillColor={sliderChrome.fill}
+              thumbColor={sliderChrome.thumb}
             />
             <View style={styles.sliderLabels}>
-              <ThemedText style={[styles.sliderLabel, { color: COLORS.textMuted }]}>Низкий</ThemedText>
-              <ThemedText style={[styles.sliderLabel, { color: COLORS.textMuted }]}>Средний</ThemedText>
-              <ThemedText style={[styles.sliderLabel, { color: COLORS.textMuted }]}>Высокий</ThemedText>
+              <ThemedText style={[styles.sliderLabel, { color: p.textMuted }]}>Низкий</ThemedText>
+              <ThemedText style={[styles.sliderLabel, { color: p.textMuted }]}>Средний</ThemedText>
+              <ThemedText style={[styles.sliderLabel, { color: p.textMuted }]}>Высокий</ThemedText>
             </View>
           </View>
           <View style={styles.btnRow}>
-            <Pressable
-              style={[styles.secondaryBtn, { backgroundColor: COLORS.trackBg }]}
-              onPress={() => setStep(1)}
-            >
-              <ThemedText style={styles.secondaryBtnText}>Назад</ThemedText>
+            <Pressable style={[styles.secondaryBtn, { backgroundColor: p.trackBg }]} onPress={() => setStep(1)}>
+              <ThemedText style={[styles.secondaryBtnText, { color: p.textPrimary }]}>Назад</ThemedText>
             </Pressable>
-            <Pressable
-              style={[styles.primaryBtn, { backgroundColor: COLORS.accent, flex: 1 }]}
-              onPress={() => setStep(3)}
-            >
-              <ThemedText style={styles.primaryBtnText}>Далее</ThemedText>
+            <Pressable style={[styles.primaryBtn, { backgroundColor: p.accent, flex: 1 }]} onPress={() => setStep(3)}>
+              <ThemedText style={[styles.primaryBtnText, { color: p.onPrimary }]}>Далее</ThemedText>
             </Pressable>
           </View>
         </>
@@ -431,13 +534,18 @@ export function MoodCheckInCard() {
         <>
           <View style={styles.stepMainColumn}>
             <View style={styles.stepVisualArea}>
-              <StressIconCircle stress={stress} />
+              <StressIconCircle
+                stress={stress}
+                trackBg={p.trackBg}
+                iconColor={p.textPrimary}
+                stressColors={stressColors}
+              />
             </View>
             <View style={styles.stepTextBlock}>
-              <ThemedText style={[styles.stepTitle, styles.stepTitleNoExtraMb, { color: COLORS.textPrimary }]}>
+              <ThemedText style={[styles.stepTitle, styles.stepTitleNoExtraMb, { color: p.textPrimary }]}>
                 Уровень стресса
               </ThemedText>
-              <ThemedText style={[styles.stepSubtitle, styles.stepSubtitleTight, { color: COLORS.textMuted }]}>
+              <ThemedText style={[styles.stepSubtitle, styles.stepSubtitleTight, { color: p.textMuted }]}>
                 {stressOptions[stress].label}
               </ThemedText>
             </View>
@@ -445,29 +553,24 @@ export function MoodCheckInCard() {
           <View style={styles.sliderSection}>
             <SimpleSlider
               value={['low', 'medium', 'high'].indexOf(stress)}
-              onValueChange={(v) =>
-                setStress(['low', 'medium', 'high'][v] as StressLevel)
-              }
+              onValueChange={(v) => setStress(['low', 'medium', 'high'][v] as StressLevel)}
               max={2}
+              trackColor={sliderChrome.track}
+              fillColor={sliderChrome.fill}
+              thumbColor={sliderChrome.thumb}
             />
             <View style={styles.sliderLabels}>
-              <ThemedText style={[styles.sliderLabel, { color: COLORS.textMuted }]}>Низкий</ThemedText>
-              <ThemedText style={[styles.sliderLabel, { color: COLORS.textMuted }]}>Средний</ThemedText>
-              <ThemedText style={[styles.sliderLabel, { color: COLORS.textMuted }]}>Высокий</ThemedText>
+              <ThemedText style={[styles.sliderLabel, { color: p.textMuted }]}>Низкий</ThemedText>
+              <ThemedText style={[styles.sliderLabel, { color: p.textMuted }]}>Средний</ThemedText>
+              <ThemedText style={[styles.sliderLabel, { color: p.textMuted }]}>Высокий</ThemedText>
             </View>
           </View>
           <View style={styles.btnRow}>
-            <Pressable
-              style={[styles.secondaryBtn, { backgroundColor: COLORS.trackBg }]}
-              onPress={() => setStep(2)}
-            >
-              <ThemedText style={styles.secondaryBtnText}>Назад</ThemedText>
+            <Pressable style={[styles.secondaryBtn, { backgroundColor: p.trackBg }]} onPress={() => setStep(2)}>
+              <ThemedText style={[styles.secondaryBtnText, { color: p.textPrimary }]}>Назад</ThemedText>
             </Pressable>
-            <Pressable
-              style={[styles.primaryBtn, { backgroundColor: COLORS.accent, flex: 1 }]}
-              onPress={handleFinish}
-            >
-              <ThemedText style={styles.primaryBtnText}>Готово</ThemedText>
+            <Pressable style={[styles.primaryBtn, { backgroundColor: p.accent, flex: 1 }]} onPress={handleFinish}>
+              <ThemedText style={[styles.primaryBtnText, { color: p.onPrimary }]}>Готово</ThemedText>
             </Pressable>
           </View>
         </>
@@ -475,46 +578,46 @@ export function MoodCheckInCard() {
 
       {step === 4 && (
         <>
-          <View style={[styles.recommendationBox, { backgroundColor: COLORS.trackBg }]}>
+          <View style={[styles.recommendationBox, { backgroundColor: p.recommendationTint }]}>
             <View style={styles.recommendationRow}>
               <ThemedText style={styles.recommendationEmoji}>{recommendation.emoji}</ThemedText>
               <View style={styles.recommendationText}>
-                <ThemedText style={[styles.recommendationTitle, { color: COLORS.textPrimary }]}>
+                <ThemedText style={[styles.recommendationTitle, { color: p.textPrimary }]}>
                   Совет на день
                 </ThemedText>
-                <ThemedText style={[styles.recommendationBody, { color: COLORS.textMuted }]}>
+                <ThemedText style={[styles.recommendationBody, { color: p.textMuted }]}>
                   {recommendation.text}
                 </ThemedText>
               </View>
             </View>
             <View style={styles.badgesRow}>
-              <View style={[styles.badge, { backgroundColor: COLORS.cardBg }]}>
+              <View style={[styles.badge, { backgroundColor: p.badgeBg }]}>
                 <ThemedText style={styles.badgeEmoji}>
                   {moodValue < 30 ? '😢' : moodValue > 70 ? '😊' : '😐'}
                 </ThemedText>
-                <ThemedText style={[styles.badgeText, { color: COLORS.textMuted }]}>
+                <ThemedText style={[styles.badgeText, { color: p.textMuted }]}>
                   {moodValue < 30 ? 'Грустно' : moodValue > 70 ? 'Радость' : 'Нейтрально'}
                 </ThemedText>
               </View>
-              <View style={[styles.badge, { backgroundColor: COLORS.cardBg }]}>
-                <MaterialIcons name="bolt" size={12} color={COLORS.textMuted} />
-                <ThemedText style={[styles.badgeText, { color: COLORS.textMuted }]}>
+              <View style={[styles.badge, { backgroundColor: p.badgeBg }]}>
+                <MaterialIcons name="bolt" size={12} color={p.textMuted} />
+                <ThemedText style={[styles.badgeText, { color: p.textMuted }]}>
                   {energyOptions[energy].label}
                 </ThemedText>
               </View>
-              <View style={[styles.badge, { backgroundColor: COLORS.cardBg }]}>
-                <MaterialIcons name="psychology" size={12} color={COLORS.textMuted} />
-                <ThemedText style={[styles.badgeText, { color: COLORS.textMuted }]}>
+              <View style={[styles.badge, { backgroundColor: p.badgeBg }]}>
+                <MaterialIcons name="psychology" size={12} color={p.textMuted} />
+                <ThemedText style={[styles.badgeText, { color: p.textMuted }]}>
                   {stressOptions[stress].label}
                 </ThemedText>
               </View>
             </View>
           </View>
           <Pressable
-            style={[styles.secondaryBtn, { backgroundColor: COLORS.trackBg, marginTop: 16 }]}
+            style={[styles.secondaryBtn, { backgroundColor: p.trackBg, marginTop: 16 }]}
             onPress={() => setStep(1)}
           >
-            <ThemedText style={styles.secondaryBtnText}>Обновить</ThemedText>
+            <ThemedText style={[styles.secondaryBtnText, { color: p.textPrimary }]}>Обновить</ThemedText>
           </Pressable>
         </>
       )}
@@ -524,7 +627,6 @@ export function MoodCheckInCard() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.cardBg,
     borderRadius: 20,
     padding: CARD_PADDING,
     marginBottom: 16,
@@ -585,7 +687,6 @@ const styles = StyleSheet.create({
   },
   sliderTrack: {
     height: 22,
-    backgroundColor: COLORS.trackBg,
     borderRadius: 11,
     overflow: 'hidden',
     position: 'relative',
@@ -595,7 +696,6 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
-    backgroundColor: COLORS.accent,
     borderRadius: 11,
   },
   sliderThumb: {
@@ -603,10 +703,9 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: COLORS.textPrimary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
   },
@@ -617,27 +716,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   sliderLabel: { fontSize: 12 },
-  valueBox: {
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  valueLabel: { fontSize: 13, marginBottom: 4 },
-  valueNumber: { fontSize: 24, fontWeight: '600' },
   primaryBtn: {
     paddingVertical: 14,
     borderRadius: 24,
     alignItems: 'center',
   },
-  primaryBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  primaryBtnText: { fontSize: 16, fontWeight: '600' },
   secondaryBtn: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 24,
     alignItems: 'center',
   },
-  secondaryBtnText: { fontSize: 16, fontWeight: '500', color: COLORS.textPrimary },
+  secondaryBtnText: { fontSize: 16, fontWeight: '500' },
   btnRow: { flexDirection: 'row', gap: 12 },
   iconCircle: {
     width: 96,

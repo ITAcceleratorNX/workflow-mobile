@@ -144,7 +144,7 @@ export default function NewsScreen() {
   );
 
   return (
-    <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: background }]}>
       <ScreenHeader title="Все новости" />
       <View style={[styles.searchRow, { backgroundColor: cardBg, borderColor: border }]}>
         <MaterialIcons name="search" size={20} color={headerSubtitle} />

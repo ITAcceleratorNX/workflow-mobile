@@ -7,11 +7,11 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
@@ -68,32 +68,6 @@ function createSmartHomeStyles(c: {
       flex: 1,
       backgroundColor: c.screenBg,
     },
-    header: {
-      paddingHorizontal: 16,
-      paddingBottom: 12,
-    },
-    backButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      minWidth: 44,
-      minHeight: 44,
-      marginBottom: 8,
-      justifyContent: 'center',
-    },
-    backLabel: {
-      fontSize: 16,
-      color: c.primary,
-      marginLeft: 4,
-    },
-    title: {
-      fontSize: 20,
-      fontWeight: 'bold',
-    },
-    headerDescription: {
-      fontSize: 13,
-      marginTop: 4,
-      lineHeight: 18,
-    },
     scrollContent: {
       paddingHorizontal: 16,
     },
@@ -111,7 +85,8 @@ function createSmartHomeStyles(c: {
       marginBottom: 4,
     },
     cardSubtitle: {
-      fontSize: 13,
+      fontSize: 14,
+      lineHeight: 21,
       marginBottom: 12,
     },
     fieldLabel: {
@@ -175,6 +150,8 @@ function createSmartHomeStyles(c: {
       borderRadius: 10,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    primaryButtonStandalone: {
       marginTop: 12,
     },
     dangerButton: {
@@ -305,7 +282,6 @@ function createSmartHomeStyles(c: {
 
 export default function AdminWorkerSmartHomeScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { show: showToast } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -541,7 +517,7 @@ export default function AdminWorkerSmartHomeScreen() {
     [yandexDevices, alreadyLinkedDeviceIds]
   );
 
-  // ——— Привязка клиента/сотрудника к комнате (доступ к управлению умным домом) ———
+  // ——— Привязка клиента/сотрудника к комнате (доступ к умному офису) ———
   const [subscriptions, setSubscriptions] = useState<ClientRoomSubscription[]>([]);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(true);
   const [officeUsers, setOfficeUsers] = useState<OfficeUser[]>([]);
@@ -617,7 +593,7 @@ export default function AdminWorkerSmartHomeScreen() {
     if (result.ok) {
       showToast({
         title: 'Доступ добавлен',
-        description: 'Пользователь может управлять умным домом в этой комнате',
+        description: 'Пользователь может управлять умным офисом в этой комнате',
         variant: 'success',
       });
       setSelectedRoomIdForSub(null);
@@ -648,18 +624,10 @@ export default function AdminWorkerSmartHomeScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <MaterialIcons name="chevron-left" size={24} color={primary} />
-          <ThemedText style={styles.backLabel}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.title}>
-          Умный дом
-        </ThemedText>
-        <ThemedText style={[styles.headerDescription, { color: textMuted }]}>
-          Управление Яндекс.Умный дом: токены и привязка устройств к переговорным комнатам
-        </ThemedText>
-      </View>
+      <ScreenHeader
+        title="Умный офис"
+        subtitle="Токены Яндекс, привязка устройств к переговорным и доступ пользователей из приложения."
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
@@ -790,7 +758,7 @@ export default function AdminWorkerSmartHomeScreen() {
         <View style={styles.card}>
           <ThemedText style={[styles.cardTitle, { color: text }]}>Комнаты и устройства</ThemedText>
           <ThemedText style={[styles.cardSubtitle, { color: textMuted }]}>
-            Привязка устройств Яндекс к переговорным комнатам выбранного офиса.
+            Устройства Яндекс и привязка к комнатам выбранного офиса.
           </ThemedText>
 
           {selectedOfficeId == null ? (
@@ -936,6 +904,7 @@ export default function AdminWorkerSmartHomeScreen() {
               <Pressable
                 style={[
                   styles.primaryButton,
+                  styles.primaryButtonStandalone,
                   (!selectedRoomId || !selectedDevice || isLinking) && styles.buttonDisabled,
                 ]}
                 onPress={handleAddDeviceToRoom}
@@ -954,7 +923,7 @@ export default function AdminWorkerSmartHomeScreen() {
         {/* Привязать клиента или сотрудника к комнате — как в браузере: Card + описание + инфо-блок + список + форма */}
         <View style={styles.card}>
           <ThemedText style={[styles.cardTitle, { color: text }]}>
-            Доступ к управлению умным домом
+            Доступ к управлению умным офисом
           </ThemedText>
           <ThemedText style={[styles.cardSubtitle, { color: textMuted }]}>
             Привяжите клиента или сотрудника к комнате (кабинету). Управление устройствами станет доступно в приложении.
@@ -969,7 +938,7 @@ export default function AdminWorkerSmartHomeScreen() {
               <View style={styles.infoBox}>
                 <MaterialIcons name="info-outline" size={20} color={info} />
                 <ThemedText style={styles.infoBoxText}>
-                  Пользователь, привязанный к комнате, сможет управлять светом и другими устройствами умного дома в этой комнате из приложения.
+                  Пользователь, привязанный к комнате, сможет управлять светом и другими устройствами умного офиса в этой комнате из приложения.
                 </ThemedText>
               </View>
 
@@ -1080,6 +1049,7 @@ export default function AdminWorkerSmartHomeScreen() {
               <Pressable
                 style={[
                   styles.primaryButton,
+                  styles.primaryButtonStandalone,
                   (!selectedRoomIdForSub || !selectedUserIdForSub || isCreatingSub) && styles.buttonDisabled,
                 ]}
                 onPress={handleCreateSubscription}

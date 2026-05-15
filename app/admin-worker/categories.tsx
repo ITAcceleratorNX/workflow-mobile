@@ -8,11 +8,12 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
@@ -101,27 +102,6 @@ function createCategoriesStyles(c: {
     container: {
       flex: 1,
       backgroundColor: c.screenBg,
-    },
-    header: {
-      paddingHorizontal: 16,
-      paddingBottom: 12,
-    },
-    backButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      minWidth: 44,
-      minHeight: 44,
-      marginBottom: 8,
-      justifyContent: 'center',
-    },
-    backLabel: {
-      fontSize: 16,
-      color: c.primary,
-      marginLeft: 4,
-    },
-    title: {
-      fontSize: 20,
-      fontWeight: 'bold',
     },
     tabs: {
       flexDirection: 'row',
@@ -342,7 +322,6 @@ function createCategoriesStyles(c: {
 
 export default function AdminWorkerCategoriesScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const { show: showToast } = useToast();
   const text = useThemeColor({}, 'text');
@@ -585,15 +564,7 @@ export default function AdminWorkerCategoriesScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <MaterialIcons name="chevron-left" size={24} color={primary} />
-          <ThemedText style={styles.backLabel}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.title}>
-          Категории и подкатегории
-        </ThemedText>
-      </View>
+      <ScreenHeader title="Категории и подкатегории" />
 
       <View style={styles.tabs}>
         <Pressable

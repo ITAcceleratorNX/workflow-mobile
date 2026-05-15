@@ -229,7 +229,7 @@ export default function AdminWorkerNewsEditorScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
-      <ScreenHeader title={headerTitle} inlineTitle hideBackLabel />
+      <ScreenHeader title={headerTitle} />
 
       <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
         <ScrollView

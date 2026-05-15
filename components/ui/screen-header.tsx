@@ -7,6 +7,8 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 
 interface ScreenHeaderProps {
   title: string;
+  /** Подзаголовок под title (только если не inlineTitle). */
+  subtitle?: string;
   onBack?: () => void;
   rightSlot?: React.ReactNode;
   /** Hide the "Назад" label and show only the icon */
@@ -19,6 +21,7 @@ interface ScreenHeaderProps {
 
 export function ScreenHeader({
   title,
+  subtitle,
   onBack,
   rightSlot,
   hideBackLabel = false,
@@ -27,6 +30,7 @@ export function ScreenHeader({
 }: ScreenHeaderProps) {
   const router = useRouter();
   const primary = useThemeColor({}, 'primary');
+  const textMuted = useThemeColor({}, 'textMuted');
 
   const handleBack = onBack ?? (() => router.back());
 
@@ -49,9 +53,14 @@ export function ScreenHeader({
         ) : null}
       </View>
       {!inlineTitle ? (
-        <ThemedText type="title" style={[styles.title, titleStyle]}>
-          {title}
-        </ThemedText>
+        <>
+          <ThemedText type="title" style={[styles.title, titleStyle]}>
+            {title}
+          </ThemedText>
+          {subtitle ? (
+            <ThemedText style={[styles.subtitle, { color: textMuted }]}>{subtitle}</ThemedText>
+          ) : null}
+        </>
       ) : null}
     </View>
   );
@@ -86,6 +95,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 6,
   },
   titleInline: {
     flex: 1,

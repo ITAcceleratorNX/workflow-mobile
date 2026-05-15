@@ -289,7 +289,7 @@ export default function AdminWorkerNewsScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
-      <ScreenHeader title="Управление новостями" inlineTitle hideBackLabel />
+      <ScreenHeader title="Управление новостями" />
 
       <View style={[styles.filters, { borderColor: border }]}>
         <ThemedText style={[styles.filterLabel, { color: textMuted }]}>Статус</ThemedText>

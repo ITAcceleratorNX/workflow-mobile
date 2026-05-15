@@ -47,6 +47,7 @@ import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
+/** Нижний стоп градиента — тот же цвет, что `BOOKING_TAB_SCENE_UNDERLAY` в `app/(tabs)/_layout.tsx` (зона под навбаром). */
 
 /**
  * URL первого фото комнаты — как в браузере: используем photos[0] или photo как есть.
@@ -78,6 +79,19 @@ for (let hour = 9; hour < 24; hour++) {
 type Step = 'offices' | 'rooms' | 'form';
 type BookingTab = 'book' | 'my-bookings';
 type MyBookingsFilter = 'active' | 'completed' | 'cancelled';
+
+function enrichCreatedBooking(
+  booking: MeetingRoomBooking,
+  room: MeetingRoom | null
+): MeetingRoomBooking {
+  if (!room) return booking;
+  const meetingRoom = (booking.meeting_room ?? booking.meetingRoom ?? room) as MeetingRoom;
+  return {
+    ...booking,
+    meeting_room: meetingRoom,
+    meetingRoom: (booking.meetingRoom ?? booking.meeting_room ?? room) as MeetingRoom,
+  };
+}
 
 function getBookingStatusText(status?: string): string {
   switch (status) {
@@ -132,6 +146,8 @@ export default function BookingScreen() {
 
   /** Защита от гонок при смене фильтра / параллельных запросов «мои бронирования». */
   const myBookingsLoadSeqRef = useRef(0);
+  const myBookingsListRef = useRef<FlatList<MeetingRoomBooking>>(null);
+  const [highlightBookingId, setHighlightBookingId] = useState<number | null>(null);
 
   const isGuest = useAuthStore((s) => s.isGuest);
   const {
@@ -376,6 +392,12 @@ export default function BookingScreen() {
   }, [activeTab, myBookingsFilter, loadMyBookings]);
 
   useEffect(() => {
+    if (highlightBookingId == null) return;
+    const timer = setTimeout(() => setHighlightBookingId(null), 3200);
+    return () => clearTimeout(timer);
+  }, [highlightBookingId]);
+
+  useEffect(() => {
     if (selectedOffice) loadRooms(selectedOffice.id);
   }, [selectedOffice?.id, loadRooms]);
 
@@ -435,6 +457,55 @@ export default function BookingScreen() {
     setCompanyName('');
     setStep('form');
   }, []);
+
+  const resetBookingForm = useCallback(() => {
+    setStep('offices');
+    setSelectedOffice(null);
+    setSelectedRoom(null);
+    setSelectedDate(null);
+    setSelectedTimeSlot(null);
+    setCompanyName('');
+    setFormRoomImageFailed(false);
+  }, []);
+
+  const afterBookingCreated = useCallback(
+    async (created: MeetingRoomBooking) => {
+      const enriched = enrichCreatedBooking(created, selectedRoom);
+
+      showToast({
+        title: 'Готово',
+        description: 'Бронирование создано',
+        variant: 'success',
+        duration: 3500,
+      });
+
+      resetBookingForm();
+      setMyBookingsFilter('active');
+      setActiveTab('my-bookings');
+      setHighlightBookingId(enriched.id);
+
+      if (isGuest) {
+        const guestList = useGuestDemoStore.getState().bookings as MeetingRoomBooking[];
+        setMyBookings(guestList);
+        setMyBookingsHasMore(false);
+        setMyBookingsPage(1);
+        return;
+      }
+
+      setMyBookings((prev) => {
+        const rest = prev.filter((b) => b.id !== enriched.id);
+        return [enriched, ...rest];
+      });
+      setMyBookingsPage(1);
+
+      await loadMyBookings('active', 1, false);
+      setMyBookings((prev) => {
+        if (prev.some((b) => b.id === enriched.id)) return prev;
+        return [enriched, ...prev];
+      });
+    },
+    [selectedRoom, showToast, resetBookingForm, isGuest, loadMyBookings]
+  );
 
   const handleSubmitBooking = useCallback(async () => {
     if (!selectedRoom || !selectedDate || !selectedTimeSlot) {
@@ -502,15 +573,28 @@ export default function BookingScreen() {
       } as any);
 
       setSubmitting(false);
-      showToast({ title: 'Демо', description: 'Бронирование создано локально', variant: 'success' });
-      setStep('rooms');
-      setSelectedRoom(null);
-      setSelectedDate(null);
-      setSelectedTimeSlot(null);
-      setCompanyName('');
-      loadMyBookings(myBookingsFilter, 1, false);
-      // Переходим на экран демо-QR
-      router.push(`/booking/${newId}`);
+      await afterBookingCreated({
+        id: newId,
+        meeting_room_id: selectedRoom.id,
+        start_time,
+        end_time,
+        status: 'scheduled',
+        company_name: companyName.trim() || null,
+        meetingRoom: {
+          id: selectedRoom.id,
+          name: selectedRoom.name,
+          floor: selectedRoom.floor,
+          capacity: selectedRoom.capacity,
+          office_id: selectedRoom.office_id,
+          office: selectedRoom.office,
+          status: selectedRoom.status,
+          room_type: selectedRoom.room_type,
+          description: selectedRoom.description,
+          photos: selectedRoom.photos,
+          photo: selectedRoom.photo,
+          isActive: selectedRoom.isActive,
+        },
+      } as MeetingRoomBooking);
       return;
     }
 
@@ -523,13 +607,7 @@ export default function BookingScreen() {
     });
     setSubmitting(false);
     if (res.ok) {
-      showToast({ title: 'Готово', description: 'Бронирование создано', variant: 'success' });
-      setStep('rooms');
-      setSelectedRoom(null);
-      setSelectedDate(null);
-      setSelectedTimeSlot(null);
-      setCompanyName('');
-      loadMyBookings(myBookingsFilter, 1, false);
+      await afterBookingCreated(res.data);
     } else {
       showToast({
         title: 'Ошибка',
@@ -545,11 +623,9 @@ export default function BookingScreen() {
     companyName,
     bookedSlots,
     showToast,
-    loadMyBookings,
-    myBookingsFilter,
     isGuest,
     addGuestBooking,
-    selectedOffice,
+    afterBookingCreated,
   ]);
 
   const handleCancelBooking = useCallback(
@@ -666,6 +742,28 @@ export default function BookingScreen() {
     }
   }, [sortedMyBookings, myBookingsFilter, isBookingActive, isBookingCompleted, isBookingCancelled]);
 
+  const myBookingsListData = isGuest ? filteredMyBookings : myBookings;
+
+  useEffect(() => {
+    if (activeTab !== 'my-bookings' || highlightBookingId == null || myBookingsListData.length === 0) {
+      return;
+    }
+    const index = myBookingsListData.findIndex((b) => b.id === highlightBookingId);
+    const scrollIndex = index >= 0 ? index : 0;
+    const frame = requestAnimationFrame(() => {
+      try {
+        myBookingsListRef.current?.scrollToIndex({
+          index: scrollIndex,
+          animated: true,
+          viewPosition: 0,
+        });
+      } catch {
+        myBookingsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab, highlightBookingId, myBookingsListData]);
+
   const isSlotDisabled = useCallback(
     (slot: { start: string }) => {
       if (bookedSlots.has(slot.start)) return true;
@@ -705,6 +803,7 @@ export default function BookingScreen() {
     const roomPhotoCount = roomPhotoUris.length;
     const showFormImages = roomPhotoCount > 0 && !formRoomImageFailed;
     const formImageWidth = windowWidth - 40;
+
     return (
       <LinearGradient colors={gradientColors} style={styles.gradientFill}>
         <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
@@ -1140,10 +1239,14 @@ export default function BookingScreen() {
             style={styles.myBookingsPullRefresh}
           >
             <FlatList
+              ref={myBookingsListRef}
               style={styles.myBookingsFlatList}
               contentContainerStyle={styles.myBookingsListContent}
-              data={isGuest ? filteredMyBookings : myBookings}
+              data={myBookingsListData}
               keyExtractor={(b) => String(b.id)}
+              onScrollToIndexFailed={() => {
+                myBookingsListRef.current?.scrollToOffset({ offset: 0, animated: true });
+              }}
               onEndReached={
                 !isGuest && myBookingsHasMore && !loadingMoreBookings && !loadingBookings
                   ? () => loadMyBookings(myBookingsFilter, myBookingsPage + 1, true)
@@ -1180,8 +1283,14 @@ export default function BookingScreen() {
                 const isCancelled = isBookingCancelled(item);
                 const isCompleted = item.status === 'completed' || isBookingCompleted(item);
                 const canCancel = !isCancelled && !isCompleted;
+                const isHighlighted = highlightBookingId === item.id;
                 return (
-                  <View style={styles.bookingCardOrange}>
+                  <View
+                    style={[
+                      styles.bookingCardOrange,
+                      isHighlighted && styles.bookingCardHighlighted,
+                    ]}
+                  >
                     <View style={styles.bookingCardHeader}>
                       <BookingText
                         type="defaultSemiBold"
@@ -1222,7 +1331,7 @@ export default function BookingScreen() {
                             <ActivityIndicator size="small" color="#fff" />
                           ) : (
                             <BookingText style={styles.cancelBtnTextWhite}>
-                              Отменить бронирование
+                              Отменить
                             </BookingText>
                           )}
                         </Pressable>
@@ -1272,7 +1381,7 @@ const styles = StyleSheet.create({
     tabWhite: {
         flex: 1,
         paddingVertical: 10,
-        paddingHorizontal: 12,
+        paddingHorizontal: 14,
         alignItems: 'center',
     },
     tabWhiteActive: {
@@ -1628,6 +1737,7 @@ const styles = StyleSheet.create({
         flex: 1,
         position: 'relative',
         paddingVertical: 10,
+        paddingHorizontal: 10,
         alignItems: 'center',
     },
     myBookingsFilterTabActive: {
@@ -1659,8 +1769,8 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start',
         marginTop: 8,
         marginBottom: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
         borderRadius: 999,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.7)',
@@ -1684,7 +1794,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        paddingVertical: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        minHeight: 44,
         borderRadius: 8,
         backgroundColor: 'rgba(255,255,255,0.2)',
     },
@@ -1701,15 +1813,33 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.2)',
     },
+    bookingCardHighlighted: {
+        backgroundColor: 'rgba(255,255,255,0.22)',
+        borderColor: 'rgba(255,255,255,0.75)',
+        borderWidth: 2,
+        shadowColor: '#FFFFFF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.35,
+        shadowRadius: 10,
+        elevation: 6,
+    },
     cancelBtnOrange: {
-        paddingVertical: 8,
+        flex: 1,
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        minHeight: 44,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.5)',
     },
     cancelBtnTextWhite: {
         color: '#fff',
+        fontSize: 14,
+        fontWeight: '500',
+        textAlign: 'center',
     },
     bookingCardTitleWhite: {
         color: '#fff',

@@ -386,8 +386,8 @@ export default function TasksScreen() {
   );
 
   return (
-    <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
-      <ScreenHeader title="Задачи" inlineTitle hideBackLabel rightSlot={headerRight} />
+    <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: background }]}>
+      <ScreenHeader title="Задачи" rightSlot={headerRight} />
 
       {viewMode === 'list' && (
         <View style={styles.topBar}>

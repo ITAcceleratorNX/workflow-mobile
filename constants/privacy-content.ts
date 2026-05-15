@@ -60,9 +60,9 @@ Email (Support): support@tmk-technohorizon.kz
 данные бронирования: компания/организация, время, пользователь, создавший бронь, и параметры расписания
 
 Важно: кабинет и переговорная комната — разные сущности.
-Сотрудник может быть закреплён за кабинетом (с функциями умного дома). Переговорные доступны для бронирования сотрудниками (в пределах прав доступа).
+Сотрудник может быть закреплён за кабинетом (с функциями умного офиса). Переговорные доступны для бронирования сотрудниками (в пределах прав доступа).
 
-3.4 Умный кабинет / умный дом
+3.4 Умный кабинет / умный офис
 команды управления (например, включение света)
 технические события и (при наличии) журналы действий, необходимые для безопасности и аудита (например, кто и когда выполнил действие)
 
@@ -104,8 +104,8 @@ Email (Support): support@tmk-technohorizon.kz
 Для отправки SMS-кода подтверждения и восстановления доступа номер телефона может передаваться провайдеру SMS-рассылки: Mobizon.
 SMS-верификация используется только при регистрации/восстановлении доступа в рабочем режиме. В демо-режиме номер телефона не запрашивается и не передаётся.
 
-6.2 Интеграции умного дома
-Для работы функций умного кабинета Приложение может взаимодействовать со сторонними платформами/поставщиками умного дома через API. В рамках интеграции могут передаваться технические данные, необходимые для выполнения команды и обеспечения безопасности.
+6.2 Интеграции умного офиса
+Для работы функций умного кабинета Приложение может взаимодействовать со сторонними платформами/поставщиками умного офиса через API. В рамках интеграции могут передаваться технические данные, необходимые для выполнения команды и обеспечения безопасности.
 
 6.3 Требования законодательства
 Мы можем раскрывать данные, если это требуется законом, по запросу уполномоченных органов, или для защиты прав и безопасности Компании и пользователей.`,
@@ -260,8 +260,8 @@ We may share data only as necessary for the Application's operation and/or as re
 For sending verification or recovery codes, phone numbers may be shared with an SMS provider: Mobizon.
 SMS verification is used only for registration/recovery in production mode. In demo mode the phone number is not requested or shared.
 
-6.2 Smart Home Integrations
-For smart office functionality, the Application may interact with third-party smart home platforms/providers via API. Technical data necessary to execute commands and ensure security may be transmitted.
+6.2 Smart Office Integrations
+For smart office functionality, the Application may interact with third-party smart office platforms/providers via API. Technical data necessary to execute commands and ensure security may be transmitted.
 
 6.3 Legal Requirements
 We may disclose data if required by law, by authorized authorities, or to protect the rights and safety of the Company and users.`,

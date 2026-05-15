@@ -1566,7 +1566,7 @@ export interface ClientRoomSubscription {
   };
 }
 
-/** Все подписки (для админа): кто привязан к каким комнатам для управления умным домом */
+/** Все подписки (для админа): кто привязан к каким комнатам для управления умным офисом */
 export async function getAllClientRoomSubscriptions(): Promise<
   { ok: true; data: ClientRoomSubscription[] } | { ok: false; error: string }
 > {
