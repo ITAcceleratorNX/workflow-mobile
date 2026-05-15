@@ -1143,6 +1143,17 @@ export async function rejectRegistrationRequest(requestId: number): Promise<
   return { ok: true };
 }
 
+/** Только для status === rejected на бэкенде. */
+export async function deleteRejectedRegistrationRequest(requestId: number): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const result = await request<unknown>(`/registration-requests/${requestId}`, {
+    method: 'DELETE',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
 // ==================== Users (admin-worker) ====================
 
 export interface OfficeUser {

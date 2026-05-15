@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,6 +27,7 @@ import {
   getRegistrationRequests,
   approveRegistrationRequest,
   rejectRegistrationRequest,
+  deleteRejectedRegistrationRequest,
   getUsersForManagement,
   changeUserPassword,
   updateUserRole,
@@ -160,6 +162,41 @@ export default function AdminWorkerUsersScreen() {
       setActionRequestId(null);
     },
     [showToast, loadRequests]
+  );
+
+  const handleDeleteRejected = useCallback(
+    async (requestId: number) => {
+      setActionRequestId(requestId);
+      const result = await deleteRejectedRegistrationRequest(requestId);
+      if (result.ok) {
+        showToast({ title: 'Удалено', description: 'Отклонённый запрос удалён из списка', variant: 'success' });
+        loadRequests();
+      } else {
+        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+      }
+      setActionRequestId(null);
+    },
+    [showToast, loadRequests]
+  );
+
+  const confirmDeleteRejectedRequest = useCallback(
+    (requestId: number) => {
+      Alert.alert(
+        'Удалить запрос?',
+        'Запись об отклонённой заявке будет удалена безвозвратно.',
+        [
+          { text: 'Отмена', style: 'cancel' },
+          {
+            text: 'Удалить',
+            style: 'destructive',
+            onPress: () => {
+              void handleDeleteRejected(requestId);
+            },
+          },
+        ]
+      );
+    },
+    [handleDeleteRejected]
   );
 
   // ——— Управление (офисные пользователи) ———
@@ -621,6 +658,29 @@ export default function AdminWorkerUsersScreen() {
                         disabled={actionRequestId === req.id}
                       >
                         <ThemedText style={[styles.registrationActionBtnLabel, { color: danger }]}>Отклонить</ThemedText>
+                      </Pressable>
+                    </View>
+                  )}
+                  {req.status === 'rejected' && (
+                    <View style={styles.requestActions}>
+                      <Pressable
+                        style={[
+                          styles.registrationActionBtn,
+                          {
+                            borderColor: border,
+                            backgroundColor: surfaceMuted,
+                            minHeight: 44,
+                          },
+                          actionRequestId === req.id && styles.buttonDisabled,
+                        ]}
+                        onPress={() => confirmDeleteRejectedRequest(req.id)}
+                        disabled={actionRequestId === req.id}
+                      >
+                        {actionRequestId === req.id ? (
+                          <ActivityIndicator size="small" color={danger} />
+                        ) : (
+                          <ThemedText style={[styles.registrationActionBtnLabel, { color: danger }]}>Удалить</ThemedText>
+                        )}
                       </Pressable>
                     </View>
                   )}

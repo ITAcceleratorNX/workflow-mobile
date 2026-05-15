@@ -1,8 +1,22 @@
 import { useEffect, useRef, useCallback } from 'react';
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 
 import { useAuthStore } from '@/stores/auth-store';
+import { useDeepLinkStore } from '@/stores/deep-link-store';
+import {
+  buildDeferredTaskDetailsHref,
+  fcmPayloadToRecord,
+  hasNonTaskPushNavigationIntent,
+  isGuestOrDemoSession,
+  nonTaskPushNavigationDedupKey,
+  parseTaskIdFromPushPayload,
+  pushPayloadType,
+  ROUTE_ADMIN_REGISTRATION_REQUESTS,
+  shouldSkipDuplicatePushOpen,
+  workflowRequestNavigateIdFromPayload,
+} from '@/lib/push-notification-open';
 import {
   setNotificationHandler,
   setupTaskReminderCategory,
@@ -15,20 +29,11 @@ import { useToast } from '@/context/toast-context';
 
 const REMIND_ACTIONS = ['in_1h', 'tomorrow', 'off'] as const;
 
-function parseTaskId(data: Record<string, unknown>): number | null {
-  const raw = data?.task_id;
-  if (typeof raw === 'string') {
-    const n = parseInt(raw, 10);
-    return Number.isFinite(n) ? n : null;
-  }
-  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
-  return null;
-}
-
 function responseDedupKey(response: Notifications.NotificationResponse): string {
   const id = response.notification.request.identifier;
   const action = response.actionIdentifier;
-  const taskId = String(parseTaskId(response.notification.request.content.data as Record<string, unknown>) ?? '');
+  const data = response.notification.request.content.data as Record<string, unknown>;
+  const taskId = String(parseTaskIdFromPushPayload(data) ?? '');
   return `${id}|${action}|${taskId}`;
 }
 
@@ -40,14 +45,99 @@ export function usePushNotifications(): void {
   const token = useAuthStore((s) => s.token);
   const isGuest = useAuthStore((s) => s.isGuest);
   const router = useRouter();
-  const hasRegistered = useRef(false);
   const { show: showToast } = useToast();
   const handledKeys = useRef(new Set<string>());
+
+  const navigateFromPushDataNonTask = useCallback(
+    async (data: Record<string, unknown>, opts?: { deferUntilSplash: boolean }) => {
+      const defer = opts?.deferUntilSplash ?? false;
+      const type = pushPayloadType(data);
+
+      if (shouldSkipDuplicatePushOpen(nonTaskPushNavigationDedupKey(data))) return;
+
+      await waitForAuthHydrated();
+
+      if (type === 'new_registration_request') {
+        if (isGuestOrDemoSession()) {
+          showToast({
+            title: 'Войдите в аккаунт',
+            description:
+              'Раздел запросов на доступ доступен после входа под учётной записью администратора.',
+            variant: 'destructive',
+            duration: 4000,
+          });
+          return;
+        }
+        if (defer) {
+          useDeepLinkStore.getState().setPendingPostAuthHref(ROUTE_ADMIN_REGISTRATION_REQUESTS);
+        } else {
+          router.push(ROUTE_ADMIN_REGISTRATION_REQUESTS);
+        }
+        await clearBadge();
+        return;
+      }
+
+      const id = workflowRequestNavigateIdFromPayload(data);
+      if (id != null && !Number.isNaN(id)) {
+        if (isGuestOrDemoSession()) {
+          showToast({
+            title: 'Демо-режим',
+            description:
+              'Переход к заявке из уведомления доступен после входа в аккаунт. Откройте заявку в списке заявок.',
+            variant: 'default',
+            duration: 4500,
+          });
+        } else if (defer) {
+          useDeepLinkStore.getState().setPendingRequestId(id);
+        } else {
+          router.push(`/(tabs)/requests/${id}` as const);
+        }
+      }
+      await clearBadge();
+    },
+    [router, showToast]
+  );
+
+  const handleFcmNotificationOpen = useCallback(
+    async (raw: Record<string, unknown>, openedFromQuitState = false) => {
+      const type = pushPayloadType(raw) ?? '';
+
+      if (type === 'task_reminder') {
+        const taskId = parseTaskIdFromPushPayload(raw);
+        if (taskId == null || Number.isNaN(taskId)) return;
+        const key = `fcm:task_open:${taskId}`;
+        if (shouldSkipDuplicatePushOpen(key)) return;
+        await waitForAuthHydrated();
+
+        if (isGuestOrDemoSession()) {
+          showToast({
+            title: 'Войдите в аккаунт',
+            description: 'Действия с напоминанием доступны после входа.',
+            variant: 'destructive',
+            duration: 4000,
+          });
+          return;
+        }
+        if (openedFromQuitState) {
+          useDeepLinkStore.getState().setPendingPostAuthHref(buildDeferredTaskDetailsHref(taskId));
+        } else {
+          router.push({
+            pathname: '/client/tasks/details',
+            params: { taskId: String(taskId) },
+          });
+        }
+        await clearBadge();
+        return;
+      }
+      await navigateFromPushDataNonTask(raw, { deferUntilSplash: openedFromQuitState });
+    },
+    [navigateFromPushDataNonTask, router, showToast]
+  );
 
   const handleTaskReminderResponse = useCallback(
     async (response: Notifications.NotificationResponse) => {
       const data = response.notification.request.content.data as Record<string, unknown>;
-      const taskId = parseTaskId(data);
+      const taskId = parseTaskIdFromPushPayload(data);
       const action = response.actionIdentifier;
 
       if (taskId == null || Number.isNaN(taskId)) return;
@@ -60,9 +150,7 @@ export function usePushNotifications(): void {
       try {
         await waitForAuthHydrated();
 
-        const authToken = useAuthStore.getState().token;
-        const guest = useAuthStore.getState().isGuest;
-        if (!authToken || guest || authToken === 'guest-demo') {
+        if (isGuestOrDemoSession()) {
           showToast({
             title: 'Войдите в аккаунт',
             description: 'Действия с напоминанием доступны после входа.',
@@ -136,8 +224,7 @@ export function usePushNotifications(): void {
     let cancelled = false;
     (async () => {
       if (cancelled) return;
-      const ok = await registerPushTokenWithBackend();
-      if (ok && !cancelled) hasRegistered.current = true;
+      await registerPushTokenWithBackend();
     })();
     return () => {
       cancelled = true;
@@ -150,46 +237,81 @@ export function usePushNotifications(): void {
       const last = await Notifications.getLastNotificationResponseAsync();
       if (cancelled || !last) return;
       const data = last.notification.request.content.data as Record<string, unknown>;
-      if (data?.type !== 'task_reminder') return;
-      await handleTaskReminderResponse(last);
+
+      if (pushPayloadType(data) === 'task_reminder') {
+        await handleFcmNotificationOpen(data as Record<string, unknown>, true);
+        try {
+          Notifications.clearLastNotificationResponse();
+        } catch {
+          /* noop */
+        }
+        return;
+      }
+
+      if (hasNonTaskPushNavigationIntent(data)) {
+        if (cancelled) return;
+        await navigateFromPushDataNonTask(data, { deferUntilSplash: true });
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [handleTaskReminderResponse]);
+  }, [handleFcmNotificationOpen, navigateFromPushDataNonTask]);
 
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown>;
-      const type = data?.type as string | undefined;
 
-      if (type === 'task_reminder') {
+      if (pushPayloadType(data) === 'task_reminder') {
         void handleTaskReminderResponse(response);
         return;
       }
 
-      const parseId = (v: unknown): number | undefined =>
-        typeof v === 'number' && !Number.isNaN(v) ? v : typeof v === 'string' ? parseInt(v, 10) : undefined;
-      const requestGroupId = parseId(data?.request_group_id ?? data?.requestGroupId);
-      const requestId = parseId(data?.request_id ?? data?.requestId);
-      const id = requestGroupId ?? requestId;
-      if (id != null && !Number.isNaN(id)) {
-        const guest = useAuthStore.getState().isGuest;
-        const authToken = useAuthStore.getState().token;
-        if (guest || authToken === 'guest-demo') {
-          showToast({
-            title: 'Демо-режим',
-            description:
-              'Переход к заявке из уведомления доступен после входа в аккаунт. Откройте заявку в списке заявок.',
-            variant: 'default',
-            duration: 4500,
-          });
-        } else {
-          router.push(`/(tabs)/requests/${id}` as const);
-        }
+      if (!hasNonTaskPushNavigationIntent(data)) {
+        void clearBadge();
+        return;
       }
-      void clearBadge();
+      void navigateFromPushDataNonTask(data);
     });
     return () => sub.remove();
-  }, [router, handleTaskReminderResponse, showToast]);
+  }, [handleTaskReminderResponse, navigateFromPushDataNonTask]);
+
+  /**
+   * FCM с блоком «notification»: на Android тап часто приходит через RN Firebase, а не через Expo —
+   * тогда data пустой в addNotificationResponseReceivedListener и экран не открывается.
+   */
+  useEffect(() => {
+    if (Constants.appOwnership === 'expo') return;
+
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const messaging = (await import('@react-native-firebase/messaging')).default;
+
+        unsubscribe = messaging().onNotificationOpenedApp((remoteMessage) => {
+          const data = fcmPayloadToRecord(remoteMessage?.data);
+          void handleFcmNotificationOpen(data, false);
+        });
+
+        const initial = await messaging().getInitialNotification();
+        if (cancelled || !initial?.data || Object.keys(initial.data).length === 0) {
+          return;
+        }
+        const data = fcmPayloadToRecord(initial.data);
+        await waitForAuthHydrated();
+        if (!cancelled) {
+          await handleFcmNotificationOpen(data, true);
+        }
+      } catch {
+        /* RNFB недоступен (тесты / веб). */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [handleFcmNotificationOpen]);
 }

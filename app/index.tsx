@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
-import { Redirect } from 'expo-router';
+import type { Href } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { parseRequestDeepLinkUrl } from '@/lib/shareRequest';
@@ -15,8 +16,11 @@ export default function IndexScreen() {
   const token = useAuthStore((state) => state.token);
   const role = useAuthStore((state) => state.role);
   const user = useAuthStore((state) => state.user);
+  const router = useRouter();
   const pendingRequestId = useDeepLinkStore((s) => s.pendingRequestId);
   const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
+  const pendingPostAuthHref = useDeepLinkStore((s) => s.pendingPostAuthHref);
+  const setPendingPostAuthHref = useDeepLinkStore((s) => s.setPendingPostAuthHref);
   const [isReady, setIsReady] = useState(false);
   const [initialRequestId, setInitialRequestId] = useState<number | null>(null);
   const colorScheme = useColorScheme();
@@ -58,6 +62,31 @@ export default function IndexScreen() {
     }
   }, [pendingRequestId, hasToken, effectiveRole, setPendingRequestId]);
 
+  // Холодный старт по пушу: не открывать табы, пока не отработает отложенный маршрут (см. use-push-notifications).
+  useEffect(() => {
+    if (!isReady || !hasToken || !effectiveRole || !pendingPostAuthHref) return;
+
+    const hrefStr = pendingPostAuthHref.trim();
+    setPendingPostAuthHref(null);
+
+    const splitIdx = hrefStr.indexOf('?');
+    const path = splitIdx >= 0 ? hrefStr.slice(0, splitIdx) : hrefStr;
+    const query = splitIdx >= 0 ? hrefStr.slice(splitIdx + 1) : '';
+
+    if (path === '/client/tasks/details') {
+      const taskId = new URLSearchParams(query).get('taskId');
+      if (taskId) {
+        router.replace({
+          pathname: '/client/tasks/details',
+          params: { taskId: decodeURIComponent(taskId) },
+        });
+        return;
+      }
+    }
+
+    router.replace(hrefStr as Href);
+  }, [effectiveRole, hasToken, isReady, pendingPostAuthHref, router, setPendingPostAuthHref]);
+
   if (!isReady) {
     return (
       <View style={[styles.loaderContainer, isDark ? styles.bgDark : styles.bgLight]}>
@@ -76,6 +105,19 @@ export default function IndexScreen() {
   }
 
   if (hasToken && effectiveRole) {
+    if (pendingPostAuthHref) {
+      return (
+        <View style={[styles.loaderContainer, isDark ? styles.bgDark : styles.bgLight]}>
+          <Image
+            source={LOGO_SOURCE}
+            style={[styles.logo, { width: LOGO_SIZE, height: LOGO_SIZE }]}
+            contentFit="contain"
+            tintColor={isDark ? '#FFFFFF' : '#1a1a1a'}
+          />
+        </View>
+      );
+    }
+
     const requestIdFromLink = initialRequestId ?? pendingRequestId;
     if (requestIdFromLink != null) {
       return <Redirect href={`/(tabs)/requests/${requestIdFromLink}`} />;
