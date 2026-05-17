@@ -12,6 +12,7 @@ import { Platform } from 'react-native';
 import * as TaskManager from 'expo-task-manager';
 
 import { config } from '@/lib/config';
+import { parseEnergyFromMoodFile, parseStressFromMoodFile } from '@/lib/mood-persist-parse';
 import { fetchStepsTodayFromPedometer, parsePersisted } from '@/lib/background-sync-utils';
 
 export const BACKGROUND_HEALTHY_TASK = 'background-healthy-sync';
@@ -66,10 +67,29 @@ interface PersistedMood {
     string,
     {
       moodValue: number;
-      energy: 'low' | 'medium' | 'high';
-      stress: 'low' | 'medium' | 'high';
+      energy?: string;
+      stress?: string;
     }
   >;
+}
+
+function parseMoodEnvelope(raw: string | null): {
+  records: NonNullable<PersistedMood['records']>;
+  version: number;
+} | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as {
+      state?: PersistedMood;
+      version?: number;
+    };
+    const inner = parsed.state ?? (parsed as unknown as PersistedMood);
+    const records = inner?.records;
+    if (!records || typeof records !== 'object') return null;
+    return { records, version: parsed.version ?? 0 };
+  } catch {
+    return null;
+  }
 }
 
 // ===== Дата YYYY-MM-DD без сдвига UTC =====
@@ -115,8 +135,23 @@ interface HealthyMetricRow {
   water_goal_ml: number | null;
   steps_count: number | null;
   mood_value: number | null;
-  energy_level: 'low' | 'medium' | 'high' | null;
-  stress_level: 'low' | 'medium' | 'high' | null;
+  energy_level:
+    | 'full'
+    | 'good'
+    | 'low'
+    | 'depleted'
+    | 'medium'
+    | 'high'
+    | null;
+  stress_level:
+    | 'calm'
+    | 'neutral'
+    | 'tense'
+    | 'overloaded'
+    | 'medium'
+    | 'high'
+    | 'low'
+    | null;
   data_sources: Record<string, boolean>;
 }
 
@@ -170,7 +205,9 @@ TaskManager.defineTask(BACKGROUND_HEALTHY_TASK, async () => {
     const sleep = parsePersisted<PersistedSleep>(sleepRaw);
     const steps = parsePersisted<PersistedSteps>(stepsRaw);
     const water = parsePersisted<PersistedWater>(waterRaw);
-    const mood = parsePersisted<PersistedMood>(moodRaw);
+    const moodEnv = parseMoodEnvelope(moodRaw);
+    const moodRecords = moodEnv?.records;
+    const moodFileVersion = moodEnv?.version ?? 0;
 
     const today = todayKey();
 
@@ -202,7 +239,14 @@ TaskManager.defineTask(BACKGROUND_HEALTHY_TASK, async () => {
       sleepRating: todaySleepRating,
     });
 
-    const todayMood = mood?.records?.[today] ?? null;
+    const todayMoodRaw = moodRecords?.[today] ?? null;
+    const todayMood = todayMoodRaw
+      ? {
+          moodValue: todayMoodRaw.moodValue,
+          energy: parseEnergyFromMoodFile(todayMoodRaw.energy, moodFileVersion),
+          stress: parseStressFromMoodFile(todayMoodRaw.stress, moodFileVersion),
+        }
+      : null;
     const history = steps?.history ?? [];
 
     const todayRow: HealthyMetricRow = {
@@ -225,7 +269,14 @@ TaskManager.defineTask(BACKGROUND_HEALTHY_TASK, async () => {
     const historyRows: HealthyMetricRow[] = history
       .filter((h) => h.date !== today)
       .map((h) => {
-        const hMood = mood?.records?.[h.date] ?? null;
+        const hMoodRaw = moodRecords?.[h.date] ?? null;
+        const hMood = hMoodRaw
+          ? {
+              moodValue: hMoodRaw.moodValue,
+              energy: parseEnergyFromMoodFile(hMoodRaw.energy, moodFileVersion),
+              stress: parseStressFromMoodFile(hMoodRaw.stress, moodFileVersion),
+            }
+          : null;
         const hSleep = sleep?.dayRecords?.[h.date] ?? null;
         return {
           date: h.date,

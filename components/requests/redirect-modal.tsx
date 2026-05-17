@@ -4,6 +4,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import { formatServiceCategoryDisplayName } from '@/constants/requests';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import type { ServiceCategory } from '@/lib/api';
 import type { SubRequest } from '@/lib/api';
@@ -35,7 +36,10 @@ export function RedirectModal({
 
   const options = categories
     .filter((c) => c.id !== subRequest?.category_id)
-    .map((c) => ({ value: String(c.id), label: c.name }));
+    .map((c) => ({
+      value: String(c.id),
+      label: formatServiceCategoryDisplayName(c.name),
+    }));
 
   const handleSubmit = async () => {
     const id = parseInt(categoryId, 10);

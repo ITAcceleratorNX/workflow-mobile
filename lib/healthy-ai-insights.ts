@@ -13,6 +13,7 @@ import {
   type InsightSignalRow,
 } from '@/lib/healthy-insight-signals';
 import type { EnergyLevel, StressLevel } from '@/stores/mood-store';
+import { isEnergyLowLevel, isStressElevated } from '@/lib/mood-persist-parse';
 import type { SleepRating } from '@/stores/sleep-store';
 
 export type HealthyInsightPeriod = 'day' | 'week' | 'month';
@@ -137,16 +138,17 @@ function pick<T>(arr: readonly T[], seed: number): T {
   return arr[Math.abs(seed) % arr.length];
 }
 
-function stressScore(s: StressLevel): number {
-  if (s === 'high') return 2;
-  if (s === 'medium') return 1;
+function stressScore(s: StressLevel | string): number {
+  if (s === 'overloaded' || s === 'high') return 2;
+  if (s === 'tense' || s === 'medium') return 1;
   return 0;
 }
 
-function energyScore(e: EnergyLevel): number {
-  if (e === 'high') return 2;
-  if (e === 'medium') return 1;
-  return 0;
+function energyScore(e: EnergyLevel | string): number {
+  if (e === 'depleted') return 0;
+  if (e === 'low') return 1;
+  if (e === 'full' || e === 'good' || e === 'high' || e === 'medium') return 2;
+  return 1;
 }
 
 function ratingToScore(r: SleepRating | undefined | null): number | null {
@@ -396,8 +398,8 @@ function buildDay(input: HealthyInsightInput, seed: number): HealthyInsightResul
 
   if (input.moodToday) {
     if (input.moodToday.moodValue < 40) weak.push({ id: 'mood', label: weakLabel('mood') });
-    if (input.moodToday.energy === 'low') weak.push({ id: 'energy', label: weakLabel('energy') });
-    if (input.moodToday.stress === 'high') weak.push({ id: 'stress', label: weakLabel('stress') });
+    if (isEnergyLowLevel(input.moodToday.energy)) weak.push({ id: 'energy', label: weakLabel('energy') });
+    if (isStressElevated(input.moodToday.stress)) weak.push({ id: 'stress', label: weakLabel('stress') });
   }
 
   const uniqWeak = weak.filter(
@@ -514,8 +516,8 @@ function buildWeek(input: HealthyInsightInput, seed: number): HealthyInsightResu
 
   const moodAvg =
     moodInWeek.length > 0 ? avg(moodInWeek.map((m) => m.moodValue)) : null;
-  const stressHighDays = moodInWeek.filter((m) => m.stress === 'high').length;
-  const energyLowDays = moodInWeek.filter((m) => m.energy === 'low').length;
+  const stressHighDays = moodInWeek.filter((m) => isStressElevated(m.stress)).length;
+  const energyLowDays = moodInWeek.filter((m) => isEnergyLowLevel(m.energy)).length;
 
   const waterOk = ratioScore(input.waterIntakeMl, input.waterGoalMl);
 
@@ -671,9 +673,9 @@ function buildMonth(input: HealthyInsightInput, seed: number): HealthyInsightRes
 
   const moodAvg = moodMonth.length ? avg(moodMonth.map((m) => m.moodValue)) : null;
   const stressHighShare =
-    moodMonth.length > 0 ? moodMonth.filter((m) => m.stress === 'high').length / moodMonth.length : 0;
+    moodMonth.length > 0 ? moodMonth.filter((m) => isStressElevated(m.stress)).length / moodMonth.length : 0;
   const energyLowShare =
-    moodMonth.length > 0 ? moodMonth.filter((m) => m.energy === 'low').length / moodMonth.length : 0;
+    moodMonth.length > 0 ? moodMonth.filter((m) => isEnergyLowLevel(m.energy)).length / moodMonth.length : 0;
 
   const strengths: string[] = [];
   const weaknesses: string[] = [];

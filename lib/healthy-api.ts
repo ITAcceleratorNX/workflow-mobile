@@ -72,8 +72,23 @@ export interface HealthyMetricPayload {
   water_goal_ml: number | null;
   steps_count: number | null;
   mood_value: number | null;
-  energy_level: 'low' | 'medium' | 'high' | null;
-  stress_level: 'low' | 'medium' | 'high' | null;
+  energy_level:
+    | 'full'
+    | 'good'
+    | 'low'
+    | 'depleted'
+    | 'medium'
+    | 'high'
+    | null;
+  stress_level:
+    | 'calm'
+    | 'neutral'
+    | 'tense'
+    | 'overloaded'
+    | 'medium'
+    | 'high'
+    | 'low'
+    | null;
   data_sources: Record<string, boolean>;
 }
 
