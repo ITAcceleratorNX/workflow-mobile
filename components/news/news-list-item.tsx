@@ -80,7 +80,9 @@ export function NewsListItem({
       ) : (
         topBlock
       )}
-      {footerSlot ? <View style={styles.footer}>{footerSlot}</View> : null}
+      {footerSlot ? (
+        <View style={[styles.footer, { borderTopColor: border }]}>{footerSlot}</View>
+      ) : null}
     </View>
   );
 
@@ -148,7 +150,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 12,
-    paddingBottom: 10,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });
 

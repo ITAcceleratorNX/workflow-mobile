@@ -1,12 +1,17 @@
-/** Реакции на новости: значения API и эмодзи в UI (без текстовых подписей). */
+/**
+ * Реакции на новости: поле kind уходит на API как thumb | heart | eyes | fire.
+ * Иконки по смыслу как 👍 ❤️ 👀 🔥, но в виде Material Icons (не эмодзи).
+ */
 export const NEWS_REACTION_OPTIONS = [
-  { kind: 'thumb' as const, emoji: '👍' },
-  { kind: 'heart' as const, emoji: '❤️' },
-  { kind: 'eyes' as const, emoji: '👀' },
-  { kind: 'fire' as const, emoji: '🔥' },
-];
+  { kind: 'thumb' as const, icon: 'thumb-up' as const },
+  { kind: 'heart' as const, icon: 'favorite' as const },
+  { kind: 'eyes' as const, icon: 'visibility' as const },
+  { kind: 'fire' as const, icon: 'whatshot' as const },
+] as const;
 
 export type NewsReactionKind = (typeof NEWS_REACTION_OPTIONS)[number]['kind'];
+
+export type NewsReactionMaterialIcon = (typeof NEWS_REACTION_OPTIONS)[number]['icon'];
 
 export type NewsReactionCounts = Record<NewsReactionKind, number>;
 

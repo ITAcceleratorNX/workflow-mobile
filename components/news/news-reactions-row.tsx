@@ -7,14 +7,17 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { MaterialIcons } from '@expo/vector-icons';
 
 import {
   NEWS_REACTION_OPTIONS,
   normalizeReactionCounts,
   type NewsReactionCounts,
   type NewsReactionKind,
+  type NewsReactionMaterialIcon,
 } from '@/lib/news-reactions';
 import { setNewsReaction } from '@/lib/news-api';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
 type Props = {
   newsId: number;
@@ -23,20 +26,26 @@ type Props = {
   canInteract: boolean;
   /** Узкий ряд (списки / карточки на главной) */
   compact?: boolean;
+  /** Ряд по центру ширины родителя (лента на главной, список новостей) */
+  centered?: boolean;
   onUpdated?: (patch: { reaction_counts: NewsReactionCounts; my_reaction: NewsReactionKind | null }) => void;
 };
 
-function ReactionEmojiButton({
-  emoji,
+function ReactionIconButton({
+  icon,
   selected,
   dimmed,
   compact,
+  activeColor,
+  inactiveColor,
   onPress,
 }: {
-  emoji: string;
+  icon: NewsReactionMaterialIcon;
   selected: boolean;
   dimmed: boolean;
   compact: boolean;
+  activeColor: string;
+  inactiveColor: string;
   onPress: () => void;
 }) {
   const scale = useSharedValue(1);
@@ -52,11 +61,14 @@ function ReactionEmojiButton({
     onPress();
   }, [onPress, scale]);
 
-  const fontSize = compact ? 22 : 28;
+  const size = compact ? 22 : 28;
+  const color = dimmed ? inactiveColor : selected ? activeColor : inactiveColor;
 
   return (
     <Pressable onPress={handlePress} disabled={dimmed} hitSlop={8} style={styles.hit}>
-      <Animated.Text style={[animStyle, { fontSize, opacity: selected ? 1 : 0.42 }]}>{emoji}</Animated.Text>
+      <Animated.View style={[animStyle, { opacity: dimmed ? 0.35 : selected ? 1 : 0.45 }]}>
+        <MaterialIcons name={icon} size={size} color={color} />
+      </Animated.View>
     </Pressable>
   );
 }
@@ -67,8 +79,12 @@ export function NewsReactionsRow({
   myReaction,
   canInteract,
   compact = false,
+  centered = false,
   onUpdated,
 }: Props) {
+  const primary = useThemeColor({}, 'primary');
+  const textMuted = useThemeColor({}, 'textMuted');
+
   const counts = normalizeReactionCounts(reactionCounts);
 
   const handleChoose = useCallback(
@@ -102,14 +118,16 @@ export function NewsReactionsRow({
   );
 
   return (
-    <View style={[styles.row, compact && styles.rowCompact]}>
-      {NEWS_REACTION_OPTIONS.map(({ kind, emoji }) => (
-        <ReactionEmojiButton
+    <View style={[styles.row, compact && styles.rowCompact, centered && styles.rowCentered]}>
+      {NEWS_REACTION_OPTIONS.map(({ kind, icon }) => (
+        <ReactionIconButton
           key={kind}
-          emoji={emoji}
+          icon={icon}
           selected={myReaction === kind}
           dimmed={!canInteract}
           compact={compact}
+          activeColor={primary}
+          inactiveColor={textMuted}
           onPress={() => void handleChoose(kind)}
         />
       ))}
@@ -128,6 +146,11 @@ const styles = StyleSheet.create({
   rowCompact: {
     gap: 10,
     paddingVertical: 2,
+  },
+  rowCentered: {
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    width: '100%',
   },
   hit: {
     minWidth: 36,

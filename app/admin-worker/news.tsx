@@ -213,7 +213,6 @@ export default function AdminWorkerNewsScreen() {
             ? formatNewsDate(item.date)
             : null;
       const rc = item.reaction_counts ?? emptyReactionCounts();
-      const reactionLine = NEWS_REACTION_OPTIONS.map((o) => `${o.emoji} ${rc[o.kind]}`).join(' / ');
       return (
         <View style={styles.newsRowWrap}>
           <NewsListItem
@@ -279,7 +278,19 @@ export default function AdminWorkerNewsScreen() {
             <ThemedText style={[styles.adminStatsLine, { color: textMuted }]}>
               Просмотры: {item.view_count ?? 0}
             </ThemedText>
-            <ThemedText style={[styles.adminStatsLine, { color: textMuted }]}>Реакции: {reactionLine}</ThemedText>
+            <View style={styles.adminReactionsRow}>
+              <ThemedText style={[styles.adminStatsLine, { color: textMuted }]}>Реакции:</ThemedText>
+              <View style={styles.adminReactionIcons}>
+                {NEWS_REACTION_OPTIONS.map((o) => (
+                  <View key={o.kind} style={styles.adminReactionChip}>
+                    <MaterialIcons name={o.icon} size={15} color={textMuted} />
+                    <ThemedText style={[styles.adminReactionCount, { color: textMuted }]}>
+                      {rc[o.kind]}
+                    </ThemedText>
+                  </View>
+                ))}
+              </View>
+            </View>
           </View>
         </View>
       );
@@ -355,6 +366,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   adminStatsLine: { fontSize: 13, lineHeight: 18 },
+  adminReactionsRow: { gap: 8 },
+  adminReactionIcons: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
+  adminReactionChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  adminReactionCount: { fontSize: 13, fontWeight: '600' },
   filters: {
     marginHorizontal: 16,
     marginBottom: 12,

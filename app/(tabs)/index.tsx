@@ -540,6 +540,7 @@ function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolea
   const headerSubtitle = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
   const cardBg = useThemeColor({}, 'cardBackground');
+  const border = useThemeColor({}, 'border');
   const [insightItems, setInsightItems] = useState<NewsDisplayItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
@@ -677,13 +678,19 @@ function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolea
           contentContainerStyle={styles.insightsScroll}
         >
           {insightItems.slice(0, 5).map((item) => (
-            <View key={item.id} style={{ width: INSIGHT_CARD_WIDTH, marginRight: 12 }}>
+            <View
+              key={item.id}
+              style={[
+                styles.insightColumn,
+                { backgroundColor: cardBg, borderColor: border },
+              ]}
+            >
               <Pressable
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push(`/client/news/${item.id}`);
                 }}
-                style={styles.insightCard}
+                style={styles.insightCardPressable}
               >
                 <Image
                   source={{ uri: item.image || 'https://via.placeholder.com/400' }}
@@ -703,14 +710,17 @@ function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolea
                   <ThemedText style={styles.insightDesc} numberOfLines={3}>{item.desc}</ThemedText>
                 </LinearGradient>
               </Pressable>
-              <NewsReactionsRow
-                newsId={Number(item.id)}
-                reactionCounts={item.reaction_counts ?? emptyReactionCounts()}
-                myReaction={item.my_reaction ?? null}
-                canInteract={canReactInsights}
-                compact
-                onUpdated={(p) => patchInsightEngagement(item.id, p)}
-              />
+              <View style={[styles.insightReactionsBar, { borderTopColor: border }]}>
+                <NewsReactionsRow
+                  newsId={Number(item.id)}
+                  reactionCounts={item.reaction_counts ?? emptyReactionCounts()}
+                  myReaction={item.my_reaction ?? null}
+                  canInteract={canReactInsights}
+                  compact
+                  centered
+                  onUpdated={(p) => patchInsightEngagement(item.id, p)}
+                />
+              </View>
             </View>
           ))}
         </ScrollView>
@@ -846,12 +856,22 @@ const styles = StyleSheet.create({
   notificationButton: { padding: 8, position: 'relative' },
   notificationDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4 },
   insightsScroll: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
-  insightCard: {
+  insightColumn: {
     width: INSIGHT_CARD_WIDTH,
-    height: INSIGHT_CARD_HEIGHT,
+    marginRight: 12,
     borderRadius: 20,
-    marginRight: 14,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  insightCardPressable: {
+    width: '100%',
+    height: INSIGHT_CARD_HEIGHT,
+    overflow: 'hidden',
+  },
+  insightReactionsBar: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   insightCardImage: {
     width: '100%',

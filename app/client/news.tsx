@@ -135,6 +135,7 @@ export default function NewsScreen() {
             myReaction={item.my_reaction ?? null}
             canInteract={canReact}
             compact
+            centered
             onUpdated={(p) => patchNewsEngagement(item.id, p)}
           />
         }

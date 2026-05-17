@@ -133,6 +133,7 @@ export default function NewsDetailScreen() {
                 reactionCounts={reactionCounts}
                 myReaction={myReaction}
                 canInteract={canReact}
+                centered
                 onUpdated={(p) => {
                   setReactionCounts(p.reaction_counts);
                   setMyReaction(p.my_reaction);
