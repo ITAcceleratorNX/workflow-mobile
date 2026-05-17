@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,7 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PageLoader } from '@/components/ui';
+import { PageLoader, ScreenHeader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -26,6 +27,7 @@ import {
   getRegistrationRequests,
   approveRegistrationRequest,
   rejectRegistrationRequest,
+  deleteRejectedRegistrationRequest,
   getUsersForManagement,
   changeUserPassword,
   updateUserRole,
@@ -61,8 +63,7 @@ export default function AdminWorkerUsersScreen() {
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
-  const gray600 = useThemeColor({}, 'gray600');
-  const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const screenBg = useThemeColor({}, 'background');
   const border = useThemeColor({}, 'border');
   const surfaceElevated = useThemeColor({}, 'surfaceElevated');
   const success = useThemeColor({}, 'success');
@@ -70,6 +71,9 @@ export default function AdminWorkerUsersScreen() {
   const danger = useThemeColor({}, 'danger');
   const dangerSoft = useThemeColor({}, 'dangerSoft');
   const accentSoft = useThemeColor({}, 'accentSoft');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const textSecondary = useThemeColor({}, 'textSecondary');
 
   const initialTab: TabType = tab === 'management' ? 'management' : 'requests';
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
@@ -159,6 +163,41 @@ export default function AdminWorkerUsersScreen() {
       setActionRequestId(null);
     },
     [showToast, loadRequests]
+  );
+
+  const handleDeleteRejected = useCallback(
+    async (requestId: number) => {
+      setActionRequestId(requestId);
+      const result = await deleteRejectedRegistrationRequest(requestId);
+      if (result.ok) {
+        showToast({ title: 'Удалено', description: 'Отклонённый запрос удалён из списка', variant: 'success' });
+        loadRequests();
+      } else {
+        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+      }
+      setActionRequestId(null);
+    },
+    [showToast, loadRequests]
+  );
+
+  const confirmDeleteRejectedRequest = useCallback(
+    (requestId: number) => {
+      Alert.alert(
+        'Удалить запрос?',
+        'Запись об отклонённой заявке будет удалена безвозвратно.',
+        [
+          { text: 'Отмена', style: 'cancel' },
+          {
+            text: 'Удалить',
+            style: 'destructive',
+            onPress: () => {
+              void handleDeleteRejected(requestId);
+            },
+          },
+        ]
+      );
+    },
+    [handleDeleteRejected]
   );
 
   // ——— Управление (офисные пользователи) ———
@@ -360,17 +399,9 @@ export default function AdminWorkerUsersScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <MaterialIcons name="chevron-left" size={24} color={primary} />
-          <ThemedText style={[styles.backLabel, { color: primary }]}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.title}>
-          Пользователи
-        </ThemedText>
-      </View>
+      <ScreenHeader title="Пользователи" />
 
-      <View style={[styles.tabs, { backgroundColor: gray600 }]}>
+      <View style={[styles.tabs, { backgroundColor: surfaceMuted, borderWidth: 1, borderColor: border }]}>
         <Pressable
           style={[styles.tab, activeTab === 'requests' && { backgroundColor: primary }]}
           onPress={() => {
@@ -381,9 +412,15 @@ export default function AdminWorkerUsersScreen() {
           <MaterialIcons
             name="person-add"
             size={18}
-            color={activeTab === 'requests' ? '#fff' : 'rgba(255,255,255,0.7)'}
+            color={activeTab === 'requests' ? onPrimary : textSecondary}
           />
-          <ThemedText style={[styles.tabText, activeTab === 'requests' && styles.tabTextActive]}>
+          <ThemedText
+            style={[
+              styles.tabText,
+              { color: activeTab === 'requests' ? onPrimary : textSecondary },
+              activeTab === 'requests' && styles.tabTextSelected,
+            ]}
+          >
             Запросы
           </ThemedText>
         </Pressable>
@@ -398,9 +435,15 @@ export default function AdminWorkerUsersScreen() {
           <MaterialIcons
             name="groups"
             size={18}
-            color={activeTab === 'management' ? '#fff' : 'rgba(255,255,255,0.7)'}
+            color={activeTab === 'management' ? onPrimary : textSecondary}
           />
-          <ThemedText style={[styles.tabText, activeTab === 'management' && styles.tabTextActive]}>
+          <ThemedText
+            style={[
+              styles.tabText,
+              { color: activeTab === 'management' ? onPrimary : textSecondary },
+              activeTab === 'management' && styles.tabTextSelected,
+            ]}
+          >
             Управление
           </ThemedText>
         </Pressable>
@@ -611,6 +654,29 @@ export default function AdminWorkerUsersScreen() {
                       </Pressable>
                     </View>
                   )}
+                  {req.status === 'rejected' && (
+                    <View style={styles.requestActions}>
+                      <Pressable
+                        style={[
+                          styles.registrationActionBtn,
+                          {
+                            borderColor: border,
+                            backgroundColor: surfaceMuted,
+                            minHeight: 44,
+                          },
+                          actionRequestId === req.id && styles.buttonDisabled,
+                        ]}
+                        onPress={() => confirmDeleteRejectedRequest(req.id)}
+                        disabled={actionRequestId === req.id}
+                      >
+                        {actionRequestId === req.id ? (
+                          <ActivityIndicator size="small" color={danger} />
+                        ) : (
+                          <ThemedText style={[styles.registrationActionBtnLabel, { color: danger }]}>Удалить</ThemedText>
+                        )}
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
               ))}
             </View>
@@ -795,9 +861,9 @@ export default function AdminWorkerUsersScreen() {
                       disabled={!selectedUserId || !newPassword || !confirmPassword || isChangingPassword}
                     >
                       {isChangingPassword ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={onPrimary} />
                       ) : (
-                        <ThemedText style={styles.primaryButtonText}>Изменить пароль</ThemedText>
+                        <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Изменить пароль</ThemedText>
                       )}
                     </Pressable>
                   </View>
@@ -880,9 +946,9 @@ export default function AdminWorkerUsersScreen() {
                       disabled={!selectedRoleUserId || !newRole || isChangingRole}
                     >
                       {isChangingRole ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={onPrimary} />
                       ) : (
-                        <ThemedText style={styles.primaryButtonText}>Изменить роль</ThemedText>
+                        <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Изменить роль</ThemedText>
                       )}
                     </Pressable>
                   </View>
@@ -982,9 +1048,9 @@ export default function AdminWorkerUsersScreen() {
                   disabled={!selectedCategoryId || !selectedExecutorId || isChangingHead}
                 >
                   {isChangingHead ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={onPrimary} />
                   ) : (
-                    <ThemedText style={styles.primaryButtonText}>Сменить руководителя</ThemedText>
+                    <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Сменить руководителя</ThemedText>
                   )}
                 </Pressable>
                 {(selectedCategoryId || selectedExecutorId) && (
@@ -1014,26 +1080,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 44,
-    minHeight: 44,
-    marginBottom: 8,
-    justifyContent: 'center',
-  },
-  backLabel: {
-    fontSize: 16,
-    marginLeft: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
   tabs: {
     flexDirection: 'row',
     marginHorizontal: 16,
@@ -1050,13 +1096,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
   },
-  tabActive: {},
   tabText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
   },
-  tabTextActive: {
-    color: '#fff',
+  tabTextSelected: {
     fontWeight: '600',
   },
   scrollContent: {
@@ -1219,7 +1262,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   primaryButtonText: {
-    color: '#fff',
     fontWeight: '600',
   },
   secondaryButton: {

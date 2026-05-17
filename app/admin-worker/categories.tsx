@@ -8,11 +8,12 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
@@ -79,16 +80,306 @@ function useCategoriesWithExecutors(categoryIds: number[]) {
   return idsWithExecutors;
 }
 
+function createCategoriesStyles(c: {
+  screenBg: string;
+  surfaceMuted: string;
+  surfaceElevated: string;
+  border: string;
+  primary: string;
+  onPrimary: string;
+  text: string;
+  textSecondary: string;
+  textMuted: string;
+  danger: string;
+  dangerSoft: string;
+  warning: string;
+  warningSoft: string;
+  info: string;
+  infoSoft: string;
+  accentSoft: string;
+}) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.screenBg,
+    },
+    tabs: {
+      flexDirection: 'row',
+      marginHorizontal: 16,
+      marginBottom: 16,
+      backgroundColor: c.surfaceMuted,
+      borderRadius: 10,
+      padding: 4,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    tab: {
+      flex: 1,
+      paddingVertical: 10,
+      alignItems: 'center',
+      borderRadius: 8,
+    },
+    tabActive: {
+      backgroundColor: c.primary,
+    },
+    tabText: {
+      fontSize: 15,
+      color: c.textSecondary,
+    },
+    tabTextActive: {
+      color: c.onPrimary,
+      fontWeight: '600',
+    },
+    loadingBox: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 12,
+    },
+    loadingText: {
+      fontSize: 14,
+    },
+    errorBox: {
+      margin: 16,
+      padding: 16,
+      borderRadius: 12,
+      backgroundColor: c.dangerSoft,
+      borderWidth: 1,
+      borderColor: c.danger,
+    },
+    errorText: {
+      color: c.danger,
+      marginBottom: 12,
+    },
+    retryButton: {
+      alignSelf: 'flex-start',
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      backgroundColor: c.primary,
+      borderRadius: 8,
+    },
+    retryText: {
+      color: c.onPrimary,
+      fontWeight: '600',
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      marginBottom: 16,
+    },
+    field: {
+      marginBottom: 16,
+    },
+    label: {
+      fontSize: 14,
+      marginBottom: 8,
+    },
+    hintInline: {
+      fontSize: 12,
+      marginTop: -4,
+      marginBottom: 8,
+      lineHeight: 16,
+    },
+    dropdownEmpty: {
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 12,
+      alignItems: 'center',
+    },
+    input: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 16,
+    },
+    inputFull: {
+      marginTop: 12,
+    },
+    selectTrigger: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 8,
+    },
+    selectTriggerText: {
+      fontSize: 16,
+    },
+    dropdown: {
+      backgroundColor: c.surfaceElevated,
+      borderRadius: 10,
+      marginBottom: 12,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    dropdownItem: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    dropdownItemActive: {
+      backgroundColor: c.accentSoft,
+    },
+    dropdownItemText: {
+      fontSize: 16,
+      color: c.text,
+    },
+    dropdownItemDisabled: {
+      opacity: 0.45,
+    },
+    primaryButton: {
+      backgroundColor: c.primary,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 10,
+      minWidth: 100,
+      alignItems: 'center',
+    },
+    primaryButtonFull: {
+      marginTop: 12,
+      minWidth: undefined,
+    },
+    dangerButton: {
+      backgroundColor: c.danger,
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: 'center',
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    primaryButtonText: {
+      color: c.onPrimary,
+      fontWeight: '600',
+    },
+    dangerButtonText: {
+      color: c.onPrimary,
+      fontWeight: '600',
+    },
+    warnBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      backgroundColor: c.warningSoft,
+      borderWidth: 1,
+      borderColor: c.warning,
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 16,
+    },
+    warnText: {
+      fontSize: 13,
+      color: c.warning,
+      flex: 1,
+    },
+    infoBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      backgroundColor: c.infoSoft,
+      borderWidth: 1,
+      borderColor: c.info,
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 16,
+    },
+    infoBoxText: {
+      fontSize: 13,
+      color: c.info,
+      flex: 1,
+    },
+    errorInline: {
+      backgroundColor: c.dangerSoft,
+      borderWidth: 1,
+      borderColor: c.danger,
+      borderRadius: 10,
+      padding: 12,
+    },
+    errorInlineText: {
+      color: c.danger,
+      fontSize: 14,
+    },
+  });
+}
+
 export default function AdminWorkerCategoriesScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const { show: showToast } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
+  const textSecondary = useThemeColor({}, 'textSecondary');
   const primary = useThemeColor({}, 'primary');
-  const gray600 = useThemeColor({}, 'gray600');
-  const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const screenBg = useThemeColor({}, 'background');
+  const border = useThemeColor({}, 'border');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const danger = useThemeColor({}, 'danger');
+  const dangerSoft = useThemeColor({}, 'dangerSoft');
+  const warning = useThemeColor({}, 'warning');
+  const warningSoft = useThemeColor({}, 'warningSoft');
+  const info = useThemeColor({}, 'info');
+  const infoSoft = useThemeColor({}, 'infoSoft');
+  const accentSoft = useThemeColor({}, 'accentSoft');
+
+  const styles = useMemo(
+    () =>
+      createCategoriesStyles({
+        screenBg,
+        surfaceMuted,
+        surfaceElevated,
+        border,
+        primary,
+        onPrimary,
+        text,
+        textSecondary,
+        textMuted,
+        danger,
+        dangerSoft,
+        warning,
+        warningSoft,
+        info,
+        infoSoft,
+        accentSoft,
+      }),
+    [
+      screenBg,
+      surfaceMuted,
+      surfaceElevated,
+      border,
+      primary,
+      onPrimary,
+      text,
+      textSecondary,
+      textMuted,
+      danger,
+      dangerSoft,
+      warning,
+      warningSoft,
+      info,
+      infoSoft,
+      accentSoft,
+    ],
+  );
 
   const initialTab: TabType =
     tab === 'subcategories' ? 'subcategories' : tab === 'executors' ? 'executors' : 'categories';
@@ -273,15 +564,7 @@ export default function AdminWorkerCategoriesScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <MaterialIcons name="chevron-left" size={24} color={primary} />
-          <ThemedText style={styles.backLabel}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.title}>
-          Категории и подкатегории
-        </ThemedText>
-      </View>
+      <ScreenHeader title="Категории и подкатегории" />
 
       <View style={styles.tabs}>
         <Pressable
@@ -352,7 +635,7 @@ export default function AdminWorkerCategoriesScreen() {
                     disabled={!newCategoryName.trim() || isCreatingCategory}
                   >
                     {isCreatingCategory ? (
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color={onPrimary} />
                     ) : (
                       <ThemedText style={styles.primaryButtonText}>Создать</ThemedText>
                     )}
@@ -361,7 +644,7 @@ export default function AdminWorkerCategoriesScreen() {
               </View>
 
               <View style={styles.warnBox}>
-                <MaterialIcons name="warning-amber" size={20} color="#F59E0B" />
+                <MaterialIcons name="warning-amber" size={20} color={warning} />
                 <ThemedText style={styles.warnText}>
                   Категорию можно удалить только если в ней нет исполнителей.
                 </ThemedText>
@@ -411,7 +694,7 @@ export default function AdminWorkerCategoriesScreen() {
                   disabled={!canDeleteCategory || isDeletingCategory}
                 >
                   {isDeletingCategory ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={onPrimary} />
                   ) : (
                     <ThemedText style={styles.dangerButtonText}>Удалить</ThemedText>
                   )}
@@ -485,7 +768,7 @@ export default function AdminWorkerCategoriesScreen() {
                   disabled={!selectedCategoryForSub || !newSubcategoryName.trim() || isCreatingSubcategory}
                 >
                   {isCreatingSubcategory ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={onPrimary} />
                   ) : (
                     <ThemedText style={styles.primaryButtonText}>Создать подкатегорию</ThemedText>
                   )}
@@ -548,7 +831,7 @@ export default function AdminWorkerCategoriesScreen() {
                   disabled={!subcategoryToDelete || isDeletingSubcategory}
                 >
                   {isDeletingSubcategory ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={onPrimary} />
                   ) : (
                     <ThemedText style={styles.dangerButtonText}>Удалить</ThemedText>
                   )}
@@ -572,7 +855,7 @@ export default function AdminWorkerCategoriesScreen() {
               </ThemedText>
 
               <View style={styles.infoBox}>
-                <MaterialIcons name="info-outline" size={20} color="#3B82F6" />
+                <MaterialIcons name="info-outline" size={20} color={info} />
                 <ThemedText style={styles.infoBoxText}>
                   Если в категории нет исполнителей, первый назначенный станет руководителем. Остальные — обычные исполнители.
                 </ThemedText>
@@ -658,7 +941,7 @@ export default function AdminWorkerCategoriesScreen() {
                 disabled={!selectedCategoryForAssign || !selectedExecutorForAssign || isAssigningExecutor}
               >
                 {isAssigningExecutor ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={onPrimary} />
                 ) : (
                   <ThemedText style={styles.primaryButtonText}>Назначить исполнителя</ThemedText>
                 )}
@@ -676,241 +959,3 @@ export default function AdminWorkerCategoriesScreen() {
     </ThemedView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1C1C1E',
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 44,
-    minHeight: 44,
-    marginBottom: 8,
-    justifyContent: 'center',
-  },
-  backLabel: {
-    fontSize: 16,
-    color: '#E25B21',
-    marginLeft: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  tabs: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: '#3A3A3C',
-    borderRadius: 10,
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  tabActive: {
-    backgroundColor: '#E25B21',
-  },
-  tabText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  tabTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  loadingBox: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-  },
-  errorBox: {
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(239,68,68,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.4)',
-  },
-  errorText: {
-    color: '#FCA5A5',
-    marginBottom: 12,
-  },
-  retryButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#E25B21',
-    borderRadius: 8,
-  },
-  retryText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  field: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  hintInline: {
-    fontSize: 12,
-    marginTop: -4,
-    marginBottom: 8,
-    lineHeight: 16,
-  },
-  dropdownEmpty: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-    backgroundColor: '#1C1C1E',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  inputFull: {
-    marginTop: 12,
-  },
-  selectTrigger: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#3A3A3C',
-    backgroundColor: '#1C1C1E',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 8,
-  },
-  selectTriggerText: {
-    fontSize: 16,
-  },
-  dropdown: {
-    backgroundColor: '#3A3A3C',
-    borderRadius: 10,
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  dropdownItem: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  dropdownItemActive: {
-    backgroundColor: 'rgba(226,91,33,0.3)',
-  },
-  dropdownItemText: {
-    fontSize: 16,
-    color: '#fff',
-  },
-  dropdownItemDisabled: {
-    color: 'rgba(255,255,255,0.5)',
-  },
-  primaryButton: {
-    backgroundColor: '#E25B21',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  primaryButtonFull: {
-    marginTop: 12,
-    minWidth: undefined,
-  },
-  dangerButton: {
-    backgroundColor: '#DC2626',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  dangerButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  warnBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: 'rgba(245,158,11,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.4)',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-  },
-  warnText: {
-    fontSize: 13,
-    color: '#FCD34D',
-    flex: 1,
-  },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: 'rgba(59,130,246,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.4)',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 16,
-  },
-  infoBoxText: {
-    fontSize: 13,
-    color: '#93C5FD',
-    flex: 1,
-  },
-  errorInline: {
-    backgroundColor: 'rgba(239,68,68,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.4)',
-    borderRadius: 10,
-    padding: 12,
-  },
-  errorInlineText: {
-    color: '#FCA5A5',
-    fontSize: 14,
-  },
-});

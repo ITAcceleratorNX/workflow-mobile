@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -11,13 +11,131 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import { scanBookingQRCode } from '@/lib/api';
 
-const CARD_ORANGE = '#D94F15';
+function normalizeBookingId(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && Number.isInteger(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = parseInt(value.trim(), 10);
+    if (!Number.isNaN(n) && Number.isInteger(n)) return n;
+  }
+  return undefined;
+}
+
+/** Извлекает ID бронирования из JSON, URL или строки цифр (payload уже trim). */
+function parseBookingIdFromQrPayload(trimmed: string): number | undefined {
+  if (!trimmed) return undefined;
+
+  try {
+    const parsed = JSON.parse(trimmed) as { bookingId?: unknown; booking_id?: unknown };
+    const id = normalizeBookingId(parsed?.bookingId ?? parsed?.booking_id);
+    if (id !== undefined) return id;
+  } catch {
+    // не JSON
+  }
+
+  const slashMatch = trimmed.match(/\/booking\/(\d+)/i) ?? trimmed.match(/booking\/(\d+)/i);
+  if (slashMatch) {
+    const id = parseInt(slashMatch[1], 10);
+    if (Number.isInteger(id)) return id;
+  }
+
+  const qpMatch = /(?:^|[?&#])(?:bookingId|booking_id|id)=(\d+)/i.exec(trimmed);
+  if (qpMatch) {
+    const id = parseInt(qpMatch[1], 10);
+    if (Number.isInteger(id)) return id;
+  }
+
+  if (/^-?\d+$/.test(trimmed)) {
+    const id = parseInt(trimmed, 10);
+    if (Number.isInteger(id)) return id;
+  }
+
+  return undefined;
+}
+
+function getScanPayload(result: BarcodeScanningResult): string {
+  const raw = (result.data ?? result.raw ?? '').trim();
+  return raw;
+}
 
 export default function ExecutorScanQrScreen() {
   const insets = useSafeAreaInsets();
   const { show } = useToast();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const processingRef = useRef(false);
+
+  const screenBg = useThemeColor({}, 'background');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const border = useThemeColor({}, 'border');
+  const text = useThemeColor({}, 'text');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const primary = useThemeColor({}, 'primary');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: screenBg,
+        },
+        card: {
+          marginHorizontal: 16,
+          marginTop: 16,
+          padding: 20,
+          borderRadius: 16,
+          backgroundColor: surfaceElevated,
+          borderWidth: 1,
+          borderColor: border,
+        },
+        cardTitle: {
+          fontSize: 18,
+          fontWeight: '600',
+          marginBottom: 8,
+        },
+        cardDescription: {
+          fontSize: 14,
+          lineHeight: 20,
+          marginBottom: 12,
+        },
+        primaryBtn: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          alignSelf: 'flex-start',
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          borderRadius: 999,
+          backgroundColor: primary,
+          gap: 8,
+        },
+        outlineBtn: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          alignSelf: 'flex-start',
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          borderRadius: 999,
+          backgroundColor: surfaceElevated,
+          borderWidth: 1,
+          borderColor: border,
+          gap: 8,
+        },
+        btnLabel: {
+          fontSize: 14,
+          fontWeight: '600',
+        },
+        scannerContainer: {
+          marginTop: 12,
+          borderRadius: 16,
+          overflow: 'hidden',
+          height: 260,
+          backgroundColor: '#000',
+        },
+      }),
+    [screenBg, surfaceElevated, border, primary],
+  );
 
   const handleRequestPermission = useCallback(async () => {
     const result = await requestPermission();
@@ -40,25 +158,16 @@ export default function ExecutorScanQrScreen() {
   }, [requestPermission]);
 
   const handleBarcodeScanned = useCallback(
-    async (event: { nativeEvent?: { data?: string }; data?: string }) => {
-      const data = event?.nativeEvent?.data ?? event?.data;
-      if (!data || scanned) return;
+    async (result: BarcodeScanningResult) => {
+      const payload = getScanPayload(result);
+      if (!payload || processingRef.current) return;
+
+      processingRef.current = true;
       setScanned(true);
 
       try {
-        let bookingId: number | undefined;
-
-        // QR из приложения: JSON { bookingId, roomId, tablesRemaining }
-        try {
-          const parsed = JSON.parse(data);
-          bookingId = parsed?.bookingId ?? parsed?.booking_id;
-        } catch {
-          // QR может быть URL вида https://workflow-back-zpk4.onrender.com/booking/123
-          const match = data.match(/\/booking\/(\d+)/);
-          if (match) bookingId = parseInt(match[1], 10);
-        }
-
-        if (typeof bookingId !== 'number' || !Number.isInteger(bookingId)) {
+        const bookingId = parseBookingIdFromQrPayload(payload);
+        if (bookingId === undefined) {
           throw new Error('В QR нет ID бронирования. Покажите QR с экрана бронирования.');
         }
 
@@ -80,11 +189,13 @@ export default function ExecutorScanQrScreen() {
           duration: 3000,
         });
       } finally {
-        // даём небольшую паузу, потом можно сканировать снова
-        setTimeout(() => setScanned(false), 2000);
+        setTimeout(() => {
+          processingRef.current = false;
+          setScanned(false);
+        }, 2000);
       }
     },
-    [scanned, show],
+    [show],
   );
 
   if (!permission) {
@@ -92,7 +203,7 @@ export default function ExecutorScanQrScreen() {
       <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
         <ScreenHeader title="QR сканер" />
         <View style={styles.card}>
-          <ThemedText style={styles.cardDescription}>Запрос доступа к камере…</ThemedText>
+          <ThemedText style={[styles.cardDescription, { color: textMuted }]}>Запрос доступа к камере…</ThemedText>
         </View>
       </ThemedView>
     );
@@ -103,10 +214,10 @@ export default function ExecutorScanQrScreen() {
       <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
         <ScreenHeader title="QR сканер" />
         <View style={styles.card}>
-          <ThemedText style={styles.cardDescription}>Нет доступа к камере</ThemedText>
-          <Pressable style={styles.actionButton} onPress={handleRequestPermission}>
-            <MaterialIcons name="camera-alt" size={18} color="#FFFFFF" />
-            <ThemedText style={styles.actionButtonText}>Выдать доступ</ThemedText>
+          <ThemedText style={[styles.cardTitle, { color: text }]}>Нет доступа к камере</ThemedText>
+          <Pressable style={styles.primaryBtn} onPress={handleRequestPermission}>
+            <MaterialIcons name="camera-alt" size={18} color={onPrimary} />
+            <ThemedText style={[styles.btnLabel, { color: onPrimary }]}>Выдать доступ</ThemedText>
           </Pressable>
         </View>
       </ThemedView>
@@ -118,13 +229,14 @@ export default function ExecutorScanQrScreen() {
       <ScreenHeader title="QR сканер" />
 
       <View style={styles.card}>
-        <ThemedText style={styles.cardTitle}>Сканирование QR кода</ThemedText>
-        <ThemedText style={styles.cardDescription}>
+        <ThemedText style={[styles.cardTitle, { color: text }]}>Сканирование QR кода</ThemedText>
+        <ThemedText style={[styles.cardDescription, { color: textMuted }]}>
           Наведите камеру на QR код бронирования, чтобы уменьшить количество столов.
         </ThemedText>
 
         <View style={styles.scannerContainer}>
           <CameraView
+            facing="back"
             onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
             barcodeScannerSettings={{
               barcodeTypes: ['qr'],
@@ -133,62 +245,18 @@ export default function ExecutorScanQrScreen() {
           />
         </View>
 
-        {scanned && (
-          <Pressable style={[styles.actionButton, { marginTop: 12 }]} onPress={() => setScanned(false)}>
-            <ThemedText style={styles.actionButtonText}>Сканировать ещё раз</ThemedText>
+        {scanned ? (
+          <Pressable
+            style={[styles.outlineBtn, { marginTop: 12 }]}
+            onPress={() => {
+              processingRef.current = false;
+              setScanned(false);
+            }}
+          >
+            <ThemedText style={[styles.btnLabel, { color: text }]}>Сканировать ещё раз</ThemedText>
           </Pressable>
-        )}
+        ) : null}
       </View>
     </ThemedView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1C1C1E',
-  },
-  card: {
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 20,
-    borderRadius: 16,
-    backgroundColor: CARD_ORANGE,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  cardDescription: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#1C1C1E',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.6)',
-    gap: 6,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '500',
-  },
-  scannerContainer: {
-    marginTop: 12,
-    borderRadius: 16,
-    overflow: 'hidden',
-    height: 260,
-    backgroundColor: '#000',
-  },
-});

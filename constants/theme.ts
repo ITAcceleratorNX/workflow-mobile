@@ -20,7 +20,8 @@ const textMuted = '#6E6E6E';
 const errorColor = '#F35713';
 const successColor = '#22c55e';
 const gray600 = '#3A3A3C';
-const screenBackgroundDark = '#1C1C1E';
+/** Только для тёмной темы: legacy-фон админских экранов (раньше использовался и в light — ломало светлую тему). */
+const screenBackgroundDarkDark = '#1C1C1E';
 
 export const Colors = {
   light: {
@@ -74,10 +75,9 @@ export const Colors = {
     // ── Legacy ──────────────────────────────────────────────────────────────
     gray600,
     /**
-     * @deprecated use `surface`/`surfaceElevated` instead.
-     * Сохранено для дашбордов admin/manager/executor — выровняем на Этапе 3.
+     * @deprecated используйте `background`. Раньше совпадало с тёмным фоном и ломало светлую тему.
      */
-    screenBackgroundDark,
+    screenBackgroundDark: '#FFFFFF',
   },
   dark: {
     // ── Surfaces ────────────────────────────────────────────────────────────
@@ -127,9 +127,9 @@ export const Colors = {
     // ── Legacy ──────────────────────────────────────────────────────────────
     gray600,
     /**
-     * @deprecated use `surface`/`surfaceElevated` instead.
+     * @deprecated используйте `background` / `surface`.
      */
-    screenBackgroundDark,
+    screenBackgroundDark: screenBackgroundDarkDark,
   },
 } as const;
 

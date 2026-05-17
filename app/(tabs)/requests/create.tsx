@@ -55,6 +55,7 @@ import {
   getServiceCategoryVisualMeta,
   SLA_OPTIONS,
 } from '@/constants/requests';
+import { Spacing } from '@/constants/theme';
 
 type CreateUserRole = 'client' | 'admin-worker' | 'department-head' | 'executor' | 'manager';
 
@@ -785,16 +786,31 @@ export default function CreateRequestScreen() {
                       ]}
                     >
                       <MaterialIcons name="home" size={18} color={locationSource === 'cabinet' ? onPrimary : mutedColor} />
-                      <ThemedText style={[styles.toggleLabel, { color: locationSource === 'cabinet' ? onPrimary : mutedColor }]}>
-                        Кабинет (умный дом)
-                      </ThemedText>
+                      <View style={styles.toggleBtnLabelCol}>
+                        <ThemedText
+                          style={[
+                            styles.toggleLabel,
+                            { color: locationSource === 'cabinet' ? onPrimary : mutedColor },
+                          ]}
+                        >
+                          Кабинет
+                        </ThemedText>
+                        <ThemedText
+                          style={[
+                            styles.toggleLabelSecondary,
+                            { color: locationSource === 'cabinet' ? onPrimary : mutedColor },
+                          ]}
+                        >
+                          умный офис
+                        </ThemedText>
+                      </View>
                     </Pressable>
                   </View>
                 )}
               {locationSource === 'cabinet' ? (
                 <>
                   <ThemedText style={[styles.stepHint, { color: mutedColor }]}>
-                    Кабинет, закреплённый за вами с умным домом
+                    Кабинет с функциями умного офиса, закреплённый за вами
                   </ThemedText>
                   <View style={styles.chipRow}>
                     {userCabinetRooms.map((room) => (
@@ -1853,9 +1869,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
+    paddingHorizontal: Spacing.lg,
+    minHeight: 52,
+  },
+  toggleBtnLabelCol: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: '78%',
   },
   toggleLabel: {
     fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  toggleLabelSecondary: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 15,
+    marginTop: 1,
+    opacity: 0.92,
   },
   summaryCard: {
     flexDirection: 'row',

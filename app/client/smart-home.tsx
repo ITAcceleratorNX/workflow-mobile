@@ -26,9 +26,11 @@ import {
   type ClientRoomSubscription,
 } from '@/lib/api';
 
-function smartHomeCardWidth(screenWidth: number) {
-  const pad = Spacing.lg * 3;
-  return Math.max(0, (screenWidth - pad) / 2);
+/** Ширина карточки устройства: экран − паддинги контента − зазор между колонками, пополам. */
+function smartHomeDeviceCardWidth(screenWidth: number) {
+  const horizontalPadding = Spacing.lg * 2;
+  const columnGap = Spacing.md;
+  return Math.max(0, Math.floor((screenWidth - horizontalPadding - columnGap) / 2));
 }
 
 const MOCK_SUBSCRIPTIONS: ClientRoomSubscription[] = [
@@ -63,7 +65,7 @@ const MOCK_DEVICES: YandexDevice[] = [
 export default function ClientSmartHomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
-  const cardWidth = useMemo(() => smartHomeCardWidth(windowWidth), [windowWidth]);
+  const deviceCardWidth = useMemo(() => smartHomeDeviceCardWidth(windowWidth), [windowWidth]);
   const user = useAuthStore((state) => state.user);
   const isGuest = useAuthStore((state) => state.isGuest);
   const { show: showToast } = useToast();
@@ -189,7 +191,7 @@ export default function ClientSmartHomeScreen() {
   const selectedRoom = subscriptions.find((s) => s.meeting_room_id === selectedRoomId);
 
   return (
-    <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: background }]}>
       <ScreenHeader
         title="Управление умным офисом"
         titleStyle={styles.screenTitleLarge}
@@ -229,29 +231,32 @@ export default function ClientSmartHomeScreen() {
                 accessibilityLabel="Выбор комнаты"
                 accessibilityState={{ expanded: showRoomSelector }}
                 style={({ pressed }) => [
-                  styles.deviceCard,
+                  styles.roomSelectorCard,
                   styles.roomCardFullWidth,
                   { backgroundColor: primary, opacity: pressed ? 0.9 : 1 },
                 ]}
               >
-                <View style={styles.deviceCardContent}>
+                <View style={styles.roomSelectCardContent}>
                   <View style={styles.roomCardTextCol}>
                     <ThemedText
-                      style={[styles.deviceName, styles.roomCardTitleNoFlex, { color: onPrimary }]}
+                      style={[styles.roomSelectTitle, { color: onPrimary }]}
                       numberOfLines={2}
                     >
                       {selectedRoom?.meetingRoom?.name || 'Выберите комнату'}
                     </ThemedText>
-                    <ThemedText style={[styles.deviceStatus, { color: onPrimary, opacity: 0.88 }]} numberOfLines={2}>
+                    <ThemedText
+                      style={[styles.roomSelectSubtitle, { color: onPrimary }]}
+                      numberOfLines={2}
+                    >
                       {selectedRoom?.meetingRoom?.office?.name || 'Нажмите, чтобы открыть список'}
                     </ThemedText>
                   </View>
                   <View
-                    style={[styles.deviceIconContainer, { backgroundColor: onAccentSurface.iconBubble }]}
+                    style={[styles.roomChevronBubble, { backgroundColor: onAccentSurface.iconBubble }]}
                   >
                     <MaterialIcons
                       name={showRoomSelector ? 'expand-less' : 'expand-more'}
-                      size={22}
+                      size={24}
                       color={onPrimary}
                     />
                   </View>
@@ -287,7 +292,7 @@ export default function ClientSmartHomeScreen() {
             <ThemedText style={[styles.devicesTitle, { color: text }]}>Устройства в кабинете</ThemedText>
             <View style={styles.devicesAreaWrapper}>
               {isLoadingDevices ? (
-                <View style={[styles.devicesGridPlaceholder, { width: cardWidth, backgroundColor: primary }]} />
+                <View style={[styles.devicesGridPlaceholder, { width: deviceCardWidth, backgroundColor: primary }]} />
               ) : controllableDevices.length === 0 ? (
                 <View style={styles.emptyState}>
                   <MaterialIcons name="lightbulb" size={64} color={textMuted} />
@@ -311,39 +316,47 @@ export default function ClientSmartHomeScreen() {
                         accessibilityLabel={`${device.name}, ${isOn ? 'включено' : 'выключено'}`}
                         style={[
                           styles.deviceCard,
-                          { width: cardWidth, backgroundColor: cardBg },
+                          { width: deviceCardWidth, backgroundColor: cardBg },
                           isControllingThis && styles.deviceCardDisabled,
                         ]}
                       >
-                        <View style={styles.deviceCardContent}>
-                          <View>
-                            <ThemedText style={[styles.deviceName, { color: onPrimary }]}>
-                              {device.name}
-                            </ThemedText>
-                            <ThemedText style={[styles.deviceStatus, { color: onPrimary, opacity: 0.88 }]}>
-                              {isControllingThis ? 'Загрузка...' : isOn ? 'Вкл.' : 'Выкл.'}
-                            </ThemedText>
+                        <View style={styles.deviceCardInner}>
+                          <View style={styles.deviceCardTopRow}>
+                            <View style={styles.deviceTitleBlock}>
+                              <ThemedText
+                                style={[styles.deviceName, { color: onPrimary }]}
+                                numberOfLines={2}
+                              >
+                                {device.name}
+                              </ThemedText>
+                            </View>
+                            <View
+                              style={[
+                                styles.deviceIconContainer,
+                                {
+                                  backgroundColor: isOn
+                                    ? onAccentSurface.iconBubbleStrong
+                                    : onAccentSurface.iconBubble,
+                                },
+                              ]}
+                            >
+                              {isControllingThis ? (
+                                <ActivityIndicator size="small" color={onPrimary} />
+                              ) : (
+                                <MaterialIcons
+                                  name="power-settings-new"
+                                  size={24}
+                                  color={isOn ? onPrimary : onAccentSurface.inactivePower}
+                                />
+                              )}
+                            </View>
                           </View>
-                          <View
-                            style={[
-                              styles.deviceIconContainer,
-                              {
-                                backgroundColor: isOn
-                                  ? onAccentSurface.iconBubbleStrong
-                                  : onAccentSurface.iconBubble,
-                              },
-                            ]}
+                          <ThemedText
+                            style={[styles.deviceStatus, { color: onPrimary }]}
+                            numberOfLines={1}
                           >
-                            {isControllingThis ? (
-                              <ActivityIndicator size="small" color={onPrimary} />
-                            ) : (
-                              <MaterialIcons
-                                name="power-settings-new"
-                                size={22}
-                                color={isOn ? onPrimary : onAccentSurface.inactivePower}
-                              />
-                            )}
-                          </View>
+                            {isControllingThis ? 'Загрузка...' : isOn ? 'Включено' : 'Выключено'}
+                          </ThemedText>
                         </View>
                       </Pressable>
                     );
@@ -390,17 +403,47 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'stretch',
   },
+  roomSelectorCard: {
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.lg + 2,
+    paddingHorizontal: Spacing.lg + 4,
+    minHeight: 92,
+  },
   roomCardTextCol: {
     flex: 1,
     minWidth: 0,
-    marginRight: Spacing.sm,
+    marginRight: Spacing.md,
+    justifyContent: 'center',
   },
-  roomCardTitleNoFlex: {
-    flex: 0,
+  roomSelectTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    lineHeight: 22,
+    letterSpacing: -0.2,
+  },
+  roomSelectSubtitle: {
+    fontSize: 14,
+    lineHeight: 19,
+    marginTop: 6,
+    opacity: 0.9,
+  },
+  roomChevronBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  roomSelectCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 72,
   },
   roomDropdown: { borderRadius: Radius.lg - 2, marginTop: Spacing.sm, overflow: 'hidden' },
-  roomDropdownItem: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
-  roomDropdownText: { fontSize: 16 },
+  roomDropdownItem: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md + 2 },
+  roomDropdownText: { fontSize: 16, lineHeight: 22 },
   devicesTitle: {
     fontSize: 17,
     fontWeight: '700',
@@ -410,22 +453,53 @@ const styles = StyleSheet.create({
   },
   devicesAreaWrapper: { position: 'relative' },
   devicesGridPlaceholder: {
-    height: 100,
+    height: 128,
     borderRadius: Radius.lg,
     opacity: 0.55,
   },
   loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
   devicesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
-  deviceCard: { borderRadius: Radius.lg - 2, padding: Spacing.lg, minHeight: 100 },
-  deviceCardDisabled: { opacity: 0.5 },
-  deviceCardContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    flex: 1,
-    paddingRight: Spacing.lg,
+  deviceCard: {
+    borderRadius: Radius.lg,
+    paddingVertical: Spacing.lg + 4,
+    paddingHorizontal: Spacing.lg + 4,
+    minHeight: 124,
   },
-  deviceName: { fontSize: 15, fontWeight: '500', flex: 1, marginRight: Spacing.sm },
-  deviceStatus: { fontSize: 13, marginTop: Spacing.xs },
-  deviceIconContainer: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  deviceCardDisabled: { opacity: 0.5 },
+  deviceCardInner: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  deviceCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.md,
+  },
+  deviceTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    paddingTop: 2,
+    paddingRight: Spacing.xs,
+  },
+  deviceName: {
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
+    letterSpacing: -0.15,
+  },
+  deviceStatus: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: Spacing.md,
+    lineHeight: 18,
+    opacity: 0.92,
+  },
+  deviceIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
 });

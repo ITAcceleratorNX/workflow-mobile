@@ -5,6 +5,9 @@ import React, { useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav, BOTTOM_NAV_ROW_HEIGHT, bottomNavBottomInset } from '@/components/bottom-nav';
+
+/** Совпадает с последним стопом градиента на `(tabs)/booking` — закрашивает запас под absolute BottomNav. */
+const BOOKING_TAB_SCENE_UNDERLAY = '#281504';
 import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 import { usePedometer } from '@/hooks/use-pedometer';
 import { useSleepNotifications } from '@/hooks/use-sleep-notifications';
@@ -54,7 +57,12 @@ export default function TabLayout() {
           tabBarTransparent: true,
           tabBarStyle: { position: 'absolute' },
           /** Запас под кастомный absolute BottomNav; 0 там, где навбар скрыт (help, create, карточка заявки). */
-          sceneStyle: { paddingBottom },
+          sceneStyle: {
+            paddingBottom,
+            ...(route.name === 'booking' && paddingBottom > 0
+              ? { backgroundColor: BOOKING_TAB_SCENE_UNDERLAY }
+              : {}),
+          },
         };
       }}>
       <Tabs.Screen name="index" options={{ title: 'Главная' }} />

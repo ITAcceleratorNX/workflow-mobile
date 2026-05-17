@@ -10,12 +10,11 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { PullToRefresh } from '@/components/ui';
+import { PullToRefresh, ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -65,13 +64,20 @@ function parseFloorField(s: string): { ok: true; value: number | null } | { ok: 
 
 export default function AdminWorkerOfficeScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { show: showToast } = useToast();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
-  const gray600 = useThemeColor({}, 'gray600');
-  const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const screenBg = useThemeColor({}, 'background');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const border = useThemeColor({}, 'border');
+  const divider = useThemeColor({}, 'divider');
+  const onPrimary = useThemeColor({}, 'onPrimary');
+  const danger = useThemeColor({}, 'danger');
+  const dangerSoft = useThemeColor({}, 'dangerSoft');
+  const accentSoft = useThemeColor({}, 'accentSoft');
+  const textSecondary = useThemeColor({}, 'textSecondary');
 
   const [offices, setOffices] = useState<Office[]>([]);
   const [loading, setLoading] = useState(true);
@@ -490,24 +496,37 @@ export default function AdminWorkerOfficeScreen() {
 
   const styles = useMemo(
     () =>
-      createOfficeStyles(primary, gray600, screenBg),
-    [primary, gray600, screenBg],
+      createOfficeStyles({
+        primary,
+        screenBg,
+        surfaceElevated,
+        surfaceMuted,
+        border,
+        divider,
+        onPrimary,
+        danger,
+        dangerSoft,
+        accentSoft,
+        textSecondary,
+      }),
+    [
+      primary,
+      screenBg,
+      surfaceElevated,
+      surfaceMuted,
+      border,
+      divider,
+      onPrimary,
+      danger,
+      dangerSoft,
+      accentSoft,
+      textSecondary,
+    ],
   );
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <MaterialIcons name="chevron-left" size={24} color={primary} />
-          <ThemedText style={styles.backLabel}>Назад</ThemedText>
-        </Pressable>
-        <ThemedText type="title" style={styles.title}>
-          Офис
-        </ThemedText>
-        <ThemedText style={[styles.subtitle, { color: textMuted }]}>
-          Офисы, рабочие часы и переговорные
-        </ThemedText>
-      </View>
+      <ScreenHeader title="Офис" subtitle="Офисы, рабочие часы и переговорные" />
 
       {loading && offices.length === 0 ? (
         <View style={styles.loadingBox}>
@@ -539,7 +558,7 @@ export default function AdminWorkerOfficeScreen() {
               setShowCreateForm((v) => !v);
             }}
           >
-            <MaterialIcons name="add-business" size={20} color="#fff" />
+            <MaterialIcons name="add-business" size={20} color={onPrimary} />
             <ThemedText style={styles.addOfficeButtonText}>
               {showCreateForm ? 'Отмена' : 'Добавить офис'}
             </ThemedText>
@@ -615,7 +634,7 @@ export default function AdminWorkerOfficeScreen() {
                 disabled={isCreating}
               >
                 {isCreating ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={onPrimary} />
                 ) : (
                   <ThemedText style={styles.saveBtnText}>Создать офис</ThemedText>
                 )}
@@ -736,7 +755,7 @@ export default function AdminWorkerOfficeScreen() {
                         disabled={savingDataId === office.id}
                       >
                         {savingDataId === office.id ? (
-                          <ActivityIndicator size="small" color="#fff" />
+                          <ActivityIndicator size="small" color={onPrimary} />
                         ) : (
                           <ThemedText style={styles.saveBtnText}>Сохранить данные офиса</ThemedText>
                         )}
@@ -772,8 +791,8 @@ export default function AdminWorkerOfficeScreen() {
                         <Switch
                           value={autoTrack}
                           onValueChange={setAutoTrack}
-                          trackColor={{ false: gray600, true: primary }}
-                          thumbColor="#fff"
+                          trackColor={{ false: surfaceMuted, true: primary }}
+                          thumbColor={onPrimary}
                         />
                       </View>
                       <Pressable
@@ -782,7 +801,7 @@ export default function AdminWorkerOfficeScreen() {
                         disabled={savingId === office.id}
                       >
                         {savingId === office.id ? (
-                          <ActivityIndicator size="small" color="#fff" />
+                          <ActivityIndicator size="small" color={onPrimary} />
                         ) : (
                           <ThemedText style={styles.saveBtnText}>Сохранить часы</ThemedText>
                         )}
@@ -842,7 +861,7 @@ export default function AdminWorkerOfficeScreen() {
                                         disabled={savingRoomId === r.id}
                                       >
                                         {savingRoomId === r.id ? (
-                                          <ActivityIndicator size="small" color="#fff" />
+                                          <ActivityIndicator size="small" color={onPrimary} />
                                         ) : (
                                           <ThemedText style={styles.roomActionBtnText}>Сохранить</ThemedText>
                                         )}
@@ -881,9 +900,9 @@ export default function AdminWorkerOfficeScreen() {
                                         disabled={deletingRoomId === r.id}
                                       >
                                         {deletingRoomId === r.id ? (
-                                          <ActivityIndicator size="small" color="#FCA5A5" />
+                                          <ActivityIndicator size="small" color={danger} />
                                         ) : (
-                                          <MaterialIcons name="delete-outline" size={20} color="#FCA5A5" />
+                                          <MaterialIcons name="delete-outline" size={20} color={danger} />
                                         )}
                                       </Pressable>
                                     </View>
@@ -952,7 +971,7 @@ export default function AdminWorkerOfficeScreen() {
                                   disabled={isCreatingRoom}
                                 >
                                   {isCreatingRoom ? (
-                                    <ActivityIndicator size="small" color="#fff" />
+                                    <ActivityIndicator size="small" color={onPrimary} />
                                   ) : (
                                     <ThemedText style={styles.saveBtnText}>Создать</ThemedText>
                                   )}
@@ -983,10 +1002,10 @@ export default function AdminWorkerOfficeScreen() {
                         disabled={deletingId === office.id}
                       >
                         {deletingId === office.id ? (
-                          <ActivityIndicator size="small" color="#fff" />
+                          <ActivityIndicator size="small" color={onPrimary} />
                         ) : (
                           <>
-                            <MaterialIcons name="delete-outline" size={18} color="#fff" />
+                            <MaterialIcons name="delete-outline" size={18} color={onPrimary} />
                             <ThemedText style={styles.deleteOfficeBtnText}>Удалить офис</ThemedText>
                           </>
                         )}
@@ -1011,40 +1030,23 @@ export default function AdminWorkerOfficeScreen() {
   );
 }
 
-function createOfficeStyles(primary: string, gray600: string, screenBg: string) {
+function createOfficeStyles(c: {
+  primary: string;
+  screenBg: string;
+  surfaceElevated: string;
+  surfaceMuted: string;
+  border: string;
+  divider: string;
+  onPrimary: string;
+  danger: string;
+  dangerSoft: string;
+  accentSoft: string;
+  textSecondary: string;
+}) {
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: screenBg,
-  },
-  header: {
-    paddingLeft: 8,
-    paddingRight: 16,
-    paddingBottom: 16,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    minHeight: 44,
-    paddingVertical: 4,
-    paddingRight: 8,
-    marginLeft: -4,
-    marginBottom: 8,
-    justifyContent: 'flex-start',
-  },
-  backLabel: {
-    fontSize: 16,
-    color: primary,
-    marginLeft: 4,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 4,
+    backgroundColor: c.screenBg,
   },
   loadingBox: {
     flex: 1,
@@ -1059,24 +1061,24 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     margin: 16,
     padding: 16,
     borderRadius: 12,
-    backgroundColor: 'rgba(239,68,68,0.15)',
+    backgroundColor: c.dangerSoft,
     borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.4)',
+    borderColor: c.danger,
   },
   errorText: {
     fontSize: 14,
-    color: '#FCA5A5',
+    color: c.danger,
     marginBottom: 12,
   },
   retryButton: {
     alignSelf: 'flex-start',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: primary,
+    backgroundColor: c.primary,
     borderRadius: 8,
   },
   retryText: {
-    color: '#fff',
+    color: c.onPrimary,
     fontWeight: '600',
   },
   scrollContent: {
@@ -1087,26 +1089,28 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: primary,
+    backgroundColor: c.primary,
     paddingVertical: 12,
     borderRadius: 12,
     marginBottom: 16,
   },
   addOfficeButtonText: {
-    color: '#fff',
+    color: c.onPrimary,
     fontWeight: '600',
     fontSize: 15,
   },
   createCard: {
-    backgroundColor: gray600,
+    backgroundColor: c.surfaceElevated,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: c.border,
   },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: screenBg,
+    borderColor: c.border,
+    backgroundColor: c.screenBg,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1119,10 +1123,12 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     fontSize: 15,
   },
   card: {
-    backgroundColor: gray600,
+    backgroundColor: c.surfaceElevated,
     borderRadius: 16,
     marginBottom: 12,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: c.border,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1154,7 +1160,7 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
   },
   expanded: {
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: c.divider,
     padding: 16,
   },
   sectionLabel: {
@@ -1184,8 +1190,8 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     alignSelf: 'stretch',
     width: '100%',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: screenBg,
+    borderColor: c.border,
+    backgroundColor: c.screenBg,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1204,7 +1210,7 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     marginRight: 12,
   },
   saveBtn: {
-    backgroundColor: primary,
+    backgroundColor: c.primary,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
@@ -1212,7 +1218,7 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     minWidth: 120,
   },
   saveBtnText: {
-    color: '#fff',
+    color: c.onPrimary,
     fontWeight: '600',
     fontSize: 15,
   },
@@ -1234,15 +1240,15 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     marginBottom: 8,
   },
   roomEditBlock: {
-    backgroundColor: screenBg,
+    backgroundColor: c.surfaceMuted,
     borderRadius: 10,
     padding: 12,
     gap: 8,
   },
   roomInput: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: gray600,
+    borderColor: c.border,
+    backgroundColor: c.screenBg,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1251,8 +1257,8 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
   roomInputSmall: {
     flex: 1,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: gray600,
+    borderColor: c.border,
+    backgroundColor: c.screenBg,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1268,7 +1274,7 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     marginTop: 4,
   },
   roomActionBtn: {
-    backgroundColor: primary,
+    backgroundColor: c.primary,
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 10,
@@ -1276,7 +1282,7 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     alignItems: 'center',
   },
   roomActionBtnText: {
-    color: '#fff',
+    color: c.onPrimary,
     fontWeight: '600',
     fontSize: 14,
   },
@@ -1292,10 +1298,12 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: screenBg,
+    backgroundColor: c.surfaceMuted,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
   },
   roomChip: {
     flexDirection: 'row',
@@ -1327,7 +1335,7 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     paddingVertical: 12,
     borderStyle: 'dashed',
     borderWidth: 1,
-    borderColor: primary,
+    borderColor: c.primary,
     borderRadius: 10,
     marginBottom: 8,
   },
@@ -1336,11 +1344,13 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     fontWeight: '600',
   },
   addRoomCard: {
-    backgroundColor: gray600,
+    backgroundColor: c.surfaceMuted,
     borderRadius: 12,
     padding: 14,
     marginBottom: 12,
     gap: 8,
+    borderWidth: 1,
+    borderColor: c.border,
   },
   addRoomActions: {
     flexDirection: 'row',
@@ -1353,13 +1363,13 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#DC2626',
+    backgroundColor: c.danger,
     paddingVertical: 12,
     borderRadius: 12,
     marginTop: 20,
   },
   deleteOfficeBtnText: {
-    color: '#fff',
+    color: c.onPrimary,
     fontWeight: '600',
     fontSize: 15,
   },
@@ -1369,13 +1379,13 @@ function createOfficeStyles(primary: string, gray600: string, screenBg: string) 
     gap: 10,
     marginTop: 8,
     padding: 12,
-    backgroundColor: 'rgba(226,91,33,0.12)',
+    backgroundColor: c.accentSoft,
     borderRadius: 10,
   },
   hintText: {
     flex: 1,
     fontSize: 12,
-    color: 'rgba(255,255,255,0.75)',
+    color: c.textSecondary,
   },
 });
 }

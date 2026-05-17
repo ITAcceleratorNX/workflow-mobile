@@ -56,8 +56,10 @@ export default function AdminWorkerNewsEditorScreen() {
   const textMuted = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
   const border = useThemeColor({}, 'border');
-  const cardBg = useThemeColor({}, 'cardBackground');
-  const screenBg = useThemeColor({}, 'screenBackgroundDark');
+  const cardBg = useThemeColor({}, 'surfaceElevated');
+  const screenBg = useThemeColor({}, 'background');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const danger = useThemeColor({}, 'danger');
 
   const params = useLocalSearchParams<{
     mode?: 'create' | 'edit';
@@ -227,7 +229,7 @@ export default function AdminWorkerNewsEditorScreen() {
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
-      <ScreenHeader title={headerTitle} inlineTitle hideBackLabel />
+      <ScreenHeader title={headerTitle} />
 
       <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
         <ScrollView
@@ -236,7 +238,9 @@ export default function AdminWorkerNewsEditorScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         >
-          {formError && <ThemedText style={[styles.formError, { color: '#F87171' }]}>{formError}</ThemedText>}
+          {formError && (
+            <ThemedText style={[styles.formError, { color: danger }]}>{formError}</ThemedText>
+          )}
 
           <View style={styles.field}>
             <ThemedText style={[styles.label, { color: textMuted }]}>Заголовок *</ThemedText>
@@ -267,18 +271,32 @@ export default function AdminWorkerNewsEditorScreen() {
               <ThemedText style={[styles.label, { color: textMuted }]}>Публикация</ThemedText>
               <View style={styles.radioRow}>
                 <Pressable
-                  style={[styles.radio, publishMode === 'now' && { backgroundColor: primary }]}
+                  style={[
+                    styles.radio,
+                    { backgroundColor: surfaceMuted, borderColor: border },
+                    publishMode === 'now' && { backgroundColor: primary, borderColor: primary },
+                  ]}
                   onPress={() => setPublishMode('now')}
                 >
-                  <ThemedText style={[styles.radioText, publishMode === 'now' && styles.radioTextActive]}>
+                  <ThemedText
+                    style={styles.radioLabel}
+                    colorName={publishMode === 'now' ? 'onPrimary' : 'textSecondary'}
+                  >
                     Сейчас
                   </ThemedText>
                 </Pressable>
                 <Pressable
-                  style={[styles.radio, publishMode === 'schedule' && { backgroundColor: primary }]}
+                  style={[
+                    styles.radio,
+                    { backgroundColor: surfaceMuted, borderColor: border },
+                    publishMode === 'schedule' && { backgroundColor: primary, borderColor: primary },
+                  ]}
                   onPress={() => setPublishMode('schedule')}
                 >
-                  <ThemedText style={[styles.radioText, publishMode === 'schedule' && styles.radioTextActive]}>
+                  <ThemedText
+                    style={styles.radioLabel}
+                    colorName={publishMode === 'schedule' ? 'onPrimary' : 'textSecondary'}
+                  >
                     Запланировать
                   </ThemedText>
                 </Pressable>
@@ -329,11 +347,21 @@ export default function AdminWorkerNewsEditorScreen() {
               {NOTIFICATION_OPTIONS.map((opt) => (
                 <Pressable
                   key={opt.value}
-                  style={[styles.radio, form.notification_type === opt.value && { backgroundColor: primary }]}
+                  style={[
+                    styles.radio,
+                    { backgroundColor: surfaceMuted, borderColor: border },
+                    form.notification_type === opt.value && {
+                      backgroundColor: primary,
+                      borderColor: primary,
+                    },
+                  ]}
                   onPress={() => setForm((f) => ({ ...f, notification_type: opt.value }))}
                 >
                   <ThemedText
-                    style={[styles.radioText, form.notification_type === opt.value && styles.radioTextActive]}
+                    style={styles.radioLabel}
+                    colorName={
+                      form.notification_type === opt.value ? 'onPrimary' : 'textSecondary'
+                    }
                   >
                     {opt.label}
                   </ThemedText>
@@ -406,10 +434,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#374151',
+    borderWidth: 1,
   },
-  radioText: { fontSize: 14, color: '#9CA3AF' },
-  radioTextActive: { color: '#fff' },
+  radioLabel: { fontSize: 14 },
   scheduleBlock: { marginTop: 12 },
   scheduleTap: {
     flexDirection: 'row',

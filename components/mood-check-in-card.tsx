@@ -32,6 +32,7 @@ const COLORS = {
   stressOverload: '#E57373',
   chipBg: '#3A3A3C',
   chipSelectedBg: 'rgba(232, 93, 43, 0.18)',
+  onPrimary: '#ffffff',
 };
 
 const MOOD_LEVELS = [
@@ -354,7 +355,7 @@ export function MoodCheckInCard() {
   const stressDef = STRESS_LEVELS.find((s) => s.key === stress) ?? STRESS_LEVELS[1];
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: COLORS.cardBg }]}>
       <View style={styles.header}>
         <MaterialIcons name="favorite" size={20} color={COLORS.accent} />
         <ThemedText style={[styles.title, { color: COLORS.textPrimary }]}>
@@ -405,7 +406,7 @@ export function MoodCheckInCard() {
             style={[styles.primaryBtn, { backgroundColor: COLORS.accent }]}
             onPress={() => setStep(2)}
           >
-            <ThemedText style={styles.primaryBtnText}>Далее</ThemedText>
+            <ThemedText style={[styles.primaryBtnText, { color: COLORS.onPrimary }]}>Далее</ThemedText>
           </Pressable>
         </>
       )}
@@ -462,17 +463,11 @@ export function MoodCheckInCard() {
             })}
           </LevelRow>
           <View style={styles.btnRow}>
-            <Pressable
-              style={[styles.secondaryBtn, { backgroundColor: COLORS.trackBg }]}
-              onPress={() => setStep(1)}
-            >
-              <ThemedText style={styles.secondaryBtnText}>Назад</ThemedText>
+            <Pressable style={[styles.secondaryBtn, { backgroundColor: COLORS.trackBg }]} onPress={() => setStep(1)}>
+              <ThemedText style={[styles.secondaryBtnText, { color: COLORS.textPrimary }]}>Назад</ThemedText>
             </Pressable>
-            <Pressable
-              style={[styles.primaryBtn, { backgroundColor: COLORS.accent, flex: 1 }]}
-              onPress={() => setStep(3)}
-            >
-              <ThemedText style={styles.primaryBtnText}>Далее</ThemedText>
+            <Pressable style={[styles.primaryBtn, { backgroundColor: COLORS.accent, flex: 1 }]} onPress={() => setStep(3)}>
+              <ThemedText style={[styles.primaryBtnText, { color: COLORS.onPrimary }]}>Далее</ThemedText>
             </Pressable>
           </View>
         </>
@@ -518,17 +513,11 @@ export function MoodCheckInCard() {
             })}
           </LevelRow>
           <View style={styles.btnRow}>
-            <Pressable
-              style={[styles.secondaryBtn, { backgroundColor: COLORS.trackBg }]}
-              onPress={() => setStep(2)}
-            >
-              <ThemedText style={styles.secondaryBtnText}>Назад</ThemedText>
+            <Pressable style={[styles.secondaryBtn, { backgroundColor: COLORS.trackBg }]} onPress={() => setStep(2)}>
+              <ThemedText style={[styles.secondaryBtnText, { color: COLORS.textPrimary }]}>Назад</ThemedText>
             </Pressable>
-            <Pressable
-              style={[styles.primaryBtn, { backgroundColor: COLORS.accent, flex: 1 }]}
-              onPress={handleFinish}
-            >
-              <ThemedText style={styles.primaryBtnText}>Готово</ThemedText>
+            <Pressable style={[styles.primaryBtn, { backgroundColor: COLORS.accent, flex: 1 }]} onPress={handleFinish}>
+              <ThemedText style={[styles.primaryBtnText, { color: COLORS.onPrimary }]}>Готово</ThemedText>
             </Pressable>
           </View>
         </>
@@ -586,7 +575,7 @@ export function MoodCheckInCard() {
             style={[styles.secondaryBtn, { backgroundColor: COLORS.trackBg, marginTop: 16 }]}
             onPress={() => setStep(1)}
           >
-            <ThemedText style={styles.secondaryBtnText}>Обновить</ThemedText>
+            <ThemedText style={[styles.secondaryBtnText, { color: COLORS.textPrimary }]}>Обновить</ThemedText>
           </Pressable>
         </>
       )}
@@ -596,7 +585,6 @@ export function MoodCheckInCard() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.cardBg,
     borderRadius: 20,
     padding: CARD_PADDING,
     marginBottom: 16,
@@ -669,14 +657,14 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
   },
-  primaryBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  primaryBtnText: { fontSize: 16, fontWeight: '600' },
   secondaryBtn: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 24,
     alignItems: 'center',
   },
-  secondaryBtnText: { fontSize: 16, fontWeight: '500', color: COLORS.textPrimary },
+  secondaryBtnText: { fontSize: 16, fontWeight: '500' },
   btnRow: { flexDirection: 'row', gap: 12 },
   recommendationBox: {
     borderRadius: 16,

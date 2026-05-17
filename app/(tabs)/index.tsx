@@ -64,8 +64,8 @@ const ADMIN_MANAGEMENT_CARDS: {
   },
   {
     key: 'smart-home',
-    title: 'Умный дом',
-    subtitle: 'Яндекс.Умный дом: токены и устройства',
+    title: 'Умный офис',
+    subtitle: 'Токены Яндекс и управление устройствами в переговорных',
     icon: 'home-filled',
   },
   {
