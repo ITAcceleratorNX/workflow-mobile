@@ -11,6 +11,7 @@ import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { getPublicBooking, type MeetingRoomBooking } from '@/lib/api';
+import { getBookingConfirmationWebUrl } from '@/lib/booking-web-url';
 import {
   formatBookingDurationRu,
   formatDisplayDateFromIso,
@@ -107,12 +108,17 @@ export default function BookingQrScreen() {
   const office = booking.office || booking.meetingRoom?.office || booking.meeting_room?.office;
   const room = booking.meetingRoom || booking.meeting_room;
   const durationLabel = formatBookingDurationRu(booking.start_time, booking.end_time);
-  const appUrl = `https://workflow-back-zpk4.onrender.com/booking/${booking.id}`;
-  const qrPayload = JSON.stringify({
-    bookingId: booking.id,
-    roomId: booking.meeting_room_id,
-    tablesRemaining: (booking as any).tables_remaining ?? room?.capacity ?? 0,
-  });
+  /** В браузере по ссылке подтягиваются актуальные данные с сервера; для демо-брони остаётся JSON для сканера в приложении. */
+  const confirmationWebUrl =
+    booking.id > 0 ? getBookingConfirmationWebUrl(booking.id) : '';
+  const qrPayload =
+    booking.id > 0
+      ? confirmationWebUrl
+      : JSON.stringify({
+          bookingId: booking.id,
+          roomId: booking.meeting_room_id,
+          tablesRemaining: (booking as any).tables_remaining ?? room?.capacity ?? 0,
+        });
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 12 }]}>
@@ -195,18 +201,25 @@ export default function BookingQrScreen() {
             </View>
           </View>
           <ThemedText style={[styles.qrHint, { color: mutedColor }]}>
-            Покажите этот QR исполнителю для сканирования.
+            Покажите этот QR-код на охране или ресепшене для подтверждения брони.
           </ThemedText>
         </View>
 
         <Pressable
           style={styles.shareButton}
           onPress={() =>
-            Share.share({
-              title: 'Бронирование переговорной',
-              message: appUrl,
-              url: appUrl,
-            })
+            Share.share(
+              confirmationWebUrl
+                ? {
+                    title: 'Бронирование переговорной',
+                    message: confirmationWebUrl,
+                    url: confirmationWebUrl,
+                  }
+                : {
+                    title: 'Бронирование переговорной',
+                    message: 'Бронирование в демо-режиме',
+                  }
+            )
           }
         >
           <MaterialIcons name="share" size={18} color="#FFFFFF" />
