@@ -54,8 +54,16 @@ export default function RegisterScreen() {
 
   useEffect(() => {
     getOffices().then(setOffices);
-    getServiceCategoriesPublic().then(setCategories);
   }, []);
+
+  useEffect(() => {
+    const officeId = parseInt(formData.office_id, 10);
+    if (!officeId) {
+      setCategories([]);
+      return;
+    }
+    getServiceCategoriesPublic(officeId).then(setCategories);
+  }, [formData.office_id]);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -220,7 +228,11 @@ export default function RegisterScreen() {
                 <Select
                   value={formData.office_id}
                   onValueChange={(v) =>
-                    setFormData((p) => ({ ...p, office_id: v }))
+                    setFormData((p) => ({
+                      ...p,
+                      office_id: v,
+                      service_category_id: '',
+                    }))
                   }
                   options={offices.map((o) => ({
                     value: String(o.id),

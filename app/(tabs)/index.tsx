@@ -47,7 +47,7 @@ const ADMIN_MANAGEMENT_CARDS: {
   {
     key: 'categories',
     title: 'Управление категориями',
-    subtitle: 'Категории и подкатегории услуг',
+    subtitle: 'Категории и подкатегории всех офисов',
     icon: 'category',
   },
   {
@@ -90,7 +90,8 @@ type ExecutorCardKey =
   | 'categories'
   | 'subcategories'
   | 'registration-requests'
-  | 'location-templates';
+  | 'location-templates'
+  | 'executors';
 
 const DEPARTMENT_HEAD_MANAGEMENT_CARDS: {
   key: ExecutorCardKey;
@@ -99,10 +100,22 @@ const DEPARTMENT_HEAD_MANAGEMENT_CARDS: {
   icon: React.ComponentProps<typeof MaterialIcons>['name'];
 }[] = [
   {
+    key: 'categories',
+    title: 'Категории услуг',
+    subtitle: 'Категории и подкатегории вашего офиса',
+    icon: 'category',
+  },
+  {
     key: 'location-templates',
     title: 'Шаблоны локаций',
     subtitle: 'Блок, этаж и помещения для заявок в вашем офисе',
     icon: 'place',
+  },
+  {
+    key: 'executors',
+    title: 'Исполнители',
+    subtitle: 'Список исполнителей и привязка к категориям',
+    icon: 'groups',
   },
   {
     key: 'statistics',
@@ -124,12 +137,6 @@ const MANAGER_MANAGEMENT_CARDS: {
     title: 'Управление офисами',
     subtitle: 'Добавление и управление офисами компании',
     icon: 'business',
-  },
-  {
-    key: 'categories',
-    title: 'Категории услуг',
-    subtitle: 'Категории и подкатегории услуг',
-    icon: 'category',
   },
   {
     key: 'users',
@@ -292,8 +299,16 @@ function ExecutorManagementScreen({
     (key: ExecutorCardKey) => {
       // department-head: шаблоны локаций своего офиса + аналитика
       if (executorRole === 'department-head') {
+        if (key === 'categories') {
+          router.push('/department-head/categories');
+          return;
+        }
         if (key === 'location-templates') {
           router.push('/department-head/office-location-catalog');
+          return;
+        }
+        if (key === 'executors') {
+          router.push('/department-head/executors');
           return;
         }
         if (key === 'statistics') router.push('/department-head/statistics');
@@ -303,9 +318,6 @@ function ExecutorManagementScreen({
       switch (key) {
         case 'office':
           router.push('/admin-worker/office');
-          break;
-        case 'categories':
-          router.push('/admin-worker/categories');
           break;
         case 'users':
           router.push('/admin-worker/users');

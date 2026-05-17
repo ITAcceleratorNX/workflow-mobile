@@ -222,11 +222,13 @@ export interface ServiceSubcategory {
   id: number;
   name: string;
   category_id: number;
+  office_id?: number;
 }
 
 export interface ServiceCategory {
   id: number;
   name: string;
+  office_id?: number;
   subcategories?: ServiceSubcategory[];
 }
 
@@ -423,21 +425,27 @@ export async function deleteOfficeLocationCatalogRow(
 
 // ==================== Service categories ====================
 
-export async function getServiceCategoriesPublic(): Promise<ServiceCategory[]> {
+export async function getServiceCategoriesPublic(
+  officeId: number
+): Promise<ServiceCategory[]> {
   const result = await request<ServiceCategory[] | ServiceCategory>(
-    '/service-categories/public'
+    `/service-categories/public?office_id=${officeId}`
   );
   if (!result.ok) return [];
   const data = result.data;
   return Array.isArray(data) ? data : [data];
 }
 
-/** Authenticated: categories with subcategories */
-export async function getServiceCategories(): Promise<
+function serviceCategoriesOfficeQuery(officeId?: number): string {
+  return officeId != null ? `?office_id=${officeId}` : '';
+}
+
+/** Authenticated: categories with subcategories (officeId — для admin-worker и фильтра) */
+export async function getServiceCategories(officeId?: number): Promise<
   { ok: true; data: ServiceCategory[] } | { ok: false; error: string }
 > {
   const result = await request<ServiceCategory[] | ServiceCategory>(
-    '/service-categories'
+    `/service-categories${serviceCategoriesOfficeQuery(officeId)}`
   );
   if (!result.ok) return { ok: false, error: result.error };
   const data = result.data;
@@ -445,23 +453,29 @@ export async function getServiceCategories(): Promise<
   return { ok: true, data: list };
 }
 
-export async function createServiceCategory(body: { name: string }): Promise<
-  { ok: true; data: ServiceCategory } | { ok: false; error: string }
-> {
-  const result = await request<ServiceCategory>('/service-categories', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+export async function createServiceCategory(
+  body: { name: string },
+  officeId?: number
+): Promise<{ ok: true; data: ServiceCategory } | { ok: false; error: string }> {
+  const result = await request<ServiceCategory>(
+    `/service-categories${serviceCategoriesOfficeQuery(officeId)}`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }
+  );
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: result.data! };
 }
 
-export async function deleteServiceCategory(id: number): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
-  const result = await request<undefined>(`/service-categories/${id}`, {
-    method: 'DELETE',
-  });
+export async function deleteServiceCategory(
+  id: number,
+  officeId?: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<undefined>(
+    `/service-categories/${id}${serviceCategoriesOfficeQuery(officeId)}`,
+    { method: 'DELETE' }
+  );
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
 }
@@ -470,7 +484,23 @@ export interface ExecutorInCategory {
   id: number;
   specialty: string;
   department_id?: number;
-  user?: { id: number; full_name: string; phone?: string; role?: string };
+  user?: { id: number; full_name: string; phone?: string; role?: string; office_id?: number };
+  serviceCategories?: Array<{ id: number; name: string }>;
+}
+
+export function getExecutorDisplayParts(executor: ExecutorInCategory): {
+  name: string;
+  specialty: string;
+} {
+  return {
+    name: executor.user?.full_name ?? `Исполнитель #${executor.id}`,
+    specialty: executor.specialty?.trim() ?? '',
+  };
+}
+
+export function formatExecutorLabel(executor: ExecutorInCategory): string {
+  const { name, specialty } = getExecutorDisplayParts(executor);
+  return specialty ? `${name} — ${specialty}` : name;
 }
 
 export async function getExecutorsByCategory(categoryId: number): Promise<
@@ -520,25 +550,24 @@ export async function changeCategoryHead(
   return { ok: true, data: result.data };
 }
 
-export async function createSubcategory(body: {
-  name: string;
-  category_id: number;
-}): Promise<
-  { ok: true; data: ServiceSubcategory } | { ok: false; error: string }
-> {
+export async function createSubcategory(
+  body: { name: string; category_id: number },
+  officeId?: number
+): Promise<{ ok: true; data: ServiceSubcategory } | { ok: false; error: string }> {
   const result = await request<ServiceSubcategory>(
-    '/service-categories/subcategories',
+    `/service-categories/subcategories${serviceCategoriesOfficeQuery(officeId)}`,
     { method: 'POST', body: JSON.stringify(body) }
   );
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: result.data! };
 }
 
-export async function deleteSubcategory(id: number): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
+export async function deleteSubcategory(
+  id: number,
+  officeId?: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await request<undefined>(
-    `/service-categories/subcategories/${id}`,
+    `/service-categories/subcategories/${id}${serviceCategoriesOfficeQuery(officeId)}`,
     { method: 'DELETE' }
   );
   if (!result.ok) return { ok: false, error: result.error };
@@ -843,7 +872,7 @@ export async function toggleLongTermRequest(
   return { ok: true };
 }
 
-/** Перенаправить подзаявку (department-head, executor) */
+/** Перенаправить подзаявку (executor) */
 export async function redirectRequest(
   requestId: number,
   categoryId: number
@@ -984,15 +1013,53 @@ export async function uploadRequestPhotos(
   }
 }
 
-/** Список исполнителей (для department-head) */
-export async function getExecutors(): Promise<
-  { ok: true; data: ExecutorInCategory[] } | { ok: false; error: string }
-> {
-  const result = await request<ExecutorInCategory[] | ExecutorInCategory>('/executors');
+/** Список исполнителей офиса; categoryId — фильтр по категории; officeId — для admin-worker */
+export async function getExecutors(
+  categoryId?: number,
+  officeId?: number
+): Promise<{ ok: true; data: ExecutorInCategory[] } | { ok: false; error: string }> {
+  const params = new URLSearchParams();
+  if (categoryId != null) params.set('categoryId', String(categoryId));
+  if (officeId != null) params.set('office_id', String(officeId));
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const result = await request<ExecutorInCategory[] | ExecutorInCategory>(`/executors${query}`);
   if (!result.ok) return { ok: false, error: result.error };
   const data = result.data;
   const list = Array.isArray(data) ? data : data ? [data] : [];
   return { ok: true, data: list };
+}
+
+export async function createExecutor(payload: {
+  full_name: string;
+  phone: string;
+  category_ids: number[];
+}): Promise<{ ok: true; data?: { executorId?: number } } | { ok: false; error: string }> {
+  const result = await request<{ executorId?: number; message?: string }>('/executors', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data };
+}
+
+export async function updateExecutor(
+  executorId: number,
+  payload: { full_name?: string; phone?: string; specialty?: string; category_ids?: number[] }
+): Promise<{ ok: true; data: ExecutorInCategory } | { ok: false; error: string }> {
+  const result = await request<ExecutorInCategory>(`/executors/${executorId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function deleteExecutor(
+  executorId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<undefined>(`/executors/${executorId}`, { method: 'DELETE' });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 /** Назначить исполнителей на подзаявку (department-head) */
@@ -1000,12 +1067,35 @@ export async function assignExecutorsToRequest(
   subRequestId: number,
   executors: Array<{ id: number; role: 'executor' | 'leader' }>
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const result = await request<unknown>(
-    `/request-executors/${subRequestId}/assign`,
-    { method: 'POST', body: JSON.stringify({ executors }) }
-  );
-  if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true };
+  const url = `${apiBaseUrl}/request-executors/${subRequestId}/assign`;
+  const token = useAuthStore.getState().token;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ executors }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const details = (data as { details?: { field?: string; message?: string }[] })?.details;
+      const detailMsg = Array.isArray(details) && details.length
+        ? details.map((d) => d.message).filter(Boolean).join('; ')
+        : '';
+      const error =
+        (data as { error?: string })?.error ||
+        (data as { message?: string })?.message ||
+        detailMsg ||
+        'Произошла ошибка';
+      return { ok: false, error: detailMsg ? `${error}: ${detailMsg}` : error };
+    }
+    return { ok: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Сетевая ошибка';
+    return { ok: false, error: message };
+  }
 }
 
 /** Изменить исполнителей на подзаявку (department-head) */

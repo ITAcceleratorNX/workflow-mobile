@@ -28,6 +28,7 @@ import { RequestActionMenu, type RequestUserRole } from '@/components/requests/r
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
+  assignExecutorsToRequest,
   changeExecutorsToRequest,
   completeRequest,
   deleteRequest,
@@ -194,22 +195,10 @@ export default function RequestDetailScreen() {
   }, [id, numId, isGuest, guestRequests]);
 
   useEffect(() => {
-    if (
-      role === 'department-head' ||
-      role === 'executor' ||
-      role === 'admin-worker' ||
-      role === 'manager'
-    ) {
+    if (role === 'executor' || role === 'admin-worker' || role === 'manager') {
       getServiceCategories().then((res) => {
         if (res.ok && res.data) {
           setCategories(res.data.map((c) => ({ id: c.id, name: c.name })));
-        }
-      });
-    }
-    if (role === 'department-head') {
-      getExecutors().then((res) => {
-        if (res.ok && res.data) {
-          setExecutors(res.data);
         }
       });
     }
@@ -217,6 +206,19 @@ export default function RequestDetailScreen() {
       getOffices().then(setOffices);
     }
   }, [role]);
+
+  useEffect(() => {
+    if (role !== 'department-head' || !subForAssign?.category_id) {
+      return;
+    }
+    getExecutors(subForAssign.category_id).then((res) => {
+      if (res.ok && res.data) {
+        setExecutors(res.data);
+      } else {
+        setExecutors([]);
+      }
+    });
+  }, [role, subForAssign?.id, subForAssign?.category_id]);
 
   /** Как системный свайп «назад»: pop стека. Без истории (deep link и т.п.) — на список заявок. */
   const goBack = useCallback(() => {
@@ -382,8 +384,11 @@ export default function RequestDetailScreen() {
       if (!subForAssign) return;
       setActionLoading(true);
       setAssignError(null);
+      const useAssignApi = subForAssign.status === 'awaiting_assignment';
       try {
-        const res = await changeExecutorsToRequest(subForAssign.id, execs);
+        const res = useAssignApi
+          ? await assignExecutorsToRequest(subForAssign.id, execs)
+          : await changeExecutorsToRequest(subForAssign.id, execs);
         if (res.ok) {
           showToast({ title: 'Исполнители назначены', variant: 'success' });
           setShowAssignModal(false);
@@ -628,7 +633,6 @@ export default function RequestDetailScreen() {
             request={request}
             subRequest={sub}
             userRole={role}
-            userServiceCategoryId={user?.service_category_id}
             userId={user?.id}
             isExecutorLeader={isExecutorLeader(sub)}
             onStartTask={(tid) => handleStartTask(Number(tid))}
@@ -652,11 +656,15 @@ export default function RequestDetailScreen() {
               setAssignError(null);
               setShowAssignModal(true);
             }}
-            onRedirect={(s) => {
-              setSubForRedirect(s);
-              setRedirectError(null);
-              setShowRedirectModal(true);
-            }}
+            onRedirect={
+              role === 'executor'
+                ? (s) => {
+                    setSubForRedirect(s);
+                    setRedirectError(null);
+                    setShowRedirectModal(true);
+                  }
+                : undefined
+            }
             onRateRequest={(s) => {
               setSubForRate(s);
               setShowRatingModal(true);
@@ -939,7 +947,6 @@ export default function RequestDetailScreen() {
         onSubmit={handleAssign}
         subRequest={subForAssign}
         executors={executors}
-        userServiceCategoryId={user?.service_category_id}
         loading={actionLoading}
         error={assignError}
       />

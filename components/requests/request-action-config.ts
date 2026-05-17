@@ -197,51 +197,31 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
   }
 
   if (userRole === 'department-head' && isSub && subRequest) {
-    const sameCategory =
-      userServiceCategoryId != null &&
-      subRequest.category_id === userServiceCategoryId;
-    if (sameCategory) {
-      if (subRequest.status === 'awaiting_assignment' && onAssignExecutor) {
-        actions.push({
-          icon: 'person-add',
-          label: 'Назначить исполнителей',
-          onClick: () => onAssignExecutor(subRequest),
-          variant: 'primary',
-        });
-      }
-      if (
-        subRequest.status !== 'in_progress' &&
-        subRequest.status !== 'awaiting_assignment' &&
-        subRequest.status !== 'completed' &&
-        onChangeExecutors
-      ) {
-        actions.push({
-          icon: 'person-add',
-          label: 'Изменить исполнителей',
-          onClick: () => onChangeExecutors(subRequest),
-          variant: 'primary',
-        });
-      }
-      if (subRequest.status !== 'completed' && onRedirect) {
-        actions.push({
-          icon: 'arrow-forward',
-          label: 'Перенаправить к другой категории',
-          onClick: () => onRedirect(subRequest),
-          variant: 'default',
-        });
-      }
-      if (onDelete) {
-        actions.push({
-          icon: 'delete',
-          label: 'Удалить заявку',
-          onClick: () => onDelete(subRequest),
-          variant: 'destructive',
-        });
-      }
-    } else if (onDelete && request.client_id === userId) {
+    if (subRequest.status === 'awaiting_assignment' && onAssignExecutor) {
+      actions.push({
+        icon: 'person-add',
+        label: 'Назначить исполнителей',
+        onClick: () => onAssignExecutor(subRequest),
+        variant: 'primary',
+      });
+    }
+    if (
+      subRequest.status !== 'in_progress' &&
+      subRequest.status !== 'awaiting_assignment' &&
+      subRequest.status !== 'completed' &&
+      onChangeExecutors
+    ) {
+      actions.push({
+        icon: 'person-add',
+        label: 'Изменить исполнителей',
+        onClick: () => onChangeExecutors(subRequest),
+        variant: 'primary',
+      });
+    }
+    if (onDelete) {
       actions.push({
         icon: 'delete',
-        label: 'Удалить',
+        label: 'Удалить заявку',
         onClick: () => onDelete(subRequest),
         variant: 'destructive',
       });

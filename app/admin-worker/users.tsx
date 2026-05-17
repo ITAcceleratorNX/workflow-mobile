@@ -955,9 +955,9 @@ export default function AdminWorkerUsersScreen() {
               ) : null}
 
               <View style={[styles.registrationCard, { borderColor: border, backgroundColor: surfaceElevated }]}>
-                <ThemedText style={[styles.cardTitle, { color: text }]}>Смена руководителя категории</ThemedText>
+                <ThemedText style={[styles.cardTitle, { color: text }]}>Исполнитель в категории</ThemedText>
                 <ThemedText style={[styles.cardSubtitle, { color: textMuted }]}>
-                  Назначение нового руководителя для категории услуг
+                  Добавить исполнителя в выбранную категорию услуг
                 </ThemedText>
                 <Pressable
                   style={[styles.selectTrigger, { borderColor: border, backgroundColor: screenBg }]}
