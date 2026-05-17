@@ -147,6 +147,7 @@ export default function CreateRequestScreen() {
 
   const [offices, setOffices] = useState<Office[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [executors, setExecutors] = useState<ExecutorInCategory[]>([]);
 
   const [locationSource, setLocationSource] = useState<'office' | 'cabinet'>('office');
@@ -208,7 +209,22 @@ export default function CreateRequestScreen() {
     hasRooms && selectedBlock
       ? getRoomsForFloorZone(locationCatalogRows, selectedBlock, locationForRooms)
       : [];
-  const selectedCategory = categories.find((c) => c.id === categoryId);
+  const effectiveOfficeId = useMemo(() => {
+    if (locationSource === 'cabinet' && selectedCabinetRoom?.office_id) {
+      return selectedCabinetRoom.office_id;
+    }
+    if (selectedOfficeId) return selectedOfficeId;
+    return null;
+  }, [locationSource, selectedCabinetRoom, selectedOfficeId]);
+
+  const officeCategories = useMemo(() => {
+    if (!effectiveOfficeId) return [];
+    return categories.filter(
+      (c) => c.office_id == null || Number(c.office_id) === effectiveOfficeId
+    );
+  }, [categories, effectiveOfficeId]);
+
+  const selectedCategory = officeCategories.find((c) => c.id === categoryId);
 
   useEffect(() => {
     const load = async () => {
@@ -248,15 +264,10 @@ export default function CreateRequestScreen() {
         return;
       }
 
-      const [offRes, catRes] = await Promise.all([
-        getOffices(),
-        getServiceCategories(),
-      ]);
+      const offRes = await getOffices();
       const offList = Array.isArray(offRes) ? offRes : [];
       setOffices(offList);
-      if (catRes.ok && catRes.data) {
-        setCategories(catRes.data);
-      }
+      setCategories([]);
       if (['admin-worker', 'department-head', 'executor', 'manager'].includes(role ?? '') && user?.id) {
         try {
           const subsRes = await getClientRoomSubscriptions(user.id);
@@ -279,6 +290,42 @@ export default function CreateRequestScreen() {
     };
     load();
   }, [role, user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isGuest || !effectiveOfficeId) {
+      if (!isGuest) {
+        setCategories([]);
+        setCategoriesLoading(false);
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setCategoriesLoading(true);
+    setCategories([]);
+    setCategoryId(0);
+    setSubcategoryId(0);
+    setTitle('');
+    setSelectedExecutors([]);
+
+    void (async () => {
+      const catRes = await getServiceCategories(effectiveOfficeId);
+      if (cancelled) return;
+      if (catRes.ok) {
+        setCategories(catRes.data);
+      } else {
+        setCategories([]);
+        showToast({ title: catRes.error, variant: 'destructive' });
+      }
+      setCategoriesLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, effectiveOfficeId, showToast]);
 
   useEffect(() => {
     if (role !== 'department-head' || categoryId <= 0) {
@@ -1234,8 +1281,20 @@ export default function CreateRequestScreen() {
               )}
 
               <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Категория заявки</ThemedText>
+              {selectedOffice ? (
+                <ThemedText style={[styles.stepHint, { color: mutedColor, marginBottom: 8 }]}>
+                  Категории офиса «{selectedOffice.name}»
+                </ThemedText>
+              ) : null}
+              {categoriesLoading ? (
+                <ActivityIndicator style={{ marginVertical: 16 }} color={primaryColor} />
+              ) : officeCategories.length === 0 ? (
+                <ThemedText style={[styles.stepHint, { color: mutedColor, marginBottom: 8 }]}>
+                  Нет категорий для выбранного офиса
+                </ThemedText>
+              ) : null}
               <View style={styles.categoryCardList}>
-                {categories.map((c) => {
+                {officeCategories.map((c) => {
                   const selected = categoryId === c.id;
                   const meta = getServiceCategoryVisualMeta(c.name);
                   return (
