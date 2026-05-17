@@ -532,9 +532,14 @@ export default function RequestDetailScreen() {
       return;
     }
 
+    const completerLabel =
+      role === 'department-head' ? 'офис-менеджером' : 'администратором';
+    const successTitle =
+      role === 'department-head' ? 'Заявка завершена' : 'Заявка завершена администратором';
+
     Alert.alert(
       'Завершить без назначения',
-      'Все подзаявки будут завершены администратором без назначения исполнителей. Продолжить?',
+      `Все подзаявки будут завершены ${completerLabel} без назначения исполнителей. Продолжить?`,
       [
         { text: 'Отмена', style: 'cancel' },
         {
@@ -549,7 +554,7 @@ export default function RequestDetailScreen() {
                   throw new Error(res.error);
                 }
               }
-              showToast({ title: 'Заявка завершена администратором', variant: 'success' });
+              showToast({ title: successTitle, variant: 'success' });
               refetch();
             } catch (e) {
               const message =
@@ -562,7 +567,7 @@ export default function RequestDetailScreen() {
         },
       ]
     );
-  }, [request, refetch, showToast]);
+  }, [request, refetch, showToast, role]);
 
   const isExecutorLeader = useCallback(
     (sub: SubRequest) => {

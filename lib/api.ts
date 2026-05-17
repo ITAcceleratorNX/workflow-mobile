@@ -920,7 +920,7 @@ export async function completeRequest(
   return { ok: true, data: result.data };
 }
 
-/** Админ-завершение подзаявки (admin-worker) */
+/** Завершение подзаявки без назначения (admin-worker, department-head) */
 export async function adminCompleteRequest(
   requestId: number
 ): Promise<{ ok: true } | { ok: false; error: string }> {

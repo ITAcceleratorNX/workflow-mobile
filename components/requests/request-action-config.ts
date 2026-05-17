@@ -43,6 +43,16 @@ export interface GetActionsParams {
   onEditRequestGroup?: () => void;
 }
 
+const STAFF_COMPLETE_SUB_STATUSES = ['in_progress', 'awaiting_assignment', 'assigned'];
+
+/** Подзаявки, которые можно закрыть без назначения (группа не в финальном статусе). */
+function canStaffCompleteWithoutAssignment(request: RequestGroup): boolean {
+  if (['completed', 'rejected', 'cancelled'].includes(request.status)) {
+    return false;
+  }
+  return (request.requests ?? []).some((sr) => STAFF_COMPLETE_SUB_STATUSES.includes(sr.status));
+}
+
 export function getRequestActions(params: GetActionsParams): ActionItem[] {
   const {
     request,
@@ -197,6 +207,15 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
   }
 
   if (userRole === 'department-head' && isSub && subRequest) {
+    if (onAdminCompleteGroup && canStaffCompleteWithoutAssignment(request)) {
+      actions.push({
+        icon: 'done-all',
+        label: 'Завершить без назначения',
+        onClick: onAdminCompleteGroup,
+        variant: 'primary',
+      });
+    }
+
     if (subRequest.status === 'awaiting_assignment' && onAssignExecutor) {
       actions.push({
         icon: 'person-add',
@@ -230,11 +249,6 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
 
   if (userRole === 'admin-worker' && isSub && subRequest) {
     const canProcessGroup = request.status === 'in_progress';
-    const hasActiveForAdminComplete =
-      canProcessGroup &&
-      (request.requests ?? []).some((sr) =>
-        ['in_progress', 'awaiting_assignment', 'assigned'].includes(sr.status)
-      );
 
     if (onAdminAcceptGroup && canProcessGroup) {
       actions.push({
@@ -254,7 +268,7 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
       });
     }
 
-    if (onAdminCompleteGroup && hasActiveForAdminComplete) {
+    if (onAdminCompleteGroup && canStaffCompleteWithoutAssignment(request)) {
       actions.push({
         icon: 'done-all',
         label: 'Завершить без назначения',
