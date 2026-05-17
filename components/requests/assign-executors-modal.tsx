@@ -1,23 +1,38 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
+  useColorScheme,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ExecutorAssignCard } from '@/components/requests/executor-assign-card';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import {
+  FontSizes,
+  FontWeights,
+  getShadow,
+  Radius,
+  Spacing,
+} from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import type { ExecutorInCategory } from '@/lib/api';
-import type { SubRequest } from '@/lib/api';
+import {
+  formatExecutorLabel,
+  getExecutorDisplayParts,
+  type ExecutorInCategory,
+  type SubRequest,
+} from '@/lib/api';
 
-interface ExecutorOption {
+interface SelectedExecutor {
   id: number;
-  name: string;
+  fullName: string;
+  specialty: string;
   role: 'executor' | 'leader';
 }
 
@@ -27,7 +42,6 @@ interface AssignExecutorsModalProps {
   onSubmit: (executors: Array<{ id: number; role: 'executor' | 'leader' }>) => Promise<void>;
   subRequest: SubRequest | null;
   executors: ExecutorInCategory[];
-  userServiceCategoryId?: number;
   loading?: boolean;
   error?: string | null;
 }
@@ -41,58 +55,63 @@ export function AssignExecutorsModal({
   loading = false,
   error,
 }: AssignExecutorsModalProps) {
-  const [selected, setSelected] = useState<ExecutorOption[]>([]);
+  const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const [selected, setSelected] = useState<SelectedExecutor[]>([]);
   const [newExecutorId, setNewExecutorId] = useState('');
+
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const border = useThemeColor({}, 'border');
   const cardBackground = useThemeColor({}, 'cardBackground');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const primary = useThemeColor({}, 'primary');
+
+  useEffect(() => {
+    if (!visible) {
+      setSelected([]);
+      setNewExecutorId('');
+    }
+  }, [visible]);
 
   const availableExecutors = executors.filter(
     (e) => !selected.some((s) => s.id === e.id)
   );
   const addOptions = [
-    { value: '', label: 'Добавить исполнителя' },
+    { value: '', label: 'Выберите исполнителя' },
     ...availableExecutors.map((e) => ({
       value: String(e.id),
-      label: e.user?.full_name ?? `Исполнитель #${e.id}`,
+      label: formatExecutorLabel(e),
     })),
   ];
+
+  const hasLeader = selected.some((s) => s.role === 'leader');
+  const canSubmit = selected.length > 0 && hasLeader && !loading;
 
   const addExecutor = (executorId: string) => {
     if (!executorId) return;
     const id = parseInt(executorId, 10);
     const exec = executors.find((e) => e.id === id);
-    if (exec && !selected.some((s) => s.id === id)) {
-      const hasLeader = selected.some((s) => s.role === 'leader');
-      setSelected((prev) => [
-        ...prev,
-        {
-          id,
-          name: exec.user?.full_name ?? `#${id}`,
-          role: hasLeader ? ('executor' as const) : ('leader' as const),
-        },
-      ]);
-      setNewExecutorId('');
-    }
-  };
+    if (!exec || selected.some((s) => s.id === id)) return;
 
-  const removeExecutor = (id: number) => {
-    setSelected((prev) => prev.filter((e) => e.id !== id));
-  };
+    const { name, specialty } = getExecutorDisplayParts(exec);
+    const assignLeader = !selected.some((s) => s.role === 'leader');
 
-  const setRole = (id: number, role: 'executor' | 'leader') => {
-    setSelected((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, role } : e))
-    );
+    setSelected((prev) => [
+      ...prev,
+      {
+        id,
+        fullName: name,
+        specialty,
+        role: assignLeader ? 'leader' : 'executor',
+      },
+    ]);
+    setNewExecutorId('');
   };
 
   const handleSubmit = async () => {
-    const hasLeader = selected.some((s) => s.role === 'leader');
-    if (selected.length === 0 || !hasLeader) return;
-    await onSubmit(
-      selected.map((e) => ({ id: e.id, role: e.role }))
-    );
+    if (!canSubmit) return;
+    await onSubmit(selected.map((e) => ({ id: e.id, role: e.role })));
     setSelected([]);
     onClose();
   };
@@ -112,101 +131,115 @@ export function AssignExecutorsModal({
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <Pressable style={styles.backdrop} onPress={handleClose}>
-        <Pressable
-          style={[styles.content, { backgroundColor: cardBackground, borderColor: border }]}
-          onPress={(e) => e.stopPropagation()}
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} accessibilityLabel="Закрыть" />
+
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: cardBackground,
+              borderColor: border,
+              marginBottom: insets.bottom + Spacing.md,
+              ...getShadow('modal', scheme),
+            },
+          ]}
         >
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <ThemedText style={[styles.title, { color: text }]}>
-              Назначить исполнителей
-            </ThemedText>
-            <ThemedText style={[styles.subtitle, { color: textMuted }]}>
-              Подзаявка #{subRequest.id}
-            </ThemedText>
-            <View style={styles.selectWrap}>
-              <Select
-                value={newExecutorId}
-                onValueChange={(v) => {
-                  if (v) addExecutor(v);
-                  setNewExecutorId('');
-                }}
-                options={addOptions}
-                placeholder="Добавить исполнителя"
-              />
+          <View style={styles.header}>
+            <View style={styles.headerText}>
+              <ThemedText style={[styles.title, { color: text }]}>
+                Назначить исполнителей
+              </ThemedText>
+              <ThemedText style={[styles.subtitle, { color: textMuted }]}>
+                Подзаявка #{subRequest.id}
+              </ThemedText>
             </View>
-            {selected.map((e) => (
-              <View
-                key={e.id}
-                style={[styles.executorRow, { borderColor: border }]}
-              >
-                <ThemedText style={[styles.executorName, { color: text }]}>
-                  {e.name}
-                </ThemedText>
-                <View style={styles.roleRow}>
-                  <Pressable
-                    onPress={() => setRole(e.id, 'leader')}
-                    style={[
-                      styles.roleBtn,
-                      e.role === 'leader' && styles.roleBtnActive,
-                    ]}
-                  >
-                    <ThemedText
-                      style={[
-                        styles.roleLabel,
-                        { color: e.role === 'leader' ? '#FFF' : textMuted },
-                      ]}
-                    >
-                      Лидер
-                    </ThemedText>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setRole(e.id, 'executor')}
-                    style={[
-                      styles.roleBtn,
-                      e.role === 'executor' && styles.roleBtnActive,
-                    ]}
-                  >
-                    <ThemedText
-                      style={[
-                        styles.roleLabel,
-                        { color: e.role === 'executor' ? '#FFF' : textMuted },
-                      ]}
-                    >
-                      Исполнитель
-                    </ThemedText>
-                  </Pressable>
-                </View>
-                <Pressable onPress={() => removeExecutor(e.id)} style={styles.removeBtn}>
-                  <MaterialIcons name="close" size={20} color="#EF4444" />
-                </Pressable>
-              </View>
-            ))}
-            {error && (
-              <ThemedText style={styles.error}>{error}</ThemedText>
-            )}
-            <ThemedText style={[styles.hint, { color: textMuted }]}>
-              Необходим хотя бы один лидер
+            <Pressable
+              onPress={handleClose}
+              hitSlop={10}
+              style={({ pressed }) => [
+                styles.closeBtn,
+                { borderColor: border, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <MaterialIcons name="close" size={22} color={textMuted} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>
+              Добавить
             </ThemedText>
+            <Select
+              value={newExecutorId}
+              onValueChange={(v) => {
+                if (v) addExecutor(v);
+                setNewExecutorId('');
+              }}
+              options={addOptions}
+              placeholder="Выберите исполнителя"
+            />
+
+            {selected.length > 0 ? (
+              <View style={styles.selectedSection}>
+                <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>
+                  Выбранные · {selected.length}
+                </ThemedText>
+                {selected.map((item) => (
+                  <ExecutorAssignCard
+                    key={item.id}
+                    fullName={item.fullName}
+                    specialty={item.specialty}
+                    role={item.role}
+                    onRoleChange={(role) =>
+                      setSelected((prev) =>
+                        prev.map((e) => (e.id === item.id ? { ...e, role } : e))
+                      )
+                    }
+                    onRemove={() =>
+                      setSelected((prev) => prev.filter((e) => e.id !== item.id))
+                    }
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={[styles.emptyState, { borderColor: border, backgroundColor: surfaceMuted }]}>
+                <MaterialIcons name="group-add" size={28} color={textMuted} />
+                <ThemedText style={[styles.emptyText, { color: textMuted }]}>
+                  Выберите одного или нескольких исполнителей из списка
+                </ThemedText>
+              </View>
+            )}
+
+            {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
+
+            {!hasLeader && selected.length > 0 ? (
+              <View style={[styles.hintBanner, { backgroundColor: `${primary}18` }]}>
+                <MaterialIcons name="info-outline" size={18} color={primary} />
+                <ThemedText style={[styles.hintText, { color: primary }]}>
+                  Назначьте хотя бы одного лидера
+                </ThemedText>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          <View style={[styles.footer, { borderTopColor: border }]}>
             <Button
               title={loading ? 'Назначение...' : 'Назначить'}
               onPress={handleSubmit}
               variant="primary"
-              disabled={
-                selected.length === 0 ||
-                !selected.some((s) => s.role === 'leader') ||
-                loading
-              }
+              loading={loading}
+              disabled={!canSubmit}
             />
-            <Button
-              title="Отмена"
-              onPress={handleClose}
-              variant="ghost"
-              style={styles.cancelBtn}
-            />
-          </ScrollView>
-        </Pressable>
-      </Pressable>
+            <Button title="Отмена" onPress={handleClose} variant="ghost" />
+          </View>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -214,69 +247,100 @@ export function AssignExecutorsModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: 24,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+    paddingHorizontal: Spacing.md,
   },
-  content: {
-    borderRadius: 16,
-    padding: 24,
+  sheet: {
+    width: '100%',
+    maxHeight: '88%',
+    borderRadius: Radius.xl,
     borderWidth: 1,
-    maxHeight: '85%',
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    gap: Spacing.md,
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontSize: FontSizes.titleLarge,
+    fontWeight: FontWeights.semibold,
   },
   subtitle: {
-    fontSize: 14,
-    marginBottom: 16,
+    fontSize: FontSizes.bodySmall,
   },
-  selectWrap: {
-    marginBottom: 16,
-  },
-  executorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.pill,
     borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  executorName: {
-    flex: 1,
-    fontSize: 16,
+  scroll: {
+    flexGrow: 0,
   },
-  roleRow: {
-    flexDirection: 'row',
-    gap: 8,
+  scrollContent: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    gap: Spacing.md,
   },
-  roleBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+  sectionLabel: {
+    fontSize: FontSizes.caption,
+    fontWeight: FontWeights.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
-  roleBtnActive: {
-    backgroundColor: '#114A65',
+  selectedSection: {
+    gap: Spacing.sm,
   },
-  roleLabel: {
-    fontSize: 14,
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
   },
-  removeBtn: {
-    padding: 4,
-    marginLeft: 8,
+  emptyText: {
+    fontSize: FontSizes.bodySmall,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   error: {
     color: '#EF4444',
-    fontSize: 14,
-    marginBottom: 12,
+    fontSize: FontSizes.bodySmall,
   },
-  hint: {
-    fontSize: 12,
-    marginBottom: 16,
+  hintBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md,
   },
-  cancelBtn: {
-    marginTop: 8,
+  hintText: {
+    flex: 1,
+    fontSize: FontSizes.bodySmall,
+    fontWeight: FontWeights.medium,
+  },
+  footer: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+    gap: Spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

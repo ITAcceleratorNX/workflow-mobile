@@ -43,6 +43,16 @@ export interface GetActionsParams {
   onEditRequestGroup?: () => void;
 }
 
+const STAFF_COMPLETE_SUB_STATUSES = ['in_progress', 'awaiting_assignment', 'assigned'];
+
+/** Подзаявки, которые можно закрыть без назначения (группа не в финальном статусе). */
+function canStaffCompleteWithoutAssignment(request: RequestGroup): boolean {
+  if (['completed', 'rejected', 'cancelled'].includes(request.status)) {
+    return false;
+  }
+  return (request.requests ?? []).some((sr) => STAFF_COMPLETE_SUB_STATUSES.includes(sr.status));
+}
+
 export function getRequestActions(params: GetActionsParams): ActionItem[] {
   const {
     request,
@@ -197,51 +207,40 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
   }
 
   if (userRole === 'department-head' && isSub && subRequest) {
-    const sameCategory =
-      userServiceCategoryId != null &&
-      subRequest.category_id === userServiceCategoryId;
-    if (sameCategory) {
-      if (subRequest.status === 'awaiting_assignment' && onAssignExecutor) {
-        actions.push({
-          icon: 'person-add',
-          label: 'Назначить исполнителей',
-          onClick: () => onAssignExecutor(subRequest),
-          variant: 'primary',
-        });
-      }
-      if (
-        subRequest.status !== 'in_progress' &&
-        subRequest.status !== 'awaiting_assignment' &&
-        subRequest.status !== 'completed' &&
-        onChangeExecutors
-      ) {
-        actions.push({
-          icon: 'person-add',
-          label: 'Изменить исполнителей',
-          onClick: () => onChangeExecutors(subRequest),
-          variant: 'primary',
-        });
-      }
-      if (subRequest.status !== 'completed' && onRedirect) {
-        actions.push({
-          icon: 'arrow-forward',
-          label: 'Перенаправить к другой категории',
-          onClick: () => onRedirect(subRequest),
-          variant: 'default',
-        });
-      }
-      if (onDelete) {
-        actions.push({
-          icon: 'delete',
-          label: 'Удалить заявку',
-          onClick: () => onDelete(subRequest),
-          variant: 'destructive',
-        });
-      }
-    } else if (onDelete && request.client_id === userId) {
+    if (onAdminCompleteGroup && canStaffCompleteWithoutAssignment(request)) {
+      actions.push({
+        icon: 'done-all',
+        label: 'Завершить без назначения',
+        onClick: onAdminCompleteGroup,
+        variant: 'primary',
+      });
+    }
+
+    if (subRequest.status === 'awaiting_assignment' && onAssignExecutor) {
+      actions.push({
+        icon: 'person-add',
+        label: 'Назначить исполнителей',
+        onClick: () => onAssignExecutor(subRequest),
+        variant: 'primary',
+      });
+    }
+    if (
+      subRequest.status !== 'in_progress' &&
+      subRequest.status !== 'awaiting_assignment' &&
+      subRequest.status !== 'completed' &&
+      onChangeExecutors
+    ) {
+      actions.push({
+        icon: 'person-add',
+        label: 'Изменить исполнителей',
+        onClick: () => onChangeExecutors(subRequest),
+        variant: 'primary',
+      });
+    }
+    if (onDelete) {
       actions.push({
         icon: 'delete',
-        label: 'Удалить',
+        label: 'Удалить заявку',
         onClick: () => onDelete(subRequest),
         variant: 'destructive',
       });
@@ -250,11 +249,6 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
 
   if (userRole === 'admin-worker' && isSub && subRequest) {
     const canProcessGroup = request.status === 'in_progress';
-    const hasActiveForAdminComplete =
-      canProcessGroup &&
-      (request.requests ?? []).some((sr) =>
-        ['in_progress', 'awaiting_assignment', 'assigned'].includes(sr.status)
-      );
 
     if (onAdminAcceptGroup && canProcessGroup) {
       actions.push({
@@ -274,7 +268,7 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
       });
     }
 
-    if (onAdminCompleteGroup && hasActiveForAdminComplete) {
+    if (onAdminCompleteGroup && canStaffCompleteWithoutAssignment(request)) {
       actions.push({
         icon: 'done-all',
         label: 'Завершить без назначения',

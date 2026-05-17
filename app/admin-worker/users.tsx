@@ -12,6 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AdminUserManagementTab } from '@/components/admin-worker/user-management-tab';
 import { PageLoader, ScreenHeader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -20,20 +21,13 @@ import { useToast } from '@/context/toast-context';
 import {
   type RegistrationRequestItem,
   type Office,
-  type OfficeUser,
   type ServiceCategory,
-  type ExecutorInCategory,
   getOffices,
   getRegistrationRequests,
   approveRegistrationRequest,
   rejectRegistrationRequest,
   deleteRejectedRegistrationRequest,
-  getUsersForManagement,
-  changeUserPassword,
-  updateUserRole,
   getServiceCategories,
-  getExecutorsByCategory,
-  changeCategoryHead,
 } from '@/lib/api';
 import { formatServiceCategoryDisplayName } from '@/constants/requests';
 import { formatRequestDate } from '@/lib/dateTimeUtils';
@@ -200,12 +194,7 @@ export default function AdminWorkerUsersScreen() {
     [handleDeleteRejected]
   );
 
-  // ——— Управление (офисные пользователи) ———
-  const [officeUsers, setOfficeUsers] = useState<OfficeUser[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
-  const [officeUsersLoading, setOfficeUsersLoading] = useState(false);
-  const [managementOfficeFilterId, setManagementOfficeFilterId] = useState('');
-  const [showManagementOfficeDropdown, setShowManagementOfficeDropdown] = useState(false);
 
   useEffect(() => {
     getServiceCategories().then((res) => {
@@ -214,188 +203,10 @@ export default function AdminWorkerUsersScreen() {
     });
   }, []);
 
-  // Смена пароля
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-
-  const handleChangePassword = useCallback(async () => {
-    if (!selectedUserId || !newPassword.trim()) return;
-    if (newPassword !== confirmPassword) {
-      setPasswordError('Пароли не совпадают');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setPasswordError('Пароль должен содержать минимум 6 символов');
-      return;
-    }
-    setPasswordError(null);
-    setIsChangingPassword(true);
-    const result = await changeUserPassword(selectedUserId, newPassword);
-    if (result.ok) {
-      showToast({ title: 'Пароль изменён', description: 'Пароль пользователя успешно изменён', variant: 'success' });
-      setSelectedUserId(null);
-      setNewPassword('');
-      setConfirmPassword('');
-      setShowUserDropdown(false);
-    } else {
-      setPasswordError(result.error);
-    }
-    setIsChangingPassword(false);
-  }, [selectedUserId, newPassword, confirmPassword, showToast]);
-
-  // Смена роли
-  const [selectedRoleUserId, setSelectedRoleUserId] = useState<number | null>(null);
-  const [newRole, setNewRole] = useState('');
-  const [isChangingRole, setIsChangingRole] = useState(false);
-  const [roleError, setRoleError] = useState<string | null>(null);
-  const [showRoleUserDropdown, setShowRoleUserDropdown] = useState(false);
-  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
-
-  useEffect(() => {
-    setSelectedUserId(null);
-    setSelectedRoleUserId(null);
-    setNewPassword('');
-    setConfirmPassword('');
-    setPasswordError(null);
-    setNewRole('');
-    setRoleError(null);
-    setShowUserDropdown(false);
-    setShowRoleUserDropdown(false);
-    setShowRoleDropdown(false);
-  }, [managementOfficeFilterId]);
-
-  useEffect(() => {
-    if (activeTab !== 'management') return;
-    let cancelled = false;
-    setOfficeUsersLoading(true);
-    (async () => {
-      try {
-        const res = await getUsersForManagement({
-          officeId: managementOfficeFilterId || undefined,
-        });
-        if (cancelled) return;
-        if (res.ok) setOfficeUsers(res.data);
-        else {
-          setOfficeUsers([]);
-          showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
-        }
-      } finally {
-        if (!cancelled) setOfficeUsersLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      setOfficeUsersLoading(false);
-    };
-  }, [activeTab, managementOfficeFilterId, showToast]);
-
-  const handleChangeRole = useCallback(async () => {
-    if (!selectedRoleUserId || !newRole) return;
-    setRoleError(null);
-    setIsChangingRole(true);
-    const result = await updateUserRole(selectedRoleUserId, newRole);
-    if (result.ok) {
-      showToast({ title: 'Роль изменена', description: 'Роль пользователя успешно изменена', variant: 'success' });
-      setOfficeUsers((prev) =>
-        prev.map((u) => (u.id === selectedRoleUserId ? { ...u, role: newRole } : u))
-      );
-      setSelectedRoleUserId(null);
-      setNewRole('');
-      setShowRoleUserDropdown(false);
-      setShowRoleDropdown(false);
-    } else {
-      setRoleError(result.error);
-    }
-    setIsChangingRole(false);
-  }, [selectedRoleUserId, newRole, showToast]);
-
-  // Смена руководителя категории
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [executors, setExecutors] = useState<ExecutorInCategory[]>([]);
-  const [selectedExecutorId, setSelectedExecutorId] = useState<number | null>(null);
-  const [isLoadingExecutors, setIsLoadingExecutors] = useState(false);
-  const [isChangingHead, setIsChangingHead] = useState(false);
-  const [changeHeadError, setChangeHeadError] = useState<string | null>(null);
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [showExecutorDropdown, setShowExecutorDropdown] = useState(false);
-
-  useEffect(() => {
-    if (!selectedCategoryId) {
-      setExecutors([]);
-      setSelectedExecutorId(null);
-      return;
-    }
-    setIsLoadingExecutors(true);
-    setChangeHeadError(null);
-    getExecutorsByCategory(selectedCategoryId).then((res) => {
-      if (res.ok) {
-        const onlyExecutors = res.data.filter((e) => e.user?.role === 'executor');
-        setExecutors(onlyExecutors);
-      } else {
-        setExecutors([]);
-        setChangeHeadError('Не удалось загрузить исполнителей');
-      }
-      setIsLoadingExecutors(false);
-    });
-  }, [selectedCategoryId]);
-
-  const handleChangeCategoryHead = useCallback(async () => {
-    if (!selectedCategoryId || !selectedExecutorId) return;
-    setChangeHeadError(null);
-    setIsChangingHead(true);
-    const result = await changeCategoryHead(selectedCategoryId, selectedExecutorId);
-    if (result.ok) {
-      const msg = result.data?.newHead?.name
-        ? `Новый руководитель: ${result.data.newHead.name}`
-        : 'Руководитель изменён';
-      showToast({ title: 'Готово', description: msg, variant: 'success' });
-      setSelectedCategoryId(null);
-      setSelectedExecutorId(null);
-      setExecutors([]);
-      setShowCategoryDropdown(false);
-      setShowExecutorDropdown(false);
-    } else {
-      setChangeHeadError(result.error);
-    }
-    setIsChangingHead(false);
-  }, [selectedCategoryId, selectedExecutorId, showToast]);
-
-  const selectedUserName = useMemo(
-    () => officeUsers.find((u) => u.id === selectedUserId)?.full_name ?? null,
-    [officeUsers, selectedUserId]
-  );
-  const selectedRoleUserName = useMemo(
-    () => officeUsers.find((u) => u.id === selectedRoleUserId)?.full_name ?? null,
-    [officeUsers, selectedRoleUserId]
-  );
-  const selectedCategoryName = useMemo(
-    () => categories.find((c) => c.id === selectedCategoryId)?.name ?? null,
-    [categories, selectedCategoryId]
-  );
-  const selectedExecutorName = useMemo(
-    () => executors.find((e) => e.id === selectedExecutorId)?.user?.full_name ?? null,
-    [executors, selectedExecutorId]
-  );
-
   const registrationOfficeLabel = useMemo(() => {
     if (!filterOfficeId) return 'Все офисы';
     return offices.find((o) => String(o.id) === filterOfficeId)?.name ?? 'Офис';
   }, [filterOfficeId, offices]);
-
-  const managementOfficeLabel = useMemo(() => {
-    if (!managementOfficeFilterId) return 'Все офисы';
-    return offices.find((o) => String(o.id) === managementOfficeFilterId)?.name ?? 'Офис';
-  }, [managementOfficeFilterId, offices]);
-
-  const managementUsersScopeHint = useMemo(() => {
-    if (!managementOfficeFilterId) return 'Пользователи всех офисов';
-    const name = offices.find((o) => String(o.id) === managementOfficeFilterId)?.name;
-    return name ? `Пользователи офиса «${name}»` : 'Пользователи выбранного офиса';
-  }, [managementOfficeFilterId, offices]);
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
@@ -404,10 +215,7 @@ export default function AdminWorkerUsersScreen() {
       <View style={[styles.tabs, { backgroundColor: surfaceMuted, borderWidth: 1, borderColor: border }]}>
         <Pressable
           style={[styles.tab, activeTab === 'requests' && { backgroundColor: primary }]}
-          onPress={() => {
-            setActiveTab('requests');
-            setShowManagementOfficeDropdown(false);
-          }}
+          onPress={() => setActiveTab('requests')}
         >
           <MaterialIcons
             name="person-add"
@@ -717,360 +525,11 @@ export default function AdminWorkerUsersScreen() {
       )}
 
       {activeTab === 'management' && (
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
-          keyboardShouldPersistTaps="handled"
-        >
-          <ThemedText style={[styles.sectionTitle, { color: text }]}>Управление пользователями</ThemedText>
-          <ThemedText style={[styles.hint, { color: textMuted }]}>
-            Фильтр «Офис» задаёт состав списков ниже. Пароль — не короче 6 символов; после смены пользователь входит с новым
-            паролем сразу.
-          </ThemedText>
-
-          <View style={styles.field}>
-            <ThemedText style={[styles.label, { color: textMuted }]}>Офис</ThemedText>
-            <Pressable
-              style={[styles.selectTrigger, { borderColor: border, backgroundColor: surfaceElevated }]}
-              onPress={() => {
-                setShowManagementOfficeDropdown((v) => !v);
-                setShowUserDropdown(false);
-                setShowRoleUserDropdown(false);
-                setShowRoleDropdown(false);
-              }}
-            >
-              <ThemedText style={[styles.selectTriggerText, { color: text }]}>{managementOfficeLabel}</ThemedText>
-              <MaterialIcons
-                name={showManagementOfficeDropdown ? 'expand-less' : 'expand-more'}
-                size={22}
-                color={textMuted}
-              />
-            </Pressable>
-            {showManagementOfficeDropdown && (
-              <View style={[styles.dropdown, { backgroundColor: surfaceElevated, borderWidth: 1, borderColor: border }]}>
-                <Pressable
-                  style={[
-                    styles.dropdownItem,
-                    !managementOfficeFilterId && { backgroundColor: accentSoft },
-                  ]}
-                  onPress={() => {
-                    setManagementOfficeFilterId('');
-                    setShowManagementOfficeDropdown(false);
-                  }}
-                >
-                  <ThemedText style={[styles.dropdownItemText, { color: text }]}>Все офисы</ThemedText>
-                </Pressable>
-                {offices.map((o) => (
-                  <Pressable
-                    key={o.id}
-                    style={[
-                      styles.dropdownItem,
-                      managementOfficeFilterId === String(o.id) && { backgroundColor: accentSoft },
-                    ]}
-                    onPress={() => {
-                      setManagementOfficeFilterId(String(o.id));
-                      setShowManagementOfficeDropdown(false);
-                    }}
-                  >
-                    <ThemedText style={[styles.dropdownItemText, { color: text }]}>{o.name}</ThemedText>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </View>
-
-          {officeUsersLoading ? (
-            <View style={styles.loadingBox}>
-              <PageLoader size={80} />
-              <ThemedText style={[styles.loadingText, { color: textMuted }]}>Загрузка...</ThemedText>
-            </View>
-          ) : null}
-
-          {!officeUsersLoading && officeUsers.length === 0 ? (
-            <ThemedText style={[styles.emptyText, { color: textMuted }]}>Пользователи не найдены</ThemedText>
-          ) : null}
-
-          {!officeUsersLoading ? (
-            <View style={[styles.requestList, { marginTop: 4 }]}>
-              {officeUsers.length > 0 ? (
-                <>
-                  <View style={[styles.registrationCard, { borderColor: border, backgroundColor: surfaceElevated }]}>
-                    <ThemedText style={[styles.cardTitle, { color: text }]}>Смена пароля</ThemedText>
-                    <ThemedText style={[styles.cardSubtitle, { color: textMuted }]}>{managementUsersScopeHint}</ThemedText>
-                    <Pressable
-                      style={[styles.selectTrigger, { borderColor: border, backgroundColor: screenBg }]}
-                      onPress={() => {
-                        setShowUserDropdown((v) => !v);
-                        setShowManagementOfficeDropdown(false);
-                      }}
-                    >
-                      <ThemedText style={[styles.selectTriggerText, { color: selectedUserName ? text : textMuted }]}>
-                        {selectedUserName ?? 'Выберите пользователя'}
-                      </ThemedText>
-                      <MaterialIcons name={showUserDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
-                    </Pressable>
-                    {showUserDropdown && (
-                      <View style={[styles.dropdown, { backgroundColor: surfaceElevated, borderWidth: 1, borderColor: border }]}>
-                        {officeUsers.map((u) => (
-                          <Pressable
-                            key={u.id}
-                            style={[
-                              styles.dropdownItem,
-                              u.id === selectedUserId && { backgroundColor: accentSoft },
-                            ]}
-                            onPress={() => {
-                              setSelectedUserId(u.id);
-                              setShowUserDropdown(false);
-                            }}
-                          >
-                            <ThemedText style={[styles.dropdownItemText, { color: text }]}>
-                              {u.full_name} ({u.phone})
-                              {!managementOfficeFilterId && u.office?.name ? ` — ${u.office.name}` : ''}
-                            </ThemedText>
-                          </Pressable>
-                        ))}
-                      </View>
-                    )}
-                    <TextInput
-                      style={[styles.input, { color: text, borderColor: border, backgroundColor: screenBg }]}
-                      placeholder="Новый пароль"
-                      placeholderTextColor={textMuted}
-                      value={newPassword}
-                      onChangeText={setNewPassword}
-                      secureTextEntry
-                      editable={!isChangingPassword}
-                    />
-                    <TextInput
-                      style={[styles.input, { color: text, borderColor: border, backgroundColor: screenBg }]}
-                      placeholder="Подтверждение"
-                      placeholderTextColor={textMuted}
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      secureTextEntry
-                      editable={!isChangingPassword}
-                    />
-                    {passwordError ? (
-                      <ThemedText style={[styles.errorText, { color: danger }]}>{passwordError}</ThemedText>
-                    ) : null}
-                    <Pressable
-                      style={[
-                        styles.primaryButton,
-                        { backgroundColor: primary },
-                        (!selectedUserId || !newPassword || !confirmPassword || isChangingPassword) && styles.buttonDisabled,
-                      ]}
-                      onPress={handleChangePassword}
-                      disabled={!selectedUserId || !newPassword || !confirmPassword || isChangingPassword}
-                    >
-                      {isChangingPassword ? (
-                        <ActivityIndicator size="small" color={onPrimary} />
-                      ) : (
-                        <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Изменить пароль</ThemedText>
-                      )}
-                    </Pressable>
-                  </View>
-
-                  <View style={[styles.registrationCard, { borderColor: border, backgroundColor: surfaceElevated }]}>
-                    <ThemedText style={[styles.cardTitle, { color: text }]}>Смена роли</ThemedText>
-                    <ThemedText style={[styles.cardSubtitle, { color: textMuted }]}>{managementUsersScopeHint}</ThemedText>
-                    <Pressable
-                      style={[styles.selectTrigger, { borderColor: border, backgroundColor: screenBg }]}
-                      onPress={() => {
-                        setShowRoleUserDropdown((v) => !v);
-                        setShowManagementOfficeDropdown(false);
-                      }}
-                    >
-                      <ThemedText style={[styles.selectTriggerText, { color: selectedRoleUserName ? text : textMuted }]}>
-                        {selectedRoleUserName
-                          ? `${selectedRoleUserName} — ${ROLE_LABELS[officeUsers.find((u) => u.id === selectedRoleUserId)?.role ?? ''] ?? ''}`
-                          : 'Выберите пользователя'}
-                      </ThemedText>
-                      <MaterialIcons name={showRoleUserDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
-                    </Pressable>
-                    {showRoleUserDropdown && (
-                      <View style={[styles.dropdown, { backgroundColor: surfaceElevated, borderWidth: 1, borderColor: border }]}>
-                        {officeUsers.map((u) => (
-                          <Pressable
-                            key={u.id}
-                            style={[
-                              styles.dropdownItem,
-                              u.id === selectedRoleUserId && { backgroundColor: accentSoft },
-                            ]}
-                            onPress={() => {
-                              setSelectedRoleUserId(u.id);
-                              setShowRoleUserDropdown(false);
-                            }}
-                          >
-                            <ThemedText style={[styles.dropdownItemText, { color: text }]}>
-                              {u.full_name} — {ROLE_LABELS[u.role] ?? u.role}
-                              {!managementOfficeFilterId && u.office?.name ? ` — ${u.office.name}` : ''}
-                            </ThemedText>
-                          </Pressable>
-                        ))}
-                      </View>
-                    )}
-                    <Pressable
-                      style={[styles.selectTrigger, { borderColor: border, backgroundColor: screenBg }]}
-                      onPress={() => {
-                        setShowRoleDropdown((v) => !v);
-                        setShowManagementOfficeDropdown(false);
-                      }}
-                    >
-                      <ThemedText style={[styles.selectTriggerText, { color: newRole ? text : textMuted }]}>
-                        {newRole ? ROLE_LABELS[newRole] ?? newRole : 'Выберите роль'}
-                      </ThemedText>
-                      <MaterialIcons name={showRoleDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
-                    </Pressable>
-                    {showRoleDropdown && (
-                      <View style={[styles.dropdown, { backgroundColor: surfaceElevated, borderWidth: 1, borderColor: border }]}>
-                        {Object.entries(ROLE_LABELS).map(([id, label]) => (
-                          <Pressable
-                            key={id}
-                            style={[styles.dropdownItem, id === newRole && { backgroundColor: accentSoft }]}
-                            onPress={() => {
-                              setNewRole(id);
-                              setShowRoleDropdown(false);
-                            }}
-                          >
-                            <ThemedText style={[styles.dropdownItemText, { color: text }]}>{label}</ThemedText>
-                          </Pressable>
-                        ))}
-                      </View>
-                    )}
-                    {roleError ? <ThemedText style={[styles.errorText, { color: danger }]}>{roleError}</ThemedText> : null}
-                    <Pressable
-                      style={[
-                        styles.primaryButton,
-                        { backgroundColor: primary },
-                        (!selectedRoleUserId || !newRole || isChangingRole) && styles.buttonDisabled,
-                      ]}
-                      onPress={handleChangeRole}
-                      disabled={!selectedRoleUserId || !newRole || isChangingRole}
-                    >
-                      {isChangingRole ? (
-                        <ActivityIndicator size="small" color={onPrimary} />
-                      ) : (
-                        <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Изменить роль</ThemedText>
-                      )}
-                    </Pressable>
-                  </View>
-                </>
-              ) : null}
-
-              <View style={[styles.registrationCard, { borderColor: border, backgroundColor: surfaceElevated }]}>
-                <ThemedText style={[styles.cardTitle, { color: text }]}>Смена руководителя категории</ThemedText>
-                <ThemedText style={[styles.cardSubtitle, { color: textMuted }]}>
-                  Назначение нового руководителя для категории услуг
-                </ThemedText>
-                <Pressable
-                  style={[styles.selectTrigger, { borderColor: border, backgroundColor: screenBg }]}
-                  onPress={() => {
-                    if (!isLoadingExecutors) {
-                      setShowCategoryDropdown((v) => !v);
-                      setShowManagementOfficeDropdown(false);
-                    }
-                  }}
-                >
-                  <ThemedText style={[styles.selectTriggerText, { color: selectedCategoryName ? text : textMuted }]}>
-                    {selectedCategoryName ?? (isLoadingExecutors ? 'Загрузка...' : 'Выберите категорию')}
-                  </ThemedText>
-                  <MaterialIcons name={showCategoryDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
-                </Pressable>
-                {showCategoryDropdown && (
-                  <View style={[styles.dropdown, { backgroundColor: surfaceElevated, borderWidth: 1, borderColor: border }]}>
-                    {categories.map((c) => (
-                      <Pressable
-                        key={c.id}
-                        style={[styles.dropdownItem, c.id === selectedCategoryId && { backgroundColor: accentSoft }]}
-                        onPress={() => {
-                          setSelectedCategoryId(c.id);
-                          setShowCategoryDropdown(false);
-                        }}
-                      >
-                        <ThemedText style={[styles.dropdownItemText, { color: text }]}>{c.name}</ThemedText>
-                      </Pressable>
-                    ))}
-                  </View>
-                )}
-                {selectedCategoryId && (
-                  <>
-                    <Pressable
-                      style={[styles.selectTrigger, { borderColor: border, backgroundColor: screenBg }]}
-                      onPress={() => {
-                        if (!isLoadingExecutors) {
-                          setShowExecutorDropdown((v) => !v);
-                          setShowManagementOfficeDropdown(false);
-                        }
-                      }}
-                    >
-                      <ThemedText style={[styles.selectTriggerText, { color: selectedExecutorName ? text : textMuted }]}>
-                        {selectedExecutorName ?? (isLoadingExecutors ? 'Загрузка...' : 'Выберите исполнителя')}
-                      </ThemedText>
-                      <MaterialIcons name={showExecutorDropdown ? 'expand-less' : 'expand-more'} size={22} color={textMuted} />
-                    </Pressable>
-                    {showExecutorDropdown && (
-                      <View style={[styles.dropdown, { backgroundColor: surfaceElevated, borderWidth: 1, borderColor: border }]}>
-                        {executors.length === 0 && !isLoadingExecutors ? (
-                          <ThemedText style={[styles.dropdownItemText, { color: textMuted }]}>
-                            Нет доступных исполнителей
-                          </ThemedText>
-                        ) : (
-                          executors.map((e) => (
-                            <Pressable
-                              key={e.id}
-                              style={[
-                                styles.dropdownItem,
-                                e.id === selectedExecutorId && { backgroundColor: accentSoft },
-                              ]}
-                              onPress={() => {
-                                setSelectedExecutorId(e.id);
-                                setShowExecutorDropdown(false);
-                              }}
-                            >
-                              <ThemedText style={[styles.dropdownItemText, { color: text }]}>
-                                {e.user?.full_name} — {e.specialty}
-                              </ThemedText>
-                            </Pressable>
-                          ))
-                        )}
-                      </View>
-                    )}
-                  </>
-                )}
-                {changeHeadError ? (
-                  <ThemedText style={[styles.errorText, { color: danger }]}>{changeHeadError}</ThemedText>
-                ) : null}
-                <Pressable
-                  style={[
-                    styles.primaryButton,
-                    { backgroundColor: primary },
-                    (!selectedCategoryId || !selectedExecutorId || isChangingHead) && styles.buttonDisabled,
-                  ]}
-                  onPress={handleChangeCategoryHead}
-                  disabled={!selectedCategoryId || !selectedExecutorId || isChangingHead}
-                >
-                  {isChangingHead ? (
-                    <ActivityIndicator size="small" color={onPrimary} />
-                  ) : (
-                    <ThemedText style={[styles.primaryButtonText, { color: onPrimary }]}>Сменить руководителя</ThemedText>
-                  )}
-                </Pressable>
-                {(selectedCategoryId || selectedExecutorId) && (
-                  <Pressable
-                    style={[styles.secondaryButton, { borderColor: border }]}
-                    onPress={() => {
-                      setSelectedCategoryId(null);
-                      setSelectedExecutorId(null);
-                      setShowCategoryDropdown(false);
-                      setShowExecutorDropdown(false);
-                    }}
-                    disabled={isChangingHead}
-                  >
-                    <ThemedText style={[styles.secondaryButtonText, { color: text }]}>Сбросить</ThemedText>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          ) : null}
-        </ScrollView>
+        <AdminUserManagementTab
+          offices={offices}
+          categories={categories}
+          isActive={activeTab === 'management'}
+        />
       )}
     </ThemedView>
   );

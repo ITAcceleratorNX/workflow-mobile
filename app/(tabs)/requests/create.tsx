@@ -20,6 +20,7 @@ import {
   View,
 } from 'react-native';
 
+import { ExecutorAssignCard } from '@/components/requests/executor-assign-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { getPrimaryPhotoUri } from '@/lib/image-uri';
@@ -29,6 +30,8 @@ import { useToast } from '@/context/toast-context';
 import {
   createRequestGroup,
   getClientRoomSubscriptions,
+  formatExecutorLabel,
+  getExecutorDisplayParts,
   getExecutors,
   getOffices,
   getOfficeLocationCatalog,
@@ -144,6 +147,7 @@ export default function CreateRequestScreen() {
 
   const [offices, setOffices] = useState<Office[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [executors, setExecutors] = useState<ExecutorInCategory[]>([]);
 
   const [locationSource, setLocationSource] = useState<'office' | 'cabinet'>('office');
@@ -205,7 +209,22 @@ export default function CreateRequestScreen() {
     hasRooms && selectedBlock
       ? getRoomsForFloorZone(locationCatalogRows, selectedBlock, locationForRooms)
       : [];
-  const selectedCategory = categories.find((c) => c.id === categoryId);
+  const effectiveOfficeId = useMemo(() => {
+    if (locationSource === 'cabinet' && selectedCabinetRoom?.office_id) {
+      return selectedCabinetRoom.office_id;
+    }
+    if (selectedOfficeId) return selectedOfficeId;
+    return null;
+  }, [locationSource, selectedCabinetRoom, selectedOfficeId]);
+
+  const officeCategories = useMemo(() => {
+    if (!effectiveOfficeId) return [];
+    return categories.filter(
+      (c) => c.office_id == null || Number(c.office_id) === effectiveOfficeId
+    );
+  }, [categories, effectiveOfficeId]);
+
+  const selectedCategory = officeCategories.find((c) => c.id === categoryId);
 
   useEffect(() => {
     const load = async () => {
@@ -245,21 +264,10 @@ export default function CreateRequestScreen() {
         return;
       }
 
-      const [offRes, catRes] = await Promise.all([
-        getOffices(),
-        getServiceCategories(),
-      ]);
+      const offRes = await getOffices();
       const offList = Array.isArray(offRes) ? offRes : [];
       setOffices(offList);
-      if (catRes.ok && catRes.data) {
-        setCategories(catRes.data);
-      }
-      if (role === 'department-head') {
-        const execRes = await getExecutors();
-        if (execRes.ok && execRes.data) {
-          setExecutors(execRes.data);
-        }
-      }
+      setCategories([]);
       if (['admin-worker', 'department-head', 'executor', 'manager'].includes(role ?? '') && user?.id) {
         try {
           const subsRes = await getClientRoomSubscriptions(user.id);
@@ -282,6 +290,63 @@ export default function CreateRequestScreen() {
     };
     load();
   }, [role, user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isGuest || !effectiveOfficeId) {
+      if (!isGuest) {
+        setCategories([]);
+        setCategoriesLoading(false);
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setCategoriesLoading(true);
+    setCategories([]);
+    setCategoryId(0);
+    setSubcategoryId(0);
+    setTitle('');
+    setSelectedExecutors([]);
+
+    void (async () => {
+      const catRes = await getServiceCategories(effectiveOfficeId);
+      if (cancelled) return;
+      if (catRes.ok) {
+        setCategories(catRes.data);
+      } else {
+        setCategories([]);
+        showToast({ title: catRes.error, variant: 'destructive' });
+      }
+      setCategoriesLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, effectiveOfficeId, showToast]);
+
+  useEffect(() => {
+    if (role !== 'department-head' || categoryId <= 0) {
+      setExecutors([]);
+      setSelectedExecutors([]);
+      return;
+    }
+    let cancelled = false;
+    getExecutors(categoryId).then((res) => {
+      if (cancelled) return;
+      if (res.ok && res.data) {
+        setExecutors(res.data);
+      } else {
+        setExecutors([]);
+      }
+      setSelectedExecutors([]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [role, categoryId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1216,8 +1281,20 @@ export default function CreateRequestScreen() {
               )}
 
               <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Категория заявки</ThemedText>
+              {selectedOffice ? (
+                <ThemedText style={[styles.stepHint, { color: mutedColor, marginBottom: 8 }]}>
+                  Категории офиса «{selectedOffice.name}»
+                </ThemedText>
+              ) : null}
+              {categoriesLoading ? (
+                <ActivityIndicator style={{ marginVertical: 16 }} color={primaryColor} />
+              ) : officeCategories.length === 0 ? (
+                <ThemedText style={[styles.stepHint, { color: mutedColor, marginBottom: 8 }]}>
+                  Нет категорий для выбранного офиса
+                </ThemedText>
+              ) : null}
               <View style={styles.categoryCardList}>
-                {categories.map((c) => {
+                {officeCategories.map((c) => {
                   const selected = categoryId === c.id;
                   const meta = getServiceCategoryVisualMeta(c.name);
                   return (
@@ -1406,9 +1483,7 @@ export default function CreateRequestScreen() {
                 </>
               )}
 
-              {role === 'department-head' &&
-                user?.service_category_id === categoryId &&
-                executors.length > 0 && (
+              {role === 'department-head' && categoryId > 0 && executors.length > 0 && (
                   <View style={styles.inputWrap}>
                     <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>
                       Исполнители (необязательно)
@@ -1433,7 +1508,7 @@ export default function CreateRequestScreen() {
                             .filter((e) => !selectedExecutors.some((s) => s.id === e.id))
                             .map((e) => ({
                               value: String(e.id),
-                              label: e.user?.full_name ?? `#${e.id}`,
+                              label: formatExecutorLabel(e),
                             })),
                         ]}
                         placeholder="Добавить"
@@ -1447,53 +1522,26 @@ export default function CreateRequestScreen() {
                         {selectedExecutors.map((executorData) => {
                           const executor = executors.find((e) => e.id === executorData.id);
                           if (!executor) return null;
+                          const { name, specialty } = getExecutorDisplayParts(executor);
                           return (
-                            <View
+                            <ExecutorAssignCard
                               key={executorData.id}
-                              style={[styles.executorChip, { backgroundColor: cardBackground, borderColor }]}
-                            >
-                              <View style={styles.executorChipLeft}>
-                                <ThemedText style={[styles.executorChipName, { color: textColor }]} numberOfLines={1}>
-                                  {executor.user?.full_name ?? `#${executor.id}`}
-                                </ThemedText>
-                                {executorData.role === 'leader' && (
-                                  <View style={[styles.executorLeaderBadge, { backgroundColor: primaryColor }]}>
-                                    <ThemedText style={[styles.executorLeaderBadgeText, { color: onPrimary }]}>Лидер</ThemedText>
-                                  </View>
-                                )}
-                              </View>
-                              <View style={styles.executorChipActions}>
-                                <View style={styles.executorRoleSelectWrap}>
-                                  <Select
-                                    value={executorData.role}
-                                    onValueChange={(v) => {
-                                      if (v === 'executor' || v === 'leader') {
-                                        setSelectedExecutors((prev) =>
-                                          prev.map((e) => (e.id === executorData.id ? { ...e, role: v } : e))
-                                        );
-                                      }
-                                    }}
-                                    options={[
-                                      { value: 'executor', label: 'Исполнитель' },
-                                      { value: 'leader', label: 'Лидер' },
-                                    ]}
-                                    placeholder="Роль"
-                                  />
-                                </View>
-                                <Pressable
-                                  onPress={() => {
-                                    setSelectedExecutors((prev) => prev.filter((e) => e.id !== executorData.id));
-                                  }}
-                                  style={({ pressed }) => [
-                                    styles.executorRemoveBtn,
-                                    { opacity: pressed ? 0.7 : 1 },
-                                  ]}
-                                  hitSlop={8}
-                                >
-                                  <MaterialIcons name="close" size={20} color="#EF4444" />
-                                </Pressable>
-                              </View>
-                            </View>
+                              fullName={name}
+                              specialty={specialty}
+                              role={executorData.role}
+                              onRoleChange={(role) =>
+                                setSelectedExecutors((prev) =>
+                                  prev.map((e) =>
+                                    e.id === executorData.id ? { ...e, role } : e
+                                  )
+                                )
+                              }
+                              onRemove={() =>
+                                setSelectedExecutors((prev) =>
+                                  prev.filter((e) => e.id !== executorData.id)
+                                )
+                              }
+                            />
                           );
                         })}
                         {selectedExecutors.length > 0 && !selectedExecutors.some((e) => e.role === 'leader') && (

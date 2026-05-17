@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  SectionList,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +31,31 @@ import {
   updateOfficeLocationCatalogRow,
   type OfficeLocationCatalogItem,
 } from '@/lib/api';
+import {
+  buildLocationCatalogSections,
+  countLocationCatalogStats,
+  getBlockFilterOptions,
+  getFloorFilterOptions,
+  type LocationCatalogSort,
+  type LocationVisibilityFilter,
+} from '@/lib/office-location-catalog-utils';
 import { useAuthStore } from '@/stores/auth-store';
+
+function normalizeSearch(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+const VISIBILITY_FILTERS: { value: LocationVisibilityFilter; label: string }[] = [
+  { value: 'all', label: 'Все' },
+  { value: 'active', label: 'Активные' },
+  { value: 'hidden', label: 'Скрытые' },
+];
+
+const SORT_OPTIONS: { value: LocationCatalogSort; label: string }[] = [
+  { value: 'order', label: 'По порядку' },
+  { value: 'room', label: 'По помещению' },
+  { value: 'block', label: 'По блоку' },
+];
 
 /** Шаблоны локаций офиса — настраивает офис-менеджер (роль department-head) для своего офиса. */
 export default function DepartmentHeadOfficeLocationCatalogScreen() {
@@ -36,11 +71,20 @@ export default function DepartmentHeadOfficeLocationCatalogScreen() {
   const border = useThemeColor({}, 'border');
   const bg = useThemeColor({}, 'background');
   const card = useThemeColor({}, 'cardBackground');
+  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const accentSoft = useThemeColor({}, 'accentSoft');
+  const danger = useThemeColor({}, 'danger');
 
   const officeId = user?.office_id != null && user.office_id > 0 ? user.office_id : null;
 
   const [rows, setRows] = useState<OfficeLocationCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState<LocationVisibilityFilter>('all');
+  const [blockFilterKey, setBlockFilterKey] = useState<string | null>(null);
+  const [floorFilterKey, setFloorFilterKey] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<LocationCatalogSort>('order');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -52,7 +96,83 @@ export default function DepartmentHeadOfficeLocationCatalogScreen() {
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [draftVisibility, setDraftVisibility] = useState<LocationVisibilityFilter>('all');
+  const [draftBlockKey, setDraftBlockKey] = useState<string | null>(null);
+  const [draftFloorKey, setDraftFloorKey] = useState<string | null>(null);
+  const [draftSortBy, setDraftSortBy] = useState<LocationCatalogSort>('order');
   const autoOpenedCreateRef = useRef(false);
+
+  const stats = useMemo(() => countLocationCatalogStats(rows), [rows]);
+
+  const blockOptions = useMemo(() => getBlockFilterOptions(rows), [rows]);
+
+  const draftFloorOptions = useMemo(
+    () => getFloorFilterOptions(rows, draftBlockKey),
+    [rows, draftBlockKey]
+  );
+
+  const filterPanelCount = useMemo(() => {
+    let count = 0;
+    if (visibilityFilter !== 'all') count += 1;
+    if (blockFilterKey != null) count += 1;
+    if (floorFilterKey != null) count += 1;
+    if (sortBy !== 'order') count += 1;
+    return count;
+  }, [visibilityFilter, blockFilterKey, floorFilterKey, sortBy]);
+
+  const sections = useMemo(
+    () =>
+      buildLocationCatalogSections(rows, {
+        searchQuery,
+        visibility: visibilityFilter,
+        blockKey: blockFilterKey,
+        floorKey: blockFilterKey != null ? floorFilterKey : null,
+        sortBy,
+      }),
+    [rows, searchQuery, visibilityFilter, blockFilterKey, floorFilterKey, sortBy]
+  );
+
+  const hasActiveFilters =
+    normalizeSearch(searchQuery).length > 0 || filterPanelCount > 0;
+
+  const resetFilters = useCallback(() => {
+    setSearchQuery('');
+    setVisibilityFilter('all');
+    setBlockFilterKey(null);
+    setFloorFilterKey(null);
+    setSortBy('order');
+  }, []);
+
+  const openFilterSheet = useCallback(() => {
+    setDraftVisibility(visibilityFilter);
+    setDraftBlockKey(blockFilterKey);
+    setDraftFloorKey(floorFilterKey);
+    setDraftSortBy(sortBy);
+    setFilterSheetOpen(true);
+  }, [visibilityFilter, blockFilterKey, floorFilterKey, sortBy]);
+
+  const closeFilterSheet = useCallback(() => setFilterSheetOpen(false), []);
+
+  const applyFilterSheet = useCallback(() => {
+    setVisibilityFilter(draftVisibility);
+    setBlockFilterKey(draftBlockKey);
+    setFloorFilterKey(draftFloorKey);
+    setSortBy(draftSortBy);
+    setFilterSheetOpen(false);
+  }, [draftVisibility, draftBlockKey, draftFloorKey, draftSortBy]);
+
+  const resetFilterPanelDraft = useCallback(() => {
+    setDraftVisibility('all');
+    setDraftBlockKey(null);
+    setDraftFloorKey(null);
+    setDraftSortBy('order');
+  }, []);
+
+  const filteredCount = useMemo(
+    () => sections.reduce((sum, s) => sum + s.data.length, 0),
+    [sections]
+  );
 
   const load = useCallback(async () => {
     if (officeId == null) {
@@ -60,7 +180,6 @@ export default function DepartmentHeadOfficeLocationCatalogScreen() {
       setLoading(false);
       return;
     }
-    setLoading(true);
     const res = await getOfficeLocationCatalog(officeId, { includeInactive: true });
     if (res.ok) {
       setRows(res.data);
@@ -69,6 +188,7 @@ export default function DepartmentHeadOfficeLocationCatalogScreen() {
       showToast({ title: res.error, variant: 'destructive' });
     }
     setLoading(false);
+    setRefreshing(false);
   }, [officeId, showToast]);
 
   useEffect(() => {
@@ -80,7 +200,6 @@ export default function DepartmentHeadOfficeLocationCatalogScreen() {
     load();
   }, [role, load, router]);
 
-  /** При первом заходе с пустым списком — сразу открыть шторку создания (как при «создании»). */
   useEffect(() => {
     if (loading || officeId == null || rows.length > 0 || autoOpenedCreateRef.current) return;
     autoOpenedCreateRef.current = true;
@@ -90,6 +209,11 @@ export default function DepartmentHeadOfficeLocationCatalogScreen() {
     setFormDefaults({ block: '', floor_zone: '', room: '', sort_order: 0 });
     setModalOpen(true);
   }, [loading, officeId, rows.length]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load();
+  }, [load]);
 
   const openAdd = useCallback(() => {
     setEditingId(null);
@@ -185,13 +309,415 @@ export default function DepartmentHeadOfficeLocationCatalogScreen() {
     await load();
   };
 
+  const renderItem = ({ item }: { item: OfficeLocationCatalogItem }) => (
+    <View
+      style={[
+        styles.rowCard,
+        {
+          borderColor: border,
+          backgroundColor: card,
+          opacity: item.is_active ? 1 : 0.72,
+        },
+      ]}
+    >
+      <Pressable
+        onPress={() => openEdit(item)}
+        style={({ pressed }) => [styles.rowMain, pressed && styles.rowPressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Редактировать шаблон"
+      >
+        <View style={[styles.rowIconWrap, { backgroundColor: accentSoft }]}>
+          <MaterialIcons name="place" size={22} color={primary} />
+        </View>
+
+        <View style={styles.rowBody}>
+          <View style={styles.rowTitleRow}>
+            <ThemedText style={[styles.rowTitle, { color: text }]} numberOfLines={1}>
+              {item.room?.trim() || item.floor_zone?.trim() || 'Помещение не указано'}
+            </ThemedText>
+            {!item.is_active ? (
+              <View style={[styles.hiddenBadge, { borderColor: border }]}>
+                <ThemedText style={[styles.hiddenBadgeText, { color: muted }]}>Скрыт</ThemedText>
+              </View>
+            ) : null}
+          </View>
+
+          {item.floor_zone?.trim() ? (
+            <ThemedText style={[styles.rowSub, { color: muted }]} numberOfLines={1}>
+              {item.floor_zone.trim()}
+            </ThemedText>
+          ) : null}
+
+          <ThemedText style={[styles.rowMeta, { color: muted }]}>
+            Порядок: {item.sort_order ?? 0}
+          </ThemedText>
+        </View>
+      </Pressable>
+
+      <View style={styles.rowActions}>
+        <Pressable
+          onPress={() => toggleActive(item)}
+          hitSlop={8}
+          style={styles.iconBtn}
+          accessibilityLabel={item.is_active ? 'Скрыть шаблон' : 'Показать шаблон'}
+        >
+          <MaterialIcons
+            name={item.is_active ? 'visibility-off' : 'visibility'}
+            size={20}
+            color={muted}
+          />
+        </Pressable>
+        <Pressable
+          onPress={() => confirmDelete(item.id)}
+          hitSlop={8}
+          style={styles.iconBtn}
+          accessibilityLabel="Удалить шаблон"
+        >
+          <MaterialIcons name="delete-outline" size={20} color={danger} />
+        </Pressable>
+        <MaterialIcons name="chevron-right" size={22} color={muted} />
+      </View>
+    </View>
+  );
+
+  const listHeader = (
+    <View style={styles.listHeader}>
+      <View style={[styles.statsRow, { backgroundColor: surfaceMuted, borderColor: border }]}>
+        <ThemedText style={[styles.statsText, { color: muted }]}>
+          {stats.total} {stats.total === 1 ? 'шаблон' : stats.total < 5 ? 'шаблона' : 'шаблонов'}
+          {' · '}
+          {stats.blocks} {stats.blocks === 1 ? 'блок' : stats.blocks < 5 ? 'блока' : 'блоков'}
+          {' · '}
+          {stats.active} активн.
+          {stats.hidden > 0 ? ` · ${stats.hidden} скрыт.` : ''}
+        </ThemedText>
+      </View>
+
+      <View style={[styles.searchWrap, { borderColor: border, backgroundColor: card }]}>
+        <MaterialIcons name="search" size={22} color={muted} />
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Поиск по блоку, этажу, помещению…"
+          placeholderTextColor={muted}
+          style={[styles.searchInput, { color: text }]}
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+          returnKeyType="search"
+        />
+        {searchQuery.length > 0 ? (
+          <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+            <MaterialIcons name="close" size={20} color={muted} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {hasActiveFilters ? (
+        <View style={styles.resultsRow}>
+          <ThemedText style={[styles.resultsBar, { color: muted }]}>
+            Найдено: {filteredCount}
+            {filterPanelCount > 0 ? ` · фильтров: ${filterPanelCount}` : ''}
+          </ThemedText>
+          <Pressable onPress={resetFilters} hitSlop={8}>
+            <ThemedText style={{ color: primary, fontWeight: '600', fontSize: 13 }}>
+              Сбросить
+            </ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const headerRight = (
+    <Pressable
+      onPress={openFilterSheet}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityLabel="Фильтры"
+      style={({ pressed }) => [styles.filterHeaderBtn, pressed && { opacity: 0.65 }]}
+    >
+      <MaterialIcons name="tune" size={26} color={primary} />
+      {filterPanelCount > 0 ? (
+        <View style={[styles.filterBadge, { backgroundColor: primary }]}>
+          <ThemedText style={styles.filterBadgeText}>{filterPanelCount}</ThemedText>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+
+  const listEmpty = (
+    <View style={styles.emptyWrap}>
+      {rows.length === 0 ? (
+        <Pressable
+          onPress={openAdd}
+          style={[styles.emptyCta, { borderColor: border, backgroundColor: card }]}
+        >
+          <MaterialIcons name="add-location-alt" size={32} color={primary} />
+          <ThemedText style={[styles.emptyCtaTitle, { color: text }]}>Добавить первый шаблон</ThemedText>
+          <ThemedText style={[styles.emptyCtaSub, { color: muted }]}>
+            Укажите блок, этаж и помещение — клиенты выберут их при создании заявки
+          </ThemedText>
+        </Pressable>
+      ) : (
+        <>
+          <MaterialIcons name="search-off" size={40} color={muted} />
+          <ThemedText style={[styles.emptyTitle, { color: text }]}>Ничего не найдено</ThemedText>
+          <ThemedText style={[styles.emptySub, { color: muted }]}>
+            Измените поиск или фильтр
+          </ThemedText>
+          <Pressable
+            onPress={resetFilters}
+            style={[styles.emptyResetBtn, { borderColor: border }]}
+          >
+            <ThemedText style={{ color: text, fontWeight: '600' }}>Сбросить фильтры</ThemedText>
+          </Pressable>
+        </>
+      )}
+    </View>
+  );
+
   if (role !== 'department-head') {
     return null;
   }
 
   return (
     <ThemedView style={[styles.screen, { paddingTop: insets.top, backgroundColor: bg }]}>
-      <ScreenHeader title="Шаблоны локаций" onBack={() => router.back()} />
+      <ScreenHeader
+        title="Шаблоны локаций"
+        onBack={() => router.back()}
+        rightSlot={headerRight}
+      />
+
+      <Modal
+        visible={filterSheetOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={closeFilterSheet}
+      >
+        <View style={styles.filterModalRoot}>
+          <Pressable style={styles.filterModalBackdrop} onPress={closeFilterSheet} />
+          <View
+            style={[
+              styles.filterSheet,
+              {
+                backgroundColor: card,
+                paddingBottom: Math.max(insets.bottom, 20),
+              },
+            ]}
+          >
+            <View style={[styles.filterSheetHeader, { borderBottomColor: border }]}>
+              <View style={styles.filterSheetHeaderSide}>
+                <Pressable
+                  onPress={closeFilterSheet}
+                  hitSlop={12}
+                  style={[styles.filterSheetIconBtn, { backgroundColor: surfaceMuted }]}
+                >
+                  <MaterialIcons name="close" size={22} color={text} />
+                </Pressable>
+              </View>
+              <ThemedText style={[styles.filterSheetTitle, { color: text }]}>Фильтры</ThemedText>
+              <View style={[styles.filterSheetHeaderSide, { justifyContent: 'flex-end' }]}>
+                <Pressable
+                  onPress={applyFilterSheet}
+                  hitSlop={12}
+                  style={[styles.filterSheetIconBtn, { backgroundColor: primary }]}
+                >
+                  <MaterialIcons name="check" size={22} color="#fff" />
+                </Pressable>
+              </View>
+            </View>
+
+            <ScrollView
+              style={styles.filterSheetScroll}
+              contentContainerStyle={styles.filterSheetContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <ThemedText style={[styles.filterSectionLabel, { color: muted }]}>Статус</ThemedText>
+              <View style={styles.pillsRow}>
+                {VISIBILITY_FILTERS.map((opt) => {
+                  const active = draftVisibility === opt.value;
+                  const count =
+                    opt.value === 'all'
+                      ? stats.total
+                      : opt.value === 'active'
+                        ? stats.active
+                        : stats.hidden;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => setDraftVisibility(opt.value)}
+                      style={[
+                        styles.pill,
+                        { borderColor: border },
+                        active && { backgroundColor: `${primary}22`, borderColor: primary },
+                      ]}
+                    >
+                      <ThemedText
+                        style={{
+                          color: active ? primary : text,
+                          fontSize: 13,
+                          fontWeight: '600',
+                        }}
+                      >
+                        {opt.label} ({count})
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {blockOptions.length > 0 ? (
+                <>
+                  <ThemedText style={[styles.filterSectionLabel, { color: muted }]}>Блок</ThemedText>
+                  <View style={styles.pillsRow}>
+                    <Pressable
+                      onPress={() => {
+                        setDraftBlockKey(null);
+                        setDraftFloorKey(null);
+                      }}
+                      style={[
+                        styles.pill,
+                        { borderColor: border },
+                        draftBlockKey === null && {
+                          backgroundColor: `${primary}22`,
+                          borderColor: primary,
+                        },
+                      ]}
+                    >
+                      <ThemedText
+                        style={{
+                          color: draftBlockKey === null ? primary : text,
+                          fontSize: 13,
+                          fontWeight: '600',
+                        }}
+                      >
+                        Все
+                      </ThemedText>
+                    </Pressable>
+                    {blockOptions.map((opt) => {
+                      const active = draftBlockKey === opt.key;
+                      return (
+                        <Pressable
+                          key={opt.key || '__empty__'}
+                          onPress={() => {
+                            setDraftBlockKey(opt.key);
+                            setDraftFloorKey(null);
+                          }}
+                          style={[
+                            styles.pill,
+                            { borderColor: border },
+                            active && { backgroundColor: `${primary}22`, borderColor: primary },
+                          ]}
+                        >
+                          <ThemedText
+                            style={{
+                              color: active ? primary : text,
+                              fontSize: 13,
+                              fontWeight: '600',
+                            }}
+                          >
+                            {opt.label} ({opt.count})
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
+
+              {draftBlockKey != null && draftFloorOptions.length > 0 ? (
+                <>
+                  <ThemedText style={[styles.filterSectionLabel, { color: muted }]}>
+                    Этаж / зона
+                  </ThemedText>
+                  <View style={styles.pillsRow}>
+                    <Pressable
+                      onPress={() => setDraftFloorKey(null)}
+                      style={[
+                        styles.pill,
+                        { borderColor: border },
+                        draftFloorKey === null && {
+                          backgroundColor: `${primary}22`,
+                          borderColor: primary,
+                        },
+                      ]}
+                    >
+                      <ThemedText
+                        style={{
+                          color: draftFloorKey === null ? primary : text,
+                          fontSize: 13,
+                          fontWeight: '600',
+                        }}
+                      >
+                        Все
+                      </ThemedText>
+                    </Pressable>
+                    {draftFloorOptions.map((opt) => {
+                      const active = draftFloorKey === opt.key;
+                      return (
+                        <Pressable
+                          key={opt.key || '__empty_floor__'}
+                          onPress={() => setDraftFloorKey(opt.key)}
+                          style={[
+                            styles.pill,
+                            { borderColor: border },
+                            active && { backgroundColor: `${primary}22`, borderColor: primary },
+                          ]}
+                        >
+                          <ThemedText
+                            style={{
+                              color: active ? primary : text,
+                              fontSize: 13,
+                              fontWeight: '600',
+                            }}
+                          >
+                            {opt.label} ({opt.count})
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
+
+              <ThemedText style={[styles.filterSectionLabel, { color: muted }]}>Сортировка</ThemedText>
+              <View style={styles.pillsRow}>
+                {SORT_OPTIONS.map((opt) => {
+                  const active = draftSortBy === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => setDraftSortBy(opt.value)}
+                      style={[
+                        styles.pill,
+                        { borderColor: border },
+                        active && { backgroundColor: `${primary}22`, borderColor: primary },
+                      ]}
+                    >
+                      <ThemedText
+                        style={{
+                          color: active ? primary : text,
+                          fontSize: 13,
+                          fontWeight: '600',
+                        }}
+                      >
+                        {opt.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Pressable onPress={resetFilterPanelDraft} style={styles.filterResetLink}>
+                <ThemedText style={{ color: primary, fontWeight: '600', fontSize: 14 }}>
+                  Сбросить фильтры
+                </ThemedText>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <OfficeLocationCatalogFormModal
         visible={modalOpen}
@@ -212,70 +738,50 @@ export default function DepartmentHeadOfficeLocationCatalogScreen() {
             У вашей учётной записи не указан офис. Обратитесь к администратору.
           </ThemedText>
         </View>
-      ) : loading ? (
+      ) : loading && !refreshing ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={primary} />
         </View>
       ) : (
         <>
-          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-            <ThemedText style={[styles.hint, { color: muted }]}>
-              Блок, этаж и помещение — клиенты увидят эти варианты при создании заявки в вашем офисе.
-            </ThemedText>
-            {rows.length === 0 ? (
-              <Pressable
-                onPress={openAdd}
-                style={[styles.emptyCta, { borderColor: border, backgroundColor: card }]}
-              >
-                <MaterialIcons name="add-circle-outline" size={28} color={primary} />
-                <ThemedText style={[styles.emptyCtaTitle, { color: text }]}>Добавить шаблон</ThemedText>
-                <ThemedText style={[styles.emptyCtaSub, { color: muted }]}>
-                  Откроется форма в том же виде, что и при редактировании заявки
+          <SectionList
+            sections={sections}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            renderSectionHeader={({ section }) => (
+              <View style={[styles.sectionHeader, { backgroundColor: bg }]}>
+                <ThemedText style={[styles.sectionTitle, { color: text }]}>
+                  {section.blockLabel}
                 </ThemedText>
-              </Pressable>
-            ) : (
-              rows.map((item) => (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.card,
-                    { borderColor: border, backgroundColor: card, opacity: item.is_active ? 1 : 0.55 },
-                  ]}
-                >
-                  <View style={styles.cardText}>
-                    <ThemedText style={[styles.cardTitle, { color: text }]} numberOfLines={2}>
-                      {item.block ? `Блок ${item.block}` : '—'}
-                      {item.floor_zone ? ` · ${item.floor_zone}` : ''}
-                      {item.room ? ` · ${item.room}` : ''}
-                    </ThemedText>
-                    <ThemedText style={[styles.cardMeta, { color: muted }]}>
-                      Порядок: {item.sort_order ?? 0}
-                      {!item.is_active ? ' · скрыт' : ''}
-                    </ThemedText>
-                  </View>
-                  <View style={styles.cardActions}>
-                    <Pressable onPress={() => openEdit(item)} hitSlop={8} style={styles.iconBtn}>
-                      <MaterialIcons name="edit" size={22} color={primary} />
-                    </Pressable>
-                    <Pressable onPress={() => toggleActive(item)} hitSlop={8} style={styles.iconBtn}>
-                      <MaterialIcons
-                        name={item.is_active ? 'visibility-off' : 'visibility'}
-                        size={22}
-                        color={muted}
-                      />
-                    </Pressable>
-                    <Pressable onPress={() => confirmDelete(item.id)} hitSlop={8} style={styles.iconBtn}>
-                      <MaterialIcons name="delete-outline" size={22} color="#c62828" />
-                    </Pressable>
-                  </View>
+                <View style={[styles.sectionCount, { backgroundColor: accentSoft }]}>
+                  <ThemedText style={[styles.sectionCountText, { color: primary }]}>
+                    {section.data.length}
+                  </ThemedText>
                 </View>
-              ))
+              </View>
             )}
-          </ScrollView>
+            stickySectionHeadersEnabled
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={listEmpty}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: insets.bottom + 88 },
+              sections.length === 0 && styles.listContentEmpty,
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={primary} />
+            }
+            initialNumToRender={16}
+            maxToRenderPerBatch={24}
+            windowSize={8}
+            ItemSeparatorComponent={() => <View style={styles.itemGap} />}
+          />
 
           <Pressable
             onPress={openAdd}
-            style={[styles.fab, { backgroundColor: primary }]}
+            style={[styles.fab, { backgroundColor: primary, bottom: insets.bottom + 20 }]}
             accessibilityRole="button"
             accessibilityLabel="Добавить шаблон"
           >
@@ -290,34 +796,198 @@ export default function DepartmentHeadOfficeLocationCatalogScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  scroll: { padding: 16, paddingBottom: 100 },
-  hint: { fontSize: 14, lineHeight: 20, marginBottom: 8 },
-  emptyCta: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: 20,
+  listContent: { paddingHorizontal: 16 },
+  listContentEmpty: { flexGrow: 1 },
+  listHeader: { gap: 10, paddingTop: 4, paddingBottom: 4 },
+  filterHeaderBtn: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    marginTop: 12,
+    justifyContent: 'center',
   },
-  emptyCtaTitle: { fontSize: 17, fontWeight: '700', marginTop: 10 },
-  emptyCtaSub: { fontSize: 13, textAlign: 'center', lineHeight: 18, marginTop: 6 },
-  card: {
+  filterBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  filterBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  filterModalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  filterModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  filterSheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    maxHeight: '78%',
+  },
+  filterSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 14,
+    marginBottom: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  filterSheetHeaderSide: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterSheetIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterSheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    flex: 2,
+    textAlign: 'center',
+  },
+  filterSheetScroll: { flexGrow: 0 },
+  filterSheetContent: { paddingBottom: 16, gap: 4 },
+  filterResetLink: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    marginTop: 8,
+  },
+  statsRow: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  statsText: { fontSize: 13, lineHeight: 18 },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    gap: 8,
+    minHeight: 44,
+  },
+  searchInput: { flex: 1, fontSize: 16, paddingVertical: 8 },
+  pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filterSectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  pill: {
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  resultsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  resultsBar: { fontSize: 13 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  sectionTitle: { fontSize: 15, fontWeight: '700', flex: 1 },
+  sectionCount: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  sectionCountText: { fontSize: 13, fontWeight: '700' },
+  itemGap: { height: 8 },
+  rowCard: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
+    overflow: 'hidden',
   },
-  cardText: { flex: 1, marginRight: 8 },
-  cardTitle: { fontSize: 15, fontWeight: '600' },
-  cardMeta: { fontSize: 12, marginTop: 4 },
-  cardActions: { flexDirection: 'row', alignItems: 'center' },
-  iconBtn: { padding: 4, marginLeft: 4 },
+  rowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+    minWidth: 0,
+  },
+  rowPressed: { opacity: 0.92 },
+  rowIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowBody: { flex: 1, minWidth: 0, gap: 2 },
+  rowTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rowTitle: { fontSize: 16, fontWeight: '600', flex: 1 },
+  hiddenBadge: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  hiddenBadgeText: { fontSize: 11, fontWeight: '600' },
+  rowSub: { fontSize: 14 },
+  rowMeta: { fontSize: 12, marginTop: 2 },
+  rowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingRight: 8,
+  },
+  iconBtn: { padding: 6 },
+  emptyWrap: { alignItems: 'center', paddingVertical: 32, gap: 8 },
+  emptyCta: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    alignSelf: 'stretch',
+  },
+  emptyCtaTitle: { fontSize: 17, fontWeight: '700', marginTop: 12 },
+  emptyCtaSub: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginTop: 8 },
+  emptyTitle: { fontSize: 17, fontWeight: '600', marginTop: 8 },
+  emptySub: { fontSize: 14, textAlign: 'center' },
+  emptyResetBtn: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 28,
     width: 56,
     height: 56,
     borderRadius: 28,
