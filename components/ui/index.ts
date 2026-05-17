@@ -15,3 +15,11 @@ export { Sheet, type SheetProps } from './sheet';
 export { StatRow } from './stat-row';
 export { SuccessModal } from './success-modal';
 export { TextInput, type TextInputProps } from './text-input';
+export {
+  KeyboardDoneAccessory,
+  KeyboardFormOverlay,
+  dismissKeyboard,
+  iosKeyboardAccessoryProps,
+  keyboardDismissInputProps,
+  KEYBOARD_DONE_ACCESSORY_ID,
+} from './keyboard-form-overlay';

@@ -91,7 +91,7 @@ type ExecutorCardKey =
   | 'subcategories'
   | 'registration-requests'
   | 'location-templates'
-  | 'executors';
+  | 'users';
 
 const DEPARTMENT_HEAD_MANAGEMENT_CARDS: {
   key: ExecutorCardKey;
@@ -112,9 +112,9 @@ const DEPARTMENT_HEAD_MANAGEMENT_CARDS: {
     icon: 'place',
   },
   {
-    key: 'executors',
-    title: 'Исполнители',
-    subtitle: 'Список исполнителей и привязка к категориям',
+    key: 'users',
+    title: 'Пользователи',
+    subtitle: 'Клиенты и исполнители офиса, пароли и роли',
     icon: 'groups',
   },
   {
@@ -307,8 +307,8 @@ function ExecutorManagementScreen({
           router.push('/department-head/office-location-catalog');
           return;
         }
-        if (key === 'executors') {
-          router.push('/department-head/executors');
+        if (key === 'users') {
+          router.push('/department-head/users');
           return;
         }
         if (key === 'statistics') router.push('/department-head/statistics');

@@ -1,20 +1,9 @@
-import { useEffect, useState } from 'react';
-import {
-  Keyboard,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
-import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated from 'react-native-reanimated';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
-import { useBottomSheetScrollMetrics } from '@/components/requests/use-bottom-sheet-scroll-metrics';
-import { useSheetPanDismiss } from '@/components/requests/use-sheet-pan-dismiss';
+import { KeyboardFormOverlay, keyboardDismissInputProps } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
 export type OfficeLocationCatalogFormValues = {
@@ -37,9 +26,6 @@ export interface OfficeLocationCatalogFormModalProps {
   onSubmit: (values: OfficeLocationCatalogFormValues) => Promise<void>;
 }
 
-/**
- * Форма шаблона локации в стиле нижней шторки «Редактировать заявку» (edit-request-group-modal).
- */
 export function OfficeLocationCatalogFormModal({
   visible,
   mode,
@@ -56,27 +42,19 @@ export function OfficeLocationCatalogFormModal({
   const mutedColor = useThemeColor({}, 'textMuted');
   const borderColor = useThemeColor({}, 'border');
   const backgroundColor = useThemeColor({}, 'background');
-  const cardBackground = useThemeColor({}, 'cardBackground');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const primary = useThemeColor({}, 'primary');
+  const onPrimary = useThemeColor({}, 'onPrimary');
 
   const [block, setBlock] = useState('');
   const [floorZone, setFloorZone] = useState('');
   const [room, setRoom] = useState('');
   const [sortOrder, setSortOrder] = useState('0');
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const {
-    scrollViewStyle,
-    onScrollContentSizeChange,
-    scrollEnabled,
-    sheetPaddingBottom,
-  } = useBottomSheetScrollMetrics({ visible, keyboardVisible });
-
-  const { panGesture, sheetAnimatedStyle } = useSheetPanDismiss({
-    visible,
-    onClose,
-    dismissAllowed: !loading,
-  });
+  const floorRef = useRef<TextInput>(null);
+  const roomRef = useRef<TextInput>(null);
+  const sortRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -87,18 +65,7 @@ export function OfficeLocationCatalogFormModal({
     setLocalError(null);
   }, [visible, defaultBlock, defaultFloorZone, defaultRoom, defaultSortOrder]);
 
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const onShowSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const onHideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-    return () => {
-      onShowSub.remove();
-      onHideSub.remove();
-    };
-  }, []);
-
-  const title = mode === 'create' ? 'Новый шаблон локации' : 'Редактирование шаблона';
+  const title = mode === 'create' ? 'Новый шаблон' : 'Редактирование';
 
   const handleSave = async () => {
     setLocalError(null);
@@ -116,240 +83,160 @@ export function OfficeLocationCatalogFormModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <GestureHandlerRootView style={styles.gestureRoot}>
-        <View style={styles.overlay}>
-          <Pressable style={styles.backdrop} onPress={onClose} />
-          <Animated.View
-            style={[
-              styles.sheet,
-              sheetAnimatedStyle,
-              {
-                backgroundColor: cardBackground,
-                borderColor,
-                paddingBottom: sheetPaddingBottom,
-              },
+    <KeyboardFormOverlay visible={visible} backgroundColor="rgba(0,0,0,0.5)">
+      <View style={[styles.card, { backgroundColor: surfaceElevated }]}>
+        <View style={styles.header}>
+          <ThemedText type="subtitle" style={{ color: textColor, flex: 1 }}>
+            {title}
+          </ThemedText>
+          <Pressable onPress={onClose} hitSlop={12} disabled={loading}>
+            <MaterialIcons name="close" size={26} color={mutedColor} />
+          </Pressable>
+        </View>
+
+        <ThemedText style={[styles.hint, { color: mutedColor }]}>
+          Блок, этаж и помещение — как в форме заявки клиента
+        </ThemedText>
+
+        <ThemedText style={[styles.label, { color: mutedColor }]}>Блок</ThemedText>
+        <TextInput
+          style={[styles.input, { color: textColor, borderColor, backgroundColor }]}
+          placeholder="Например: А"
+          placeholderTextColor={mutedColor}
+          value={block}
+          onChangeText={setBlock}
+          returnKeyType="next"
+          blurOnSubmit={false}
+          onSubmitEditing={() => floorRef.current?.focus()}
+        />
+
+        <ThemedText style={[styles.label, { color: mutedColor }]}>Этаж / зона</ThemedText>
+        <TextInput
+          ref={floorRef}
+          style={[styles.input, { color: textColor, borderColor, backgroundColor }]}
+          placeholder="Например: 2 этаж"
+          placeholderTextColor={mutedColor}
+          value={floorZone}
+          onChangeText={setFloorZone}
+          returnKeyType="next"
+          blurOnSubmit={false}
+          onSubmitEditing={() => roomRef.current?.focus()}
+        />
+
+        <ThemedText style={[styles.label, { color: mutedColor }]}>Помещение</ThemedText>
+        <TextInput
+          ref={roomRef}
+          style={[styles.input, { color: textColor, borderColor, backgroundColor }]}
+          placeholder="Название помещения"
+          placeholderTextColor={mutedColor}
+          value={room}
+          onChangeText={setRoom}
+          returnKeyType="next"
+          blurOnSubmit={false}
+          onSubmitEditing={() => sortRef.current?.focus()}
+        />
+
+        <ThemedText style={[styles.label, { color: mutedColor }]}>Порядок сортировки</ThemedText>
+        <TextInput
+          ref={sortRef}
+          style={[styles.input, { color: textColor, borderColor, backgroundColor }]}
+          placeholder="0"
+          placeholderTextColor={mutedColor}
+          value={sortOrder}
+          onChangeText={setSortOrder}
+          keyboardType="numeric"
+          {...keyboardDismissInputProps()}
+        />
+
+        {error || localError ? (
+          <ThemedText style={styles.error}>{error || localError}</ThemedText>
+        ) : null}
+
+        <View style={styles.actions}>
+          <Pressable
+            onPress={handleSave}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.btn,
+              { backgroundColor: primary, borderColor: primary },
+              loading && styles.btnDisabled,
+              pressed && !loading && styles.btnPressed,
             ]}
           >
-            <GestureDetector gesture={panGesture}>
-              <View style={styles.sheetGrabRegion}>
-                <View style={styles.sheetHandleHit}>
-                  <View style={styles.handle} />
-                </View>
-                <ThemedText style={[styles.title, { color: textColor }]}>{title}</ThemedText>
-              </View>
-            </GestureDetector>
-
-            <ScrollView
-              style={[styles.content, scrollViewStyle]}
-              scrollEnabled={scrollEnabled}
-              bounces={scrollEnabled && Platform.OS === 'ios'}
-              alwaysBounceVertical={scrollEnabled && Platform.OS === 'ios'}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-              contentContainerStyle={styles.contentContainer}
-              onContentSizeChange={onScrollContentSizeChange}
-            >
-              <ThemedText style={[styles.label, { color: mutedColor }]}>Блок</ThemedText>
-              <TextInput
-                style={[styles.input, { color: textColor, borderColor, backgroundColor }]}
-                placeholder="Например: А"
-                placeholderTextColor={mutedColor}
-                value={block}
-                onChangeText={setBlock}
-                returnKeyType="next"
-                blurOnSubmit={false}
-              />
-
-              <ThemedText style={[styles.label, { color: mutedColor }]}>Этаж / зона</ThemedText>
-              <TextInput
-                style={[styles.input, { color: textColor, borderColor, backgroundColor }]}
-                placeholder="Например: 2 этаж"
-                placeholderTextColor={mutedColor}
-                value={floorZone}
-                onChangeText={setFloorZone}
-                returnKeyType="next"
-                blurOnSubmit={false}
-              />
-
-              <ThemedText style={[styles.label, { color: mutedColor }]}>Помещение</ThemedText>
-              <TextInput
-                style={[styles.input, { color: textColor, borderColor, backgroundColor }]}
-                placeholder="Название помещения"
-                placeholderTextColor={mutedColor}
-                value={room}
-                onChangeText={setRoom}
-                returnKeyType="next"
-                blurOnSubmit={false}
-              />
-
-              <ThemedText style={[styles.label, { color: mutedColor }]}>Порядок сортировки</ThemedText>
-              <TextInput
-                style={[styles.input, { color: textColor, borderColor, backgroundColor }]}
-                placeholder="0"
-                placeholderTextColor={mutedColor}
-                value={sortOrder}
-                onChangeText={setSortOrder}
-                keyboardType="number-pad"
-                returnKeyType="done"
-                blurOnSubmit
-                onSubmitEditing={Keyboard.dismiss}
-              />
-
-              {error || localError ? (
-                <ThemedText style={styles.error}>{error || localError}</ThemedText>
-              ) : null}
-            </ScrollView>
-
-            {keyboardVisible && (
-              <View style={styles.keyboardToolbar}>
-                <Pressable
-                  onPress={Keyboard.dismiss}
-                  style={({ pressed }) => [
-                    styles.keyboardDoneButton,
-                    { borderColor },
-                    pressed && styles.actionButtonPressed,
-                  ]}
-                >
-                  <ThemedText style={[styles.keyboardDoneLabel, { color: textColor }]}>Готово</ThemedText>
-                </Pressable>
-              </View>
+            {loading ? (
+              <ThemedText style={{ color: onPrimary, fontWeight: '600' }}>Сохранение...</ThemedText>
+            ) : (
+              <ThemedText style={{ color: onPrimary, fontWeight: '600' }}>Сохранить</ThemedText>
             )}
-
-            <View style={styles.actions}>
-              <Pressable
-                onPress={handleSave}
-                disabled={loading}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  styles.saveButton,
-                  loading && styles.actionButtonDisabled,
-                  pressed && !loading && styles.actionButtonPressed,
-                ]}
-              >
-                <ThemedText style={[styles.actionLabel, styles.actionLabelPrimary]}>
-                  {loading ? 'Сохранение...' : 'Сохранить'}
-                </ThemedText>
-              </Pressable>
-              <Pressable
-                onPress={onClose}
-                disabled={loading}
-                style={({ pressed }) => [
-                  styles.actionButton,
-                  styles.actionButtonSecondary,
-                  { borderColor },
-                  pressed && styles.actionButtonPressed,
-                ]}
-              >
-                <ThemedText style={[styles.actionLabel, { color: textColor }]}>Отмена</ThemedText>
-              </Pressable>
-            </View>
-          </Animated.View>
+          </Pressable>
+          <Pressable
+            onPress={onClose}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.btn,
+              { borderColor },
+              pressed && styles.btnPressed,
+            ]}
+          >
+            <ThemedText style={{ color: textColor, fontWeight: '600' }}>Отмена</ThemedText>
+          </Pressable>
         </View>
-      </GestureHandlerRootView>
-    </Modal>
+      </View>
+    </KeyboardFormOverlay>
   );
 }
 
 const styles = StyleSheet.create({
-  gestureRoot: { flex: 1 },
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+  card: {
+    borderRadius: 16,
+    padding: 20,
+    gap: 4,
   },
-  sheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    maxHeight: '92%',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 4,
   },
-  sheetGrabRegion: {
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
-  },
-  sheetHandleHit: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 4,
-    paddingBottom: 8,
-    minHeight: 36,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: 'rgba(148,163,184,0.8)',
-    alignSelf: 'center',
-  },
-  title: {
-    fontSize: 20,
-    lineHeight: 26,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  content: {},
-  contentContainer: { paddingBottom: 8 },
-  keyboardToolbar: {
-    alignItems: 'flex-end',
-    marginTop: 8,
-  },
-  keyboardDoneButton: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  keyboardDoneLabel: {
+  hint: {
     fontSize: 13,
-    fontWeight: '600',
+    lineHeight: 18,
+    marginBottom: 8,
   },
   label: {
-    fontSize: 13,
-    marginBottom: 8,
-    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+    marginTop: 4,
   },
   input: {
     borderWidth: 1,
     borderRadius: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    minHeight: 48,
-    fontSize: 15,
+    fontSize: 16,
     marginBottom: 8,
+    minHeight: 44,
   },
   error: {
     color: '#DC2626',
     fontSize: 13,
-    marginTop: 10,
+    marginTop: 4,
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
+    gap: 12,
+    marginTop: 16,
   },
-  actionButton: {
+  btn: {
     flex: 1,
-    borderRadius: 10,
-    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
     borderWidth: 1,
+    minHeight: 44,
   },
-  actionButtonSecondary: {
-    backgroundColor: 'transparent',
-  },
-  saveButton: {
-    backgroundColor: '#B8400E',
-    borderColor: '#B8400E',
-  },
-  actionButtonPressed: { opacity: 0.8 },
-  actionButtonDisabled: { opacity: 0.5 },
-  actionLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  actionLabelPrimary: { color: '#FFF' },
+  btnPressed: { opacity: 0.85 },
+  btnDisabled: { opacity: 0.5 },
 });

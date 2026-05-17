@@ -488,6 +488,78 @@ export interface ExecutorInCategory {
   serviceCategories?: Array<{ id: number; name: string }>;
 }
 
+export function normalizeExecutorInCategory(raw: unknown): ExecutorInCategory | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const id = Number(o.id);
+  if (!Number.isFinite(id) || id <= 0) return null;
+
+  const specialty =
+    (typeof o.specialty === 'string' && o.specialty) ||
+    (typeof o.Specialty === 'string' && o.Specialty) ||
+    '';
+
+  const categoriesRaw = o.serviceCategories ?? o.service_categories;
+  const serviceCategories = Array.isArray(categoriesRaw)
+    ? categoriesRaw
+        .map((c) => {
+          if (!c || typeof c !== 'object') return null;
+          const cat = c as Record<string, unknown>;
+          const catId = Number(cat.id);
+          const name = typeof cat.name === 'string' ? cat.name : '';
+          return Number.isFinite(catId) && name ? { id: catId, name } : null;
+        })
+        .filter((c): c is { id: number; name: string } => c !== null)
+    : [];
+
+  let user: ExecutorInCategory['user'];
+  const userRaw = o.user;
+  if (userRaw && typeof userRaw === 'object') {
+    const u = userRaw as Record<string, unknown>;
+    const userId = Number(u.id);
+    if (Number.isFinite(userId)) {
+      user = {
+        id: userId,
+        full_name:
+          (typeof u.full_name === 'string' && u.full_name) ||
+          (typeof u.fullName === 'string' && u.fullName) ||
+          '',
+        phone: typeof u.phone === 'string' ? u.phone : undefined,
+        role: typeof u.role === 'string' ? u.role : undefined,
+        office_id:
+          typeof u.office_id === 'number'
+            ? u.office_id
+            : typeof u.officeId === 'number'
+              ? u.officeId
+              : undefined,
+      };
+    }
+  }
+
+  return {
+    id,
+    specialty,
+    department_id:
+      typeof o.department_id === 'number'
+        ? o.department_id
+        : typeof o.departmentId === 'number'
+          ? o.departmentId
+          : undefined,
+    user,
+    serviceCategories,
+  };
+}
+
+export async function getExecutorByUserId(
+  userId: number
+): Promise<{ ok: true; data: ExecutorInCategory } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/executors/${userId}/user`);
+  if (!result.ok) return { ok: false, error: result.error };
+  const normalized = normalizeExecutorInCategory(result.data);
+  if (!normalized) return { ok: false, error: 'Некорректный ответ сервера' };
+  return { ok: true, data: normalized };
+}
+
 export function getExecutorDisplayParts(executor: ExecutorInCategory): {
   name: string;
   specialty: string;
@@ -1025,7 +1097,10 @@ export async function getExecutors(
   const result = await request<ExecutorInCategory[] | ExecutorInCategory>(`/executors${query}`);
   if (!result.ok) return { ok: false, error: result.error };
   const data = result.data;
-  const list = Array.isArray(data) ? data : data ? [data] : [];
+  const rawList = Array.isArray(data) ? data : data ? [data] : [];
+  const list = rawList
+    .map(normalizeExecutorInCategory)
+    .filter((e): e is ExecutorInCategory => e !== null);
   return { ok: true, data: list };
 }
 
@@ -1403,13 +1478,36 @@ export async function changeUserPassword(
   return { ok: true };
 }
 
-export async function updateUserRole(
+export async function updateUserProfile(
   userId: number,
-  role: string
+  data: { full_name?: string; phone?: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const body: { full_name?: string; phone?: string } = {};
+  if (data.full_name !== undefined) body.full_name = data.full_name.trim();
+  if (data.phone !== undefined) body.phone = data.phone;
   const result = await request<unknown>(`/users/${userId}`, {
     method: 'PUT',
-    body: JSON.stringify({ role }),
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+export async function updateUserRole(
+  userId: number,
+  role: string,
+  options?: { category_ids?: number[]; specialty?: string }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const body: { role: string; category_ids?: number[]; specialty?: string } = { role };
+  if (options?.category_ids?.length) {
+    body.category_ids = options.category_ids;
+  }
+  if (options?.specialty?.trim()) {
+    body.specialty = options.specialty.trim();
+  }
+  const result = await request<unknown>(`/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
