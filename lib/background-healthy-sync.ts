@@ -12,6 +12,7 @@ import { Platform } from 'react-native';
 import * as TaskManager from 'expo-task-manager';
 
 import { config } from '@/lib/config';
+import { moodEnergyToApiLevel, moodStressToApiLevel } from '@/lib/healthy-sync-map';
 import { parseEnergyFromMoodFile, parseStressFromMoodFile } from '@/lib/mood-persist-parse';
 import { fetchStepsTodayFromPedometer, parsePersisted } from '@/lib/background-sync-utils';
 
@@ -135,23 +136,8 @@ interface HealthyMetricRow {
   water_goal_ml: number | null;
   steps_count: number | null;
   mood_value: number | null;
-  energy_level:
-    | 'full'
-    | 'good'
-    | 'low'
-    | 'depleted'
-    | 'medium'
-    | 'high'
-    | null;
-  stress_level:
-    | 'calm'
-    | 'neutral'
-    | 'tense'
-    | 'overloaded'
-    | 'medium'
-    | 'high'
-    | 'low'
-    | null;
+  energy_level: 'low' | 'medium' | 'high' | null;
+  stress_level: 'low' | 'medium' | 'high' | null;
   data_sources: Record<string, boolean>;
 }
 
@@ -162,7 +148,6 @@ async function sendHealthySync(args: {
     steps_goal: number | null;
     weight_kg: number | null;
     height_cm: number | null;
-    timezone: string;
     health_data_consent: boolean;
     apple_health_enabled: boolean;
     sleep_notifications_enabled: boolean;
@@ -257,8 +242,8 @@ TaskManager.defineTask(BACKGROUND_HEALTHY_TASK, async () => {
       water_goal_ml: waterGoal,
       steps_count: stepsToday,
       mood_value: todayMood?.moodValue ?? null,
-      energy_level: todayMood?.energy ?? null,
-      stress_level: todayMood?.stress ?? null,
+      energy_level: moodEnergyToApiLevel(todayMood?.energy),
+      stress_level: moodStressToApiLevel(todayMood?.stress),
       data_sources: {
         background_task: true,
         pedometer: Platform.OS === 'ios',
@@ -286,8 +271,8 @@ TaskManager.defineTask(BACKGROUND_HEALTHY_TASK, async () => {
           water_goal_ml: null,
           steps_count: h.steps,
           mood_value: hMood?.moodValue ?? null,
-          energy_level: hMood?.energy ?? null,
-          stress_level: hMood?.stress ?? null,
+          energy_level: moodEnergyToApiLevel(hMood?.energy),
+          stress_level: moodStressToApiLevel(hMood?.stress),
           data_sources: { pedometer: true, mood_check_in: Boolean(hMood) },
         };
       });
@@ -303,7 +288,6 @@ TaskManager.defineTask(BACKGROUND_HEALTHY_TASK, async () => {
         steps_goal: stepsGoal,
         weight_kg: weightKg,
         height_cm: heightCm,
-        timezone: 'Asia/Almaty',
         health_data_consent: true,
         apple_health_enabled: Platform.OS === 'ios',
         sleep_notifications_enabled: sleepNotifications,

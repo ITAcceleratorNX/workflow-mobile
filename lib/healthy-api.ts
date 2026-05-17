@@ -56,7 +56,6 @@ export interface HealthyProfilePayload {
   steps_goal: number | null;
   weight_kg: number | null;
   height_cm: number | null;
-  timezone: string;
   health_data_consent: boolean;
   apple_health_enabled: boolean;
   sleep_notifications_enabled: boolean;
@@ -72,23 +71,9 @@ export interface HealthyMetricPayload {
   water_goal_ml: number | null;
   steps_count: number | null;
   mood_value: number | null;
-  energy_level:
-    | 'full'
-    | 'good'
-    | 'low'
-    | 'depleted'
-    | 'medium'
-    | 'high'
-    | null;
-  stress_level:
-    | 'calm'
-    | 'neutral'
-    | 'tense'
-    | 'overloaded'
-    | 'medium'
-    | 'high'
-    | 'low'
-    | null;
+  /** Как в healthy.dto.js — только три уровня (после moodEnergyToApiLevel / moodStressToApiLevel). */
+  energy_level: 'low' | 'medium' | 'high' | null;
+  stress_level: 'low' | 'medium' | 'high' | null;
   data_sources: Record<string, boolean>;
 }
 
@@ -105,6 +90,11 @@ interface HealthyInsightResponseDto extends HealthyInsightResponse {
   version: typeof HEALTHY_API_VERSION;
 }
 
+/**
+ * POST /healthy/sync: version `healthy.v1`, `profile`, `metrics[]`.
+ * Каждый metric: date (YYYY-MM-DD), sleep_minutes, sleep_rating, water_*, steps_count, mood_value,
+ * energy_level | stress_level — только low | medium | high | null.
+ */
 export async function syncHealthyData(payload: {
   profile: HealthyProfilePayload;
   metrics: HealthyMetricPayload[];

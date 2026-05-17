@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import { formatDateForApi } from '@/lib/dateTimeUtils';
 import { syncHealthyData } from '@/lib/healthy-api';
+import { moodEnergyToApiLevel, moodStressToApiLevel } from '@/lib/healthy-sync-map';
 import { useAuthStore } from '@/stores/auth-store';
 import { useMoodStore } from '@/stores/mood-store';
 import { useSleepStore } from '@/stores/sleep-store';
@@ -55,8 +56,8 @@ export function useHealthySync() {
           water_goal_ml: waterGoalMl,
           steps_count: stepsToday,
           mood_value: todayMood?.moodValue ?? null,
-          energy_level: todayMood?.energy ?? null,
-          stress_level: todayMood?.stress ?? null,
+          energy_level: moodEnergyToApiLevel(todayMood?.energy),
+          stress_level: moodStressToApiLevel(todayMood?.stress),
           data_sources: {
             apple_health_sleep: healthAccessGranted === true,
             apple_health_water: healthWaterTodayMl != null,
@@ -75,8 +76,8 @@ export function useHealthySync() {
             water_goal_ml: null,
             steps_count: item.steps,
             mood_value: mood?.moodValue ?? null,
-            energy_level: mood?.energy ?? null,
-            stress_level: mood?.stress ?? null,
+            energy_level: moodEnergyToApiLevel(mood?.energy),
+            stress_level: moodStressToApiLevel(mood?.stress),
             data_sources: {
               pedometer: true,
               mood_check_in: Boolean(mood),
@@ -95,7 +96,6 @@ export function useHealthySync() {
           steps_goal: stepsSettings.goalSteps ?? null,
           weight_kg: stepsSettings.weightKg ?? null,
           height_cm: stepsSettings.heightCm ?? null,
-          timezone: 'Asia/Almaty',
           health_data_consent: true,
           apple_health_enabled: healthAccessGranted === true,
           sleep_notifications_enabled: sleepSettings.notificationsEnabled !== false,
