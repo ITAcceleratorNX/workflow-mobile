@@ -146,12 +146,12 @@ function getPrimarySubRequest(request: RequestGroup) {
   return request.requests?.[0];
 }
 
-/** Тип услуги для карточки клиента / администратора / офис-менеджера: Клининг, КТО, Административная (см. formatServiceCategoryDisplayName). */
+/** Тип услуги для карточки: Админ, Клининг, Техника (см. formatServiceCategoryDisplayName). */
 function getServiceTypeLabel(request: RequestGroup): string {
   return formatServiceCategoryDisplayName(getPrimarySubRequest(request)?.category?.name);
 }
 
-/** Блок / локация для карточки исполнителя (КТО, клининг): корпус, этаж. */
+/** Блок / локация для карточки исполнителя: корпус, этаж. */
 function getExecutorBlockLine(request: RequestGroup): string {
   const sub = getPrimarySubRequest(request);
   return (

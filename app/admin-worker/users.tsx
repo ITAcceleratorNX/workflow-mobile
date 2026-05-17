@@ -35,6 +35,7 @@ import {
   getExecutorsByCategory,
   changeCategoryHead,
 } from '@/lib/api';
+import { formatServiceCategoryDisplayName } from '@/constants/requests';
 import { formatRequestDate } from '@/lib/dateTimeUtils';
 
 type TabType = 'requests' | 'management';
@@ -609,7 +610,7 @@ export default function AdminWorkerUsersScreen() {
                   </ThemedText>
                   {req.role === 'executor' && req.service_category && (
                     <ThemedText style={[styles.requestMeta, { color: textMuted }]}>
-                      Категория: {req.service_category.name}
+                      Категория: {formatServiceCategoryDisplayName(req.service_category.name)}
                     </ThemedText>
                   )}
                   <ThemedText style={[styles.requestMeta, { color: textMuted }]}>

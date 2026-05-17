@@ -53,37 +53,121 @@ export function getTypeLabel(type: string): string {
   return TYPE_LABELS[type] ?? 'Обычная';
 }
 
+/** Три основных направления сервисных заявок (названия для пользователя). */
+export type ServiceCategoryKind = 'cleaning' | 'admin' | 'tech' | 'other';
+
+const SERVICE_CATEGORY_DESCRIPTION: Record<
+  Exclude<ServiceCategoryKind, 'other'>,
+  string
+> = {
+  admin: 'офисные вопросы и поддержка',
+  cleaning: 'уборка, чистота, мусор',
+  tech: 'поломки, ремонт, оборудование',
+};
+
 /**
- * Единый текст типа услуги для карточек (клиент, администратор офиса, офис-менеджер):
- * «Клининг», «КТО», «Административная» и синонимы из API.
+ * Классификация названия категории из API (синонимы: администрация, КТО, cleaning и т.д.).
  */
-export function formatServiceCategoryDisplayName(
+export function classifyServiceCategory(
   apiCategoryName: string | undefined | null
-): string {
+): ServiceCategoryKind {
   const t = apiCategoryName?.trim() ?? '';
-  if (!t) return 'Не указано';
+  if (!t) return 'other';
   const lower = t.toLowerCase();
 
   if (lower.includes('клининг') || lower.includes('cleaning')) {
-    return 'Клининг';
+    return 'cleaning';
   }
   if (
     lower.includes('административ') ||
     lower.includes('administrativ') ||
     lower.includes('администрация')
   ) {
-    return 'Административная';
+    return 'admin';
   }
   if (
     lower === 'кто' ||
     lower === 'kto' ||
     lower === 'cto' ||
+    lower.includes('техник') ||
     lower.includes('техобслуж') ||
     lower.includes('техническое обслуживание') ||
     (lower.includes('кто') && lower.length <= 24)
   ) {
-    return 'КТО';
+    return 'tech';
   }
 
-  return t;
+  return 'other';
+}
+
+/**
+ * Единый короткий заголовок направления для карточек, деталей и селектов:
+ * «Админ», «Клининг», «Техника» и синонимы из API.
+ */
+export function formatServiceCategoryDisplayName(
+  apiCategoryName: string | undefined | null
+): string {
+  const kind = classifyServiceCategory(apiCategoryName);
+  switch (kind) {
+    case 'cleaning':
+      return 'Клининг';
+    case 'admin':
+      return 'Админ';
+    case 'tech':
+      return 'Техника';
+    default: {
+      const t = apiCategoryName?.trim() ?? '';
+      return t || 'Не указано';
+    }
+  }
+}
+
+/** Имя глифа MaterialIcons для блока выбора категории на экране создания заявки. */
+export type ServiceCategoryCardIcon =
+  | 'assignment-ind'
+  | 'cleaning-services'
+  | 'handyman'
+  | 'category';
+
+export type ServiceCategoryVisualMeta = {
+  title: string;
+  description: string | null;
+  icon: ServiceCategoryCardIcon;
+};
+
+/**
+ * Заголовок, подпись и иконка для визуального блока категории (экран создания заявки).
+ */
+export function getServiceCategoryVisualMeta(
+  apiCategoryName: string | undefined | null
+): ServiceCategoryVisualMeta {
+  const kind = classifyServiceCategory(apiCategoryName);
+  const raw = apiCategoryName?.trim() ?? '';
+
+  switch (kind) {
+    case 'cleaning':
+      return {
+        title: 'Клининг',
+        description: SERVICE_CATEGORY_DESCRIPTION.cleaning,
+        icon: 'cleaning-services',
+      };
+    case 'admin':
+      return {
+        title: 'Админ',
+        description: SERVICE_CATEGORY_DESCRIPTION.admin,
+        icon: 'assignment-ind',
+      };
+    case 'tech':
+      return {
+        title: 'Техника',
+        description: SERVICE_CATEGORY_DESCRIPTION.tech,
+        icon: 'handyman',
+      };
+    default:
+      return {
+        title: raw || 'Категория',
+        description: null,
+        icon: 'category',
+      };
+  }
 }

@@ -2,6 +2,11 @@
  * Mirrors backend healthy-insight-signals.js for offline Healthy personalization (stage 2).
  */
 
+import {
+  isEnergyComfortable,
+  isEnergyLowLevel,
+  isStressElevated,
+} from '@/lib/mood-persist-parse';
 export type InsightSignalProfile = {
   sleep_goal_minutes: number;
   steps_goal: number | null;
@@ -72,12 +77,12 @@ export function computeWindowSignals(rows: InsightSignalRow[], profile: InsightS
 
   const stressTagged = rows.filter((r) => r.stress_level != null);
   const stressHighShare = stressTagged.length
-    ? stressTagged.filter((r) => r.stress_level === 'high').length / stressTagged.length
+    ? stressTagged.filter((r) => isStressElevated(r.stress_level)).length / stressTagged.length
     : null;
 
   const energyTagged = rows.filter((r) => r.energy_level != null);
   const energyLowShare = energyTagged.length
-    ? energyTagged.filter((r) => r.energy_level === 'low').length / energyTagged.length
+    ? energyTagged.filter((r) => isEnergyLowLevel(r.energy_level)).length / energyTagged.length
     : null;
 
   return {
@@ -247,13 +252,13 @@ export function buildMetricLinks(sortedRows: InsightSignalRow[], profile: Insigh
 
     if (ratio != null && ratio >= 0.88 && nextRow.energy_level != null) {
       goodSleepPairs += 1;
-      if (nextRow.energy_level === 'high' || nextRow.energy_level === 'medium') {
+      if (isEnergyComfortable(nextRow.energy_level)) {
         goodSleepNextEnergyOk += 1;
       }
     }
     if (ratio != null && ratio <= 0.72 && nextRow.energy_level != null) {
       poorSleepPairs += 1;
-      if (nextRow.energy_level === 'low') {
+      if (isEnergyLowLevel(nextRow.energy_level)) {
         poorSleepNextEnergyLow += 1;
       }
     }
@@ -349,8 +354,8 @@ export function buildHelpfulHabits(sortedRows: InsightSignalRow[], profile: Insi
     const okTagged = sleepOk.filter((r) => r.stress_level != null);
     const weakTagged = sleepWeak.filter((r) => r.stress_level != null);
     if (okTagged.length >= 3 && weakTagged.length >= 3) {
-      const rateHighOk = okTagged.filter((r) => r.stress_level === 'high').length / okTagged.length;
-      const rateHighWeak = weakTagged.filter((r) => r.stress_level === 'high').length / weakTagged.length;
+      const rateHighOk = okTagged.filter((r) => isStressElevated(r.stress_level)).length / okTagged.length;
+      const rateHighWeak = weakTagged.filter((r) => isStressElevated(r.stress_level)).length / weakTagged.length;
       if (rateHighWeak - rateHighOk >= 0.18) {
         habits.push('В дни с более достаточным сном по данным реже отмечался высокий стресс.');
       }

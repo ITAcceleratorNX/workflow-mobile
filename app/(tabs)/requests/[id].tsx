@@ -58,7 +58,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { getStatusLabel, getTypeLabel } from '@/constants/requests';
+import { formatServiceCategoryDisplayName, getStatusLabel, getTypeLabel } from '@/constants/requests';
 
 function PhotoGrid({
   photos,
@@ -729,11 +729,11 @@ export default function RequestDetailScreen() {
                   Заявка #{sr.id}
                 </ThemedText>
                 <ThemedText style={[styles.blockValue, { color: textColor }]}>
-                  {sr.title || sr.category?.name}
+                  {sr.title || formatServiceCategoryDisplayName(sr.category?.name)}
                 </ThemedText>
                 {sr.category?.name && sr.title && (
                   <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-                    {sr.category.name}
+                    {formatServiceCategoryDisplayName(sr.category.name)}
                   </ThemedText>
                 )}
               </View>

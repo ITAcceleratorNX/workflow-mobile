@@ -14,7 +14,12 @@ import Animated from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { Select } from '@/components/ui';
-import { COMPLEXITY_OPTIONS, REQUEST_TYPE_OPTIONS, SLA_OPTIONS } from '@/constants/requests';
+import {
+  COMPLEXITY_OPTIONS,
+  formatServiceCategoryDisplayName,
+  REQUEST_TYPE_OPTIONS,
+  SLA_OPTIONS,
+} from '@/constants/requests';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import type { RequestGroup, UpdateRequestGroupPayload } from '@/lib/api';
 
@@ -105,7 +110,11 @@ export function EditRequestGroupModal({
   }, []);
 
   const categoryOptions = useMemo(
-    () => categories.map((c) => ({ value: String(c.id), label: c.name })),
+    () =>
+      categories.map((c) => ({
+        value: String(c.id),
+        label: formatServiceCategoryDisplayName(c.name),
+      })),
     [categories]
   );
 

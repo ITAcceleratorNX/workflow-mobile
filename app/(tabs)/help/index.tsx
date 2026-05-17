@@ -59,7 +59,7 @@ const TOPICS: Topic[] = [
   {
     id: 'requests',
     title: 'Сервисные заявки',
-    description: 'Клининг, КТО, административные заявки',
+    description: 'Админ, Клининг, Техника — сервисные заявки',
     icon: 'build',
     questions: [
       'Как создать заявку?',

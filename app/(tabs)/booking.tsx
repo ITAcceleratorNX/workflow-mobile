@@ -30,7 +30,7 @@ import {
     getOffices,
     getRoomDailyAvailability,
 } from '@/lib/api';
-import { config } from '@/lib/config';
+import { getBookingConfirmationWebUrl } from '@/lib/booking-web-url';
 import {
     formatDateForApi,
     formatDisplayDateFromIso,
@@ -57,12 +57,9 @@ function getRoomPhotoUri(room: MeetingRoom | null | undefined): string | null {
   return getPrimaryPhotoUri(room);
 }
 
-/** URL страницы бронирования в веб-версии (для кнопки «Просмотреть») */
+/** URL страницы подтверждения брони в браузере (та же ссылка, что в QR). */
 function getBookingPageUrl(bookingId: number): string {
-  const base =
-    (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_BOOKING_WEB_URL) ||
-    config.apiBaseUrl.replace(/\/api\/?$/, '');
-  return `${base}/booking/${bookingId}`;
+  return getBookingConfirmationWebUrl(bookingId);
 }
 
 const TIME_SLOTS: { label: string; start: string; end: string }[] = [];

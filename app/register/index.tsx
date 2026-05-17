@@ -33,6 +33,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FontSizes, LineHeights, Spacing } from '@/constants/theme';
+import { formatServiceCategoryDisplayName } from '@/constants/requests';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -266,7 +267,7 @@ export default function RegisterScreen() {
                     }
                     options={categories.map((c) => ({
                       value: String(c.id),
-                      label: c.name,
+                      label: formatServiceCategoryDisplayName(c.name),
                     }))}
                     placeholder="Категория услуг"
                   />

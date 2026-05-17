@@ -53,7 +53,11 @@ import { findNearestOffice } from '@/lib/nearest-office';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COMPLEXITY_OPTIONS, SLA_OPTIONS } from '@/constants/requests';
+import {
+  COMPLEXITY_OPTIONS,
+  getServiceCategoryVisualMeta,
+  SLA_OPTIONS,
+} from '@/constants/requests';
 import { Spacing } from '@/constants/theme';
 
 type CreateUserRole = 'client' | 'admin-worker' | 'department-head' | 'executor' | 'manager';
@@ -1230,26 +1234,58 @@ export default function CreateRequestScreen() {
               )}
 
               <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Категория заявки</ThemedText>
-              <View style={styles.chipRow}>
-                {categories.map((c) => (
-                  <Pressable
-                    key={c.id}
-                    onPress={() => {
-                      setCategoryId(c.id);
-                      setSubcategoryId(0);
-                      setTitle('');
-                    }}
-                    style={[
-                      styles.chip,
-                      { borderColor },
-                      categoryId === c.id && themeStyles.chipActive,
-                    ]}
-                  >
-                    <ThemedText style={[styles.chipText, { color: categoryId === c.id ? onPrimary : textColor }]}>
-                      {c.name}
-                    </ThemedText>
-                  </Pressable>
-                ))}
+              <View style={styles.categoryCardList}>
+                {categories.map((c) => {
+                  const selected = categoryId === c.id;
+                  const meta = getServiceCategoryVisualMeta(c.name);
+                  return (
+                    <Pressable
+                      key={c.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`${meta.title}${meta.description ? `. ${meta.description}` : ''}`}
+                      onPress={() => {
+                        setCategoryId(c.id);
+                        setSubcategoryId(0);
+                        setTitle('');
+                      }}
+                      style={[
+                        styles.categoryCard,
+                        { borderColor: selected ? primaryColor : borderColor, backgroundColor: cardBackground },
+                        selected && { backgroundColor: accentSoft },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.categoryIconBox,
+                          {
+                            borderColor: selected ? primaryColor : borderColor,
+                            backgroundColor: surfaceMuted,
+                          },
+                        ]}
+                      >
+                        <MaterialIcons name={meta.icon} size={26} color={primaryColor} />
+                      </View>
+                      <View style={styles.categoryTextCol}>
+                        <ThemedText
+                          style={[
+                            styles.categoryCardTitle,
+                            { color: textColor },
+                          ]}
+                        >
+                          {meta.title}
+                        </ThemedText>
+                        {meta.description ? (
+                          <ThemedText
+                            style={[styles.categoryCardDesc, { color: mutedColor }]}
+                          >
+                            {meta.description}
+                          </ThemedText>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
               </View>
 
               {selectedCategory?.subcategories && selectedCategory.subcategories.length > 0 && (
@@ -1762,6 +1798,39 @@ const styles = StyleSheet.create({
   officeName: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  categoryCardList: {
+    gap: 10,
+    marginBottom: 16,
+  },
+  categoryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  categoryIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  categoryCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  categoryCardDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
   },
   chipRow: {
     flexDirection: 'row',
