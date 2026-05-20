@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
     ActivityIndicator,
     Pressable,
@@ -115,9 +115,11 @@ function TaskRow({
 export function TodoTab({ filter = 'all' }: TodoTabProps) {
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
-  const { tasks, loading, toggleComplete } = useTodoList(
-    filter === 'overdue' ? 'overdue' : 'all'
+  const todoQuery = useMemo(
+    () => ({ filter: (filter === 'overdue' ? 'overdue' : 'all') as 'all' | 'overdue', light: true }),
+    [filter]
   );
+  const { tasks, loading, toggleComplete } = useTodoList(todoQuery);
   const todayKey = formatDateForApi(new Date());
 
   const primary = useThemeColor({}, 'primary');

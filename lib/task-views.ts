@@ -1,7 +1,7 @@
 /**
  * Client-side views for user tasks (Todoist-like).
- * Inbox: tasks without date, or with inbox=true (optional date); completed inbox stay here.
- * Today / Upcoming: exclude inbox-flagged from scheduled lists; Today adds «Выполнено» for today (non-inbox).
+ * Входящие: в т.ч. без даты; с датой/сроком также попадают в «Сегодня», «Предстоящие» (и календарь через API).
+ * День в календарных списках: scheduled_at, а у входящих при его отсутствии — deadline_to (и deadline_time для сортировки).
  */
 
 import { toAppDateKey } from '@/lib/dateTimeUtils';
@@ -15,14 +15,42 @@ export interface TaskSection {
   tasks: UserTask[];
 }
 
+function deadlineToDateKey(deadlineTo: UserTask['deadline_to']): string | null {
+  if (deadlineTo == null || deadlineTo === '') return null;
+  if (typeof deadlineTo === 'string') return deadlineTo.slice(0, 10);
+  const k = toAppDateKey(deadlineTo);
+  return k || null;
+}
+
+/** Календарный день (Asia/Almaty для scheduled_at): для входящих учитывается срок deadline_to, если нет расписания. */
+function taskScheduledDayKey(t: UserTask): string | null {
+  if (t.scheduled_at) return toAppDateKey(t.scheduled_at);
+  if (t.inbox) return deadlineToDateKey(t.deadline_to);
+  return null;
+}
+
+function effectiveSortTime(t: UserTask): number {
+  if (t.scheduled_at) return new Date(t.scheduled_at).getTime();
+  if (t.inbox && t.deadline_to) {
+    const dk = deadlineToDateKey(t.deadline_to);
+    if (!dk) return 0;
+    if (typeof t.deadline_time === 'string' && /^\d{1,2}:\d{2}$/.test(t.deadline_time)) {
+      const [h, m] = t.deadline_time.split(':');
+      return new Date(`${dk}T${String(h).padStart(2, '0')}:${m}:00`).getTime();
+    }
+    return new Date(`${dk}T12:00:00`).getTime();
+  }
+  return 0;
+}
+
 function sortByScheduleThenTitle(a: UserTask, b: UserTask): number {
   const priorityWeight = (p?: string) => (p === 'high' ? 3 : p === 'medium' ? 2 : 1);
   const pa = priorityWeight(a.priority);
   const pb = priorityWeight(b.priority);
   if (pa !== pb) return pb - pa;
 
-  const ta = a.scheduled_at ? new Date(a.scheduled_at).getTime() : 0;
-  const tb = b.scheduled_at ? new Date(b.scheduled_at).getTime() : 0;
+  const ta = effectiveSortTime(a);
+  const tb = effectiveSortTime(b);
   if (ta !== tb) return ta - tb;
   return a.title.localeCompare(b.title, 'ru');
 }
@@ -71,16 +99,16 @@ export function getInboxTasks(tasks: UserTask[]): UserTask[] {
   return [...incomplete, ...done];
 }
 
-/** Today: не-inbox просроченные и на сегодня; плюс выполненные сегодня (не inbox). todayKey — YYYY-MM-DD в Asia/Almaty. */
+/** Today: просроченные и на сегодня по scheduled_at / у входящих по deadline_to; плюс выполненные сегодня с датой в списках. */
 export function getTodaySections(tasks: UserTask[], todayKey: string): TaskSection[] {
   const overdue: UserTask[] = [];
   const todayScheduled: UserTask[] = [];
   const doneToday: UserTask[] = [];
 
   for (const t of tasks) {
-    if (t.inbox) {
-      continue;
-    }
+    const dayKey = taskScheduledDayKey(t);
+    if (t.inbox && !dayKey) continue;
+
     if (t.completed) {
       const ref = t.completed_at;
       if (ref && toAppDateKey(ref) === todayKey) {
@@ -88,13 +116,12 @@ export function getTodaySections(tasks: UserTask[], todayKey: string): TaskSecti
       }
       continue;
     }
-    if (!t.scheduled_at) continue;
-    const key = toAppDateKey(t.scheduled_at);
-    if (key < todayKey) {
+    if (!dayKey) continue;
+    if (dayKey < todayKey) {
       overdue.push(t);
       continue;
     }
-    if (key === todayKey) {
+    if (dayKey === todayKey) {
       todayScheduled.push(t);
     }
   }
@@ -120,14 +147,15 @@ export function getTodaySections(tasks: UserTask[], todayKey: string): TaskSecti
   return sections;
 }
 
-/** Overdue: tasks scheduled strictly before today. */
+/** Overdue: задачи со днём строго до today (по расписанию или по дедлайну у входящих). */
 export function getOverdueSections(tasks: UserTask[], todayKey: string): TaskSection[] {
   const overdue: UserTask[] = [];
 
   for (const t of tasks) {
-    if (t.completed || t.inbox || !t.scheduled_at) continue;
-    const key = toAppDateKey(t.scheduled_at);
-    if (key < todayKey) overdue.push(t);
+    const dayKey = taskScheduledDayKey(t);
+    if (t.inbox && !dayKey) continue;
+    if (t.completed || !dayKey) continue;
+    if (dayKey < todayKey) overdue.push(t);
   }
 
   overdue.sort(sortByScheduleThenTitle);
@@ -139,17 +167,18 @@ export function getOverdueSections(tasks: UserTask[], todayKey: string): TaskSec
   return sections;
 }
 
-/** Upcoming: future scheduled tasks grouped by date (after today), excluding inbox-flagged. */
+/** Upcoming: будущие по дню (после today), включая входящие с датой/сроком. */
 export function getUpcomingSections(tasks: UserTask[], todayKey: string): TaskSection[] {
   const map = new Map<string, UserTask[]>();
 
   for (const t of tasks) {
-    if (t.completed || t.inbox || !t.scheduled_at) continue;
-    const key = toAppDateKey(t.scheduled_at);
-    if (key <= todayKey) continue;
-    const list = map.get(key) ?? [];
+    const dayKey = taskScheduledDayKey(t);
+    if (t.inbox && !dayKey) continue;
+    if (t.completed || !dayKey) continue;
+    if (dayKey <= todayKey) continue;
+    const list = map.get(dayKey) ?? [];
     list.push(t);
-    map.set(key, list);
+    map.set(dayKey, list);
   }
 
   const keys = [...map.keys()].sort();

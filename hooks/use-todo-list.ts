@@ -8,11 +8,14 @@ import {
   type UserTask,
   type TaskPriority,
   type TaskFilter,
+  type TaskListView,
 } from '@/lib/user-tasks-api';
 import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useToast } from '@/context/toast-context';
+
+const DEFAULT_PAGE_SIZE = 50;
 
 /** Поля, которые реально принимает PATCH /user-tasks/:id (остальное только для оптимистичного UI). */
 const USER_TASK_API_PATCH_KEYS = [
@@ -45,10 +48,68 @@ function pickUserTaskApiPatch(updates: Partial<UserTask>): Parameters<typeof upd
   return out as Parameters<typeof updateUserTask>[1];
 }
 
-export function useTodoList(filter: TaskFilter = 'all') {
+export type UseTodoListQuery = {
+  filter?: TaskFilter;
+  view?: TaskListView;
+  today?: string;
+  fromDate?: string;
+  toDate?: string;
+  completedOn?: string;
+  light?: boolean;
+  pageSize?: number;
+  /** false — не грузить (например, режим календаря). */
+  enabled?: boolean;
+};
+
+function normalizeQuery(input: UseTodoListQuery | TaskFilter): UseTodoListQuery {
+  if (typeof input === 'string') return { filter: input };
+  return input;
+}
+
+function querySignature(q: UseTodoListQuery): string {
+  return JSON.stringify({
+    filter: q.filter ?? null,
+    view: q.view ?? null,
+    today: q.today ?? null,
+    fromDate: q.fromDate ?? null,
+    toDate: q.toDate ?? null,
+    completedOn: q.completedOn ?? null,
+    light: q.light ?? false,
+    pageSize: q.pageSize ?? DEFAULT_PAGE_SIZE,
+    enabled: q.enabled !== false,
+  });
+}
+
+function toApiParams(q: UseTodoListQuery, page: number) {
+  const pageSize = q.pageSize ?? DEFAULT_PAGE_SIZE;
+  const params: Parameters<typeof getUserTasks>[0] = {
+    page,
+    pageSize,
+    light: q.light ? true : undefined,
+  };
+  if (q.view) {
+    params.view = q.view;
+    if (q.today) params.today = q.today;
+    if (q.fromDate) params.from_date = q.fromDate;
+    if (q.toDate) params.to_date = q.toDate;
+    if (q.completedOn) params.completed_on = q.completedOn;
+  } else if (q.filter) {
+    params.filter = q.filter;
+  }
+  return params;
+}
+
+export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter: 'all' }) {
+  const query = useMemo(() => normalizeQuery(queryInput), [queryInput]);
+  const signature = useMemo(() => querySignature(query), [query]);
+  const enabled = query.enabled !== false;
+
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const token = useAuthStore((s) => s.token);
@@ -62,41 +123,74 @@ export function useTodoList(filter: TaskFilter = 'all') {
     tasksRef.current = tasks;
   }, [tasks]);
 
+  const hasMore = page < totalPages;
+
+  const fetchPage = useCallback(
+    async (pageNum: number, append: boolean) => {
+      if (!token || isGuest || !enabled) {
+        setTasks([]);
+        setTotal(0);
+        setPage(1);
+        setTotalPages(0);
+        return { ok: true as const };
+      }
+
+      const res = await getUserTasks(toApiParams(query, pageNum));
+      if (!res.ok) return res;
+
+      setTotal(res.data.total);
+      setPage(res.data.page);
+      setTotalPages(res.data.totalPages);
+      setTasks((prev) => (append ? [...prev, ...res.data.tasks] : res.data.tasks));
+      return res;
+    },
+    [token, isGuest, enabled, query]
+  );
+
   const refresh = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     if (!token || isGuest) {
       setTasks([]);
       setTotal(0);
+      setPage(1);
+      setTotalPages(0);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     setError(null);
-
-    const res = await getUserTasks({ filter, pageSize: 100 });
-
+    const res = await fetchPage(1, false);
     setLoading(false);
+    if (!res.ok) setError(res.error);
+  }, [token, isGuest, enabled, fetchPage]);
 
-    if (res.ok) {
-      setTasks(res.data.tasks);
-      setTotal(res.data.total);
-    } else {
-      setError(res.error);
-    }
-  }, [token, isGuest, filter]);
-
-  /** Синхронизация с сервером без лоадера (после мутаций и bump из других экранов). */
   const silentRefresh = useCallback(async () => {
-    if (!token || isGuest) return;
-    const res = await getUserTasks({ filter, pageSize: 100 });
-    if (!res.ok) return;
-    setTasks(res.data.tasks);
-    setTotal(res.data.total);
-  }, [token, isGuest, filter]);
+    if (!enabled || !token || isGuest) return;
+    await fetchPage(1, false);
+  }, [enabled, token, isGuest, fetchPage]);
+
+  const loadMore = useCallback(async () => {
+    if (!enabled || !token || isGuest || loading || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const res = await fetchPage(page + 1, true);
+    setLoadingMore(false);
+    if (!res.ok) {
+      showToast({
+        title: 'Не удалось загрузить задачи',
+        description: res.error,
+        variant: 'destructive',
+        duration: 4000,
+      });
+    }
+  }, [enabled, token, isGuest, loading, loadingMore, hasMore, fetchPage, page, showToast]);
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [signature, refresh]);
 
   const skipVersionSyncRef = useRef(true);
   useEffect(() => {
@@ -202,7 +296,6 @@ export function useTodoList(filter: TaskFilter = 'all') {
         bump();
         return res.data;
       }
-      // rollback
       setTasks(before);
       showToast({ title: 'Не удалось создать задачу', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
@@ -227,13 +320,10 @@ export function useTodoList(filter: TaskFilter = 'all') {
 
       const res = await updateUserTask(task.id, { completed: nextCompleted });
       if (res.ok) {
-        setTasks((prev) =>
-          prev.map((t) => (t.id === task.id ? { ...t, ...res.data } : t))
-        );
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...res.data } : t)));
         bump();
         return;
       }
-      // rollback
       setTasks(before);
       showToast({ title: 'Не удалось обновить задачу', description: res.error, variant: 'destructive', duration: 4000 });
     },
@@ -259,7 +349,6 @@ export function useTodoList(filter: TaskFilter = 'all') {
         bump();
         return;
       }
-      // rollback
       setTasks(before);
       showToast({ title: 'Не удалось удалить задачу', description: res.error, variant: 'destructive', duration: 4000 });
     },
@@ -293,10 +382,7 @@ export function useTodoList(filter: TaskFilter = 'all') {
                 merged.assignees?.length ? merged.assignees.map((a) => a.id) : (t.assignee_ids ?? []);
             }
             merged.assignee_ids = ids;
-            if (
-              ids.length > 0 &&
-              (!merged.assignees || merged.assignees.length === 0)
-            ) {
+            if (ids.length > 0 && (!merged.assignees || merged.assignees.length === 0)) {
               merged.assignees = ids.map((id) => {
                 const fromPrev = t.assignees?.find((a) => a.id === id);
                 const fromUpdates = updates.assignees?.find((a) => a.id === id);
@@ -309,7 +395,6 @@ export function useTodoList(filter: TaskFilter = 'all') {
         bump();
         return res.data;
       }
-      // rollback
       setTasks(before);
       showToast({ title: 'Не удалось сохранить изменения', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
@@ -320,9 +405,14 @@ export function useTodoList(filter: TaskFilter = 'all') {
   return {
     tasks,
     total,
+    page,
+    totalPages,
+    hasMore,
     loading,
+    loadingMore,
     error,
     refresh,
+    loadMore,
     addTask,
     toggleComplete,
     removeTask,

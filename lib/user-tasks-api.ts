@@ -52,7 +52,7 @@ export interface UserTask {
   executor_id?: number | null;
   team?: TaskTeamRef | null;
   executor?: TaskExecutorRef | null;
-  /** true: задача с вкладки «Входящие», остаётся там даже с scheduled_at и после выполнения */
+  /** true: задача «Входящие»; без даты/срока — только там; с датой (scheduled_at или срок) также в «Сегодня»/«Предстоящие» и календаре */
   inbox: boolean;
 }
 
@@ -114,21 +114,36 @@ export interface UserTasksListResponse {
 
 export type TaskFilter = 'all' | 'today' | 'overdue';
 
+/** Вкладки списка задач (серверная фильтрация + пагинация). */
+export type TaskListView = 'inbox' | 'list_today' | 'list_upcoming' | 'list_completed';
+
 export async function getUserTasks(params: {
   filter?: TaskFilter;
+  view?: TaskListView;
   date?: string;
+  today?: string;
+  from_date?: string;
+  to_date?: string;
+  completed_on?: string;
   start_date?: string;
   end_date?: string;
   page?: number;
   pageSize?: number;
+  light?: boolean | '1';
 }): Promise<{ ok: true; data: UserTasksListResponse } | { ok: false; error: string }> {
   const searchParams: Record<string, string> = {};
   if (params.filter) searchParams.filter = params.filter;
+  if (params.view) searchParams.view = params.view;
   if (params.date) searchParams.date = params.date;
+  if (params.today) searchParams.today = params.today;
+  if (params.from_date) searchParams.from_date = params.from_date;
+  if (params.to_date) searchParams.to_date = params.to_date;
+  if (params.completed_on) searchParams.completed_on = params.completed_on;
   if (params.start_date) searchParams.start_date = params.start_date;
   if (params.end_date) searchParams.end_date = params.end_date;
   if (params.page != null) searchParams.page = String(params.page);
   if (params.pageSize != null) searchParams.pageSize = String(params.pageSize);
+  if (params.light) searchParams.light = '1';
 
   const result = await request<UserTasksListResponse>('/user-tasks', {
     params: Object.keys(searchParams).length ? searchParams : undefined,

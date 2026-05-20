@@ -1,4 +1,7 @@
-import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -7,36 +10,31 @@ import {
   Modal,
   Platform,
   Pressable,
-  SectionList,
   ScrollView,
+  SectionList,
   StyleSheet,
   UIManager,
   View,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 
+import { CalendarTab } from '@/components/tasks/CalendarTab';
+import { TaskAddSheet } from '@/components/tasks/TaskAddSheet';
+import { TeamsInboxPanel } from '@/components/tasks/TeamsInboxPanel';
+import { UserTaskRow } from '@/components/tasks/UserTaskRow';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ScreenHeader } from '@/components/ui';
-import { UserTaskRow } from '@/components/tasks/UserTaskRow';
-import { TaskAddSheet } from '@/components/tasks/TaskAddSheet';
-import { TeamsInboxPanel } from '@/components/tasks/TeamsInboxPanel';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useTodoList } from '@/hooks/use-todo-list';
-import { useAuthStore } from '@/stores/auth-store';
+import { useTodoList, type UseTodoListQuery } from '@/hooks/use-todo-list';
 import { addCalendarDaysToDateKey, todayTaskDateKey } from '@/lib/dateTimeUtils';
-import type { UserTask } from '@/lib/user-tasks-api';
-import { CalendarTab } from '@/components/tasks/CalendarTab';
 import {
   type TaskMainView,
-  getCompletedTasks,
-  getInboxTasks,
+  formatSectionDateLabel,
   getTodaySections,
-  getUpcomingSections,
 } from '@/lib/task-views';
+import type { UserTask } from '@/lib/user-tasks-api';
+import { useAuthStore } from '@/stores/auth-store';
 
 const VIEW_TABS: { value: TaskMainView; label: string }[] = [
   { value: 'inbox', label: 'Входящие' },
@@ -124,7 +122,6 @@ export default function TasksScreen() {
   const cardBg = useThemeColor({}, 'cardBackground');
   const border = useThemeColor({}, 'border');
 
-  const { tasks, toggleComplete, loading: loadingTasks, addTask } = useTodoList();
   const [mainView, setMainView] = useState<TaskMainView>(() =>
     parseMainView({ tab: paramTab, filter: paramFilter, date: paramDate })
   );
@@ -157,6 +154,42 @@ export default function TasksScreen() {
 
   const todayKey = todayTaskDateKey();
   const tomorrowKey = useMemo(() => addCalendarDaysToDateKey(todayKey, 1), [todayKey]);
+
+  const todoListQuery = useMemo((): UseTodoListQuery => {
+    if (viewMode === 'calendar') {
+      return { view: 'inbox', enabled: false };
+    }
+    switch (mainView) {
+      case 'inbox':
+        return { view: 'inbox', light: true };
+      case 'today':
+        return { view: 'list_today', today: todayKey, light: true };
+      case 'upcoming': {
+        const day = upcomingDate ?? tomorrowKey;
+        return {
+          view: 'list_upcoming',
+          today: todayKey,
+          fromDate: day,
+          toDate: day,
+          light: true,
+        };
+      }
+      case 'completed':
+        return { view: 'list_completed', completedOn: completedDateKey, light: true };
+      default:
+        return { view: 'inbox', light: true };
+    }
+  }, [mainView, todayKey, upcomingDate, tomorrowKey, completedDateKey, viewMode]);
+
+  const {
+    tasks,
+    toggleComplete,
+    loading: loadingTasks,
+    loadingMore,
+    hasMore,
+    loadMore,
+    addTask,
+  } = useTodoList(todoListQuery);
 
   useEffect(() => {
     if (upcomingDate) return;
@@ -240,14 +273,12 @@ export default function TasksScreen() {
 
   const sections = useMemo((): TaskSectionRow[] => {
     if (mainView === 'completed') {
-      const done = getCompletedTasks(tasks, completedDateKey);
-      if (done.length === 0) return [];
-      return [{ title: '', data: done, sectionId: 'completed' }];
+      if (tasks.length === 0) return [];
+      return [{ title: '', data: tasks, sectionId: 'completed' }];
     }
     if (mainView === 'inbox') {
-      const inbox = getInboxTasks(tasks);
-      if (inbox.length === 0) return [];
-      return [{ title: 'Входящие', data: inbox, sectionId: 'inbox' }];
+      if (tasks.length === 0) return [];
+      return [{ title: 'Входящие', data: tasks, sectionId: 'inbox' }];
     }
     if (mainView === 'today') {
       return getTodaySections(tasks, todayKey).map((s) => ({
@@ -256,22 +287,16 @@ export default function TasksScreen() {
         sectionId: s.id,
       }));
     }
-    const allUpcoming = getUpcomingSections(tasks, todayKey);
-    if (!upcomingDate) {
-      return allUpcoming.map((s) => ({
-        title: s.title,
-        data: s.tasks,
-        sectionId: s.id,
-      }));
-    }
-    /** Все дни от выбранной даты в полосе календаря и дальше (не только один день). */
-    return allUpcoming
-      .filter((s) => {
-        const dayKey = s.id.startsWith('day-') ? s.id.slice('day-'.length) : s.id;
-        return dayKey >= upcomingDate;
-      })
-      .map((s) => ({ title: s.title, data: s.tasks, sectionId: s.id }));
-  }, [tasks, mainView, todayKey, upcomingDate, completedDateKey]);
+    const day = upcomingDate ?? tomorrowKey;
+    if (tasks.length === 0) return [];
+    return [
+      {
+        title: formatSectionDateLabel(day, todayKey),
+        data: tasks,
+        sectionId: `day-${day}`,
+      },
+    ];
+  }, [tasks, mainView, todayKey, upcomingDate, tomorrowKey]);
 
   const openAddSheet = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -603,6 +628,17 @@ export default function TasksScreen() {
               stickySectionHeadersEnabled={false}
               contentContainerStyle={[styles.listContent, { paddingBottom: 88 }]}
               ListEmptyComponent={ListEmpty}
+              ListFooterComponent={
+                loadingMore ? (
+                  <View style={styles.loaderFooter}>
+                    <ActivityIndicator size="small" color={primary} />
+                  </View>
+                ) : null
+              }
+              onEndReached={() => {
+                if (hasMore && !loadingMore) void loadMore();
+              }}
+              onEndReachedThreshold={0.35}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             />
@@ -976,6 +1012,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 40,
+  },
+  loaderFooter: {
+    paddingVertical: 16,
+    alignItems: 'center',
   },
   empty: {
     alignItems: 'center',

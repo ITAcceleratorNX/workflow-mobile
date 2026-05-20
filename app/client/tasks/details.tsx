@@ -49,7 +49,13 @@ import {
 } from '@/lib/task-recurrence';
 import type { Team } from '@/lib/teams-api';
 import type { TaskPriority, UserTask, UserTaskAttachment } from '@/lib/user-tasks-api';
-import { deleteUserTaskAttachment, getUserTaskAttachments, uploadUserTaskAttachments } from '@/lib/user-tasks-api';
+import {
+  deleteUserTaskAttachment,
+  getUserTask,
+  getUserTaskAttachments,
+  uploadUserTaskAttachments,
+} from '@/lib/user-tasks-api';
+import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useAuthStore } from '@/stores/auth-store';
 
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
@@ -129,12 +135,39 @@ export default function TaskDetailsScreen() {
     return Platform.OS === 'ios' ? { ...common, ios_backgroundColor: border } : common;
   }, [border, primary]);
 
-  const { tasks, updateTask, removeTask, toggleComplete } = useTodoList();
+  const { tasks, updateTask, removeTask, toggleComplete } = useTodoList({ filter: 'all', enabled: false });
+  const tasksInvalidateVersion = useUserTasksInvalidateStore((s) => s.version);
+
+  const [fetchedTask, setFetchedTask] = useState<UserTask | null>(null);
+  const [loadingTask, setLoadingTask] = useState(false);
 
   const task = useMemo(() => {
     if (!taskId) return null;
-    return tasks.find((t) => t.id === taskId) ?? null;
-  }, [tasks, taskId]);
+    return tasks.find((t) => t.id === taskId) ?? fetchedTask;
+  }, [tasks, taskId, fetchedTask]);
+
+  useEffect(() => {
+    if (!taskId || isGuest) {
+      setFetchedTask(null);
+      setLoadingTask(false);
+      return;
+    }
+    if (tasks.some((t) => t.id === taskId)) {
+      setFetchedTask(null);
+      setLoadingTask(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingTask(true);
+    void getUserTask(taskId).then((res) => {
+      if (cancelled) return;
+      if (res.ok) setFetchedTask(res.data);
+      setLoadingTask(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [taskId, isGuest, tasks, tasksInvalidateVersion]);
 
   const canEditDetails = !!task && !!currentUserId && task.creator_id === currentUserId;
 
@@ -662,7 +695,11 @@ export default function TaskDetailsScreen() {
           <View style={styles.headerBtn} />
         </View>
         <View style={styles.empty}>
-          <ThemedText style={{ color: textMuted }}>Задача не найдена</ThemedText>
+          {loadingTask ? (
+            <ActivityIndicator size="large" color={primary} />
+          ) : (
+            <ThemedText style={{ color: textMuted }}>Задача не найдена</ThemedText>
+          )}
         </View>
       </ThemedView>
     );
