@@ -23,6 +23,8 @@ interface CompleteTaskModalProps {
   subRequest: SubRequest | null;
   requestGroupId: number;
   loading?: boolean;
+  title?: string;
+  subtitle?: string;
 }
 
 export function CompleteTaskModal({
@@ -32,6 +34,8 @@ export function CompleteTaskModal({
   subRequest,
   requestGroupId,
   loading = false,
+  title = 'Завершить задачу',
+  subtitle,
 }: CompleteTaskModalProps) {
   const [comment, setComment] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
@@ -90,10 +94,10 @@ export function CompleteTaskModal({
         >
           <ScrollView showsVerticalScrollIndicator={false}>
             <ThemedText style={[styles.title, { color: text }]}>
-              Завершить задачу
+              {title}
             </ThemedText>
             <ThemedText style={[styles.subtitle, { color: textMuted }]}>
-              Подзаявка #{subRequest.id}
+              {subtitle ?? `Подзаявка #${subRequest.id}`}
             </ThemedText>
             <ThemedText style={[styles.label, { color: textMuted }]}>
               Комментарий (необязательно)

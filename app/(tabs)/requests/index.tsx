@@ -14,10 +14,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PageLoader, PullToRefresh, Select } from '@/components/ui';
+import { LongTermBadge } from '@/components/requests/long-term-badge';
 import {
     formatServiceCategoryDisplayName,
     getStatusLabel,
     getTypeLabel,
+    isLongTermRequestGroup,
 } from '@/constants/requests';
 import { FontSizes, LineHeights, Radius, Spacing } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -199,6 +201,7 @@ function RequestCard({
   const textSecondary = useThemeColor({}, 'textSecondary');
 
   const isExecutor = usesExecutorRequestCard(role);
+  const isLongTerm = isLongTermRequestGroup(request);
   const typeLabel = getTypeLabel(request.request_type ?? 'normal');
   const statusLabel = getStatusLabel(request.status);
   const serviceName = getServiceTypeLabel(request);
@@ -211,7 +214,7 @@ function RequestCard({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Заявка ${request.id}, ${statusLabel}, ${serviceName}, ${officeText}`}
+      accessibilityLabel={`Заявка ${request.id}, ${statusLabel}${isLongTerm ? ', долгосрочная' : ''}, ${serviceName}, ${officeText}`}
       style={({ pressed }) => [styles.card, { opacity: pressed ? 0.85 : 1 }]}
     >
       <View style={[styles.photoWrap, { backgroundColor: surfaceMuted }]}>
@@ -247,13 +250,16 @@ function RequestCard({
             >
               {getExecutorRequestTitle(request)}
             </ThemedText>
-            <ThemedText
-              style={[styles.cardCompactLine3, { color: textSecondary }]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {statusLabel}
-            </ThemedText>
+            <View style={styles.cardMetaRow}>
+              <ThemedText
+                style={[styles.cardCompactLine3, { color: textSecondary }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {statusLabel}
+              </ThemedText>
+              {isLongTerm ? <LongTermBadge /> : null}
+            </View>
           </View>
         ) : (
           <View style={styles.cardContentInner}>
@@ -275,6 +281,7 @@ function RequestCard({
                     </ThemedText>
                   </View>
                 ) : null}
+                {isLongTerm ? <LongTermBadge /> : null}
               </View>
               <ThemedText
                 style={[styles.cardCompactStatus, { color: textMuted }]}
@@ -490,7 +497,7 @@ export default function RequestsListScreen() {
       const statusOk = (r: RequestGroup) => {
         if (filterStatus === 'all') return true;
         if (filterStatus === 'long_term') {
-          return (r.requests ?? []).some((req) => req.is_long_term) && r.request_type !== 'recurring';
+          return isLongTermRequestGroup(r);
         }
         return r.status === filterStatus;
       };
@@ -886,6 +893,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     fontWeight: '400',
+  },
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    minWidth: 0,
   },
   badgeTypeMini: {
     paddingHorizontal: 6,

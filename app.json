@@ -59,7 +59,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 11,
+      "versionCode": 12,
       "package": "com.workflow.kz"
     },
     "web": {
