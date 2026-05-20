@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 
 import { PageLoader, PullToRefresh } from '@/components/ui';
@@ -36,7 +36,14 @@ const CARD_ORANGE = '#D94F15';
 const CARD_GREEN = '#1A9A8A';
 const TRACKER_ACTIVE_TEAL = '#1CC7A5';
 
-type AdminCardKey = 'categories' | 'users' | 'office' | 'smart-home' | 'statistics' | 'news';
+type AdminCardKey =
+  | 'categories'
+  | 'users'
+  | 'office'
+  | 'location-templates'
+  | 'smart-home'
+  | 'statistics'
+  | 'news';
 
 const ADMIN_MANAGEMENT_CARDS: {
   key: AdminCardKey;
@@ -49,6 +56,12 @@ const ADMIN_MANAGEMENT_CARDS: {
     title: 'Управление категориями',
     subtitle: 'Категории и подкатегории всех офисов',
     icon: 'category',
+  },
+  {
+    key: 'location-templates',
+    title: 'Шаблоны локаций',
+    subtitle: 'Блок, этаж и помещения для заявок по выбранному офису',
+    icon: 'place',
   },
   {
     key: 'users',
@@ -192,6 +205,9 @@ function AdminWorkerManagementScreen({ hasNotifications }: { hasNotifications: b
           break;
         case 'users':
           router.push('/admin-worker/users');
+          break;
+        case 'location-templates':
+          router.push('/admin-worker/office-location-catalog' as Href);
           break;
         case 'office':
           router.push('/admin-worker/office');
