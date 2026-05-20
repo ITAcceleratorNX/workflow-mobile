@@ -125,6 +125,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newRole, setNewRole] = useState('');
+  const [draftOfficeId, setDraftOfficeId] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('+7 ');
   const [specialty, setSpecialty] = useState('');
@@ -267,12 +268,25 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     setSortBy('name-asc');
   };
 
+  const sortedOffices = useMemo(
+    () => [...offices].sort((a, b) => a.name.localeCompare(b.name, 'ru')),
+    [offices]
+  );
+
   const modalCategories = useMemo(() => {
-    if (!editUser?.office_id) return categories;
+    const oid =
+      draftOfficeId !== ''
+        ? Number(draftOfficeId)
+        : editUser?.office_id != null
+          ? Number(editUser.office_id)
+          : NaN;
+    if (!Number.isFinite(oid)) {
+      return categories;
+    }
     return categories.filter(
-      (c) => !c.office_id || Number(c.office_id) === Number(editUser.office_id)
+      (c) => !c.office_id || Number(c.office_id) === Number(oid)
     );
-  }, [categories, editUser]);
+  }, [categories, editUser, draftOfficeId]);
 
   const isExecutorForm = newRole === 'executor';
   const editingExecutor = editUser ? executorByUserId[editUser.id] : undefined;
@@ -282,6 +296,21 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   };
+
+  const selectDraftOffice = useCallback(
+    (id: string) => {
+      setDraftOfficeId(id);
+      const oidNum = Number(id);
+      setSelectedCategoryIds((prev) => {
+        if (!Number.isFinite(oidNum)) return prev;
+        return prev.filter((catId) => {
+          const c = categories.find((x) => x.id === catId);
+          return c != null && (!c.office_id || Number(c.office_id) === oidNum);
+        });
+      });
+    },
+    [categories]
+  );
 
   const selectRole = (roleId: string) => {
     setNewRole(roleId);
@@ -304,6 +333,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     const executor = executorByUserId[user.id];
     setEditUser(user);
     setNewRole(user.role);
+    setDraftOfficeId(user.office_id != null ? String(user.office_id) : '');
     setFullName(user.full_name ?? '');
     setPhone(formatPhone(user.phone ?? ''));
     setSpecialty(executor?.specialty?.trim() ?? '');
@@ -322,6 +352,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     setPhone('+7 ');
     setSpecialty('');
     setSelectedCategoryIds([]);
+    setDraftOfficeId('');
     setPasswordError(null);
     setRoleError(null);
   };
@@ -343,6 +374,15 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       }
     }
 
+    if (
+      offices.length > 0 &&
+      !draftOfficeId.trim() &&
+      !['department-head', 'manager', 'admin-worker'].includes(editUser.role)
+    ) {
+      showToast({ title: 'Выберите офис', variant: 'destructive' });
+      return;
+    }
+
     const basicProfileChanged =
       fullName.trim() !== (editUser.full_name ?? '').trim() ||
       phone !== formatPhone(editUser.phone ?? '');
@@ -361,6 +401,19 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
         return;
       }
     }
+
+    const initialOfficeNumeric =
+      editUser.office_id != null && Number.isFinite(Number(editUser.office_id))
+        ? Number(editUser.office_id)
+        : NaN;
+    const draftOfficeNumeric =
+      draftOfficeId.trim() !== '' && Number.isFinite(Number(draftOfficeId))
+        ? Number(draftOfficeId)
+        : NaN;
+    const officeChanged =
+      Number.isFinite(draftOfficeNumeric) &&
+      (Number.isNaN(initialOfficeNumeric) ||
+        draftOfficeNumeric !== initialOfficeNumeric);
 
     const initialRole = editUser.role;
     const roleChanged = newRole && newRole !== initialRole;
@@ -382,7 +435,14 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
 
     const needsUserProfileUpdate = basicProfileChanged && !useExecutorApiForProfile;
 
-    if (!passwordFilled && !roleChanged && !needsUserProfileUpdate && !executorFieldsChanged && !promotingToExecutor) {
+    if (
+      !passwordFilled &&
+      !officeChanged &&
+      !roleChanged &&
+      !needsUserProfileUpdate &&
+      !executorFieldsChanged &&
+      !promotingToExecutor
+    ) {
       showToast({ title: 'Нет изменений', variant: 'default' });
       return;
     }
@@ -394,6 +454,31 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       if (!pwdRes.ok) {
         setSaving(false);
         setPasswordError(pwdRes.error);
+        return;
+      }
+    }
+
+    const profilePut: {
+      full_name?: string;
+      phone?: string;
+      office_id?: number;
+      category_ids?: number[];
+    } = {};
+    if (officeChanged && Number.isFinite(draftOfficeNumeric)) {
+      profilePut.office_id = draftOfficeNumeric;
+      if (isExecutorForm) {
+        profilePut.category_ids = selectedCategoryIds;
+      }
+    }
+    if (needsUserProfileUpdate) {
+      profilePut.full_name = fullName.trim();
+      profilePut.phone = phone;
+    }
+    if (Object.keys(profilePut).length > 0) {
+      const profileRes = await updateUserProfile(editUser.id, profilePut);
+      if (!profileRes.ok) {
+        setSaving(false);
+        setRoleError(profileRes.error);
         return;
       }
     }
@@ -413,26 +498,14 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       );
     }
 
-    if (needsUserProfileUpdate) {
-      const profileRes = await updateUserProfile(editUser.id, {
-        full_name: fullName.trim(),
-        phone,
-      });
-      if (!profileRes.ok) {
-        setSaving(false);
-        setRoleError(profileRes.error);
-        return;
-      }
-      setOfficeUsers((prev) =>
-        prev.map((u) =>
-          u.id === editUser.id ? { ...u, full_name: fullName.trim(), phone } : u
-        )
-      );
-    }
+    const resolverOfficeId =
+      officeChanged && Number.isFinite(draftOfficeNumeric)
+        ? draftOfficeNumeric
+        : editUser.office_id;
 
     let executorRecord = editingExecutor;
     if (promotingToExecutor && !executorRecord) {
-      const execRes = await getExecutors(undefined, editUser.office_id);
+      const execRes = await getExecutors(undefined, resolverOfficeId);
       if (execRes.ok) {
         executorRecord = execRes.data.find((e) => e.user?.id === editUser.id);
       }
@@ -883,7 +956,50 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
                 <ThemedText style={{ color: danger, fontSize: 13 }}>{roleError}</ThemedText>
               ) : null}
 
-              <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>ФИО</ThemedText>
+              <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Офис</ThemedText>
+              {['department-head', 'manager', 'admin-worker'].includes(editUser.role) ? (
+                <ThemedText style={{ color: textMuted, fontSize: 13, marginBottom: 8 }}>
+                  Для пользователей с этой ролью смена офиса здесь недоступна.
+                </ThemedText>
+              ) : sortedOffices.length === 0 ? (
+                <ThemedText style={{ color: textMuted, fontSize: 13, marginBottom: 8 }}>
+                  Список офисов недоступен — обновите экран
+                </ThemedText>
+              ) : (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.modalPillsScroll}
+                  contentContainerStyle={styles.pillsContent}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {sortedOffices.map((o) => {
+                    const active = draftOfficeId === String(o.id);
+                    return (
+                      <Pressable
+                        key={o.id}
+                        onPress={() => selectDraftOffice(String(o.id))}
+                        style={[
+                          styles.pill,
+                          { borderColor: border },
+                          active && { backgroundColor: `${primary}22`, borderColor: primary },
+                        ]}
+                      >
+                        <ThemedText
+                          style={{
+                            color: active ? primary : text,
+                            fontSize: 13,
+                            fontWeight: '600',
+                          }}
+                          numberOfLines={1}
+                        >
+                          {o.name}
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              )}
               <TextInput
                 value={fullName}
                 onChangeText={setFullName}

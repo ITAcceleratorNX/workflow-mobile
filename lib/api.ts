@@ -1480,11 +1480,26 @@ export async function changeUserPassword(
 
 export async function updateUserProfile(
   userId: number,
-  data: { full_name?: string; phone?: string }
+  data: {
+    full_name?: string;
+    phone?: string;
+    office_id?: number;
+    /** Вместе со сменой office_id для исполнителя (категории целевого офиса). */
+    category_ids?: number[];
+  }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const body: { full_name?: string; phone?: string } = {};
+  const body: {
+    full_name?: string;
+    phone?: string;
+    office_id?: number;
+    category_ids?: number[];
+  } = {};
   if (data.full_name !== undefined) body.full_name = data.full_name.trim();
   if (data.phone !== undefined) body.phone = data.phone;
+  if (data.office_id !== undefined) body.office_id = data.office_id;
+  if (data.category_ids !== undefined && data.category_ids.length > 0) {
+    body.category_ids = data.category_ids;
+  }
   const result = await request<unknown>(`/users/${userId}`, {
     method: 'PUT',
     body: JSON.stringify(body),
