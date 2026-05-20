@@ -41,6 +41,7 @@ export interface GetActionsParams {
   onAdminAcceptGroup?: () => void;
   onAdminRejectGroup?: () => void;
   onEditRequestGroup?: () => void;
+  onOpenComments?: () => void;
 }
 
 const STAFF_COMPLETE_SUB_STATUSES = ['in_progress', 'awaiting_assignment', 'assigned'];
@@ -76,6 +77,7 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
     onAdminAcceptGroup,
     onAdminRejectGroup,
     onEditRequestGroup,
+    onOpenComments,
   } = params;
 
   const actions: ActionItem[] = [];
@@ -93,6 +95,15 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
       icon: 'share',
       label: 'Поделиться ссылкой',
       onClick: onShare,
+      variant: 'default',
+    });
+  }
+
+  if (onOpenComments) {
+    actions.push({
+      icon: 'chat-bubble-outline',
+      label: 'Комментировать',
+      onClick: onOpenComments,
       variant: 'default',
     });
   }

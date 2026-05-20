@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AssignExecutorsModal } from '@/components/requests/assign-executors-modal';
 import { CompleteTaskModal } from '@/components/requests/complete-task-modal';
+import { CommentsModal } from '@/components/requests/comments-modal';
 import {
   AdminAcceptRequestModal,
   AdminRejectRequestModal,
@@ -25,6 +26,7 @@ import { RatingModal } from '@/components/requests/rating-modal';
 import { RedirectModal } from '@/components/requests/redirect-modal';
 import { RejectModal } from '@/components/requests/reject-modal';
 import { RequestActionMenu, type RequestUserRole } from '@/components/requests/request-action-menu';
+import { LongTermBadge } from '@/components/requests/long-term-badge';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
@@ -58,7 +60,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatServiceCategoryDisplayName, getStatusLabel, getTypeLabel } from '@/constants/requests';
+import { formatServiceCategoryDisplayName, getStatusLabel, getTypeLabel, isLongTermRequestGroup } from '@/constants/requests';
 
 function PhotoGrid({
   photos,
@@ -124,6 +126,8 @@ export default function RequestDetailScreen() {
   const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null);
 
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completeMode, setCompleteMode] = useState<'executor' | 'staff'>('executor');
+  const [staffCompleteTargets, setStaffCompleteTargets] = useState<SubRequest[]>([]);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [showClientRatingModal, setShowClientRatingModal] = useState(false);
@@ -148,6 +152,7 @@ export default function RequestDetailScreen() {
   const [offices, setOffices] = useState<Office[]>([]);
   const [adminAcceptError, setAdminAcceptError] = useState<string | null>(null);
   const [adminRejectError, setAdminRejectError] = useState<string | null>(null);
+  const [showCommentsModal, setShowCommentsModal] = useState(false);
 
   const numId = id ? parseInt(id, 10) : NaN;
 
@@ -242,13 +247,55 @@ export default function RequestDetailScreen() {
     [refetch, showToast]
   );
 
+  const defaultStaffCompleteComment =
+    role === 'department-head' ? 'Завершено офис-менеджером' : 'Завершено администратором';
+  const staffCompleteSuccessTitle =
+    role === 'department-head' ? 'Заявка завершена' : 'Заявка завершена администратором';
+
   const handleCompleteTask = useCallback(
     async (comment: string, photoUris: string[]) => {
-      if (!taskForComplete) return;
+      if (!request) return;
       setActionLoading(true);
       try {
+        if (completeMode === 'staff') {
+          if (!staffCompleteTargets.length) {
+            showToast({ title: 'Нет подзаявок для завершения', variant: 'destructive' });
+            return;
+          }
+          const completionComment = comment.trim() || defaultStaffCompleteComment;
+          for (const sr of staffCompleteTargets) {
+            const res = await adminCompleteRequest(sr.id, { comment: completionComment });
+            if (!res.ok) {
+              throw new Error(res.error);
+            }
+          }
+          if (photoUris.length > 0) {
+            const uploadRes = await uploadRequestPhotos(
+              request.id,
+              photoUris.map((uri) => ({ uri })),
+              'after'
+            );
+            if (!uploadRes.ok) {
+              showToast({
+                title: 'Ошибка загрузки',
+                description: uploadRes.error,
+                variant: 'destructive',
+                duration: 4000,
+              });
+            }
+          }
+          showToast({ title: staffCompleteSuccessTitle, variant: 'success' });
+          setShowCompleteModal(false);
+          setTaskForComplete(null);
+          setStaffCompleteTargets([]);
+          setCompleteMode('executor');
+          refetch();
+          return;
+        }
+
+        if (!taskForComplete) return;
         const res = await completeRequest(taskForComplete.id, { comment });
-        if (res.ok && photoUris.length > 0 && request) {
+        if (res.ok && photoUris.length > 0) {
           const uploadRes = await uploadRequestPhotos(
             request.id,
             photoUris.map((uri) => ({ uri })),
@@ -271,11 +318,23 @@ export default function RequestDetailScreen() {
         } else {
           showToast({ title: res.error, variant: 'destructive' });
         }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Ошибка при завершении заявки';
+        showToast({ title: message, variant: 'destructive' });
       } finally {
         setActionLoading(false);
       }
     },
-    [taskForComplete, request, refetch, showToast]
+    [
+      completeMode,
+      taskForComplete,
+      request,
+      staffCompleteTargets,
+      defaultStaffCompleteComment,
+      staffCompleteSuccessTitle,
+      refetch,
+      showToast,
+    ]
   );
 
   const handleReject = useCallback(
@@ -532,42 +591,11 @@ export default function RequestDetailScreen() {
       return;
     }
 
-    const completerLabel =
-      role === 'department-head' ? 'офис-менеджером' : 'администратором';
-    const successTitle =
-      role === 'department-head' ? 'Заявка завершена' : 'Заявка завершена администратором';
-
-    Alert.alert(
-      'Завершить без назначения',
-      `Все подзаявки будут завершены ${completerLabel} без назначения исполнителей. Продолжить?`,
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Завершить',
-          style: 'destructive',
-          onPress: async () => {
-            setActionLoading(true);
-            try {
-              for (const sr of targets) {
-                const res = await adminCompleteRequest(sr.id);
-                if (!res.ok) {
-                  throw new Error(res.error);
-                }
-              }
-              showToast({ title: successTitle, variant: 'success' });
-              refetch();
-            } catch (e) {
-              const message =
-                e instanceof Error ? e.message : 'Ошибка при завершении заявки';
-              showToast({ title: message, variant: 'destructive' });
-            } finally {
-              setActionLoading(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [request, refetch, showToast, role]);
+    setCompleteMode('staff');
+    setStaffCompleteTargets(targets);
+    setTaskForComplete(targets[0]);
+    setShowCompleteModal(true);
+  }, [request, showToast]);
 
   const isExecutorLeader = useCallback(
     (sub: SubRequest) => {
@@ -615,6 +643,7 @@ export default function RequestDetailScreen() {
   })();
 
   const subRequests = request.requests ?? [];
+  const isLongTerm = isLongTermRequestGroup(request);
 
   return (
     <ThemedView style={styles.container}>
@@ -633,7 +662,25 @@ export default function RequestDetailScreen() {
         <ThemedText style={[styles.headerTitle, { color: textColor }]}>
           Заявка #{request.id}
         </ThemedText>
-        {role && sub && (
+        <View style={styles.headerActions}>
+          {!isGuest && sub ? (
+            <Pressable
+              onPress={() => setShowCommentsModal(true)}
+              style={({ pressed }) => [
+                styles.headerIconBtn,
+                { opacity: pressed ? 0.75 : 1 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Комментарии"
+            >
+              <MaterialIcons
+                name="chat-bubble-outline"
+                size={22}
+                color={showCommentsModal ? primaryColor : textColor}
+              />
+            </Pressable>
+          ) : null}
+          {role && sub ? (
           <RequestActionMenu
             request={request}
             subRequest={sub}
@@ -642,6 +689,8 @@ export default function RequestDetailScreen() {
             isExecutorLeader={isExecutorLeader(sub)}
             onStartTask={(tid) => handleStartTask(Number(tid))}
             onCompleteTask={(s) => {
+              setCompleteMode('executor');
+              setStaffCompleteTargets([]);
               setTaskForComplete(s);
               setShowCompleteModal(true);
             }}
@@ -689,8 +738,10 @@ export default function RequestDetailScreen() {
               setEditError(null);
               setShowEditModal(true);
             }}
+            onOpenComments={() => setShowCommentsModal(true)}
           />
-        )}
+          ) : null}
+        </View>
       </View>
 
       <ScrollView
@@ -709,6 +760,7 @@ export default function RequestDetailScreen() {
               {getTypeLabel(request.request_type ?? 'normal')}
             </ThemedText>
           </View>
+          {isLongTerm ? <LongTermBadge detail /> : null}
         </View>
 
         {request.request_type === 'planned' && request.planned_date && (
@@ -858,16 +910,35 @@ export default function RequestDetailScreen() {
         </Pressable>
       ) : null}
 
+      <CommentsModal
+        visible={showCommentsModal}
+        onClose={() => setShowCommentsModal(false)}
+        requestId={sub?.id ?? null}
+        currentUserId={user?.id}
+        currentUserName={user?.full_name}
+        currentUserRole={role ?? undefined}
+      />
+
       <CompleteTaskModal
         visible={showCompleteModal}
         onClose={() => {
           setShowCompleteModal(false);
           setTaskForComplete(null);
+          setStaffCompleteTargets([]);
+          setCompleteMode('executor');
         }}
         onSubmit={handleCompleteTask}
         subRequest={taskForComplete}
         requestGroupId={request.id}
         loading={actionLoading}
+        title={
+          completeMode === 'staff' ? 'Завершить без назначения' : 'Завершить задачу'
+        }
+        subtitle={
+          completeMode === 'staff'
+            ? `Заявка #${request.id}${staffCompleteTargets.length > 1 ? ` · подзаявок: ${staffCompleteTargets.length}` : ''}`
+            : undefined
+        }
       />
 
       {role === 'admin-worker' && request.status === 'in_progress' && (
@@ -1009,6 +1080,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backdrop: {
     flex: 1,

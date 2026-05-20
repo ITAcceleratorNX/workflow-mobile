@@ -171,3 +171,14 @@ export function getServiceCategoryVisualMeta(
       };
   }
 }
+
+export const LONG_TERM_LABEL = 'Долгосрочная';
+
+/** Заявка помечена как долгосрочная (не для повторяющихся). */
+export function isLongTermRequestGroup(request: {
+  request_type?: string;
+  requests?: Array<{ is_long_term?: boolean }>;
+}): boolean {
+  if (request.request_type === 'recurring') return false;
+  return (request.requests ?? []).some((req) => req.is_long_term);
+}

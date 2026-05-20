@@ -112,6 +112,13 @@ export async function request<T>(
         } as T,
       };
     }
+
+    if (base.startsWith('/comments')) {
+      if (method === 'GET') {
+        return { ok: true, data: [] as T };
+      }
+      return { ok: false, error: 'Войдите в аккаунт' };
+    }
   }
 
   const headers: HeadersInit = {
@@ -954,10 +961,12 @@ export async function completeRequest(
 
 /** Завершение подзаявки без назначения (admin-worker, department-head) */
 export async function adminCompleteRequest(
-  requestId: number
+  requestId: number,
+  body?: { comment?: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await request<unknown>(`/requests/${requestId}/admin-complete`, {
     method: 'PATCH',
+    body: body?.comment != null ? JSON.stringify({ comment: body.comment }) : undefined,
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
@@ -971,6 +980,63 @@ export async function toggleLongTermRequest(
   const result = await request<unknown>(`/requests/${requestId}/long-term`, {
     method: 'PATCH',
     body: JSON.stringify({ is_long_term: isLongTerm }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+export interface RequestComment {
+  id: number;
+  request_id: number;
+  sender_id: number;
+  comment: string;
+  timestamp: string;
+  user?: {
+    id: number;
+    full_name: string;
+    role?: string;
+  };
+}
+
+/** Комментарии к подзаявке */
+export async function getRequestComments(
+  requestId: number
+): Promise<{ ok: true; data: RequestComment[] } | { ok: false; error: string }> {
+  const result = await request<RequestComment[]>(`/comments/request/${requestId}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data ?? [] };
+}
+
+export async function createRequestComment(
+  requestId: number,
+  comment: string
+): Promise<{ ok: true; data: RequestComment } | { ok: false; error: string }> {
+  const result = await request<RequestComment>('/comments', {
+    method: 'POST',
+    body: JSON.stringify({ request_id: requestId, comment: comment.trim() }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function updateRequestComment(
+  commentId: number,
+  requestId: number,
+  comment: string
+): Promise<{ ok: true; data: RequestComment } | { ok: false; error: string }> {
+  const result = await request<RequestComment>(`/comments/${commentId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ request_id: requestId, comment: comment.trim() }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function deleteRequestComment(
+  commentId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/comments/${commentId}`, {
+    method: 'DELETE',
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
