@@ -61,7 +61,6 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  /** С бэкенда: удалять могут только создатель и руководитель */
   const [teamMeta, setTeamMeta] = useState<{ created_by: number; leader_id: number } | null>(null);
 
   useEffect(() => {
@@ -128,10 +127,18 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
     return Array.from(ids);
   }, [leader, members]);
 
-  const canDeleteTeam = useMemo(() => {
+  const isTeamCreator = useMemo(() => {
     if (currentUserId == null || teamMeta == null) return false;
-    return teamMeta.created_by === currentUserId || teamMeta.leader_id === currentUserId;
+    return teamMeta.created_by === currentUserId;
   }, [currentUserId, teamMeta]);
+
+  const canManageMembers = useMemo(() => {
+    if (currentUserId == null || teamMeta == null) return !isEdit;
+    return isTeamCreator || teamMeta.leader_id === currentUserId;
+  }, [currentUserId, teamMeta, isEdit, isTeamCreator]);
+
+  const canEditTeamMeta = isTeamCreator || !isEdit;
+  const canDeleteTeam = isTeamCreator;
 
   const pickLeader = useCallback((u: UserSearchItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -182,11 +189,10 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
     if (saving) return;
     setSaving(true);
     if (isEdit && teamId) {
-      const res = await updateTeam(teamId, {
-        name: trimmed,
-        leader_id: leader.id,
-        member_ids: memberIdsForSubmit,
-      });
+      const payload = isTeamCreator
+        ? { name: trimmed, leader_id: leader.id, member_ids: memberIdsForSubmit }
+        : { member_ids: memberIdsForSubmit };
+      const res = await updateTeam(teamId, payload);
       setSaving(false);
       if (res.ok) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -219,6 +225,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
     isEdit,
     teamId,
     memberIdsForSubmit,
+    isTeamCreator,
     show,
     router,
   ]);
@@ -245,6 +252,19 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
         <ScreenHeader title={isEdit ? 'Команда' : 'Новая команда'} />
         <View style={styles.center}>
           <ThemedText style={{ color: textMuted }}>Войдите в аккаунт, чтобы управлять командами</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  if (isEdit && !loadingTeam && teamMeta && !canManageMembers) {
+    return (
+      <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
+        <ScreenHeader title="Команда" />
+        <View style={styles.center}>
+          <ThemedText style={{ color: textMuted, textAlign: 'center' }}>
+            Редактировать команду могут только создатель и руководитель
+          </ThemedText>
         </View>
       </ThemedView>
     );
@@ -285,6 +305,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
               placeholderTextColor={textMuted}
               style={[styles.input, { color: text }]}
               maxLength={255}
+              editable={canEditTeamMeta}
             />
           </View>
 
@@ -296,6 +317,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
               placeholder="Поиск по имени (от 2 символов)"
               placeholderTextColor={textMuted}
               style={[styles.input, { color: text }]}
+              editable={canEditTeamMeta}
             />
             {leaderSearching ? (
               <ThemedText style={[styles.hint, { color: textMuted }]}>Поиск…</ThemedText>
@@ -305,7 +327,8 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
                 {leaderResults.map((u) => (
                   <Pressable
                     key={u.id}
-                    onPress={() => pickLeader(u)}
+                    onPress={() => canEditTeamMeta && pickLeader(u)}
+                    disabled={!canEditTeamMeta}
                     style={({ pressed }) => [styles.resultRow, pressed && { opacity: 0.75 }]}
                   >
                     <ThemedText style={{ color: text }} numberOfLines={1}>
@@ -326,9 +349,11 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
                   >
                     {leader.full_name?.trim() || `#${leader.id}`}
                   </ThemedText>
-                  <Pressable onPress={clearLeader} hitSlop={8}>
-                    <MaterialIcons name="close" size={18} color={primary} />
-                  </Pressable>
+                  {canEditTeamMeta ? (
+                    <Pressable onPress={clearLeader} hitSlop={8}>
+                      <MaterialIcons name="close" size={18} color={primary} />
+                    </Pressable>
+                  ) : null}
                 </View>
               </View>
             ) : (
@@ -346,6 +371,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
               placeholder="Добавить участника (поиск от 2 символов)"
               placeholderTextColor={textMuted}
               style={[styles.input, { color: text }]}
+              editable={canManageMembers}
             />
             {memberSearching ? (
               <ThemedText style={[styles.hint, { color: textMuted }]}>Поиск…</ThemedText>
@@ -381,9 +407,11 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
                     >
                       {m.full_name?.trim() || `#${m.id}`}
                     </ThemedText>
-                    <Pressable onPress={() => removeMember(m.id)} hitSlop={8}>
-                      <MaterialIcons name="close" size={18} color={textMuted} />
-                    </Pressable>
+                    {canManageMembers ? (
+                      <Pressable onPress={() => removeMember(m.id)} hitSlop={8}>
+                        <MaterialIcons name="close" size={18} color={textMuted} />
+                      </Pressable>
+                    ) : null}
                   </View>
                 ))}
               </View>
@@ -415,6 +443,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
           ) : null}
         </ScrollView>
 
+        {canManageMembers ? (
         <View style={[styles.footer, { borderTopColor: border, paddingBottom: Math.max(insets.bottom, 12) }]}>
           <Pressable
             onPress={handleSave}
@@ -431,6 +460,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
             )}
           </Pressable>
         </View>
+        ) : null}
       </KeyboardAvoidingView>
     </ThemedView>
   );

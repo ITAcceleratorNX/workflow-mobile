@@ -44,7 +44,11 @@ function normalizeUserRef(u: unknown): TeamUserRef | null {
 }
 
 function normalizeTeam(team: Team): Team {
-  const out = { ...team };
+  const out = {
+    ...team,
+    leader_id: Number(team.leader_id),
+    created_by: Number(team.created_by),
+  };
   if (team.leader != null) {
     out.leader =
       normalizeUserRef(team.leader) ?? {
