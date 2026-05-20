@@ -468,6 +468,22 @@ export async function createServiceCategory(
   return { ok: true, data: result.data! };
 }
 
+export async function updateServiceCategory(
+  id: number,
+  body: { name: string },
+  officeId?: number
+): Promise<{ ok: true; data: ServiceCategory } | { ok: false; error: string }> {
+  const result = await request<ServiceCategory>(
+    `/service-categories/${id}${serviceCategoriesOfficeQuery(officeId)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
 export async function deleteServiceCategory(
   id: number,
   officeId?: number
@@ -629,6 +645,22 @@ export async function createSubcategory(
   const result = await request<ServiceSubcategory>(
     `/service-categories/subcategories${serviceCategoriesOfficeQuery(officeId)}`,
     { method: 'POST', body: JSON.stringify(body) }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function updateSubcategory(
+  id: number,
+  body: { name: string },
+  officeId?: number
+): Promise<{ ok: true; data: ServiceSubcategory } | { ok: false; error: string }> {
+  const result = await request<ServiceSubcategory>(
+    `/service-categories/subcategories/${id}${serviceCategoriesOfficeQuery(officeId)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }
   );
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: result.data! };

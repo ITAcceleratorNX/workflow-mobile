@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { EditableCatalogRow } from '@/components/categories/editable-catalog-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, ScreenHeader, Select, TextInput } from '@/components/ui';
@@ -25,8 +24,10 @@ import {
   getOffices,
   getServiceCategories,
   createServiceCategory,
+  updateServiceCategory,
   deleteServiceCategory,
   createSubcategory,
+  updateSubcategory,
   deleteSubcategory,
 } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
@@ -34,6 +35,14 @@ import { useAuthStore } from '@/stores/auth-store';
 export type CategoryManagementVariant = 'department-head' | 'admin-worker';
 
 type TabType = 'categories' | 'subcategories';
+
+type EditingKey = `category-${number}` | `subcategory-${number}`;
+
+function subcategoryCountLabel(count: number): string {
+  if (count === 1) return '1 подкатегория';
+  if (count > 1 && count < 5) return `${count} подкатегории`;
+  return `${count} подкатегорий`;
+}
 
 function useCategories(officeId: number | null) {
   const [list, setList] = useState<ServiceCategory[]>([]);
@@ -104,9 +113,11 @@ export function CategoryManagementScreen({
   const border = useThemeColor({}, 'border');
   const cardBg = useThemeColor({}, 'cardBackground');
   const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const surface = useThemeColor({}, 'surface');
   const danger = useThemeColor({}, 'danger');
   const dangerSoft = useThemeColor({}, 'dangerSoft');
   const accentSoft = useThemeColor({}, 'accentSoft');
+  const background = useThemeColor({}, 'background');
 
   const initialTab: TabType = tab === 'subcategories' ? 'subcategories' : 'categories';
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
@@ -119,6 +130,11 @@ export function CategoryManagementScreen({
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [newSubcategoryName, setNewSubcategoryName] = useState('');
   const [isCreatingSubcategory, setIsCreatingSubcategory] = useState(false);
+
+  const [editingKey, setEditingKey] = useState<EditingKey | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [originalName, setOriginalName] = useState('');
+  const [savingKey, setSavingKey] = useState<EditingKey | null>(null);
 
   const selectedCategory = useMemo(
     () => categories.find((c) => String(c.id) === selectedCategoryId),
@@ -143,6 +159,20 @@ export function CategoryManagementScreen({
     [categories]
   );
 
+  const cancelEdit = useCallback(() => {
+    setEditingKey(null);
+    setEditDraft('');
+    setOriginalName('');
+    setSavingKey(null);
+  }, []);
+
+  const startEdit = useCallback((key: EditingKey, name: string) => {
+    setEditingKey(key);
+    setEditDraft(name);
+    setOriginalName(name);
+    setSavingKey(null);
+  }, []);
+
   const handleCreateCategory = useCallback(async () => {
     const name = newCategoryName.trim();
     if (!name || manageOfficeId == null) return;
@@ -160,6 +190,7 @@ export function CategoryManagementScreen({
 
   const confirmDeleteCategory = useCallback(
     (cat: ServiceCategory) => {
+      if (editingKey === `category-${cat.id}`) cancelEdit();
       Alert.alert(
         'Удалить категорию?',
         `${cat.name}\n\nКатегория будет снята у исполнителей и в существующих заявках (поле станет пустым). Заявки не удаляются.`,
@@ -183,7 +214,7 @@ export function CategoryManagementScreen({
         ]
       );
     },
-    [manageOfficeId, selectedCategoryId, showToast, refetch]
+    [manageOfficeId, selectedCategoryId, showToast, refetch, editingKey, cancelEdit]
   );
 
   const handleCreateSubcategory = useCallback(async () => {
@@ -202,8 +233,40 @@ export function CategoryManagementScreen({
     }
   }, [newSubcategoryName, selectedCategoryId, manageOfficeId, showToast, refetch]);
 
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingKey || manageOfficeId == null) return;
+    const name = editDraft.trim();
+    if (!name) return;
+    if (name === originalName) {
+      cancelEdit();
+      return;
+    }
+
+    setSavingKey(editingKey);
+    const isCategory = editingKey.startsWith('category-');
+    const id = Number(editingKey.split('-')[1]);
+
+    const result = isCategory
+      ? await updateServiceCategory(id, { name }, manageOfficeId)
+      : await updateSubcategory(id, { name }, manageOfficeId);
+
+    setSavingKey(null);
+
+    if (result.ok) {
+      showToast({
+        title: isCategory ? 'Категория обновлена' : 'Подкатегория обновлена',
+        variant: 'success',
+      });
+      cancelEdit();
+      refetch();
+    } else {
+      showToast({ title: result.error, variant: 'destructive' });
+    }
+  }, [editDraft, editingKey, originalName, manageOfficeId, showToast, refetch, cancelEdit]);
+
   const confirmDeleteSubcategory = useCallback(
     (name: string, id: number) => {
+      if (editingKey === `subcategory-${id}`) cancelEdit();
       Alert.alert('Удалить подкатегорию?', name, [
         { text: 'Отмена', style: 'cancel' },
         {
@@ -222,7 +285,7 @@ export function CategoryManagementScreen({
         },
       ]);
     },
-    [manageOfficeId, showToast, refetch]
+    [manageOfficeId, showToast, refetch, editingKey, cancelEdit]
   );
 
   const allowed =
@@ -233,6 +296,16 @@ export function CategoryManagementScreen({
 
   const needsOffice = isAdmin && manageOfficeId == null;
 
+  const rowTheme = {
+    cardBackgroundColor: cardBg,
+    borderColor: border,
+    textColor: text,
+    textMutedColor: textMuted,
+    primaryColor: primary,
+    dangerColor: danger,
+    surfaceColor: surface,
+  };
+
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       <ScreenHeader title="Категории услуг" onBack={() => router.back()} />
@@ -241,7 +314,10 @@ export function CategoryManagementScreen({
         <View style={styles.officeBar}>
           <Select
             value={selectedOfficeId}
-            onValueChange={setSelectedOfficeId}
+            onValueChange={(v) => {
+              cancelEdit();
+              setSelectedOfficeId(v);
+            }}
             options={officeOptions}
             placeholder="Выберите офис"
           />
@@ -251,7 +327,10 @@ export function CategoryManagementScreen({
       <View style={[styles.tabs, { backgroundColor: surfaceMuted, borderColor: border }]}>
         <Pressable
           style={[styles.tab, activeTab === 'categories' && { backgroundColor: primary }]}
-          onPress={() => setActiveTab('categories')}
+          onPress={() => {
+            cancelEdit();
+            setActiveTab('categories');
+          }}
         >
           <ThemedText
             style={[
@@ -264,7 +343,10 @@ export function CategoryManagementScreen({
         </Pressable>
         <Pressable
           style={[styles.tab, activeTab === 'subcategories' && { backgroundColor: primary }]}
-          onPress={() => setActiveTab('subcategories')}
+          onPress={() => {
+            cancelEdit();
+            setActiveTab('subcategories');
+          }}
         >
           <ThemedText
             style={[
@@ -297,19 +379,17 @@ export function CategoryManagementScreen({
           <Button title="Повторить" onPress={refetch} variant="outline" />
         </View>
       ) : (
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={insets.top + 56}
+        <ScrollView
+          style={[styles.flex, { backgroundColor: background }]}
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingBottom: insets.bottom + Spacing.xxl },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets
         >
-          <ScrollView
-            contentContainerStyle={[
-              styles.scroll,
-              { paddingBottom: insets.bottom + Spacing.xxl },
-            ]}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
             {activeTab === 'categories' && (
               <>
                 <View style={[styles.formCard, { backgroundColor: cardBg, borderColor: border }]}>
@@ -321,7 +401,9 @@ export function CategoryManagementScreen({
                     placeholder="Например: КТО"
                     value={newCategoryName}
                     onChangeText={setNewCategoryName}
-                    editable={!isCreatingCategory}
+                    editable={!isCreatingCategory && editingKey == null}
+                    returnKeyType="done"
+                    onSubmitEditing={handleCreateCategory}
                   />
                   <Button
                     title={isCreatingCategory ? 'Сохранение...' : 'Добавить категорию'}
@@ -332,15 +414,20 @@ export function CategoryManagementScreen({
                   />
                 </View>
 
-                <View style={styles.listHeader}>
-                  <ThemedText style={[styles.listTitle, { color: text }]}>
-                    Список категорий
-                  </ThemedText>
-                  <View style={[styles.countBadge, { backgroundColor: accentSoft }]}>
-                    <ThemedText style={[styles.countText, { color: primary }]}>
-                      {categories.length}
+                <View style={styles.listHeaderBlock}>
+                  <View style={styles.listHeader}>
+                    <ThemedText style={[styles.listTitle, { color: text }]}>
+                      Список категорий
                     </ThemedText>
+                    <View style={[styles.countBadge, { backgroundColor: accentSoft }]}>
+                      <ThemedText style={[styles.countText, { color: primary }]}>
+                        {categories.length}
+                      </ThemedText>
+                    </View>
                   </View>
+                  <ThemedText style={[styles.listHint, { color: textMuted }]}>
+                    Нажмите на название, чтобы переименовать
+                  </ThemedText>
                 </View>
 
                 {categories.length === 0 ? (
@@ -352,41 +439,26 @@ export function CategoryManagementScreen({
                   </View>
                 ) : (
                   categories.map((cat) => {
+                    const key: EditingKey = `category-${cat.id}`;
                     const subCount = cat.subcategories?.length ?? 0;
                     return (
-                      <View
+                      <EditableCatalogRow
                         key={cat.id}
-                        style={[styles.listCard, { backgroundColor: cardBg, borderColor: border }]}
-                      >
-                        <View style={styles.listCardMain}>
-                          <View style={[styles.iconWrap, { backgroundColor: accentSoft }]}>
-                            <MaterialIcons name="category" size={22} color={primary} />
-                          </View>
-                          <View style={styles.listCardText}>
-                            <ThemedText style={[styles.itemName, { color: text }]} numberOfLines={2}>
-                              {cat.name}
-                            </ThemedText>
-                            <ThemedText style={[styles.itemMeta, { color: textMuted }]}>
-                              {subCount}{' '}
-                              {subCount === 1
-                                ? 'подкатегория'
-                                : subCount < 5
-                                  ? 'подкатегории'
-                                  : 'подкатегорий'}
-                            </ThemedText>
-                          </View>
-                        </View>
-                        <Pressable
-                          onPress={() => confirmDeleteCategory(cat)}
-                          hitSlop={10}
-                          style={({ pressed }) => [
-                            styles.deleteBtn,
-                            { borderColor: border, opacity: pressed ? 0.6 : 1 },
-                          ]}
-                        >
-                          <MaterialIcons name="delete-outline" size={22} color={danger} />
-                        </Pressable>
-                      </View>
+                        icon="category"
+                        iconBackgroundColor={accentSoft}
+                        iconColor={primary}
+                        name={cat.name}
+                        subtitle={subcategoryCountLabel(subCount)}
+                        isEditing={editingKey === key}
+                        draft={editingKey === key ? editDraft : cat.name}
+                        isSaving={savingKey === key}
+                        {...rowTheme}
+                        onStartEdit={() => startEdit(key, cat.name)}
+                        onChangeDraft={setEditDraft}
+                        onSave={handleSaveEdit}
+                        onCancel={cancelEdit}
+                        onDelete={() => confirmDeleteCategory(cat)}
+                      />
                     );
                   })
                 )}
@@ -401,7 +473,10 @@ export function CategoryManagementScreen({
                   </ThemedText>
                   <Select
                     value={selectedCategoryId}
-                    onValueChange={setSelectedCategoryId}
+                    onValueChange={(v) => {
+                      cancelEdit();
+                      setSelectedCategoryId(v);
+                    }}
                     options={categoryOptions}
                     placeholder="Выберите категорию"
                     disabled={categories.length === 0}
@@ -433,7 +508,9 @@ export function CategoryManagementScreen({
                         placeholder="Например: Замена ламп"
                         value={newSubcategoryName}
                         onChangeText={setNewSubcategoryName}
-                        editable={!isCreatingSubcategory}
+                        editable={!isCreatingSubcategory && editingKey == null}
+                        returnKeyType="done"
+                        onSubmitEditing={handleCreateSubcategory}
                       />
                       <Button
                         title={isCreatingSubcategory ? 'Сохранение...' : 'Добавить подкатегорию'}
@@ -444,15 +521,20 @@ export function CategoryManagementScreen({
                       />
                     </View>
 
-                    <View style={styles.listHeader}>
-                      <ThemedText style={[styles.listTitle, { color: text }]}>
-                        Подкатегории
-                      </ThemedText>
-                      <View style={[styles.countBadge, { backgroundColor: accentSoft }]}>
-                        <ThemedText style={[styles.countText, { color: primary }]}>
-                          {subcategories.length}
+                    <View style={styles.listHeaderBlock}>
+                      <View style={styles.listHeader}>
+                        <ThemedText style={[styles.listTitle, { color: text }]}>
+                          Подкатегории
                         </ThemedText>
+                        <View style={[styles.countBadge, { backgroundColor: accentSoft }]}>
+                          <ThemedText style={[styles.countText, { color: primary }]}>
+                            {subcategories.length}
+                          </ThemedText>
+                        </View>
                       </View>
+                      <ThemedText style={[styles.listHint, { color: textMuted }]}>
+                        Нажмите на название, чтобы переименовать
+                      </ThemedText>
                     </View>
 
                     {subcategories.length === 0 ? (
@@ -463,44 +545,33 @@ export function CategoryManagementScreen({
                         </ThemedText>
                       </View>
                     ) : (
-                      subcategories.map((sub) => (
-                        <View
-                          key={sub.id}
-                          style={[
-                            styles.listCard,
-                            { backgroundColor: cardBg, borderColor: border },
-                          ]}
-                        >
-                          <View style={styles.listCardMain}>
-                            <View style={[styles.iconWrap, { backgroundColor: surfaceMuted }]}>
-                              <MaterialIcons name="subdirectory-arrow-right" size={20} color={textMuted} />
-                            </View>
-                            <ThemedText
-                              style={[styles.itemName, { color: text, flex: 1 }]}
-                              numberOfLines={2}
-                            >
-                              {sub.name}
-                            </ThemedText>
-                          </View>
-                          <Pressable
-                            onPress={() => confirmDeleteSubcategory(sub.name, sub.id)}
-                            hitSlop={10}
-                            style={({ pressed }) => [
-                              styles.deleteBtn,
-                              { borderColor: border, opacity: pressed ? 0.6 : 1 },
-                            ]}
-                          >
-                            <MaterialIcons name="delete-outline" size={22} color={danger} />
-                          </Pressable>
-                        </View>
-                      ))
+                      subcategories.map((sub) => {
+                        const key: EditingKey = `subcategory-${sub.id}`;
+                        return (
+                          <EditableCatalogRow
+                            key={sub.id}
+                            icon="subdirectory-arrow-right"
+                            iconBackgroundColor={surfaceMuted}
+                            iconColor={textMuted}
+                            name={sub.name}
+                            isEditing={editingKey === key}
+                            draft={editingKey === key ? editDraft : sub.name}
+                            isSaving={savingKey === key}
+                            {...rowTheme}
+                            onStartEdit={() => startEdit(key, sub.name)}
+                            onChangeDraft={setEditDraft}
+                            onSave={handleSaveEdit}
+                            onCancel={cancelEdit}
+                            onDelete={() => confirmDeleteSubcategory(sub.name, sub.id)}
+                          />
+                        );
+                      })
                     )}
                   </>
                 )}
               </>
             )}
-          </ScrollView>
-        </KeyboardAvoidingView>
+        </ScrollView>
       )}
     </ThemedView>
   );
@@ -556,12 +627,19 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.bodySmall,
     marginTop: -Spacing.sm,
   },
+  listHeaderBlock: {
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+    gap: 4,
+  },
   listHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
+  },
+  listHint: {
+    fontSize: FontSizes.caption,
+    lineHeight: 18,
   },
   listTitle: {
     fontSize: FontSizes.body,
@@ -575,48 +653,6 @@ const styles = StyleSheet.create({
   countText: {
     fontSize: FontSizes.caption,
     fontWeight: FontWeights.semibold,
-  },
-  listCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.md,
-    gap: Spacing.sm,
-  },
-  listCardMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    minWidth: 0,
-  },
-  listCardText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemName: {
-    fontSize: FontSizes.body,
-    fontWeight: FontWeights.semibold,
-  },
-  itemMeta: {
-    fontSize: FontSizes.caption,
-  },
-  deleteBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   emptyCard: {
     alignItems: 'center',
