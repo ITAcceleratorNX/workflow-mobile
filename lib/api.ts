@@ -1489,7 +1489,7 @@ export async function searchUsersForAssign(query: string): Promise<
 > {
   const q = query?.trim();
   if (!q || q.length < 1) return { ok: true, data: [] };
-  /** Без фильтра по роли: исполнители, офис, клиенты — кого реально можно назначить на задачу. */
+  /** Сервер: свой офис (кроме admin-worker), без manager; admin-worker — все офисы. */
   const result = await request<{ success: boolean; users: unknown[] }>('/users/search', {
     params: { q },
   });
