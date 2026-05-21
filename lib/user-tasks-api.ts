@@ -52,6 +52,9 @@ export interface UserTask {
   executor_id?: number | null;
   team?: TaskTeamRef | null;
   executor?: TaskExecutorRef | null;
+  completed_by?: number | null;
+  completed_by_user?: TaskExecutorRef | null;
+  completedByUser?: TaskExecutorRef | null;
   /** true: задача «Входящие»; без даты/срока — только там; с датой (scheduled_at или срок) также в «Сегодня»/«Предстоящие» и календаре */
   inbox: boolean;
 }
@@ -69,7 +72,17 @@ function unwrapTaskPayload(raw: unknown): UserTask {
 
 function normalizeUserTaskRow(t: UserTask): UserTask {
   const rec = normalizeRecurrenceFromApi(t);
-  return { ...t, ...rec, inbox: Boolean(t.inbox) };
+  const completedByUser = t.completed_by_user ?? t.completedByUser ?? undefined;
+  return { ...t, ...rec, inbox: Boolean(t.inbox), completed_by_user: completedByUser };
+}
+
+/** Создатель или руководитель команды (для задач с team_id). */
+export function canEditUserTaskDetails(task: UserTask, userId: number | null | undefined): boolean {
+  if (!task || userId == null) return false;
+  if (task.creator_id === userId) return true;
+  if (task.team_id == null) return false;
+  const leaderId = task.team?.leader_id;
+  return leaderId != null && leaderId === userId;
 }
 
 export type UserTaskAttachmentKind = 'image' | 'video' | 'document';

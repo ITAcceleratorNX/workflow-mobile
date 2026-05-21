@@ -252,7 +252,11 @@ export function TaskExecutorPickerOverlay({
               <MaterialIcons name="close" size={24} color={headerText} />
             </Pressable>
             <ThemedText style={[styles.subSheetHeaderTitle, { color: headerText }]}>Исполнитель</ThemedText>
-            <Pressable onPress={onClose} hitSlop={12} style={styles.subSheetHeaderBtn}>
+            <Pressable
+              onPress={() => pick(selectedExecutor)}
+              hitSlop={12}
+              style={styles.subSheetHeaderBtn}
+            >
               <MaterialIcons name="check" size={24} color={primary} />
             </Pressable>
           </View>

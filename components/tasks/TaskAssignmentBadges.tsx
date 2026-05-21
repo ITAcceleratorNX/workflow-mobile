@@ -29,14 +29,15 @@ export function TaskAssignmentBadges({
   compact,
 }: TaskAssignmentBadgesProps) {
   const teamName = task.team_id && task.team?.name ? task.team.name : null;
-  const people =
-    task.assignees && task.assignees.length > 0
-      ? task.assignees
-      : task.executor_id && task.executor?.full_name
-        ? [{ id: task.executor_id, full_name: task.executor.full_name }]
-        : [];
+  const executorName =
+    !teamName && task.executor_id && task.executor?.full_name ? task.executor.full_name : null;
+  const legacyAssignee =
+    !teamName && !executorName && task.assignees?.[0]?.full_name
+      ? task.assignees[0].full_name
+      : null;
+  const personName = executorName ?? legacyAssignee;
 
-  if (!teamName && people.length === 0) return null;
+  if (!teamName && !personName) return null;
 
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
@@ -48,25 +49,19 @@ export function TaskAssignmentBadges({
           </ThemedText>
         </View>
       ) : null}
-      {people.length === 1 ? (
+      {personName ? (
         <View
           style={[
             styles.pill,
             styles.pillOutline,
             { borderColor: primary },
-            currentUserId != null && people[0].id === currentUserId && { backgroundColor: `${primary}18` },
+            currentUserId != null &&
+              task.executor_id === currentUserId && { backgroundColor: `${primary}18` },
           ]}
         >
           <MaterialIcons name="person" size={compact ? 11 : 12} color={primary} />
           <ThemedText style={[styles.pillText, { color: primary }]} numberOfLines={1}>
-            {currentUserId != null && people[0].id === currentUserId ? 'Вы' : people[0].full_name}
-          </ThemedText>
-        </View>
-      ) : people.length > 1 ? (
-        <View style={[styles.pill, styles.pillOutline, { borderColor: primary }]}>
-          <MaterialIcons name="group" size={compact ? 11 : 12} color={primary} />
-          <ThemedText style={[styles.pillText, { color: primary }]} numberOfLines={1}>
-            Исполнители · {people.length}
+            {currentUserId != null && task.executor_id === currentUserId ? 'Вы' : personName}
           </ThemedText>
         </View>
       ) : null}

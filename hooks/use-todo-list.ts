@@ -218,7 +218,8 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
       remindBeforeMinutes?: number | null,
       assignment?: {
         team_id?: number | null;
-        assignees?: { id: number; full_name: string }[];
+        executor_id?: number | null;
+        executor?: { id: number; full_name: string } | null;
       },
       priority: TaskPriority = 'medium',
       recurrence?: TaskRecurrencePayload,
@@ -234,8 +235,8 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         return null;
       }
       const optimisticId = nextTempId();
-      const assignees = assignment?.assignees ?? [];
-      const assigneeIds = assignees.map((a) => a.id);
+      const executorId = assignment?.executor_id ?? assignment?.executor?.id ?? null;
+      const executor = assignment?.executor ?? null;
       const rec = recurrence ?? defaultRecurrenceNone();
       const inboxFlag = options?.inbox === true;
       const optimistic: UserTask = {
@@ -259,10 +260,11 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         recurrence_weekdays: rec.recurrence_weekdays,
         created_at: nowIso(),
         updated_at: nowIso(),
-        assignee_ids: assigneeIds,
-        assignees,
+        assignee_ids: executorId != null ? [executorId] : [],
+        assignees: executor ? [executor] : [],
         team_id: assignment?.team_id ?? null,
-        executor_id: null,
+        executor_id: executorId,
+        executor: executor ?? undefined,
       };
 
       const before = tasksRef.current;
@@ -275,12 +277,11 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         deadline_from: null,
         deadline_to: null,
         deadline_time: null,
-        assignee_ids: assigneeIds.length > 0 ? assigneeIds : undefined,
         priority,
         reminders_disabled: remindersDisabled,
         remind_before_minutes: remindBeforeMinutes ?? null,
         team_id: assignment?.team_id ?? null,
-        executor_id: null,
+        executor_id: executorId,
         recurrence_type: rec.recurrence_type,
         recurrence_interval: rec.recurrence_interval,
         recurrence_custom_unit: rec.recurrence_custom_unit,

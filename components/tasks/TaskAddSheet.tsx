@@ -25,8 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import {
-  collectTeamMemberOptions,
-  TaskAssigneesPickerOverlay,
+  TaskExecutorPickerOverlay,
   TaskTeamPickerOverlay,
 } from '@/components/tasks/task-assignment-pickers';
 import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
@@ -57,7 +56,7 @@ const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
 /** Если в поле только срок без названия («завтра», «в 15:30») — уходит на API как заголовок. */
 const QUICK_ADD_FALLBACK_TITLE = 'Задача';
 
-type SubModalId = 'schedule' | 'team' | 'assignees' | 'priority' | 'reminders' | null;
+type SubModalId = 'schedule' | 'team' | 'executor' | 'priority' | 'reminders' | null;
 
 export interface TaskAddSheetProps {
   visible: boolean;
@@ -73,7 +72,8 @@ export interface TaskAddSheetProps {
     remindBeforeMinutes?: number | null,
     assignment?: {
       team_id?: number | null;
-      assignees?: { id: number; full_name: string }[];
+      executor_id?: number | null;
+      executor?: { id: number; full_name: string } | null;
     },
     priority?: TaskPriority,
     recurrence?: TaskRecurrencePayload,
@@ -99,7 +99,6 @@ export function TaskAddSheet({
   const cardBg = useThemeColor({}, 'cardBackground');
 
   const isGuest = useAuthStore((s) => s.isGuest);
-  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const { teams, loading: teamsLoading } = useTeams();
 
   const [title, setTitle] = useState('');
@@ -118,7 +117,7 @@ export function TaskAddSheet({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [teamId, setTeamId] = useState<number | null>(null);
-  const [assignees, setAssignees] = useState<{ id: number; full_name: string }[]>([]);
+  const [executor, setExecutor] = useState<{ id: number; full_name: string } | null>(null);
 
   const [nlpScheduleHint, setNlpScheduleHint] = useState<string | null>(null);
   const nlpHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -234,7 +233,7 @@ export function TaskAddSheet({
     else if (mainView === 'today') setScheduledDate(todayKey);
     else setScheduledDate(defaultDateKey ?? tomorrowKey);
     setTeamId(null);
-    setAssignees([]);
+    setExecutor(null);
     nlpHintLatestRef.current = null;
     if (nlpHintTimerRef.current) {
       clearTimeout(nlpHintTimerRef.current);
@@ -248,15 +247,6 @@ export function TaskAddSheet({
   useEffect(() => {
     if (scheduledDate == null) setRecurrenceDraft(defaultRecurrenceNone());
   }, [scheduledDate]);
-
-  useEffect(() => {
-    if (teamId == null) return;
-    const team = teams.find((t) => t.id === teamId);
-    if (!team) return;
-    const opts = collectTeamMemberOptions(team);
-    const allowed = new Set(opts.map((o) => o.id));
-    setAssignees((prev) => prev.filter((a) => allowed.has(a.id)));
-  }, [teamId, teams]);
 
   useEffect(() => {
     if (!visible) setSubModal(null);
@@ -286,11 +276,23 @@ export function TaskAddSheet({
     setSubModal('team');
   }, []);
 
-  const openAssigneesModal = useCallback(() => {
+  const openExecutorModal = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     titleInputRef.current?.blur();
     Keyboard.dismiss();
-    setSubModal('assignees');
+    setSubModal('executor');
+  }, []);
+
+  const handleSelectTeam = useCallback((id: number | null) => {
+    setTeamId(id);
+    setExecutor(null);
+    setSubModal(null);
+  }, []);
+
+  const handleSelectExecutor = useCallback((user: { id: number; full_name: string } | null) => {
+    setExecutor(user);
+    setTeamId(null);
+    setSubModal(null);
   }, []);
 
   const openPriorityModal = useCallback(() => {
@@ -399,23 +401,17 @@ export function TaskAddSheet({
 
   const scheduleChipHighlighted = scheduledDate != null;
 
-  const teamForExecutor = useMemo(
-    () => (teamId != null ? teams.find((t) => t.id === teamId) ?? null : null),
-    [teamId, teams]
-  );
-
   const teamChipLabel = useMemo(() => {
     if (teamId == null) return 'Команда';
     return teams.find((t) => t.id === teamId)?.name ?? 'Команда';
   }, [teamId, teams]);
 
-  const assigneesChipLabel = useMemo(() => {
-    if (assignees.length === 0) return 'Исполнители';
-    if (assignees.length === 1) return assignees[0].full_name;
-    return `Исполнители · ${assignees.length}`;
-  }, [assignees]);
+  const executorChipLabel = useMemo(() => {
+    if (!executor) return 'Исполнитель';
+    return executor.full_name;
+  }, [executor]);
   const teamChipOn = teamId != null;
-  const assigneesChipOn = assignees.length > 0;
+  const executorChipOn = executor != null;
 
   const priorityChipLabel = useMemo(
     () => PRIORITY_OPTIONS.find((o) => o.value === priority)?.label ?? 'Приоритет',
@@ -469,7 +465,11 @@ export function TaskAddSheet({
       scheduledAtIso,
       remindersDisabled,
       remindBeforeMinutes,
-      { team_id: teamId, assignees },
+      {
+        team_id: teamId,
+        executor_id: executor?.id ?? null,
+        executor,
+      },
       priority,
       recurrenceDraft,
       { inbox: mainView === 'inbox' }
@@ -492,7 +492,7 @@ export function TaskAddSheet({
     addTask,
     onClose,
     teamId,
-    assignees,
+    executor,
     allowEmptyTitleFromNlp,
     recurrenceDraft,
     mainView,
@@ -671,26 +671,26 @@ export function TaskAddSheet({
                         </ThemedText>
                       </Pressable>
                       <Pressable
-                        onPress={openAssigneesModal}
+                        onPress={openExecutorModal}
                         style={[
                           styles.quickPill,
                           { borderColor: border, backgroundColor: cardBg },
-                          assigneesChipOn && { borderColor: primary, backgroundColor: `${primary}18` },
+                          executorChipOn && { borderColor: primary, backgroundColor: `${primary}18` },
                         ]}
                       >
                         <MaterialIcons
                           name="person-outline"
                           size={18}
-                          color={assigneesChipOn ? primary : headerSubtitle}
+                          color={executorChipOn ? primary : headerSubtitle}
                         />
                         <ThemedText
                           style={[
                             styles.quickPillText,
-                            { color: assigneesChipOn ? primary : headerText },
+                            { color: executorChipOn ? primary : headerText },
                           ]}
                           numberOfLines={1}
                         >
-                          {assigneesChipLabel}
+                          {executorChipLabel}
                         </ThemedText>
                       </Pressable>
                     </>
@@ -819,17 +819,15 @@ export function TaskAddSheet({
             teams={teams}
             loading={teamsLoading}
             selectedTeamId={teamId}
-            onSelect={(id) => setTeamId(id)}
+            onSelect={handleSelectTeam}
           />
-          <TaskAssigneesPickerOverlay
-            visible={subModal === 'assignees'}
+          <TaskExecutorPickerOverlay
+            visible={subModal === 'executor'}
             onClose={closeSub}
-            teamScope={teamId != null}
-            team={teamForExecutor}
-            teamLoading={teamId != null && !teamForExecutor && teamsLoading}
-            selectedAssignees={assignees}
-            onChange={setAssignees}
-            currentUserId={currentUserId}
+            teamScope={false}
+            team={null}
+            selectedExecutor={executor}
+            onSelect={handleSelectExecutor}
           />
 
           {subModal === 'priority' && (

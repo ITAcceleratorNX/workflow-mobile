@@ -102,7 +102,7 @@ export function usePushNotifications(): void {
     async (raw: Record<string, unknown>, openedFromQuitState = false) => {
       const type = pushPayloadType(raw) ?? '';
 
-      if (type === 'task_reminder') {
+      if (type === 'task_reminder' || type === 'user_task_assigned') {
         const taskId = parseTaskIdFromPushPayload(raw);
         if (taskId == null || Number.isNaN(taskId)) return;
         const key = `fcm:task_open:${taskId}`;
@@ -112,7 +112,7 @@ export function usePushNotifications(): void {
         if (isGuestOrDemoSession()) {
           showToast({
             title: 'Войдите в аккаунт',
-            description: 'Действия с напоминанием доступны после входа.',
+            description: 'Действия с задачей доступны после входа.',
             variant: 'destructive',
             duration: 4000,
           });
@@ -238,7 +238,8 @@ export function usePushNotifications(): void {
       if (cancelled || !last) return;
       const data = last.notification.request.content.data as Record<string, unknown>;
 
-      if (pushPayloadType(data) === 'task_reminder') {
+      const openType = pushPayloadType(data);
+      if (openType === 'task_reminder' || openType === 'user_task_assigned') {
         await handleFcmNotificationOpen(data as Record<string, unknown>, true);
         try {
           Notifications.clearLastNotificationResponse();
@@ -262,8 +263,13 @@ export function usePushNotifications(): void {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as Record<string, unknown>;
 
-      if (pushPayloadType(data) === 'task_reminder') {
+      const responseType = pushPayloadType(data);
+      if (responseType === 'task_reminder') {
         void handleTaskReminderResponse(response);
+        return;
+      }
+      if (responseType === 'user_task_assigned') {
+        void handleFcmNotificationOpen(data, false);
         return;
       }
 
