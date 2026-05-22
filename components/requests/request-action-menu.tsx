@@ -1,12 +1,12 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Modal, Pressable, Share, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import type { RequestGroup, SubRequest } from '@/lib/api';
-import { getRequestShareMessage } from '@/lib/shareRequest';
+import { shareRequestWithContent } from '@/lib/shareRequest';
 import {
   getRequestActions,
   type ActionItem,
@@ -77,21 +77,7 @@ export function RequestActionMenu({
   const isSub = !!subRequest;
 
   const handleShare = () => {
-    const target = subRequest ?? request.requests?.[0];
-    const params = {
-      requestId: request.id,
-      subRequestId: subRequest?.id,
-      title: target?.title,
-      status: (subRequest ?? request).status,
-      description: target?.description,
-    };
-    const message = getRequestShareMessage(params);
-    const displayId = subRequest != null ? `${request.id}/${subRequest.id}` : String(request.id);
-    const sharePayload = {
-      title: `Заявка #${displayId}`,
-      message,
-    };
-    Share.share(sharePayload)
+    void shareRequestWithContent(request, subRequest)
       .then(() => setVisible(false))
       .catch((err) => {
         setVisible(false);
