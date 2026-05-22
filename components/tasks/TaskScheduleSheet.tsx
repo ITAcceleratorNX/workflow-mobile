@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { formatTaskTime } from '@/lib/dateTimeUtils';
 import {
     customPayload,
@@ -83,6 +84,7 @@ export function TaskScheduleSheetContent({
   recurrence,
   onRecurrenceChange,
 }: TaskScheduleSheetContentProps) {
+  const colorScheme = useColorScheme();
   const [showScheduleTimePicker, setShowScheduleTimePicker] = useState(false);
   const [repeatMenuOpen, setRepeatMenuOpen] = useState(false);
   const [customRepeatOpen, setCustomRepeatOpen] = useState(false);
@@ -634,6 +636,9 @@ export function TaskScheduleSheetContent({
                   value={parseTimeIntoDate(scheduledDate || todayKey, scheduledTime)}
                   mode="time"
                   display="spinner"
+                  themeVariant={colorScheme}
+                  textColor={text}
+                  accentColor={primary}
                   onChange={(_, date) => {
                     if (date) onScheduledTimeChange(formatTaskTime(date));
                   }}

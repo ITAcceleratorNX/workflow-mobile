@@ -6,8 +6,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps 
 import {
     ActivityIndicator,
     Alert,
+    Dimensions,
     FlatList,
+    KeyboardAvoidingView,
     Linking,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -45,6 +48,8 @@ import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
 /** Нижний стоп градиента — тот же цвет, что `BOOKING_TAB_SCENE_UNDERLAY` в `app/(tabs)/_layout.tsx` (зона под навбаром). */
@@ -144,6 +149,10 @@ export default function BookingScreen() {
   /** Защита от гонок при смене фильтра / параллельных запросов «мои бронирования». */
   const myBookingsLoadSeqRef = useRef(0);
   const myBookingsListRef = useRef<FlatList<MeetingRoomBooking>>(null);
+  const bookingFormScrollRef = useRef<ScrollView>(null);
+  const companyFieldWrapRef = useRef<View>(null);
+  const bookingFormScrollYRef = useRef(0);
+  const companyFieldFocusedRef = useRef(false);
   const [highlightBookingId, setHighlightBookingId] = useState<number | null>(null);
 
   const isGuest = useAuthStore((s) => s.isGuest);
@@ -173,6 +182,55 @@ export default function BookingScreen() {
       };
     }, [step, setHideBottomNavForBookingForm])
   );
+
+  const bookingFormKeyboardHeight = useKeyboardHeight(step === 'form');
+
+  const scrollCompanyFieldAboveKeyboard = useCallback(() => {
+    const wrap = companyFieldWrapRef.current;
+    const scroll = bookingFormScrollRef.current;
+    if (!wrap || !scroll) return;
+
+    const keyboardInset =
+      bookingFormKeyboardHeight > 0
+        ? bookingFormKeyboardHeight
+        : Platform.OS === 'android'
+          ? 280
+          : 0;
+    if (keyboardInset <= 0) return;
+
+    wrap.measureInWindow((_x, fieldTop, _w, fieldHeight) => {
+      const windowH = Dimensions.get('window').height;
+      const headerApprox = insets.top + 56;
+      const visibleBottom = windowH - keyboardInset - Math.max(insets.bottom, 12);
+      const fieldBottom = fieldTop + fieldHeight;
+      const gap = 16;
+      if (fieldBottom > visibleBottom - gap) {
+        const overflow = fieldBottom - (visibleBottom - gap);
+        scroll.scrollTo({
+          y: bookingFormScrollYRef.current + overflow,
+          animated: true,
+        });
+        return;
+      }
+      if (Platform.OS === 'android') {
+        scroll.scrollToEnd({ animated: true });
+      }
+    });
+  }, [bookingFormKeyboardHeight, insets.top, insets.bottom]);
+
+  const focusCompanyField = useCallback(() => {
+    companyFieldFocusedRef.current = true;
+    const delays = Platform.OS === 'android' ? [80, 220, 400] : [280];
+    delays.forEach((delay) => {
+      setTimeout(scrollCompanyFieldAboveKeyboard, delay);
+    });
+  }, [scrollCompanyFieldAboveKeyboard]);
+
+  useEffect(() => {
+    if (step === 'form' && companyFieldFocusedRef.current && bookingFormKeyboardHeight > 0) {
+      scrollCompanyFieldAboveKeyboard();
+    }
+  }, [step, bookingFormKeyboardHeight, scrollCompanyFieldAboveKeyboard]);
 
   const loadOffices = useCallback(async () => {
     setLoadingOffices(true);
@@ -801,17 +859,37 @@ export default function BookingScreen() {
     const showFormImages = roomPhotoCount > 0 && !formRoomImageFailed;
     const formImageWidth = windowWidth - 40;
 
+    const formScrollPaddingBottom =
+      Platform.OS === 'android'
+        ? Math.max(insets.bottom, 16) + 24
+        : Math.max(insets.bottom, 16) + bookingFormKeyboardHeight + 12;
+
     return (
       <LinearGradient colors={gradientColors} style={styles.gradientFill}>
-        <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
-          <Pressable style={styles.backRowWhite} onPress={goBack}>
-            <MaterialIcons name="arrow-back" size={24} color="#fff" />
-            <BookingText style={styles.backTextWhite}>Назад</BookingText>
-          </Pressable>
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={[styles.formContent, { paddingBottom: insets.bottom + 28 }]}
-          >
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoid}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+        >
+          <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
+            <Pressable style={styles.backRowWhite} onPress={goBack}>
+              <MaterialIcons name="arrow-back" size={24} color="#fff" />
+              <BookingText style={styles.backTextWhite}>Назад</BookingText>
+            </Pressable>
+            <ScrollView
+              ref={bookingFormScrollRef}
+              style={styles.scroll}
+              contentContainerStyle={[styles.formContent, { paddingBottom: formScrollPaddingBottom }]}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              automaticallyAdjustKeyboardInsets
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={(e) => {
+                bookingFormScrollYRef.current = e.nativeEvent.contentOffset.y;
+              }}
+            >
             <View style={styles.roomImageContainer}>
               {showFormImages ? (
                 <>
@@ -915,13 +993,19 @@ export default function BookingScreen() {
             </View>
           )}
           <BookingText style={styles.labelWhite}>Компания (необязательно)</BookingText>
-          <TextInput
-            value={companyName}
-            onChangeText={setCompanyName}
-            placeholder="Название компании"
-            placeholderTextColor="rgba(255,255,255,0.6)"
-            style={styles.inputForm}
-          />
+          <View ref={companyFieldWrapRef} collapsable={false}>
+            <TextInput
+              value={companyName}
+              onChangeText={setCompanyName}
+              placeholder="Название компании"
+              placeholderTextColor="rgba(255,255,255,0.6)"
+              style={styles.inputForm}
+              onFocus={focusCompanyField}
+              onBlur={() => {
+                companyFieldFocusedRef.current = false;
+              }}
+            />
+          </View>
           <Pressable
             onPress={handleSubmitBooking}
             disabled={submitting}
@@ -933,8 +1017,9 @@ export default function BookingScreen() {
               <BookingText style={styles.submitBtnText}>Забронировать</BookingText>
             )}
           </Pressable>
-        </ScrollView>
-        </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </LinearGradient>
     );
   }
@@ -1348,6 +1433,9 @@ export default function BookingScreen() {
 
 const styles = StyleSheet.create({
     gradientFill: {
+        flex: 1,
+    },
+    keyboardAvoid: {
         flex: 1,
     },
     container: {
