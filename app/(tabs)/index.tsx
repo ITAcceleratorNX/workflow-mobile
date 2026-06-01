@@ -41,6 +41,7 @@ type AdminCardKey =
   | 'users'
   | 'office'
   | 'location-templates'
+  | 'companies'
   | 'smart-home'
   | 'statistics'
   | 'news';
@@ -62,6 +63,12 @@ const ADMIN_MANAGEMENT_CARDS: {
     title: 'Шаблоны локаций',
     subtitle: 'Блок, этаж и помещения для заявок по выбранному офису',
     icon: 'place',
+  },
+  {
+    key: 'companies',
+    title: 'Компании',
+    subtitle: 'Арендаторы внутри офиса',
+    icon: 'apartment',
   },
   {
     key: 'users',
@@ -104,6 +111,7 @@ type ExecutorCardKey =
   | 'subcategories'
   | 'registration-requests'
   | 'location-templates'
+  | 'companies'
   | 'users';
 
 const DEPARTMENT_HEAD_MANAGEMENT_CARDS: {
@@ -123,6 +131,12 @@ const DEPARTMENT_HEAD_MANAGEMENT_CARDS: {
     title: 'Шаблоны локаций',
     subtitle: 'Блок, этаж и помещения для заявок в вашем офисе',
     icon: 'place',
+  },
+  {
+    key: 'companies',
+    title: 'Компании',
+    subtitle: 'Арендаторы вашего офиса',
+    icon: 'apartment',
   },
   {
     key: 'users',
@@ -208,6 +222,9 @@ function AdminWorkerManagementScreen({ hasNotifications }: { hasNotifications: b
           break;
         case 'location-templates':
           router.push('/admin-worker/office-location-catalog' as Href);
+          break;
+        case 'companies':
+          router.push('/admin-worker/companies' as Href);
           break;
         case 'office':
           router.push('/admin-worker/office');
@@ -321,6 +338,10 @@ function ExecutorManagementScreen({
         }
         if (key === 'location-templates') {
           router.push('/department-head/office-location-catalog');
+          return;
+        }
+        if (key === 'companies') {
+          router.push('/department-head/companies' as Href);
           return;
         }
         if (key === 'users') {

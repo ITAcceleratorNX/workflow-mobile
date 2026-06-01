@@ -28,6 +28,9 @@ export interface User {
   marketing_notifications: boolean;
   push_notifications: boolean;
   service_category_id?: number;
+  /** company_id заполнен только у клиентов; null/undefined — компания «Не указана». */
+  company_id?: number | null;
+  company?: { id: number; name: string } | null;
 }
 
 export async function loginWithPhone(

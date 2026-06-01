@@ -4,7 +4,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Params = {
   visible: boolean;
-  keyboardVisible: boolean;
+  /** Высота клавиатуры (px) — уменьшает область скролла, чтобы поле не уходило под клавиатуру. */
+  keyboardHeight?: number;
+  /** @deprecated предпочтительно передавать `keyboardHeight` */
+  keyboardVisible?: boolean;
   /** Доп. резерв под хром (px), если шапка/футер отличаются от типового */
   chromeExtra?: number;
 };
@@ -15,7 +18,8 @@ type Params = {
  */
 export function useBottomSheetScrollMetrics({
   visible,
-  keyboardVisible,
+  keyboardHeight = 0,
+  keyboardVisible = false,
   chromeExtra = 0,
 }: Params) {
   const { height: winH } = useWindowDimensions();
@@ -26,7 +30,7 @@ export function useBottomSheetScrollMetrics({
     if (!visible) setInnerContentHeight(0);
   }, [visible]);
 
-  const keyboardReserve = keyboardVisible ? 44 : 0;
+  const keyboardReserve = keyboardHeight > 0 ? keyboardHeight : keyboardVisible ? 44 : 0;
   /** paddingTop + ручка + заголовок + футер кнопок + paddingBottom шита (без области ScrollView) */
   const baseChrome = 138 + chromeExtra + keyboardReserve + insets.bottom;
   const scrollCap = Math.max(160, Math.floor(winH * 0.92 - baseChrome));

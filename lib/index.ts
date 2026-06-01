@@ -10,9 +10,11 @@ export { config } from './config';
 export {
   getOffices,
   getServiceCategoriesPublic,
+  getOfficeCompanies,
   createRegistrationRequest,
   type Office,
   type ServiceCategory,
+  type Company,
   type CreateRegistrationRequestBody,
 } from './api';
 export {
@@ -30,5 +32,6 @@ export {
   REGISTRATION_ROLES,
   PHONE_REGEX,
   INITIAL_REGISTRATION_FORM,
+  COMPANY_OTHER_VALUE,
   formatPhone,
 } from './registration';

@@ -9,12 +9,19 @@ export const REGISTRATION_ROLES = [
 
 export const PHONE_REGEX = /^\+7 \d{3} \d{3} \d{2} \d{2}$/;
 
+/** Специальное значение в селекте «Компания» — клиент укажет название вручную. */
+export const COMPANY_OTHER_VALUE = '__other__' as const;
+
 export const INITIAL_REGISTRATION_FORM = {
   phone: '',
   full_name: '',
   office_id: '',
   role: '',
   service_category_id: '',
+  /** id компании, '__other__' (Другое) или '' (не выбрано). */
+  company_id: '',
+  /** Произвольное название компании, если выбрано «Другое». */
+  company_other_name: '',
   password: '',
   confirm_password: '',
 };

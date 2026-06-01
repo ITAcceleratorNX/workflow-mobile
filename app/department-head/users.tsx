@@ -27,11 +27,13 @@ import {
   deleteExecutor,
   getExecutorByUserId,
   getExecutors,
+  getOfficeCompanies,
   getServiceCategories,
   getUsersForManagement,
   updateExecutor,
   updateUserProfile,
   updateUserRole,
+  type Company,
   type ExecutorInCategory,
   type OfficeUser,
   type ServiceCategory,
@@ -101,8 +103,10 @@ export default function DepartmentHeadUsersScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [categoryFilterId, setCategoryFilterId] = useState<number | null>(null);
+  const [companyFilterId, setCompanyFilterId] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('name-asc');
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -113,6 +117,7 @@ export default function DepartmentHeadUsersScreen() {
   const [phone, setPhone] = useState('+7 ');
   const [specialty, setSpecialty] = useState('');
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [draftCompanyId, setDraftCompanyId] = useState<string>('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -124,13 +129,22 @@ export default function DepartmentHeadUsersScreen() {
       return;
     }
     setLoading(true);
-    const [usersRes, execRes, catRes] = await Promise.all([
-      getUsersForManagement({ officeId: String(officeId) }),
+    const [usersRes, execRes, catRes, companiesRes] = await Promise.all([
+      getUsersForManagement({
+        officeId: String(officeId),
+        companyId:
+          roleFilter !== 'executor' && companyFilterId != null
+            ? String(companyFilterId)
+            : undefined,
+      }),
       getExecutors(),
       getServiceCategories(),
+      getOfficeCompanies(officeId),
     ]);
 
     if (catRes.ok && catRes.data) setCategories(catRes.data);
+    if (companiesRes.ok) setCompanies(companiesRes.data);
+    else setCompanies([]);
 
     const executorByUserId = new Map<number, ExecutorInCategory>();
     if (execRes.ok) {
@@ -154,7 +168,12 @@ export default function DepartmentHeadUsersScreen() {
     }
     setLoading(false);
     setRefreshing(false);
-  }, [officeId, showToast]);
+  }, [officeId, roleFilter, companyFilterId, showToast]);
+
+  // Если выбраны исполнители — фильтр по компании скрываем и сбрасываем.
+  useEffect(() => {
+    if (roleFilter === 'executor') setCompanyFilterId(null);
+  }, [roleFilter]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -178,7 +197,8 @@ export default function DepartmentHeadUsersScreen() {
   const hasActiveFilters =
     searchQuery.trim().length > 0 ||
     roleFilter !== 'all' ||
-    categoryFilterId !== null;
+    categoryFilterId !== null ||
+    companyFilterId !== null;
 
   const filteredUsers = useMemo(() => {
     const q = normalizeSearchText(searchQuery);
@@ -210,6 +230,7 @@ export default function DepartmentHeadUsersScreen() {
     setSearchQuery('');
     setRoleFilter('all');
     setCategoryFilterId(null);
+    setCompanyFilterId(null);
     setSortBy('name-asc');
   };
 
@@ -220,6 +241,7 @@ export default function DepartmentHeadUsersScreen() {
     setPhone('+7 ');
     setSpecialty('');
     setSelectedCategoryIds([]);
+    setDraftCompanyId('');
     setNewPassword('');
     setConfirmPassword('');
     setPasswordError(null);
@@ -248,6 +270,7 @@ export default function DepartmentHeadUsersScreen() {
     setSelectedCategoryIds(
       row.executor?.serviceCategories?.map((c) => c.id) ?? []
     );
+    setDraftCompanyId(row.company_id != null ? String(row.company_id) : '');
     setNewPassword('');
     setConfirmPassword('');
     setPasswordError(null);
@@ -344,10 +367,19 @@ export default function DepartmentHeadUsersScreen() {
     const demotingToClient = roleChanged && selectedRole === 'client';
     const needsUserProfileUpdate = basicProfileChanged && !isExecutorForm;
 
+    const initialCompanyId = editingUser.company_id != null ? Number(editingUser.company_id) : null;
+    const draftCompanyNumeric =
+      draftCompanyId.trim() !== '' && Number.isFinite(Number(draftCompanyId))
+        ? Number(draftCompanyId)
+        : null;
+    const companyChanged =
+      !roleChanged && selectedRole === 'client' && draftCompanyNumeric !== initialCompanyId;
+
     if (
       !passwordFilled &&
       !roleChanged &&
       !needsUserProfileUpdate &&
+      !companyChanged &&
       !(isExecutorForm && editingUser.executor && !demotingToClient)
     ) {
       const executorOnlyProfileChange =
@@ -384,11 +416,20 @@ export default function DepartmentHeadUsersScreen() {
       }
     }
 
-    if (needsUserProfileUpdate) {
-      const profileRes = await updateUserProfile(editingUser.id, {
-        full_name: fullName.trim(),
-        phone,
-      });
+    if (needsUserProfileUpdate || companyChanged) {
+      const profileBody: {
+        full_name?: string;
+        phone?: string;
+        company_id?: number | null;
+      } = {};
+      if (needsUserProfileUpdate) {
+        profileBody.full_name = fullName.trim();
+        profileBody.phone = phone;
+      }
+      if (companyChanged) {
+        profileBody.company_id = draftCompanyNumeric;
+      }
+      const profileRes = await updateUserProfile(editingUser.id, profileBody);
       if (!profileRes.ok) {
         setSaving(false);
         showToast({ title: profileRes.error, variant: 'destructive' });
@@ -542,6 +583,64 @@ export default function DepartmentHeadUsersScreen() {
               );
             })}
           </ScrollView>
+
+          {roleFilter !== 'executor' && companies.length > 0 ? (
+            <>
+              <ThemedText style={[styles.filterSectionLabel, { color: muted }]}>
+                Компания
+              </ThemedText>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterPillsScroll}
+                contentContainerStyle={styles.filterPillsContent}
+                keyboardShouldPersistTaps="handled"
+              >
+                <Pressable
+                  onPress={() => setCompanyFilterId(null)}
+                  style={[
+                    styles.pill,
+                    { borderColor: border },
+                    companyFilterId === null && {
+                      backgroundColor: `${primary}22`,
+                      borderColor: primary,
+                    },
+                  ]}
+                >
+                  <ThemedText
+                    style={{
+                      color: companyFilterId === null ? primary : text,
+                      fontSize: 13,
+                      fontWeight: '600',
+                    }}
+                  >
+                    Все компании
+                  </ThemedText>
+                </Pressable>
+                {companies.map((c) => {
+                  const active = companyFilterId === c.id;
+                  return (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => setCompanyFilterId(active ? null : c.id)}
+                      style={[
+                        styles.pill,
+                        { borderColor: border },
+                        active && { backgroundColor: `${primary}22`, borderColor: primary },
+                      ]}
+                    >
+                      <ThemedText
+                        style={{ color: active ? primary : text, fontSize: 13, fontWeight: '600' }}
+                        numberOfLines={1}
+                      >
+                        {c.name}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </>
+          ) : null}
 
           {categories.length > 0 ? (
             <>
@@ -738,6 +837,14 @@ export default function DepartmentHeadUsersScreen() {
                   <ThemedText style={{ color: muted, fontSize: 14 }}>{row.phone}</ThemedText>
                 </View>
               ) : null}
+              {row.role === 'client' ? (
+                <View style={styles.metaRow}>
+                  <MaterialIcons name="apartment" size={16} color={muted} />
+                  <ThemedText style={{ color: muted, fontSize: 14 }}>
+                    {row.company?.name ?? 'Не указана'}
+                  </ThemedText>
+                </View>
+              ) : null}
               {row.executor?.specialty ? (
                 <View style={styles.metaRow}>
                   <MaterialIcons name="work-outline" size={16} color={muted} />
@@ -853,6 +960,66 @@ export default function DepartmentHeadUsersScreen() {
                 maxLength={19}
                 {...keyboardDismissInputProps({ numericKeyboard: true })}
               />
+
+              {selectedRole === 'client' && companies.length > 0 ? (
+                <>
+                  <ThemedText style={[styles.label, { color: muted }]}>Компания</ThemedText>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.modalPillsScroll}
+                    contentContainerStyle={styles.filterPillsContent}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    <Pressable
+                      onPress={() => setDraftCompanyId('')}
+                      style={[
+                        styles.pill,
+                        { borderColor: border },
+                        draftCompanyId === '' && {
+                          backgroundColor: `${primary}22`,
+                          borderColor: primary,
+                        },
+                      ]}
+                    >
+                      <ThemedText
+                        style={{
+                          color: draftCompanyId === '' ? primary : text,
+                          fontSize: 13,
+                          fontWeight: '600',
+                        }}
+                      >
+                        Не указана
+                      </ThemedText>
+                    </Pressable>
+                    {companies.map((c) => {
+                      const active = draftCompanyId === String(c.id);
+                      return (
+                        <Pressable
+                          key={c.id}
+                          onPress={() => setDraftCompanyId(String(c.id))}
+                          style={[
+                            styles.pill,
+                            { borderColor: border },
+                            active && { backgroundColor: `${primary}22`, borderColor: primary },
+                          ]}
+                        >
+                          <ThemedText
+                            style={{
+                              color: active ? primary : text,
+                              fontSize: 13,
+                              fontWeight: '600',
+                            }}
+                            numberOfLines={1}
+                          >
+                            {c.name}
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </>
+              ) : null}
 
               {isExecutorForm ? (
                 <>

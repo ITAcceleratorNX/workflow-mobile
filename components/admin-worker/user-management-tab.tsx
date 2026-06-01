@@ -25,10 +25,12 @@ import {
   getExecutorByUserId,
   getExecutors,
   getExecutorsByCategory,
+  getOfficeCompanies,
   getUsersForManagement,
   updateExecutor,
   updateUserProfile,
   updateUserRole,
+  type Company,
   type ExecutorInCategory,
   type Office,
   type OfficeUser,
@@ -133,6 +135,11 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** Фильтр клиентов по компании на списке (только для admin-worker, когда role=client). */
+  const [companyFilterId, setCompanyFilterId] = useState<string>('');
+  /** Кэш компаний по office_id — чтобы не перезагружать при выборе пользователя. */
+  const [companiesByOfficeId, setCompaniesByOfficeId] = useState<Record<number, Company[]>>({});
+  const [draftCompanyId, setDraftCompanyId] = useState<string>('');
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [executors, setExecutors] = useState<ExecutorInCategory[]>([]);
@@ -149,8 +156,12 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       : authOfficeId
         ? Number(authOfficeId)
         : undefined;
+    const useCompanyFilter = roleFilter === 'client' && companyFilterId !== '';
     const [usersRes, execRes] = await Promise.all([
-      getUsersForManagement({ officeId: officeFilterId || undefined }),
+      getUsersForManagement({
+        officeId: officeFilterId || undefined,
+        companyId: useCompanyFilter ? companyFilterId : undefined,
+      }),
       getExecutors(undefined, officeIdNum),
     ]);
 
@@ -172,7 +183,42 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     }
     setLoading(false);
     setRefreshing(false);
-  }, [officeFilterId, authOfficeId, showToast]);
+  }, [officeFilterId, authOfficeId, roleFilter, companyFilterId, showToast]);
+
+  const loadCompaniesForOffice = useCallback(
+    async (officeIdNum: number) => {
+      if (!Number.isFinite(officeIdNum) || officeIdNum <= 0) return [];
+      if (companiesByOfficeId[officeIdNum]) return companiesByOfficeId[officeIdNum];
+      const res = await getOfficeCompanies(officeIdNum);
+      const list = res.ok ? res.data : [];
+      setCompaniesByOfficeId((prev) => ({ ...prev, [officeIdNum]: list }));
+      return list;
+    },
+    [companiesByOfficeId],
+  );
+
+  // Загружаем компании выбранного фильтром офиса, чтобы показать пилюли «Все», {имя}, …
+  useEffect(() => {
+    if (roleFilter !== 'client') return;
+    const officeIdNum = officeFilterId
+      ? Number(officeFilterId)
+      : authOfficeId
+        ? Number(authOfficeId)
+        : NaN;
+    if (Number.isFinite(officeIdNum) && officeIdNum > 0) {
+      void loadCompaniesForOffice(officeIdNum);
+    }
+  }, [roleFilter, officeFilterId, authOfficeId, loadCompaniesForOffice]);
+
+  // Сброс фильтра по компании при изменении роли/офиса
+  useEffect(() => {
+    if (roleFilter !== 'client') {
+      setCompanyFilterId('');
+    }
+  }, [roleFilter]);
+  useEffect(() => {
+    setCompanyFilterId('');
+  }, [officeFilterId]);
 
   useEffect(() => {
     if (!editUser || newRole !== 'executor') return;
@@ -265,6 +311,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     setSearchQuery('');
     setRoleFilter('all');
     setOfficeFilterId('');
+    setCompanyFilterId('');
     setSortBy('name-asc');
   };
 
@@ -308,8 +355,13 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
           return c != null && (!c.office_id || Number(c.office_id) === oidNum);
         });
       });
+      // Компания привязана к офису, поэтому сбрасываем выбор и подгружаем нужный список.
+      setDraftCompanyId('');
+      if (Number.isFinite(oidNum) && oidNum > 0) {
+        void loadCompaniesForOffice(oidNum);
+      }
     },
-    [categories]
+    [categories, loadCompaniesForOffice]
   );
 
   const selectRole = (roleId: string) => {
@@ -334,6 +386,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     setEditUser(user);
     setNewRole(user.role);
     setDraftOfficeId(user.office_id != null ? String(user.office_id) : '');
+    setDraftCompanyId(user.company_id != null ? String(user.company_id) : '');
     setFullName(user.full_name ?? '');
     setPhone(formatPhone(user.phone ?? ''));
     setSpecialty(executor?.specialty?.trim() ?? '');
@@ -342,6 +395,9 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     setConfirmPassword('');
     setPasswordError(null);
     setRoleError(null);
+    if (user.office_id != null) {
+      void loadCompaniesForOffice(Number(user.office_id));
+    }
   };
 
   const closeEdit = () => {
@@ -353,6 +409,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     setSpecialty('');
     setSelectedCategoryIds([]);
     setDraftOfficeId('');
+    setDraftCompanyId('');
     setPasswordError(null);
     setRoleError(null);
   };
@@ -435,13 +492,23 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
 
     const needsUserProfileUpdate = basicProfileChanged && !useExecutorApiForProfile;
 
+    const initialCompanyId = editUser.company_id != null ? Number(editUser.company_id) : null;
+    const draftCompanyNumeric =
+      draftCompanyId.trim() !== '' && Number.isFinite(Number(draftCompanyId))
+        ? Number(draftCompanyId)
+        : null;
+    // Меняем company_id только для клиентов, и только если действительно отличается.
+    const companyChanged =
+      !roleChanged && newRole === 'client' && draftCompanyNumeric !== initialCompanyId;
+
     if (
       !passwordFilled &&
       !officeChanged &&
       !roleChanged &&
       !needsUserProfileUpdate &&
       !executorFieldsChanged &&
-      !promotingToExecutor
+      !promotingToExecutor &&
+      !companyChanged
     ) {
       showToast({ title: 'Нет изменений', variant: 'default' });
       return;
@@ -463,6 +530,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       phone?: string;
       office_id?: number;
       category_ids?: number[];
+      company_id?: number | null;
     } = {};
     if (officeChanged && Number.isFinite(draftOfficeNumeric)) {
       profilePut.office_id = draftOfficeNumeric;
@@ -473,6 +541,9 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     if (needsUserProfileUpdate) {
       profilePut.full_name = fullName.trim();
       profilePut.phone = phone;
+    }
+    if (companyChanged) {
+      profilePut.company_id = draftCompanyNumeric;
     }
     if (Object.keys(profilePut).length > 0) {
       const profileRes = await updateUserProfile(editUser.id, profilePut);
@@ -662,6 +733,72 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
           })}
         </ScrollView>
 
+        {roleFilter === 'client' ? (() => {
+          const oid = officeFilterId
+            ? Number(officeFilterId)
+            : authOfficeId
+              ? Number(authOfficeId)
+              : NaN;
+          const list = Number.isFinite(oid) ? companiesByOfficeId[oid] ?? [] : [];
+          if (list.length === 0) return null;
+          return (
+            <>
+              <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>
+                Компания
+              </ThemedText>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.pillsScroll}
+                contentContainerStyle={styles.pillsContent}
+              >
+                <Pressable
+                  onPress={() => setCompanyFilterId('')}
+                  style={[
+                    styles.pill,
+                    { borderColor: border },
+                    companyFilterId === '' && {
+                      backgroundColor: `${primary}22`,
+                      borderColor: primary,
+                    },
+                  ]}
+                >
+                  <ThemedText
+                    style={{
+                      color: companyFilterId === '' ? primary : text,
+                      fontSize: 13,
+                      fontWeight: '600',
+                    }}
+                  >
+                    Все компании
+                  </ThemedText>
+                </Pressable>
+                {list.map((c) => {
+                  const active = companyFilterId === String(c.id);
+                  return (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => setCompanyFilterId(active ? '' : String(c.id))}
+                      style={[
+                        styles.pill,
+                        { borderColor: border },
+                        active && { backgroundColor: `${primary}22`, borderColor: primary },
+                      ]}
+                    >
+                      <ThemedText
+                        style={{ color: active ? primary : text, fontSize: 13, fontWeight: '600' }}
+                        numberOfLines={1}
+                      >
+                        {c.name}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </>
+          );
+        })() : null}
+
         <View style={styles.sortRow}>
           <ThemedText style={[styles.sectionLabel, { color: textMuted, marginBottom: 0 }]}>
             Сортировка
@@ -753,6 +890,14 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
                   <View style={styles.metaRow}>
                     <MaterialIcons name="business" size={15} color={textMuted} />
                     <ThemedText style={{ color: textMuted, fontSize: 14 }}>{user.office.name}</ThemedText>
+                  </View>
+                ) : null}
+                {user.role === 'client' ? (
+                  <View style={styles.metaRow}>
+                    <MaterialIcons name="apartment" size={15} color={textMuted} />
+                    <ThemedText style={{ color: textMuted, fontSize: 14 }}>
+                      {user.company?.name ?? 'Не указана'}
+                    </ThemedText>
                   </View>
                 ) : null}
               </Pressable>
@@ -1000,6 +1145,76 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
                   })}
                 </ScrollView>
               )}
+              {newRole === 'client' ? (() => {
+                const oidNum = draftOfficeId
+                  ? Number(draftOfficeId)
+                  : editUser.office_id != null
+                    ? Number(editUser.office_id)
+                    : NaN;
+                const list = Number.isFinite(oidNum) ? companiesByOfficeId[oidNum] ?? [] : [];
+                return (
+                  <>
+                    <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>
+                      Компания
+                    </ThemedText>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={styles.modalPillsScroll}
+                      contentContainerStyle={styles.pillsContent}
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      <Pressable
+                        onPress={() => setDraftCompanyId('')}
+                        style={[
+                          styles.pill,
+                          { borderColor: border },
+                          draftCompanyId === '' && {
+                            backgroundColor: `${primary}22`,
+                            borderColor: primary,
+                          },
+                        ]}
+                      >
+                        <ThemedText
+                          style={{
+                            color: draftCompanyId === '' ? primary : text,
+                            fontSize: 13,
+                            fontWeight: '600',
+                          }}
+                        >
+                          Не указана
+                        </ThemedText>
+                      </Pressable>
+                      {list.map((c) => {
+                        const active = draftCompanyId === String(c.id);
+                        return (
+                          <Pressable
+                            key={c.id}
+                            onPress={() => setDraftCompanyId(String(c.id))}
+                            style={[
+                              styles.pill,
+                              { borderColor: border },
+                              active && { backgroundColor: `${primary}22`, borderColor: primary },
+                            ]}
+                          >
+                            <ThemedText
+                              style={{
+                                color: active ? primary : text,
+                                fontSize: 13,
+                                fontWeight: '600',
+                              }}
+                              numberOfLines={1}
+                            >
+                              {c.name}
+                            </ThemedText>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </>
+                );
+              })() : null}
+
               <TextInput
                 value={fullName}
                 onChangeText={setFullName}

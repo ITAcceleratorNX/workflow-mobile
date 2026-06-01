@@ -390,6 +390,15 @@ export default function ProfileScreen() {
                         </ThemedText>
                       </View>
                     ) : null}
+                    {role === 'client' ? (
+                      <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: border }]}>
+                        <MaterialIcons name="apartment" size={22} color={textMuted} />
+                        <ThemedText style={[styles.infoLabel, { color: textMuted }]}>Компания</ThemedText>
+                        <ThemedText style={[styles.infoValue, { color: text }]} numberOfLines={1}>
+                          {user?.company?.name ?? 'Не указана'}
+                        </ThemedText>
+                      </View>
+                    ) : null}
                     <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
                       <MaterialIcons name="tag" size={22} color={textMuted} />
                       <ThemedText style={[styles.infoLabel, { color: textMuted }]}>ID</ThemedText>

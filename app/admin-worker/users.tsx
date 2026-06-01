@@ -13,6 +13,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AdminUserManagementTab } from '@/components/admin-worker/user-management-tab';
+import { RegistrationRequestEditSheet } from '@/components/registration-request-edit-sheet';
 import { PageLoader, ScreenHeader } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -83,6 +84,7 @@ export default function AdminWorkerUsersScreen() {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showOfficeDropdown, setShowOfficeDropdown] = useState(false);
   const [actionRequestId, setActionRequestId] = useState<number | null>(null);
+  const [editingRequest, setEditingRequest] = useState<RegistrationRequestItem | null>(null);
   const [offices, setOffices] = useState<Office[]>([]);
   const [filterOfficeId, setFilterOfficeId] = useState('');
   const [requestPage, setRequestPage] = useState(1);
@@ -416,6 +418,16 @@ export default function AdminWorkerUsersScreen() {
                   <ThemedText style={[styles.requestMeta, { color: textMuted }]}>
                     Роль: {ROLE_LABELS[req.role] ?? req.role}
                   </ThemedText>
+                  {req.role === 'client' && (
+                    <ThemedText style={[styles.requestMeta, { color: textMuted }]}>
+                      Компания:{' '}
+                      {req.company?.name
+                        ? req.company.name
+                        : req.company_other_name
+                          ? `Другое — ${req.company_other_name}`
+                          : 'Не указана'}
+                    </ThemedText>
+                  )}
                   {req.role === 'executor' && req.service_category && (
                     <ThemedText style={[styles.requestMeta, { color: textMuted }]}>
                       Категория: {formatServiceCategoryDisplayName(req.service_category.name)}
@@ -425,42 +437,56 @@ export default function AdminWorkerUsersScreen() {
                     Дата: {formatRequestDate(req.created_at)}
                   </ThemedText>
                   {req.status === 'pending' && (
-                    <View style={styles.requestActions}>
+                    <>
+                      <View style={styles.requestActions}>
+                        <Pressable
+                          style={[
+                            styles.registrationActionBtn,
+                            {
+                              borderColor: success,
+                              backgroundColor: successSoft,
+                              minHeight: 44,
+                            },
+                            actionRequestId === req.id && styles.buttonDisabled,
+                          ]}
+                          onPress={() => handleApprove(req.id)}
+                          disabled={actionRequestId === req.id}
+                        >
+                          {actionRequestId === req.id ? (
+                            <ActivityIndicator size="small" color={success} />
+                          ) : (
+                            <ThemedText style={[styles.registrationActionBtnLabel, { color: success }]}>Одобрить</ThemedText>
+                          )}
+                        </Pressable>
+                        <Pressable
+                          style={[
+                            styles.registrationActionBtn,
+                            {
+                              borderColor: danger,
+                              backgroundColor: dangerSoft,
+                              minHeight: 44,
+                            },
+                            actionRequestId === req.id && styles.buttonDisabled,
+                          ]}
+                          onPress={() => handleReject(req.id)}
+                          disabled={actionRequestId === req.id}
+                        >
+                          <ThemedText style={[styles.registrationActionBtnLabel, { color: danger }]}>Отклонить</ThemedText>
+                        </Pressable>
+                      </View>
                       <Pressable
+                        onPress={() => setEditingRequest(req)}
                         style={[
-                          styles.registrationActionBtn,
-                          {
-                            borderColor: success,
-                            backgroundColor: successSoft,
-                            minHeight: 44,
-                          },
-                          actionRequestId === req.id && styles.buttonDisabled,
+                          styles.editLinkBtn,
+                          { borderColor: border, backgroundColor: surfaceMuted },
                         ]}
-                        onPress={() => handleApprove(req.id)}
-                        disabled={actionRequestId === req.id}
                       >
-                        {actionRequestId === req.id ? (
-                          <ActivityIndicator size="small" color={success} />
-                        ) : (
-                          <ThemedText style={[styles.registrationActionBtnLabel, { color: success }]}>Одобрить</ThemedText>
-                        )}
+                        <MaterialIcons name="edit" size={16} color={text} />
+                        <ThemedText style={[styles.editLinkText, { color: text }]}>
+                          Изменить офис / компанию
+                        </ThemedText>
                       </Pressable>
-                      <Pressable
-                        style={[
-                          styles.registrationActionBtn,
-                          {
-                            borderColor: danger,
-                            backgroundColor: dangerSoft,
-                            minHeight: 44,
-                          },
-                          actionRequestId === req.id && styles.buttonDisabled,
-                        ]}
-                        onPress={() => handleReject(req.id)}
-                        disabled={actionRequestId === req.id}
-                      >
-                        <ThemedText style={[styles.registrationActionBtnLabel, { color: danger }]}>Отклонить</ThemedText>
-                      </Pressable>
-                    </View>
+                    </>
                   )}
                   {req.status === 'rejected' && (
                     <View style={styles.requestActions}>
@@ -531,6 +557,17 @@ export default function AdminWorkerUsersScreen() {
           isActive={activeTab === 'management'}
         />
       )}
+
+      <RegistrationRequestEditSheet
+        visible={editingRequest != null}
+        request={editingRequest}
+        offices={offices}
+        onClose={() => setEditingRequest(null)}
+        onSaved={() => {
+          showToast({ title: 'Заявка обновлена', variant: 'success' });
+          loadRequests();
+        }}
+      />
     </ThemedView>
   );
 }
@@ -650,6 +687,20 @@ const styles = StyleSheet.create({
   registrationActionBtnLabel: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  editLinkBtn: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 10,
+  },
+  editLinkText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   paginationBar: {
     marginTop: 20,

@@ -1,5 +1,6 @@
 import {
   getOffices,
+  getOfficeCompanies,
   getServiceCategoriesPublic,
   createRegistrationRequest,
   sendVerificationCode,
@@ -8,8 +9,11 @@ import {
   PHONE_REGEX,
   REGISTRATION_ROLES,
   INITIAL_REGISTRATION_FORM,
+  COMPANY_OTHER_VALUE,
   type Office,
   type ServiceCategory,
+  type Company,
+  type CreateRegistrationRequestBody,
 } from '@/lib';
 import {
   Button,
@@ -44,6 +48,7 @@ export default function RegisterScreen() {
   const [formData, setFormData] = useState(INITIAL_REGISTRATION_FORM);
   const [offices, setOffices] = useState<Office[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState<string | null>(null);
@@ -61,9 +66,13 @@ export default function RegisterScreen() {
     const officeId = parseInt(formData.office_id, 10);
     if (!officeId) {
       setCategories([]);
+      setCompanies([]);
       return;
     }
     getServiceCategoriesPublic(officeId).then(setCategories);
+    getOfficeCompanies(officeId).then((res) => {
+      setCompanies(res.ok ? res.data : []);
+    });
   }, [formData.office_id]);
 
   useEffect(() => {
@@ -134,7 +143,7 @@ export default function RegisterScreen() {
     }
     setFormErrors(null);
     setLoading(true);
-    const body = {
+    const body: Record<string, unknown> = {
       phone: formData.phone,
       full_name: formData.full_name,
       office_id: parseInt(formData.office_id, 10),
@@ -142,12 +151,24 @@ export default function RegisterScreen() {
       password: formData.password,
     };
     if (formData.role === 'executor' && formData.service_category_id) {
-      (body as Record<string, unknown>).service_category_id = parseInt(
-        formData.service_category_id,
-        10
-      );
+      body.service_category_id = parseInt(formData.service_category_id, 10);
     }
-    const result = await createRegistrationRequest(body);
+    if (formData.role === 'client') {
+      if (formData.company_id === COMPANY_OTHER_VALUE) {
+        const otherName = formData.company_other_name.trim();
+        if (otherName) {
+          body.company_other_name = otherName;
+        }
+      } else if (formData.company_id) {
+        const cid = parseInt(formData.company_id, 10);
+        if (Number.isFinite(cid) && cid > 0) {
+          body.company_id = cid;
+        }
+      }
+    }
+    const result = await createRegistrationRequest(
+      body as CreateRegistrationRequestBody,
+    );
     setLoading(false);
     if (result.ok) {
       setFormData(INITIAL_REGISTRATION_FORM);
@@ -171,7 +192,11 @@ export default function RegisterScreen() {
     formData.full_name.trim() &&
     formData.office_id &&
     formData.role &&
-    (formData.role !== 'executor' || formData.service_category_id);
+    (formData.role !== 'executor' || formData.service_category_id) &&
+    (formData.role !== 'client' ||
+      (formData.company_id !== '' &&
+        (formData.company_id !== COMPANY_OTHER_VALUE ||
+          formData.company_other_name.trim().length > 0)));
 
   const stepTitles = ['Регистрация', 'Верификация', 'Создание пароля'];
   const stepSubtitles = [
@@ -233,6 +258,8 @@ export default function RegisterScreen() {
                       ...p,
                       office_id: v,
                       service_category_id: '',
+                      company_id: '',
+                      company_other_name: '',
                     }))
                   }
                   options={offices.map((o) => ({
@@ -251,12 +278,50 @@ export default function RegisterScreen() {
                       ...p,
                       role: v,
                       service_category_id: '',
+                      company_id: v === 'client' ? p.company_id : '',
+                      company_other_name:
+                        v === 'client' ? p.company_other_name : '',
                     }))
                   }
                   options={[...REGISTRATION_ROLES]}
                   placeholder="Клиент или исполнитель"
                 />
               </View>
+              {formData.role === 'client' && formData.office_id !== '' && (
+                <View style={styles.field}>
+                  <ThemedText style={styles.label}>Компания</ThemedText>
+                  <Select
+                    value={formData.company_id}
+                    onValueChange={(v) =>
+                      setFormData((p) => ({
+                        ...p,
+                        company_id: v,
+                        company_other_name:
+                          v === COMPANY_OTHER_VALUE ? p.company_other_name : '',
+                      }))
+                    }
+                    options={[
+                      ...companies.map((c) => ({
+                        value: String(c.id),
+                        label: c.name,
+                      })),
+                      { value: COMPANY_OTHER_VALUE, label: 'Другое' },
+                    ]}
+                    placeholder="Выберите компанию"
+                  />
+                </View>
+              )}
+              {formData.role === 'client' &&
+                formData.company_id === COMPANY_OTHER_VALUE && (
+                  <TextInput
+                    label="Название компании"
+                    placeholder="Введите название вашей компании"
+                    value={formData.company_other_name}
+                    onChangeText={(t) =>
+                      setFormData((p) => ({ ...p, company_other_name: t }))
+                    }
+                  />
+                )}
               {formData.role === 'executor' && (
                 <View style={styles.field}>
                   <ThemedText style={styles.label}>Категория услуг</ThemedText>

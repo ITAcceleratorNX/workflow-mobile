@@ -12,6 +12,12 @@ export { PullToRefresh } from './pull-to-refresh';
 export { ScreenHeader } from './screen-header';
 export { Select } from './select';
 export { Sheet, type SheetProps } from './sheet';
+export {
+  FormBottomSheet,
+  FormBottomSheetFieldLabel,
+  formBottomSheetFieldStyles,
+  type FormBottomSheetProps,
+} from './form-bottom-sheet';
 export { StatRow } from './stat-row';
 export { SuccessModal } from './success-modal';
 export { TextInput, type TextInputProps } from './text-input';

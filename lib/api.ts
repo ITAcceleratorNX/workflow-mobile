@@ -239,6 +239,13 @@ export interface ServiceCategory {
   subcategories?: ServiceSubcategory[];
 }
 
+export interface Company {
+  id: number;
+  office_id: number;
+  name: string;
+  created_at?: string;
+}
+
 export interface CreateRegistrationRequestBody {
   phone: string;
   full_name: string;
@@ -246,6 +253,10 @@ export interface CreateRegistrationRequestBody {
   role: 'client' | 'executor';
   password: string;
   service_category_id?: number;
+  /** Существующая компания внутри выбранного офиса (только для роли client). */
+  company_id?: number;
+  /** Произвольное название компании при выборе варианта «Другое» (только для роли client). */
+  company_other_name?: string;
 }
 
 // ==================== Offices ====================
@@ -424,6 +435,54 @@ export async function deleteOfficeLocationCatalogRow(
   rowId: number
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await request<undefined>(`/offices/${officeId}/location-catalog/${rowId}`, {
+    method: 'DELETE',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+// ==================== Companies (компании-арендаторы внутри офиса) ====================
+
+/** Публичный список компаний офиса (используется на регистрации и в админке). */
+export async function getOfficeCompanies(
+  officeId: number
+): Promise<{ ok: true; data: Company[] } | { ok: false; error: string }> {
+  const result = await request<{ items: Company[] }>(`/offices/${officeId}/companies`);
+  if (!result.ok) return { ok: false, error: result.error };
+  const items = result.data?.items;
+  return { ok: true, data: Array.isArray(items) ? items : [] };
+}
+
+export async function createOfficeCompany(
+  officeId: number,
+  body: { name: string }
+): Promise<{ ok: true; data: Company } | { ok: false; error: string }> {
+  const result = await request<Company>(`/offices/${officeId}/companies`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function updateOfficeCompany(
+  officeId: number,
+  companyId: number,
+  body: { name: string }
+): Promise<{ ok: true; data: Company } | { ok: false; error: string }> {
+  const result = await request<Company>(`/offices/${officeId}/companies/${companyId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+export async function deleteOfficeCompany(
+  officeId: number,
+  companyId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<undefined>(`/offices/${officeId}/companies/${companyId}`, {
     method: 'DELETE',
   });
   if (!result.ok) return { ok: false, error: result.error };
@@ -1321,10 +1380,15 @@ export interface RegistrationRequestItem {
   phone: string;
   full_name: string;
   office_id?: number;
-  office: { name: string };
+  office: { id?: number; name: string };
   role: string;
   service_category_id?: number;
   service_category?: { name: string };
+  /** Привязка к существующей компании в этом офисе. */
+  company_id?: number | null;
+  company?: { id: number; name: string } | null;
+  /** Текст «Другое» — название компании, которое клиент указал вручную. */
+  company_other_name?: string | null;
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
 }
@@ -1417,6 +1481,26 @@ export async function deleteRejectedRegistrationRequest(requestId: number): Prom
   return { ok: true };
 }
 
+/**
+ * Обновление полей pending-заявки администратором перед approve.
+ * Сервер сбрасывает «Другое»/company_id, если выбран другой вариант или роль перестала быть клиентом.
+ */
+export async function updateRegistrationRequest(
+  requestId: number,
+  body: {
+    office_id?: number;
+    company_id?: number | null;
+    company_other_name?: string | null;
+  }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/registration-requests/${requestId}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
 // ==================== Users (admin-worker) ====================
 
 export interface OfficeUser {
@@ -1426,6 +1510,9 @@ export interface OfficeUser {
   role: string;
   office_id?: number;
   office?: { id: number; name: string };
+  /** company_id заполнен только у клиентов; null — компания «Не указана». */
+  company_id?: number | null;
+  company?: { id: number; name: string } | null;
 }
 
 function normalizeManagementUser(raw: unknown): OfficeUser | null {
@@ -1458,16 +1545,33 @@ function normalizeManagementUser(raw: unknown): OfficeUser | null {
     const oname = typeof oo.name === 'string' ? oo.name : '';
     if (Number.isFinite(oid) && oname) office = { id: oid, name: oname };
   }
-  return { id, full_name, phone, role, office_id, office };
+  const companyIdRaw = o.company_id ?? o.companyId;
+  const company_id =
+    typeof companyIdRaw === 'number' && Number.isFinite(companyIdRaw)
+      ? companyIdRaw
+      : typeof companyIdRaw === 'string' && companyIdRaw.trim() !== ''
+        ? Number(companyIdRaw)
+        : null;
+  let company: { id: number; name: string } | null = null;
+  const co = o.company;
+  if (co && typeof co === 'object') {
+    const cc = co as Record<string, unknown>;
+    const cid = Number(cc.id);
+    const cname = typeof cc.name === 'string' ? cc.name : '';
+    if (Number.isFinite(cid) && cname) company = { id: cid, name: cname };
+  }
+  return { id, full_name, phone, role, office_id, office, company_id, company };
 }
 
 const USERS_MANAGEMENT_PAGE_SIZE = 100;
 
-/** Список пользователей для админ-экрана: GET /users с опциональным office_id, все страницы. */
+/** Список пользователей для админ-экрана: GET /users с опциональным office_id/company_id, все страницы. */
 export async function getUsersForManagement(options?: {
   officeId?: string;
+  companyId?: string;
 }): Promise<{ ok: true; data: OfficeUser[] } | { ok: false; error: string }> {
   const officeId = options?.officeId?.trim();
+  const companyId = options?.companyId?.trim();
   const all: OfficeUser[] = [];
   let page = 1;
   let totalPages = 1;
@@ -1478,6 +1582,7 @@ export async function getUsersForManagement(options?: {
       limit: String(USERS_MANAGEMENT_PAGE_SIZE),
     };
     if (officeId) params.office_id = officeId;
+    if (companyId) params.company_id = companyId;
 
     const result = await request<{
       success?: boolean;
@@ -1584,6 +1689,8 @@ export async function updateUserProfile(
     office_id?: number;
     /** Вместе со сменой office_id для исполнителя (категории целевого офиса). */
     category_ids?: number[];
+    /** Привязка клиента к компании. null — снять (Не указана). undefined — не менять. */
+    company_id?: number | null;
   }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const body: {
@@ -1591,6 +1698,7 @@ export async function updateUserProfile(
     phone?: string;
     office_id?: number;
     category_ids?: number[];
+    company_id?: number | null;
   } = {};
   if (data.full_name !== undefined) body.full_name = data.full_name.trim();
   if (data.phone !== undefined) body.phone = data.phone;
@@ -1598,6 +1706,7 @@ export async function updateUserProfile(
   if (data.category_ids !== undefined && data.category_ids.length > 0) {
     body.category_ids = data.category_ids;
   }
+  if (data.company_id !== undefined) body.company_id = data.company_id;
   const result = await request<unknown>(`/users/${userId}`, {
     method: 'PUT',
     body: JSON.stringify(body),
