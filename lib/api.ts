@@ -792,6 +792,12 @@ export interface SubRequest {
   location?: string;
 }
 
+/** category_id с бэкенда или вложенный category.id */
+export function getSubRequestCategoryId(sub: SubRequest): number | undefined {
+  const id = sub.category_id ?? sub.category?.id;
+  return id != null && Number.isFinite(Number(id)) && Number(id) > 0 ? Number(id) : undefined;
+}
+
 export interface RequestGroup {
   id: number;
   client_id: number;

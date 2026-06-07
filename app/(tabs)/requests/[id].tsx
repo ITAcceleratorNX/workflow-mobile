@@ -36,6 +36,7 @@ import {
   deleteRequest,
   executeRequest,
   getExecutors,
+  getSubRequestCategoryId,
   getOffices,
   getRequestGroupById,
   getServiceCategories,
@@ -143,6 +144,7 @@ export default function RequestDetailScreen() {
 
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [executors, setExecutors] = useState<ExecutorInCategory[]>([]);
+  const [executorsLoading, setExecutorsLoading] = useState(false);
 
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectError, setRejectError] = useState<string | null>(null);
@@ -230,17 +232,41 @@ export default function RequestDetailScreen() {
   }, [role]);
 
   useEffect(() => {
-    if (role !== 'department-head' || !subForAssign?.category_id) {
+    if (role !== 'department-head' || !showAssignModal || !subForAssign) {
+      if (!showAssignModal) {
+        setExecutors([]);
+        setExecutorsLoading(false);
+      }
       return;
     }
-    getExecutors(subForAssign.category_id).then((res) => {
-      if (res.ok && res.data) {
-        setExecutors(res.data);
-      } else {
-        setExecutors([]);
-      }
+
+    let cancelled = false;
+    setExecutorsLoading(true);
+    const officeId = request?.office_id ?? request?.office?.id;
+    const categoryId = getSubRequestCategoryId(subForAssign);
+
+    if (!categoryId) {
+      setExecutors([]);
+      setExecutorsLoading(false);
+      return;
+    }
+
+    void getExecutors(categoryId, officeId).then((res) => {
+      if (cancelled) return;
+      setExecutors(res.ok && res.data ? res.data : []);
+      setExecutorsLoading(false);
     });
-  }, [role, subForAssign?.id, subForAssign?.category_id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    role,
+    showAssignModal,
+    subForAssign,
+    request?.office_id,
+    request?.office?.id,
+  ]);
 
   /** Как системный свайп «назад»: pop стека. Без истории (deep link и т.п.) — на список заявок. */
   const goBack = useCallback(() => {
@@ -1040,6 +1066,7 @@ export default function RequestDetailScreen() {
         onSubmit={handleAssign}
         subRequest={subForAssign}
         executors={executors}
+        executorsLoading={executorsLoading}
         loading={actionLoading}
         error={assignError}
       />

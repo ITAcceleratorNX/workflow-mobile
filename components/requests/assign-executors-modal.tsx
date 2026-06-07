@@ -42,6 +42,7 @@ interface AssignExecutorsModalProps {
   onSubmit: (executors: Array<{ id: number; role: 'executor' | 'leader' }>) => Promise<void>;
   subRequest: SubRequest | null;
   executors: ExecutorInCategory[];
+  executorsLoading?: boolean;
   loading?: boolean;
   error?: string | null;
 }
@@ -52,6 +53,7 @@ export function AssignExecutorsModal({
   onSubmit,
   subRequest,
   executors,
+  executorsLoading = false,
   loading = false,
   error,
 }: AssignExecutorsModalProps) {
@@ -175,15 +177,28 @@ export function AssignExecutorsModal({
             <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>
               Добавить
             </ThemedText>
-            <Select
-              value={newExecutorId}
-              onValueChange={(v) => {
-                if (v) addExecutor(v);
-                setNewExecutorId('');
-              }}
-              options={addOptions}
-              placeholder="Выберите исполнителя"
-            />
+            {executorsLoading ? (
+              <View style={[styles.emptyState, { borderColor: border, backgroundColor: surfaceMuted }]}>
+                <ThemedText style={[styles.emptyText, { color: textMuted }]}>
+                  Загрузка исполнителей…
+                </ThemedText>
+              </View>
+            ) : (
+              <Select
+                value={newExecutorId}
+                onValueChange={(v) => {
+                  if (v) addExecutor(v);
+                  setNewExecutorId('');
+                }}
+                options={addOptions}
+                placeholder={
+                  availableExecutors.length > 0
+                    ? 'Выберите исполнителя'
+                    : 'Нет доступных исполнителей'
+                }
+                disabled={availableExecutors.length === 0}
+              />
+            )}
 
             {selected.length > 0 ? (
               <View style={styles.selectedSection}>

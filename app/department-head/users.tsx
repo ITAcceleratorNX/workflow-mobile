@@ -138,7 +138,7 @@ export default function DepartmentHeadUsersScreen() {
             : undefined,
       }),
       getExecutors(),
-      getServiceCategories(),
+      getServiceCategories(officeId),
       getOfficeCompanies(officeId),
     ]);
 
@@ -323,6 +323,18 @@ export default function DepartmentHeadUsersScreen() {
   };
 
   const isExecutorForm = selectedRole === 'executor';
+
+  const formCategories = useMemo(() => {
+    const byId = new Map(categories.map((c) => [c.id, c]));
+    for (const id of selectedCategoryIds) {
+      if (byId.has(id)) continue;
+      const fromExecutor = editingUser?.executor?.serviceCategories?.find((c) => c.id === id);
+      if (fromExecutor) {
+        byId.set(id, { id: fromExecutor.id, name: fromExecutor.name });
+      }
+    }
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+  }, [categories, selectedCategoryIds, editingUser]);
 
   const initialRole = editingUser?.role as OfficeStaffRole | undefined;
 
@@ -1036,7 +1048,7 @@ export default function DepartmentHeadUsersScreen() {
                     Категории услуг
                   </ThemedText>
                   <View style={styles.chips}>
-                    {categories.map((c) => {
+                    {formCategories.map((c) => {
                       const active = selectedCategoryIds.includes(c.id);
                       return (
                         <Pressable
