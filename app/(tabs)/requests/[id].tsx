@@ -200,13 +200,30 @@ export default function RequestDetailScreen() {
   }, [id, numId, isGuest, guestRequests]);
 
   useEffect(() => {
-    if (role === 'executor' || role === 'admin-worker' || role === 'manager') {
-      getServiceCategories().then((res) => {
-        if (res.ok && res.data) {
-          setCategories(res.data.map((c) => ({ id: c.id, name: c.name })));
-        }
-      });
+    if (!showEditModal || !request) {
+      if (!showEditModal) setCategories([]);
+      return;
     }
+    const officeId = request.office_id ?? request.office?.id;
+    if (!officeId) {
+      setCategories([]);
+      return;
+    }
+    let cancelled = false;
+    void getServiceCategories(officeId).then((res) => {
+      if (cancelled) return;
+      if (res.ok && res.data) {
+        setCategories(res.data.map((c) => ({ id: c.id, name: c.name })));
+      } else {
+        setCategories([]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showEditModal, request]);
+
+  useEffect(() => {
     if (role === 'admin-worker') {
       getOffices().then(setOffices);
     }

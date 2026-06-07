@@ -109,14 +109,22 @@ export function EditRequestGroupModal({
     };
   }, []);
 
-  const categoryOptions = useMemo(
-    () =>
-      categories.map((c) => ({
-        value: String(c.id),
-        label: formatServiceCategoryDisplayName(c.name),
-      })),
-    [categories]
-  );
+  const categoryOptions = useMemo(() => {
+    const byId = new Map(categories.map((c) => [c.id, c]));
+    (request?.requests ?? []).forEach((sr) => {
+      const categoryId = sr.category_id;
+      if (categoryId && !byId.has(categoryId)) {
+        byId.set(categoryId, {
+          id: categoryId,
+          name: sr.category?.name ?? `Категория #${categoryId}`,
+        });
+      }
+    });
+    return [...byId.values()].map((c) => ({
+      value: String(c.id),
+      label: formatServiceCategoryDisplayName(c.name),
+    }));
+  }, [categories, request]);
 
   const updateSubRequest = (
     subRequestId: number,
