@@ -49,7 +49,7 @@ type CalendarStripDay = { key: string; dayNumber: number; weekdayLabel: string }
 const WEEKDAY_SHORT_RU = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const MONTH_SHORT_RU = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
-const UPCOMING_CALENDAR_DAYS_BACK = 0;
+/** Полоса «Предстоящие» — только будущие дни (с завтра), сегодня в «Сегодня». */
 const UPCOMING_CALENDAR_DAYS_FORWARD = 180;
 /**
  * Глубина полосы «Выполненные» (как горизонт у «Предстоящие»): дни слева направо
@@ -202,10 +202,8 @@ export default function TasksScreen() {
   }, [upcomingVisibleDateKey, upcomingDate, tomorrowKey]);
 
   const upcomingStripDays = useMemo((): CalendarStripDay[] => {
-    return Array.from(
-      { length: UPCOMING_CALENDAR_DAYS_BACK + UPCOMING_CALENDAR_DAYS_FORWARD + 1 },
-      (_, idx) => {
-        const dayOffset = idx - UPCOMING_CALENDAR_DAYS_BACK;
+    return Array.from({ length: UPCOMING_CALENDAR_DAYS_FORWARD + 1 }, (_, idx) => {
+        const dayOffset = idx + 1;
         const key = addCalendarDaysToDateKey(todayKey, dayOffset);
         const dayPart = key.split('-')[2];
         const dayNumber = dayPart ? parseInt(dayPart, 10) : 1;
