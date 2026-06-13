@@ -19,10 +19,10 @@ const ACTIVE_COLOR = '#FFFFFF';
 const INACTIVE_COLOR = 'rgba(255, 255, 255, 0.55)';
 const BAR_BACKGROUND = '#F35713';
 
-const NAV_ITEMS: { key: string; routeName: string; label: string; icon: 'home' | 'grid-on' | 'build' | 'message' | 'person' }[] = [
+const NAV_ITEMS: { key: string; routeName: string; label: string; icon: 'home' | 'grid-on' | 'checklist' | 'message' | 'person' }[] = [
   { key: 'home', routeName: 'index', label: 'Главная', icon: 'home' },
   { key: 'booking', routeName: 'booking', label: 'Бронь', icon: 'grid-on' },
-  { key: 'requests', routeName: 'requests', label: 'Заявки', icon: 'build' },
+  { key: 'requests', routeName: 'requests', label: 'Заявки', icon: 'checklist' },
   { key: 'help', routeName: 'help', label: 'Сообщение', icon: 'message' },
   { key: 'profile', routeName: 'profile', label: 'Профиль', icon: 'person' },
 ];

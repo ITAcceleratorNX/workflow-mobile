@@ -357,3 +357,91 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
 
   return actions;
 }
+
+export type PrimaryActionKey = 'accept' | 'complete' | 'share';
+
+export interface PrimaryActionItem {
+  key: PrimaryActionKey;
+  label: string;
+  variant: 'primary' | 'default';
+  onClick: () => void;
+}
+
+/**
+ * Ключевые действия для нижнего блока карточки заявки:
+ * Принять / Завершить / Поделиться заявкой.
+ */
+export function getRequestPrimaryActions(params: GetActionsParams): PrimaryActionItem[] {
+  const {
+    request,
+    subRequest,
+    userRole,
+    isExecutorLeader,
+    onShare,
+    onCompleteTask,
+    onAdminCompleteGroup,
+    onAdminAcceptGroup,
+  } = params;
+
+  const actions: PrimaryActionItem[] = [];
+  const shareRoles: RequestUserRole[] = [
+    'client',
+    'executor',
+    'manager',
+    'department-head',
+    'admin-worker',
+  ];
+
+  if (
+    userRole === 'admin-worker' &&
+    subRequest &&
+    request.status === 'in_progress' &&
+    onAdminAcceptGroup
+  ) {
+    actions.push({
+      key: 'accept',
+      label: 'Принять',
+      variant: 'primary',
+      onClick: onAdminAcceptGroup,
+    });
+  }
+
+  if (
+    userRole === 'executor' &&
+    subRequest &&
+    isExecutorLeader &&
+    subRequest.status === 'execution' &&
+    onCompleteTask
+  ) {
+    actions.push({
+      key: 'complete',
+      label: 'Завершить',
+      variant: 'primary',
+      onClick: () => onCompleteTask(subRequest),
+    });
+  }
+
+  if (
+    (userRole === 'admin-worker' || userRole === 'department-head') &&
+    onAdminCompleteGroup &&
+    canStaffCompleteWithoutAssignment(request)
+  ) {
+    actions.push({
+      key: 'complete',
+      label: 'Завершить',
+      variant: 'primary',
+      onClick: onAdminCompleteGroup,
+    });
+  }
+
+  if (shareRoles.includes(userRole)) {
+    actions.push({
+      key: 'share',
+      label: 'Поделиться заявкой',
+      variant: 'default',
+      onClick: onShare,
+    });
+  }
+
+  return actions;
+}

@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -26,7 +25,15 @@ import { RatingModal } from '@/components/requests/rating-modal';
 import { RedirectModal } from '@/components/requests/redirect-modal';
 import { RejectModal } from '@/components/requests/reject-modal';
 import { RequestActionMenu, type RequestUserRole } from '@/components/requests/request-action-menu';
-import { LongTermBadge } from '@/components/requests/long-term-badge';
+import { getRequestPrimaryActions } from '@/components/requests/request-action-config';
+import {
+  RequestDescriptionCard,
+  RequestDetailHeader,
+  RequestLocationCard,
+  RequestMetaCard,
+  RequestPhotoStrip,
+  RequestPrimaryActions,
+} from '@/components/requests/request-detail-ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
@@ -61,48 +68,16 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatServiceCategoryDisplayName, getStatusLabel, getTypeLabel, isLongTermRequestGroup } from '@/constants/requests';
+import { formatServiceCategoryDisplayName, isLongTermRequestGroup } from '@/constants/requests';
+import { shareRequestWithContent } from '@/lib/shareRequest';
 
-function PhotoGrid({
-  photos,
-  onPress,
-}: {
-  photos: Array<{ photo_url: string }>;
-  onPress: (url: string) => void;
-}) {
-  const { width } = useWindowDimensions();
-  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
-  const gap = 8;
-  const count = 3;
-  const size = (width - 48 - gap * (count - 1)) / count;
-
-  if (!photos?.length) return null;
-
-  return (
-    <View style={styles.photoSection}>
-      <ThemedText style={styles.photoSectionTitle}>Фотографии</ThemedText>
-      <View style={[styles.photoGrid, { gap }]}>
-        {photos.map((p, idx) => (
-          <Pressable
-            key={`${p.photo_url}-${idx}`}
-            onPress={() => onPress(p.photo_url)}
-            accessibilityRole="imagebutton"
-            accessibilityLabel={`Фото ${idx + 1}`}
-            style={[
-              styles.photoTile,
-              { width: size, height: size, backgroundColor: surfaceMuted },
-            ]}
-          >
-            <Image
-              source={{ uri: p.photo_url }}
-              style={StyleSheet.absoluteFill}
-              resizeMode="cover"
-            />
-          </Pressable>
-        ))}
-      </View>
-    </View>
-  );
+function getSubcategoryName(sub: SubRequest | undefined): string | undefined {
+  if (!sub?.title?.trim()) return undefined;
+  const title = sub.title.trim();
+  const categoryDisplay = formatServiceCategoryDisplayName(sub.category?.name);
+  if (title === categoryDisplay) return undefined;
+  if (sub.category?.name?.trim() === title) return undefined;
+  return title;
 }
 
 export default function RequestDetailScreen() {
@@ -119,7 +94,6 @@ export default function RequestDetailScreen() {
   const mutedColor = useThemeColor({}, 'textMuted');
   const primaryColor = useThemeColor({}, 'primary');
   const borderColor = useThemeColor({}, 'border');
-  const onPrimary = useThemeColor({}, 'onPrimary');
 
   const [request, setRequest] = useState<RequestGroup | null>(null);
   const [loading, setLoading] = useState(true);
@@ -687,6 +661,39 @@ export default function RequestDetailScreen() {
 
   const subRequests = request.requests ?? [];
   const isLongTerm = isLongTermRequestGroup(request);
+  const description = sub?.description?.trim() ?? '';
+  const executorNames = sub
+    ? (sub.executors ?? (sub.executor ? [sub.executor] : [])).map(
+        (e) => e.user?.full_name?.trim() || '—'
+      )
+    : [];
+  const primaryActions =
+    role && sub
+      ? getRequestPrimaryActions({
+          request,
+          subRequest: sub,
+          userRole: role,
+          userId: user?.id,
+          isExecutorLeader: isExecutorLeader(sub),
+          onShare: () => {
+            void shareRequestWithContent(request, sub).catch((err) => {
+              if (__DEV__) console.warn('[RequestDetail] Share failed', err);
+            });
+          },
+          onStartTask: (tid) => handleStartTask(Number(tid)),
+          onCompleteTask: (s) => {
+            setCompleteMode('executor');
+            setStaffCompleteTargets([]);
+            setTaskForComplete(s);
+            setShowCompleteModal(true);
+          },
+          onAdminCompleteGroup: handleAdminCompleteGroup,
+          onAdminAcceptGroup: () => {
+            setAdminAcceptError(null);
+            setShowAcceptGroupModal(true);
+          },
+        })
+      : [];
 
   return (
     <ThemedView style={styles.container}>
@@ -702,9 +709,7 @@ export default function RequestDetailScreen() {
         <Pressable onPress={goBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <MaterialIcons name="arrow-back" size={24} color={textColor} />
         </Pressable>
-        <ThemedText style={[styles.headerTitle, { color: textColor }]}>
-          Заявка #{request.id}
-        </ThemedText>
+        <View style={styles.headerTitleSpacer} />
         <View style={styles.headerActions}>
           {!isGuest && sub ? (
             <Pressable
@@ -792,149 +797,56 @@ export default function RequestDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.badges}>
-          <View style={[styles.badge, { backgroundColor: primaryColor }]}>
-            <ThemedText style={[styles.badgeText, { color: onPrimary }]}>
-              {getStatusLabel(request.status)}
-            </ThemedText>
-          </View>
-          <View style={[styles.badge, { backgroundColor: mutedColor }]}>
-            <ThemedText style={[styles.badgeText, { color: onPrimary }]}>
-              {getTypeLabel(request.request_type ?? 'normal')}
-            </ThemedText>
-          </View>
-          {isLongTerm ? <LongTermBadge detail /> : null}
-        </View>
+        <RequestDetailHeader request={request} sub={sub} isLongTerm={isLongTerm} />
 
-        {request.request_type === 'planned' && request.planned_date && (
-          <View style={styles.block}>
-            <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-              Запланировано на
-            </ThemedText>
-            <ThemedText style={{ color: textColor }}>
-              {new Date(request.planned_date).toLocaleDateString('ru-RU', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </ThemedText>
-          </View>
-        )}
+        {description ? <RequestDescriptionCard description={description} /> : null}
 
-        {subRequests.map((sr) => (
-          <View key={sr.id} style={styles.subBlock}>
-            {(sr.title || sr.category?.name) && (
-              <View style={styles.block}>
-                <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-                  Заявка #{sr.id}
-                </ThemedText>
-                <ThemedText style={[styles.blockValue, { color: textColor }]}>
-                  {sr.title || formatServiceCategoryDisplayName(sr.category?.name)}
-                </ThemedText>
-                {sr.category?.name && sr.title && (
-                  <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-                    {formatServiceCategoryDisplayName(sr.category.name)}
-                  </ThemedText>
-                )}
-              </View>
-            )}
-            {sr.description ? (
-              <View style={styles.block}>
-                <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-                  Описание
-                </ThemedText>
-                <ThemedText style={[styles.blockValue, { color: textColor }]}>
-                  {sr.description}
-                </ThemedText>
-              </View>
-            ) : null}
-            {(sr.complexity || sr.sla) && (
-              <View style={styles.block}>
-                <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-                  Доп. информация
-                </ThemedText>
-                <ThemedText style={{ color: textColor }}>
-                  {[
-                    sr.complexity && `Сложность: ${sr.complexity}`,
-                    sr.sla && `Срок: ${sr.sla}`,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </ThemedText>
-              </View>
-            )}
-            {(sr.executors?.length || sr.executor) && (
-              <View style={styles.block}>
-                <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-                  Исполнители
-                </ThemedText>
-                {(sr.executors ?? (sr.executor ? [sr.executor] : [])).map(
-                  (e: { user?: { full_name?: string } }, i: number) => (
-                    <ThemedText key={i} style={{ color: textColor }}>
-                      {e.user?.full_name ?? '—'}
-                    </ThemedText>
-                  )
-                )}
-              </View>
-            )}
-            {sr.status === 'completed' && sr.comment && (
-              <View style={styles.block}>
-                <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-                  Комментарий по выполнению
-                </ThemedText>
-                <ThemedText style={[styles.blockValue, { color: textColor }]}>
-                  {sr.comment}
-                </ThemedText>
-              </View>
-            )}
-          </View>
-        ))}
+        <RequestLocationCard
+          officeName={request.office?.name}
+          officeAddress={request.office?.address}
+          locationDetail={request.location_detail}
+        />
 
-        {request.location_detail ? (
-          <View style={styles.block}>
-            <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-              Локация в офисе
-            </ThemedText>
-            <ThemedText style={{ color: textColor }}>
-              {request.location_detail}
-            </ThemedText>
-          </View>
+        <RequestMetaCard
+          categoryName={sub?.category?.name}
+          subcategoryName={getSubcategoryName(sub)}
+          createdDate={request.created_date || sub?.created_date}
+          clientName={request.client?.full_name}
+          plannedDate={
+            request.request_type === 'planned' ? request.planned_date : undefined
+          }
+          executors={executorNames.length > 0 ? executorNames : undefined}
+          completionComment={
+            sub?.status === 'completed' ? sub.comment : undefined
+          }
+        />
+
+        {subRequests.length > 1 ? (
+          subRequests.slice(1).map((sr) => (
+            <RequestMetaCard
+              key={sr.id}
+              title={`Подзаявка #${sr.id}`}
+              categoryName={sr.category?.name}
+              subcategoryName={getSubcategoryName(sr)}
+              createdDate={sr.created_date}
+              completionComment={
+                sr.status === 'completed' ? sr.comment : undefined
+              }
+              executors={
+                (sr.executors ?? (sr.executor ? [sr.executor] : [])).map(
+                  (e) => e.user?.full_name?.trim() || '—'
+                )
+              }
+            />
+          ))
         ) : null}
 
-        <View style={styles.block}>
-          <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-            Офис
-          </ThemedText>
-          <ThemedText style={{ color: textColor }}>
-            {request.office?.name || '—'}
-          </ThemedText>
-        </View>
+        <RequestPhotoStrip
+          photos={allPhotos}
+          onPress={(url) => setPhotoModalUrl(url)}
+        />
 
-        <View style={styles.block}>
-          <ThemedText style={[styles.blockLabel, { color: mutedColor }]}>
-            Дата создания
-          </ThemedText>
-          <ThemedText style={{ color: textColor }}>
-            {request.created_date
-              ? new Date(request.created_date).toLocaleString('ru-RU', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-              : '—'}
-          </ThemedText>
-        </View>
-
-        {allPhotos.length > 0 && (
-          <PhotoGrid
-            photos={allPhotos}
-            onPress={(url) => setPhotoModalUrl(url)}
-          />
-        )}
-
-        {/* Блок действий администратора перенесён в модальные окна, доступные из меню действий */}
+        <RequestPrimaryActions actions={primaryActions} />
       </ScrollView>
 
       {photoModalUrl ? (
@@ -1120,9 +1032,7 @@ const styles = StyleSheet.create({
     padding: 8,
     marginRight: 8,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+  headerTitleSpacer: {
     flex: 1,
   },
   headerActions: {
@@ -1148,52 +1058,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 24,
     paddingBottom: 48,
-  },
-  badges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 20,
-  },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  badgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  block: {
-    marginBottom: 20,
-  },
-  subBlock: {
-    marginBottom: 8,
-  },
-  blockLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  blockValue: {
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  photoSection: {
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  photoSectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  photoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  photoTile: {
-    borderRadius: 8,
-    overflow: 'hidden',
   },
   photoModal: {
     ...StyleSheet.absoluteFillObject,

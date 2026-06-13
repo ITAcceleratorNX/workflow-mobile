@@ -2,6 +2,8 @@
  * Централизованные константы и хелперы для заявок (requests).
  */
 
+import type { ThemeColorName } from '@/constants/theme';
+
 export const STATUS_LABELS: Record<string, string> = {
   completed: 'Завершено',
   in_progress: 'В обработке',
@@ -51,6 +53,27 @@ export function getStatusLabel(status: string): string {
 
 export function getTypeLabel(type: string): string {
   return TYPE_LABELS[type] ?? 'Обычная';
+}
+
+/** Цвета бейджа статуса (семантические токены темы). */
+export function getStatusBadgeTheme(status: string): {
+  bg: ThemeColorName;
+  text: ThemeColorName;
+} {
+  switch (status) {
+    case 'completed':
+      return { bg: 'successSoft', text: 'success' };
+    case 'rejected':
+    case 'cancelled':
+      return { bg: 'dangerSoft', text: 'danger' };
+    case 'in_progress':
+    case 'execution':
+    case 'assigned':
+    case 'awaiting_assignment':
+      return { bg: 'infoSoft', text: 'info' };
+    default:
+      return { bg: 'surfaceElevated', text: 'textSecondary' };
+  }
 }
 
 /** Три основных направления сервисных заявок (названия для пользователя). */
