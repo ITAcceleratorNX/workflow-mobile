@@ -16,9 +16,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { AssignUserSearchFilters } from '@/components/tasks/assign-user-search-filters';
 import { ScreenHeader } from '@/components/ui';
+import { useAssignUserSearchScope } from '@/hooks/use-assign-user-search-scope';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { normalizeUserSearchItem, searchUsersForAssign, type UserSearchItem } from '@/lib/api';
+import { formatUserSearchLabel } from '@/lib/user-search-display';
 import { bumpTeamsCache, createTeam, deleteTeam, getTeam, updateTeam } from '@/lib/teams-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useToast } from '@/context/toast-context';
@@ -59,6 +62,8 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
   const [memberResults, setMemberResults] = useState<UserSearchItem[]>([]);
   const [memberSearching, setMemberSearching] = useState(false);
 
+  const assignSearch = useAssignUserSearchScope();
+
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [teamMeta, setTeamMeta] = useState<{ created_by: number; leader_id: number } | null>(null);
@@ -98,12 +103,12 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
     }
     const t = setTimeout(async () => {
       setLeaderSearching(true);
-      const res = await searchUsersForAssign(q);
+      const res = await searchUsersForAssign(q, assignSearch.searchOptions);
       setLeaderSearching(false);
       if (res.ok) setLeaderResults(res.data);
     }, 300);
     return () => clearTimeout(t);
-  }, [leaderSearch]);
+  }, [leaderSearch, assignSearch.searchOptions]);
 
   useEffect(() => {
     const q = memberSearch.trim();
@@ -113,12 +118,12 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
     }
     const t = setTimeout(async () => {
       setMemberSearching(true);
-      const res = await searchUsersForAssign(q);
+      const res = await searchUsersForAssign(q, assignSearch.searchOptions);
       setMemberSearching(false);
       if (res.ok) setMemberResults(res.data);
     }, 300);
     return () => clearTimeout(t);
-  }, [memberSearch]);
+  }, [memberSearch, assignSearch.searchOptions]);
 
   const memberIdsForSubmit = useMemo(() => {
     const ids = new Set<number>();
@@ -310,6 +315,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
           </View>
 
           <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Руководитель</ThemedText>
+          <AssignUserSearchFilters filters={assignSearch} />
           <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
             <TextInput
               value={leaderSearch}
@@ -331,8 +337,8 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
                     disabled={!canEditTeamMeta}
                     style={({ pressed }) => [styles.resultRow, pressed && { opacity: 0.75 }]}
                   >
-                    <ThemedText style={{ color: text }} numberOfLines={1}>
-                      {u.full_name}
+                    <ThemedText style={{ color: text }} numberOfLines={2}>
+                      {formatUserSearchLabel(u)}
                     </ThemedText>
                   </Pressable>
                 ))}
@@ -386,8 +392,8 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
                       onPress={() => addMember(u)}
                       style={({ pressed }) => [styles.resultRow, pressed && { opacity: 0.75 }]}
                     >
-                      <ThemedText style={{ color: text }} numberOfLines={1}>
-                        {u.full_name}
+                      <ThemedText style={{ color: text }} numberOfLines={2}>
+                        {formatUserSearchLabel(u)}
                       </ThemedText>
                     </Pressable>
                   ))}

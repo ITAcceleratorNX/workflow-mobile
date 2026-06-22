@@ -12,10 +12,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AssignUserSearchFilters } from '@/components/tasks/assign-user-search-filters';
 import { ThemedText } from '@/components/themed-text';
+import { useAssignUserSearchScope } from '@/hooks/use-assign-user-search-scope';
 import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
+import { formatUserSearchLabel } from '@/lib/user-search-display';
 import type { Team } from '@/lib/teams-api';
 
 /** Лидер + участники для выбора исполнителя (Team или вложенный `task.team` с API). */
@@ -184,6 +187,7 @@ export function TaskExecutorPickerOverlay({
   const [search, setSearch] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<UserSearchItem[]>([]);
+  const assignSearch = useAssignUserSearchScope();
 
   const teamMode = teamScope && team != null;
   const teamPending = teamScope && team == null && teamLoading;
@@ -201,19 +205,19 @@ export function TaskExecutorPickerOverlay({
   useEffect(() => {
     if (!visible || teamMode) return;
     const q = search.trim();
-    if (q.length < 1) {
+    if (q.length < 2) {
       setResults([]);
       return;
     }
     const t = setTimeout(async () => {
       setSearching(true);
-      const res = await searchUsersForAssign(q);
+      const res = await searchUsersForAssign(q, assignSearch.searchOptions);
       setSearching(false);
       if (res.ok) setResults(res.data);
       else setResults([]);
     }, 300);
     return () => clearTimeout(t);
-  }, [search, visible, teamMode]);
+  }, [search, visible, teamMode, assignSearch.searchOptions]);
 
   const pick = useCallback(
     (executor: { id: number; full_name: string } | null) => {
@@ -311,12 +315,13 @@ export function TaskExecutorPickerOverlay({
               )
             ) : (
               <>
+                <AssignUserSearchFilters filters={assignSearch} />
                 <View style={[styles.searchCard, { backgroundColor: cardBg, borderColor: border }]}>
                   <MaterialIcons name="search" size={22} color={textMuted} />
                   <TextInput
                     value={search}
                     onChangeText={setSearch}
-                    placeholder="Имя или телефон"
+                    placeholder="Имя или телефон (от 2 символов)"
                     placeholderTextColor={textMuted}
                     style={[styles.searchInput, { color: headerText }]}
                   />
@@ -334,13 +339,13 @@ export function TaskExecutorPickerOverlay({
                     >
                       <MaterialIcons name="person" size={22} color={primary} />
                       <ThemedText style={[styles.shortcutLabel, { color: headerText }]} numberOfLines={2}>
-                        {u.full_name}
+                        {formatUserSearchLabel(u)}
                       </ThemedText>
                       {selected ? <MaterialIcons name="check" size={22} color={primary} /> : null}
                     </Pressable>
                   );
                 })}
-                {search.trim().length >= 1 && !searching && results.length === 0 ? (
+                {search.trim().length >= 2 && !searching && results.length === 0 ? (
                   <ThemedText style={[styles.hint, { color: textMuted }]}>Никого не найдено</ThemedText>
                 ) : null}
               </>
@@ -388,6 +393,7 @@ export function TaskAssigneesPickerOverlay({
   const [search, setSearch] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<UserSearchItem[]>([]);
+  const assignSearch = useAssignUserSearchScope();
 
   const teamMode = teamScope && team != null;
   const teamPending = teamScope && team == null && teamLoading;
@@ -412,13 +418,13 @@ export function TaskAssigneesPickerOverlay({
   useEffect(() => {
     if (!visible || teamMode) return;
     const q = search.trim();
-    if (q.length < 1) {
+    if (q.length < 2) {
       setResults([]);
       return;
     }
     const t = setTimeout(async () => {
       setSearching(true);
-      const res = await searchUsersForAssign(q);
+      const res = await searchUsersForAssign(q, assignSearch.searchOptions);
       setSearching(false);
       if (res.ok) {
         const list = currentUserId ? res.data.filter((u) => u.id !== currentUserId) : res.data;
@@ -428,7 +434,7 @@ export function TaskAssigneesPickerOverlay({
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [search, visible, teamMode, currentUserId]);
+  }, [search, visible, teamMode, currentUserId, assignSearch.searchOptions]);
 
   const toggle = useCallback(
     (u: { id: number; full_name: string }) => {
@@ -555,12 +561,13 @@ export function TaskAssigneesPickerOverlay({
               )
             ) : (
               <>
+                <AssignUserSearchFilters filters={assignSearch} />
                 <View style={[styles.searchCard, { backgroundColor: cardBg, borderColor: border }]}>
                   <MaterialIcons name="search" size={22} color={textMuted} />
                   <TextInput
                     value={search}
                     onChangeText={setSearch}
-                    placeholder="Имя или телефон"
+                    placeholder="Имя или телефон (от 2 символов)"
                     placeholderTextColor={textMuted}
                     style={[styles.searchInput, { color: headerText }]}
                   />
@@ -578,13 +585,13 @@ export function TaskAssigneesPickerOverlay({
                     >
                       <MaterialIcons name="person" size={22} color={primary} />
                       <ThemedText style={[styles.shortcutLabel, { color: headerText }]} numberOfLines={2}>
-                        {u.full_name}
+                        {formatUserSearchLabel(u)}
                       </ThemedText>
                       {on ? <MaterialIcons name="check" size={22} color={primary} /> : null}
                     </Pressable>
                   );
                 })}
-                {search.trim().length >= 1 && !searching && results.length === 0 ? (
+                {search.trim().length >= 2 && !searching && results.length === 0 ? (
                   <ThemedText style={[styles.hint, { color: textMuted }]}>Никого не найдено</ThemedText>
                 ) : null}
               </>
