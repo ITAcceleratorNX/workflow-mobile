@@ -8,9 +8,12 @@
     "scheme": "workflowmobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
-      "version": "1.0.4",
-      "buildNumber": "19",
+      "version": "1.0.5",
+      "buildNumber": "20",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -60,7 +63,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 12,
+      "versionCode": 13,
       "package": "com.workflow.kz"
     },
     "web": {

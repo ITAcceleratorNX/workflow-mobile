@@ -6,6 +6,7 @@ import { Linking } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
+import { AppUpdateBanner } from '@/components/app-update-banner';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { SleepSurveyGate } from '@/components/sleep-survey-gate';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -63,6 +64,7 @@ export default function RootLayout() {
               <Stack.Screen name="notifications" />
             </Stack>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+            <AppUpdateBanner />
           </ToastProvider>
         </ThemeProvider>
       </GestureHandlerRootView>
