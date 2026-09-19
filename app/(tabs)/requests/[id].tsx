@@ -25,12 +25,16 @@ import { RatingModal } from '@/components/requests/rating-modal';
 import { RedirectModal } from '@/components/requests/redirect-modal';
 import { RejectModal } from '@/components/requests/reject-modal';
 import { RequestActionMenu, type RequestUserRole } from '@/components/requests/request-action-menu';
-import { getRequestPrimaryActions } from '@/components/requests/request-action-config';
+import {
+  getRequestPrimaryActions,
+  isStaffCompletableSubRequest,
+} from '@/components/requests/request-action-config';
 import {
   RequestDescriptionCard,
   RequestDetailHeader,
   RequestLocationCard,
   RequestMetaCard,
+  RequestObserverNotice,
   RequestPhotoStrip,
   RequestPrimaryActions,
 } from '@/components/requests/request-detail-ui';
@@ -52,6 +56,8 @@ import {
   postRating,
   postRejectNotification,
   adminCompleteRequest,
+  adminStartRequest,
+  takeRequestGroup,
   redirectRequest,
   rejectRequest,
   toggleLongTermRequest,
@@ -68,7 +74,11 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { formatServiceCategoryDisplayName, isLongTermRequestGroup } from '@/constants/requests';
+import {
+  formatServiceCategoryDisplayName,
+  isAdministrativeRequestGroup,
+  isLongTermRequestGroup,
+} from '@/constants/requests';
 import { shareRequestWithContent } from '@/lib/shareRequest';
 
 function getSubcategoryName(sub: SubRequest | undefined): string | undefined {
@@ -109,6 +119,8 @@ export default function RequestDetailScreen() {
   const [showRedirectModal, setShowRedirectModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAcceptGroupModal, setShowAcceptGroupModal] = useState(false);
+  const [showRejectGroupModal, setShowRejectGroupModal] = useState(false);
 
   const [taskForComplete, setTaskForComplete] = useState<SubRequest | null>(null);
   const [subForReject, setSubForReject] = useState<SubRequest | null>(null);
@@ -126,6 +138,10 @@ export default function RequestDetailScreen() {
   const [assignError, setAssignError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [offices, setOffices] = useState<Office[]>([]);
+  /** Офис, выбранный в модалке принятия: категории грузятся под него. */
+  const [acceptOfficeId, setAcceptOfficeId] = useState<number | null>(null);
+  const [acceptCategories, setAcceptCategories] = useState<{ id: number; name: string }[]>([]);
+  const [acceptCategoriesLoading, setAcceptCategoriesLoading] = useState(false);
   const [adminAcceptError, setAdminAcceptError] = useState<string | null>(null);
   const [adminRejectError, setAdminRejectError] = useState<string | null>(null);
   const [showCommentsModal, setShowCommentsModal] = useState(false);
@@ -204,6 +220,27 @@ export default function RequestDetailScreen() {
       getOffices().then(setOffices);
     }
   }, [role]);
+
+  /** Категории привязаны к офису: перезагружаем их при смене офиса в модалке принятия. */
+  useEffect(() => {
+    if (!showAcceptGroupModal || acceptOfficeId == null) {
+      if (!showAcceptGroupModal) {
+        setAcceptCategories([]);
+        setAcceptCategoriesLoading(false);
+      }
+      return;
+    }
+    let cancelled = false;
+    setAcceptCategoriesLoading(true);
+    void getServiceCategories(acceptOfficeId).then((res) => {
+      if (cancelled) return;
+      setAcceptCategories(res.ok && res.data ? res.data.map((c) => ({ id: c.id, name: c.name })) : []);
+      setAcceptCategoriesLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showAcceptGroupModal, acceptOfficeId]);
 
   useEffect(() => {
     if (role !== 'department-head' || !showAssignModal || !subForAssign) {
@@ -521,7 +558,7 @@ export default function RequestDetailScreen() {
       try {
         const res = await patchRequestGroup(request.id, 1, body);
         if (res.ok) {
-          showToast({ title: 'Заявка принята в работу', variant: 'success' });
+          showToast({ title: 'Заявка передана офис-менеджеру', variant: 'success' });
           refetch();
           setShowAcceptGroupModal(false);
         } else {
@@ -593,15 +630,46 @@ export default function RequestDetailScreen() {
     [request, refetch, showToast]
   );
 
-  const [showAcceptGroupModal, setShowAcceptGroupModal] = useState(false);
-  const [showRejectGroupModal, setShowRejectGroupModal] = useState(false);
+  /** «Взять в работу»: администратор закрепляет КТО/Клининг заявку за собой. */
+  const handleAdminTakeGroup = useCallback(async () => {
+    if (!request) return;
+    setActionLoading(true);
+    try {
+      const res = await takeRequestGroup(request.id);
+      if (res.ok) {
+        showToast({ title: 'Заявка закреплена за вами', variant: 'success' });
+        refetch();
+      } else {
+        showToast({ title: res.error, variant: 'destructive' });
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  }, [request, refetch, showToast]);
+
+  /** Взять административную заявку в работу без назначения исполнителя. */
+  const handleStaffStartGroup = useCallback(
+    async (subReq: SubRequest) => {
+      setActionLoading(true);
+      try {
+        const res = await adminStartRequest(subReq.id);
+        if (res.ok) {
+          showToast({ title: 'Заявка взята в работу', variant: 'success' });
+          refetch();
+        } else {
+          showToast({ title: res.error, variant: 'destructive' });
+        }
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [refetch, showToast]
+  );
 
   const handleAdminCompleteGroup = useCallback(() => {
     if (!request) return;
 
-    const targets = (request.requests ?? []).filter((sr) =>
-      ['in_progress', 'awaiting_assignment', 'assigned'].includes(sr.status)
-    );
+    const targets = (request.requests ?? []).filter(isStaffCompletableSubRequest);
 
     if (!targets.length) {
       showToast({ title: 'Нет подзаявок для завершения', variant: 'destructive' });
@@ -661,6 +729,7 @@ export default function RequestDetailScreen() {
 
   const subRequests = request.requests ?? [];
   const isLongTerm = isLongTermRequestGroup(request);
+  const isAdministrative = isAdministrativeRequestGroup(request);
   const description = sub?.description?.trim() ?? '';
   const executorNames = sub
     ? (sub.executors ?? (sub.executor ? [sub.executor] : [])).map(
@@ -688,6 +757,8 @@ export default function RequestDetailScreen() {
             setShowCompleteModal(true);
           },
           onAdminCompleteGroup: handleAdminCompleteGroup,
+          onStaffStartGroup: (s) => void handleStaffStartGroup(s),
+          onAdminTakeGroup: () => void handleAdminTakeGroup(),
           onAdminAcceptGroup: () => {
             setAdminAcceptError(null);
             setShowAcceptGroupModal(true);
@@ -774,6 +845,8 @@ export default function RequestDetailScreen() {
             onRateClient={() => setShowClientRatingModal(true)}
             onToggleLongTerm={handleToggleLongTerm}
             onAdminCompleteGroup={handleAdminCompleteGroup}
+            onStaffStartGroup={(s) => void handleStaffStartGroup(s)}
+            onAdminTakeGroup={() => void handleAdminTakeGroup()}
             onAdminAcceptGroup={() => {
               setAdminAcceptError(null);
               setShowAcceptGroupModal(true);
@@ -799,6 +872,10 @@ export default function RequestDetailScreen() {
       >
         <RequestDetailHeader request={request} sub={sub} isLongTerm={isLongTerm} />
 
+        {isAdministrative && role === 'admin-worker' ? (
+          <RequestObserverNotice text="Административная заявка. Её ведёт офис-менеджер офиса — вы видите её для контроля статуса и истории." />
+        ) : null}
+
         {description ? <RequestDescriptionCard description={description} /> : null}
 
         <RequestLocationCard
@@ -816,6 +893,7 @@ export default function RequestDetailScreen() {
             request.request_type === 'planned' ? request.planned_date : undefined
           }
           executors={executorNames.length > 0 ? executorNames : undefined}
+          responsibleName={request.takenByAdmin?.full_name}
           completionComment={
             sub?.status === 'completed' ? sub.comment : undefined
           }
@@ -902,12 +980,16 @@ export default function RequestDetailScreen() {
             visible={showAcceptGroupModal}
             request={request}
             offices={offices}
+            categories={acceptCategories}
+            categoriesLoading={acceptCategoriesLoading}
             loading={actionLoading}
             error={adminAcceptError}
             onClose={() => {
               setShowAcceptGroupModal(false);
               setAdminAcceptError(null);
+              setAcceptOfficeId(null);
             }}
+            onOfficeChange={setAcceptOfficeId}
             onAccept={handleAdminAccept}
           />
           <AdminRejectRequestModal

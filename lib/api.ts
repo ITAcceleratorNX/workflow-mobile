@@ -811,6 +811,9 @@ export interface RequestGroup {
   planned_date?: string;
   created_date: string;
   client?: { full_name: string; phone?: string; role?: string };
+  /** Администратор, взявший заявку в работу (офис-менеджеру она не передаётся). */
+  taken_by_admin_id?: number | null;
+  takenByAdmin?: { id: number; full_name: string; phone?: string; role?: string } | null;
   office?: { id: number; name: string; city: string; address?: string };
   photos?: RequestPhoto[];
   requests: SubRequest[];
@@ -1032,6 +1035,28 @@ export async function adminCompleteRequest(
   const result = await request<unknown>(`/requests/${requestId}/admin-complete`, {
     method: 'PATCH',
     body: body?.comment != null ? JSON.stringify({ comment: body.comment }) : undefined,
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** «Взять в работу»: администратор закрепляет КТО/Клининг заявку за собой */
+export async function takeRequestGroup(
+  groupId: number
+): Promise<{ ok: true; data: RequestGroup } | { ok: false; error: string }> {
+  const result = await request<RequestGroup>(`/request-groups/${groupId}/take`, {
+    method: 'PATCH',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data! };
+}
+
+/** Взять подзаявку в работу без назначения исполнителя (department-head, admin-worker) */
+export async function adminStartRequest(
+  requestId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/requests/${requestId}/admin-start`, {
+    method: 'PATCH',
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };

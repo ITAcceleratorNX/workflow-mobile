@@ -135,6 +135,22 @@ export function RequestDescriptionCard({ description }: { description: string })
   );
 }
 
+/**
+ * Пояснение администратору: административную заявку ведёт офис-менеджер,
+ * админ видит её только для контроля.
+ */
+export function RequestObserverNotice({ text: notice }: { text: string }) {
+  const infoSoft = useThemeColor({}, 'infoSoft');
+  const info = useThemeColor({}, 'info');
+
+  return (
+    <View style={[styles.card, styles.observerNotice, { backgroundColor: infoSoft }]}>
+      <MaterialIcons name="visibility" size={18} color={info} />
+      <ThemedText style={[styles.observerNoticeText, { color: info }]}>{notice}</ThemedText>
+    </View>
+  );
+}
+
 export function RequestLocationCard({
   officeName,
   officeAddress,
@@ -173,6 +189,7 @@ export function RequestMetaCard({
   clientName,
   plannedDate,
   executors,
+  responsibleName,
   completionComment,
 }: {
   title?: string;
@@ -182,6 +199,8 @@ export function RequestMetaCard({
   clientName?: string;
   plannedDate?: string;
   executors?: string[];
+  /** Сотрудник, ведущий заявку сам (администратор взял её в работу). */
+  responsibleName?: string;
   completionComment?: string;
 }) {
   const rows: Array<{ label: string; value: string }> = [];
@@ -225,6 +244,9 @@ export function RequestMetaCard({
             day: 'numeric',
           }),
     });
+  }
+  if (responsibleName?.trim()) {
+    rows.push({ label: 'Ответственный', value: responsibleName.trim() });
   }
   if (executors?.length) {
     rows.push({ label: 'Исполнители', value: executors.join(', ') });
@@ -328,6 +350,13 @@ export function RequestPrimaryActions({ actions }: { actions: PrimaryActionItem[
                   color={isPrimary ? onPrimary : text}
                   style={styles.actionIcon}
                 />
+              ) : action.key === 'take' || action.key === 'start' ? (
+                <MaterialIcons
+                  name="play-arrow"
+                  size={20}
+                  color={isPrimary ? onPrimary : text}
+                  style={styles.actionIcon}
+                />
               ) : (
                 <MaterialIcons
                   name="check-circle"
@@ -357,6 +386,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing.lg,
     marginBottom: Spacing.md,
+  },
+  observerNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+  },
+  observerNoticeText: {
+    flex: 1,
+    fontSize: FontSizes.bodySmall,
+    lineHeight: LineHeights.bodySmall,
   },
   cardTitle: {
     fontSize: FontSizes.bodySmall,

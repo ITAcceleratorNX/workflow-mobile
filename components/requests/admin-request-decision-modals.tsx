@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Keyboard,
   Modal,
@@ -16,11 +16,19 @@ import { ThemedText } from '@/components/themed-text';
 import { Select } from '@/components/ui';
 import {
   COMPLEXITY_OPTIONS,
+  formatServiceCategoryDisplayName,
+  matchServiceCategoryInOffice,
   REQUEST_TYPE_OPTIONS,
   SLA_OPTIONS,
+  type OfficeServiceCategory,
 } from '@/constants/requests';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import type { AcceptSubRequestPayload, Office, RequestGroup } from '@/lib/api';
+import {
+  getSubRequestCategoryId,
+  type AcceptSubRequestPayload,
+  type Office,
+  type RequestGroup,
+} from '@/lib/api';
 
 import { useBottomSheetScrollMetrics } from './use-bottom-sheet-scroll-metrics';
 import { useSheetPanDismiss } from './use-sheet-pan-dismiss';
@@ -36,9 +44,14 @@ interface AdminAcceptRequestModalProps {
   visible: boolean;
   request: RequestGroup | null;
   offices: Office[];
+  /** Категории выбранного офиса: грузятся родителем по onOfficeChange. */
+  categories: OfficeServiceCategory[];
+  categoriesLoading?: boolean;
   loading?: boolean;
   error?: string | null;
   onClose: () => void;
+  /** Офис, выбранный в модалке (null — не выбран): родитель грузит его категории. */
+  onOfficeChange: (officeId: number | null) => void;
   onAccept: (payload: AdminAcceptRequestPayload) => Promise<void>;
 }
 
@@ -46,9 +59,12 @@ export function AdminAcceptRequestModal({
   visible,
   request,
   offices,
+  categories,
+  categoriesLoading = false,
   loading = false,
   error,
   onClose,
+  onOfficeChange,
   onAccept,
 }: AdminAcceptRequestModalProps) {
   const textColor = useThemeColor({}, 'text');
@@ -64,6 +80,8 @@ export function AdminAcceptRequestModal({
   const [subSettings, setSubSettings] = useState<
     Record<number, { sla: string; complexity: string }>
   >({});
+  /** category_id подзаявки в выбранном офисе (строка — значение Select). */
+  const [subCategoryIds, setSubCategoryIds] = useState<Record<number, string>>({});
   const [localError, setLocalError] = useState<string | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
@@ -82,14 +100,75 @@ export function AdminAcceptRequestModal({
 
   const officeOptions = offices.map((o) => ({ value: String(o.id), label: o.name }));
 
+  const subRequests = useMemo(() => request?.requests ?? [], [request]);
+
+  const keepsOriginalOffice =
+    request != null && Number(officeId) === Number(request.office_id);
+
+  /**
+   * Категории выбранного офиса. Для родного офиса заявки добавляем её текущую
+   * категорию, даже если её нет в справочнике (переименована / удалена), —
+   * иначе принять заявку без смены офиса стало бы невозможно.
+   */
+  const availableCategories = useMemo(() => {
+    const byId = new Map(categories.map((c) => [c.id, { id: c.id, name: c.name }]));
+    if (keepsOriginalOffice) {
+      subRequests.forEach((sr) => {
+        const id = getSubRequestCategoryId(sr);
+        if (id != null && !byId.has(id)) {
+          byId.set(id, { id, name: sr.category?.name ?? `Категория #${id}` });
+        }
+      });
+    }
+    return [...byId.values()];
+  }, [categories, keepsOriginalOffice, subRequests]);
+
+  const categoryOptions = useMemo(
+    () =>
+      availableCategories.map((c) => ({
+        value: String(c.id),
+        label: formatServiceCategoryDisplayName(c.name),
+      })),
+    [availableCategories]
+  );
+
   useEffect(() => {
     if (!visible || !request) return;
     setRequestType(request.request_type ?? 'normal');
     setLocationDetail(request.location_detail ?? '');
     setOfficeId(String(request.office_id ?? ''));
     setSubSettings({});
+    setSubCategoryIds({});
     setLocalError(null);
   }, [visible, request]);
+
+  /** Родитель грузит категории выбранного офиса: они нужны для подзаявок. */
+  useEffect(() => {
+    if (!visible) return;
+    const parsed = Number(officeId);
+    onOfficeChange(Number.isInteger(parsed) && parsed > 0 ? parsed : null);
+  }, [visible, officeId, onOfficeChange]);
+
+  /**
+   * Категории принадлежат офису, поэтому при смене офиса подбираем категорию
+   * нового офиса по направлению заявки; своя категория офиса остаётся как есть.
+   */
+  useEffect(() => {
+    if (!visible || categoriesLoading) return;
+    setSubCategoryIds(() => {
+      const next: Record<number, string> = {};
+      subRequests.forEach((sr) => {
+        const currentId = getSubRequestCategoryId(sr);
+        const keepsCurrent =
+          currentId != null && availableCategories.some((c) => c.id === currentId);
+        const matchedId = keepsCurrent
+          ? currentId
+          : matchServiceCategoryInOffice(sr.category?.name, availableCategories);
+        next[sr.id] = matchedId != null ? String(matchedId) : '';
+      });
+      return next;
+    });
+  }, [visible, availableCategories, categoriesLoading, subRequests]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -104,10 +183,23 @@ export function AdminAcceptRequestModal({
 
   const displayError = localError ?? error;
 
+  const setSubCategory = useCallback((subRequestId: number, value: string) => {
+    setSubCategoryIds((prev) => ({ ...prev, [subRequestId]: value }));
+  }, []);
+
   const handleAccept = async () => {
     if (!request) return;
+    const parsedOffice = Number(officeId);
+    if (!Number.isInteger(parsedOffice) || parsedOffice <= 0) {
+      setLocalError('Выберите офис');
+      return;
+    }
+    if (categoriesLoading) {
+      setLocalError('Категории офиса ещё загружаются');
+      return;
+    }
     if (requestType !== 'planned') {
-      const allHave = (request.requests ?? []).every((sr) => {
+      const allHave = subRequests.every((sr) => {
         const s = subSettings[sr.id];
         return s?.sla && s?.complexity;
       });
@@ -116,21 +208,29 @@ export function AdminAcceptRequestModal({
         return;
       }
     }
+    // Категория чужого офиса оставит заявку на исполнителях прежнего офиса.
+    const allHaveCategory = subRequests.every((sr) => {
+      const picked = Number(subCategoryIds[sr.id]);
+      return Number.isInteger(picked) && availableCategories.some((c) => c.id === picked);
+    });
+    if (!allHaveCategory) {
+      setLocalError('Выберите категорию выбранного офиса для всех подзаявок');
+      return;
+    }
     setLocalError(null);
-    const sub_requests: AcceptSubRequestPayload[] = (request.requests ?? []).map((sr) => {
+    const sub_requests: AcceptSubRequestPayload[] = subRequests.map((sr) => {
       const s = subSettings[sr.id];
       return {
         id: sr.id,
         sla: requestType === 'planned' ? null : s?.sla ?? null,
         complexity: requestType === 'planned' ? null : s?.complexity ?? null,
-        category_id: sr.category_id,
+        category_id: Number(subCategoryIds[sr.id]),
       };
     });
-    const parsedOffice = Number(officeId);
     const payload: AdminAcceptRequestPayload = {
       request_type: requestType,
       location_detail: locationDetail.trim() || undefined,
-      office_id: Number.isInteger(parsedOffice) ? parsedOffice : request.office_id,
+      office_id: parsedOffice,
       sub_requests,
     };
     await onAccept(payload);
@@ -157,7 +257,9 @@ export function AdminAcceptRequestModal({
                 <View style={styles.sheetHandleHit}>
                   <View style={styles.handle} />
                 </View>
-                <ThemedText style={[styles.title, { color: textColor }]}>Принять заявку</ThemedText>
+                <ThemedText style={[styles.title, { color: textColor }]}>
+                  Передать Офис-менеджеру
+                </ThemedText>
               </View>
             </GestureDetector>
 
@@ -187,60 +289,77 @@ export function AdminAcceptRequestModal({
               placeholder="Выберите офис"
             />
 
-            {requestType !== 'planned' && (
-              <>
-                <ThemedText style={[styles.label, { color: mutedColor }]}>
-                  Время и сложность по подзаявкам
+            {!categoriesLoading && categoryOptions.length === 0 ? (
+              <ThemedText style={[styles.hint, { color: mutedColor }]}>
+                В выбранном офисе нет категорий услуг — заявку нельзя направить в этот
+                офис.
+              </ThemedText>
+            ) : null}
+
+            <ThemedText style={[styles.label, { color: mutedColor }]}>
+              {requestType === 'planned'
+                ? 'Категория по подзаявкам'
+                : 'Категория, время и сложность по подзаявкам'}
+            </ThemedText>
+            {subRequests.map((sr) => (
+              <View key={sr.id} style={[styles.subBlock, { borderColor }]}>
+                <ThemedText style={[styles.subTitle, { color: textColor }]}>
+                  {sr.title || `Подзаявка #${sr.id}`}
                 </ThemedText>
-                {(request?.requests ?? []).map((sr) => (
-                  <View key={sr.id} style={[styles.subBlock, { borderColor }]}>
-                    <ThemedText style={[styles.subTitle, { color: textColor }]}>
-                      {sr.title || `Подзаявка #${sr.id}`}
-                    </ThemedText>
-                    <View style={styles.row}>
-                      <View style={styles.rowField}>
-                        <ThemedText style={[styles.subLabel, { color: mutedColor }]}>
-                          Время (SLA)
-                        </ThemedText>
-                        <Select
-                          value={subSettings[sr.id]?.sla ?? ''}
-                          onValueChange={(v) =>
-                            setSubSettings((prev) => ({
-                              ...prev,
-                              [sr.id]: {
-                                sla: v,
-                                complexity: prev[sr.id]?.complexity ?? '',
-                              },
-                            }))
-                          }
-                          options={SLA_OPTIONS}
-                          placeholder="Выберите"
-                        />
-                      </View>
-                      <View style={styles.rowField}>
-                        <ThemedText style={[styles.subLabel, { color: mutedColor }]}>
-                          Сложность
-                        </ThemedText>
-                        <Select
-                          value={subSettings[sr.id]?.complexity ?? ''}
-                          onValueChange={(v) =>
-                            setSubSettings((prev) => ({
-                              ...prev,
-                              [sr.id]: {
-                                sla: prev[sr.id]?.sla ?? '',
-                                complexity: v,
-                              },
-                            }))
-                          }
-                          options={COMPLEXITY_OPTIONS}
-                          placeholder="Выберите"
-                        />
-                      </View>
+                <ThemedText style={[styles.subLabel, { color: mutedColor }]}>
+                  Категория
+                </ThemedText>
+                <Select
+                  value={subCategoryIds[sr.id] ?? ''}
+                  onValueChange={(v) => setSubCategory(sr.id, v)}
+                  options={categoryOptions}
+                  placeholder={categoriesLoading ? 'Загрузка...' : 'Выберите категорию'}
+                  disabled={categoriesLoading || categoryOptions.length === 0}
+                />
+                {requestType !== 'planned' && (
+                  <View style={styles.row}>
+                    <View style={styles.rowField}>
+                      <ThemedText style={[styles.subLabel, { color: mutedColor }]}>
+                        Время (SLA)
+                      </ThemedText>
+                      <Select
+                        value={subSettings[sr.id]?.sla ?? ''}
+                        onValueChange={(v) =>
+                          setSubSettings((prev) => ({
+                            ...prev,
+                            [sr.id]: {
+                              sla: v,
+                              complexity: prev[sr.id]?.complexity ?? '',
+                            },
+                          }))
+                        }
+                        options={SLA_OPTIONS}
+                        placeholder="Выберите"
+                      />
+                    </View>
+                    <View style={styles.rowField}>
+                      <ThemedText style={[styles.subLabel, { color: mutedColor }]}>
+                        Сложность
+                      </ThemedText>
+                      <Select
+                        value={subSettings[sr.id]?.complexity ?? ''}
+                        onValueChange={(v) =>
+                          setSubSettings((prev) => ({
+                            ...prev,
+                            [sr.id]: {
+                              sla: prev[sr.id]?.sla ?? '',
+                              complexity: v,
+                            },
+                          }))
+                        }
+                        options={COMPLEXITY_OPTIONS}
+                        placeholder="Выберите"
+                      />
                     </View>
                   </View>
-                ))}
-              </>
-            )}
+                )}
+              </View>
+            ))}
 
             <ThemedText style={[styles.label, { color: mutedColor }]}>
               Локация в офисе (необязательно)
@@ -289,7 +408,7 @@ export function AdminAcceptRequestModal({
               ]}
             >
               <ThemedText style={[styles.actionLabel, styles.actionLabelPrimary]}>
-                {loading ? 'Отправка...' : 'Принять'}
+                {loading ? 'Отправка...' : 'Передать'}
               </ThemedText>
             </Pressable>
             <Pressable
@@ -595,6 +714,11 @@ const styles = StyleSheet.create({
   },
   error: {
     fontSize: 13,
+    marginTop: 10,
+  },
+  hint: {
+    fontSize: 13,
+    lineHeight: 18,
     marginTop: 10,
   },
   actions: {

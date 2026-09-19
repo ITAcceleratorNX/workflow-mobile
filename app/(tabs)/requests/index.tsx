@@ -136,6 +136,29 @@ const TABS_BY_ROLE: Record<string, { key: string; label: string }[]> = {
   ],
 };
 
+/** Догруженная страница дополняет список без дублей (id уже может быть в нём). */
+function mergeRequestsById(
+  prev: RequestGroup[],
+  next: RequestGroup[]
+): RequestGroup[] {
+  const seen = new Set(prev.map((r) => r.id));
+  return [...prev, ...next.filter((r) => !seen.has(r.id))];
+}
+
+/** То же для вкладок (Входящие / Мои): иначе подгрузка не видна в списке. */
+function mergeSegments(
+  prev: RequestGroupsSegments | null,
+  next: RequestGroupsSegments | undefined
+): RequestGroupsSegments | null {
+  if (!next) return prev;
+  if (!prev) return next;
+  const merged: RequestGroupsSegments = { ...prev };
+  Object.entries(next).forEach(([key, items]) => {
+    merged[key] = mergeRequestsById(merged[key] ?? [], items);
+  });
+  return merged;
+}
+
 /** Первое фото заявки: с группы (как в kcell compact — request.photos[0]) или с первой подзаявки */
 function getFirstPhotoUrl(request: RequestGroup): string | null {
   const fromGroup = request.photos?.[0]?.photo_url;
@@ -436,11 +459,13 @@ export default function RequestsListScreen() {
       if (pageNum === 1) {
         setList(res.data);
         setSegments(res.segments ?? null);
-        setPage(1);
       } else {
-        setList((prev) => [...prev, ...res.data]);
+        setList((prev) => mergeRequestsById(prev, res.data));
+        // Список показывает segments[activeTab], поэтому вкладки тоже дополняем.
+        setSegments((prev) => mergeSegments(prev, res.segments));
       }
-      setHasMore(res.hasMore);
+      // total с бэкенда может быть завышен join'ами: пустая страница — конец списка.
+      setHasMore(res.hasMore && (pageNum === 1 || res.data.length > 0));
       setPage(pageNum);
       setLoading(false);
     },
@@ -469,12 +494,10 @@ export default function RequestsListScreen() {
   }, [load]);
 
   const onEndReached = useCallback(() => {
-    const hasSegments = segments && Object.keys(segments).length > 0;
-    if (hasSegments) return;
     if (!hasMore || loading || loadingMore) return;
     setLoadingMore(true);
     load(page + 1).finally(() => setLoadingMore(false));
-  }, [segments, hasMore, loading, loadingMore, page, load]);
+  }, [hasMore, loading, loadingMore, page, load]);
 
   const rawListForDisplay = useMemo(() => {
     if (segments && activeTab && segments[activeTab]) {

@@ -145,6 +145,53 @@ export function formatServiceCategoryDisplayName(
   }
 }
 
+/**
+ * Административная заявка: её ведёт офис-менеджер, администратор только
+ * наблюдает (не подтверждает, не перенаправляет, не назначает исполнителя).
+ * Признак — все подзаявки в админ-категориях; смешанная заявка идёт обычным
+ * сервисным маршрутом через администратора.
+ */
+export function isAdministrativeRequestGroup(request: {
+  requests?: { category?: { name?: string } | null }[] | null;
+}): boolean {
+  const subRequests = request.requests ?? [];
+  if (subRequests.length === 0) return false;
+  return subRequests.every(
+    (sub) => classifyServiceCategory(sub?.category?.name) === 'admin'
+  );
+}
+
+/** Минимальный вид категории офиса для подбора соответствия. */
+export interface OfficeServiceCategory {
+  id: number;
+  name: string;
+}
+
+/**
+ * Категории привязаны к офису (service_categories.office_id), поэтому при смене
+ * офиса у заявки прежний category_id остаётся чужим: исполнители подбираются по
+ * офису категории, и дальнейший флоу уходит в старый офис.
+ * Подбирает категорию нового офиса: сначала по точному названию, затем по
+ * направлению (КТО / Клининг / Админ). Без совпадения — undefined: категорию
+ * выбирает администратор.
+ */
+export function matchServiceCategoryInOffice(
+  sourceCategoryName: string | undefined | null,
+  officeCategories: OfficeServiceCategory[]
+): number | undefined {
+  const source = sourceCategoryName?.trim();
+  if (!source || officeCategories.length === 0) return undefined;
+
+  const lower = source.toLowerCase();
+  const byName = officeCategories.find((c) => c.name.trim().toLowerCase() === lower);
+  if (byName) return byName.id;
+
+  const kind = classifyServiceCategory(source);
+  if (kind === 'other') return undefined;
+
+  return officeCategories.find((c) => classifyServiceCategory(c.name) === kind)?.id;
+}
+
 /** Имя глифа MaterialIcons для блока выбора категории на экране создания заявки. */
 export type ServiceCategoryCardIcon =
   | 'assignment-ind'
