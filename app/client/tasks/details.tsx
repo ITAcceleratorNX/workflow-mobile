@@ -1,6 +1,6 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
@@ -1545,7 +1545,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   reminderTimePickerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   reminderTimePickerSheet: {
@@ -1580,7 +1580,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   scheduleModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   scheduleModalSheet: {

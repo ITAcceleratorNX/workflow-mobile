@@ -1111,7 +1111,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',

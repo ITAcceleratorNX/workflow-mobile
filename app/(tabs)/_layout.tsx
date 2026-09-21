@@ -1,5 +1,3 @@
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +6,17 @@ import { BottomNav, BOTTOM_NAV_ROW_HEIGHT, bottomNavBottomInset } from '@/compon
 
 /** Совпадает с последним стопом градиента на `(tabs)/booking` — закрашивает запас под absolute BottomNav. */
 const BOOKING_TAB_SCENE_UNDERLAY = '#281504';
+
+/**
+ * Имя вложенного экрана вкладки. Замена getFocusedRouteNameFromRoute из
+ * @react-navigation: с SDK 56 expo-router с ним несовместим.
+ */
+function getNestedRouteName(route: { name: string; state?: unknown }): string {
+  const nested = route.state as { routes?: { name: string }[]; index?: number } | undefined;
+  if (!nested?.routes?.length) return route.name;
+  const index = nested.index ?? nested.routes.length - 1;
+  return nested.routes[index]?.name ?? route.name;
+}
 import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 import { usePedometer } from '@/hooks/use-pedometer';
 import { useSleepNotifications } from '@/hooks/use-sleep-notifications';
@@ -38,9 +47,9 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      tabBar={(props: BottomTabBarProps) => <BottomNav {...props} />}
+      tabBar={(props) => <BottomNav {...props} />}
       screenOptions={({ route }) => {
-        const nestedRoute = getFocusedRouteNameFromRoute(route) ?? route.name;
+        const nestedRoute = getNestedRouteName(route);
         const isCreateRequest = route.name === 'requests' && nestedRoute === 'create';
         const isRequestDetail = route.name === 'requests' && nestedRoute === '[id]';
         const paddingBottom =

@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     opacity: 0.55,
   },
-  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
+  loadingOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
   devicesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
   deviceCard: {
     borderRadius: Radius.lg,

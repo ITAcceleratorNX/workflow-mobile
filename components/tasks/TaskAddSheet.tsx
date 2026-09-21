@@ -1002,7 +1002,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.42)',
   },
   sheet: {
@@ -1113,7 +1113,7 @@ const styles = StyleSheet.create({
   },
   quickPillText: { fontSize: 13, fontWeight: '600' },
   subOverlayRoot: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000,
   },
   subScheduleWrap: {
@@ -1146,7 +1146,7 @@ const styles = StyleSheet.create({
   },
   shortcutLabel: { flex: 1, fontSize: 16 },
   subBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.38)',
   },
   remindChip: {

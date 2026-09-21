@@ -1142,7 +1142,7 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   photoModal: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.9)',
     justifyContent: 'center',
     alignItems: 'center',

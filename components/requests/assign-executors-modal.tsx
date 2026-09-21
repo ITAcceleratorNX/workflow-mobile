@@ -5,7 +5,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,6 +20,7 @@ import {
   Radius,
   Spacing,
 } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import {
   formatExecutorLabel,
@@ -58,7 +58,7 @@ export function AssignExecutorsModal({
   error,
 }: AssignExecutorsModalProps) {
   const insets = useSafeAreaInsets();
-  const scheme = useColorScheme() ?? 'light';
+  const scheme = useColorScheme();
   const [selected, setSelected] = useState<SelectedExecutor[]>([]);
   const [newExecutorId, setNewExecutorId] = useState('');
 
