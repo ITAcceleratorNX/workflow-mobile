@@ -14,8 +14,9 @@ const BEDTIME_ID = 'sleep-bedtime-notification';
 const LEGACY_WAKE_ID = 'sleep-wake-notification';
 
 /**
- * Утреннее уведомление Healthy: свой текст на каждый будний день.
- * weekday — нумерация expo-notifications: 1 = воскресенье, 7 = суббота.
+ * Утреннее уведомление Healthy: свой текст на каждый день недели.
+ * weekday — нумерация expo-notifications: 1 = воскресенье, 7 = суббота;
+ * записи идут от понедельника к воскресенью, как читается календарь.
  */
 const WAKE_WEEKDAY_MESSAGES: { weekday: number; body: string }[] = [
   { weekday: 2, body: 'Пусть начало недели будет лёгким' },
@@ -23,6 +24,8 @@ const WAKE_WEEKDAY_MESSAGES: { weekday: number; body: string }[] = [
   { weekday: 4, body: 'Пусть день начнётся спокойно и легко' },
   { weekday: 5, body: 'Хорошего старта нового дня' },
   { weekday: 6, body: 'Пусть начало дня задаст хороший ритм' },
+  { weekday: 7, body: 'Пусть выходной начнётся неспешно' },
+  { weekday: 1, body: 'Хорошего отдыха и спокойного утра' },
 ];
 
 const wakeNotificationId = (weekday: number) => `sleep-wake-notification-${weekday}`;
@@ -88,7 +91,7 @@ export async function scheduleSleepNotifications(settings: SleepSettings): Promi
     });
 
     // Время то же, что и раньше (wakeHour/wakeMinute) — меняется только текст
-    // по дню недели, поэтому вместо одного DAILY пять недельных уведомлений.
+    // по дню недели, поэтому вместо одного DAILY семь недельных уведомлений.
     for (const { weekday, body } of WAKE_WEEKDAY_MESSAGES) {
       await Notifications.scheduleNotificationAsync({
         identifier: wakeNotificationId(weekday),
