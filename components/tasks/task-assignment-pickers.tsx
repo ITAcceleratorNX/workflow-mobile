@@ -605,11 +605,11 @@ export function TaskAssigneesPickerOverlay({
 
 const styles = StyleSheet.create({
   subOverlayRoot: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000,
   },
   subBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.38)',
   },
   subScheduleWrap: {

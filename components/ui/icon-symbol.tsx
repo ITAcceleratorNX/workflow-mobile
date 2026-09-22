@@ -5,7 +5,10 @@ import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
 import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
+// В новом expo-symbols name — это SF Symbol либо объект {ios,android,web};
+// для маппинга нужна только строковая форма.
+type SymbolName = Extract<SymbolViewProps['name'], string>;
+type IconMapping = Record<SymbolName, ComponentProps<typeof MaterialIcons>['name']>;
 type IconSymbolName = keyof typeof MAPPING;
 
 /**

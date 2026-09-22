@@ -241,7 +241,7 @@ export default function ExecutorScanQrScreen() {
             barcodeScannerSettings={{
               barcodeTypes: ['qr'],
             }}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
           />
         </View>
 

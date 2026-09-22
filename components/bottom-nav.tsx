@@ -1,4 +1,3 @@
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Haptics from 'expo-haptics';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -27,7 +26,20 @@ const NAV_ITEMS: { key: string; routeName: string; label: string; icon: 'home' |
   { key: 'profile', routeName: 'profile', label: 'Профиль', icon: 'person' },
 ];
 
-export function BottomNav({ state, navigation }: BottomTabBarProps) {
+/**
+ * Структурный тип вместо BottomTabBarProps: expo-router с SDK 57 поставляет
+ * собственную копию типов bottom-tabs, несовместимую с @react-navigation.
+ * Панели нужны только маршрут и navigate, поэтому не привязываемся ни к одной.
+ */
+export type BottomNavProps = {
+  state: {
+    index: number;
+    routes: { name: string; state?: unknown }[];
+  };
+  navigation: { navigate: (name: string) => void };
+};
+
+export function BottomNav({ state, navigation }: BottomNavProps) {
   const insets = useSafeAreaInsets();
   const hideBookingForm = useBookingTabUiStore((s) => s.hideBottomNavForBookingForm);
 
