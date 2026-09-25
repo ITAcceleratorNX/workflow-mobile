@@ -27,6 +27,11 @@ const CHECK_ORANGE = '#EA580C';
 
 type ViewMode = 'day' | 'week' | 'month';
 
+const EMPTY_RANGE_LABELS: Record<Exclude<ViewMode, 'day'>, string> = {
+  week: 'Нет задач на эту неделю',
+  month: 'Нет задач на этот месяц',
+};
+
 function getWeekRange(date: Date): { start: Date; end: Date } {
   const d = new Date(date);
   const day = d.getDay();
@@ -44,11 +49,22 @@ function getMonthRange(date: Date): { start: Date; end: Date } {
   return { start, end };
 }
 
-export function CalendarTab() {
+interface CalendarTabProps {
+  selectedDate: Date;
+  onSelectedDateChange: (date: Date) => void;
+  /** Нижний отступ прокручиваемого контента — чтобы плавающая кнопка не перекрывала последние задачи. */
+  contentBottomInset?: number;
+}
+
+export function CalendarTab({
+  selectedDate,
+  onSelectedDateChange,
+  contentBottomInset = 0,
+}: CalendarTabProps) {
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
-  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('day');
+  const scrollContentStyle = useMemo(() => ({ paddingBottom: contentBottomInset }), [contentBottomInset]);
 
   const { start, end } = useMemo(() => {
     if (viewMode === 'day') {
@@ -82,7 +98,7 @@ export function CalendarTab() {
     if (viewMode === 'day') d.setDate(d.getDate() - 1);
     else if (viewMode === 'week') d.setDate(d.getDate() - 7);
     else d.setMonth(d.getMonth() - 1);
-    setSelectedDate(d);
+    onSelectedDateChange(d);
   };
 
   const next = () => {
@@ -91,7 +107,7 @@ export function CalendarTab() {
     if (viewMode === 'day') d.setDate(d.getDate() + 1);
     else if (viewMode === 'week') d.setDate(d.getDate() + 7);
     else d.setMonth(d.getMonth() + 1);
-    setSelectedDate(d);
+    onSelectedDateChange(d);
   };
 
   const openTaskDetails = useCallback((task: CalendarTask) => {
@@ -119,6 +135,12 @@ export function CalendarTab() {
     }
     return null;
   }, [tasksByHour]);
+
+  /** Копия: сортировка на месте мутировала бы состояние useCalendarTasks. */
+  const sortedTasks = useMemo(
+    () => [...tasks].sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()),
+    [tasks]
+  );
 
   const dayScrollRef = useRef<ScrollView>(null);
   const hourRowYRef = useRef<number[]>([]);
@@ -193,6 +215,8 @@ export function CalendarTab() {
     [animateToggleCheck, getToggleScale, toggleComplete, togglingTaskIds, textMuted]
   );
 
+  // Прокрутка к первому часу с задачами. `tasks` намеренно не в зависимостях:
+  // иначе отметка или создание задачи сбрасывали бы прокрутку пользователя.
   useEffect(() => {
     if (loading || viewMode !== 'day') return;
     const t = setTimeout(() => {
@@ -206,7 +230,7 @@ export function CalendarTab() {
       dayScrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: false });
     }, 64);
     return () => clearTimeout(t);
-  }, [loading, viewMode, selectedDate, firstHourWithTasks, tasks]);
+  }, [loading, viewMode, selectedDate, firstHourWithTasks]);
 
   return (
     <View style={styles.container}>
@@ -253,6 +277,7 @@ export function CalendarTab() {
         <ScrollView
           ref={dayScrollRef}
           style={styles.grid}
+          contentContainerStyle={scrollContentStyle}
           showsVerticalScrollIndicator={false}
         >
           {HOURS.map((hour) => (
@@ -295,82 +320,45 @@ export function CalendarTab() {
             </View>
           ))}
         </ScrollView>
-      ) : viewMode === 'week' ? (
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-          {tasks
-            .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-            .map((task) => (
-              <Pressable
-                key={task.id}
-                onPress={() => openTaskDetails(task)}
-                style={[
-                  styles.weekTask,
-                  {
-                    backgroundColor: task.completed ? 'rgba(148,163,184,0.14)' : cardBg,
-                    borderColor: task.completed ? 'rgba(148,163,184,0.45)' : border,
-                  },
-                ]}
-              >
-                <View style={styles.weekTaskTitleRow}>
-                  <ThemedText
-                    style={[
-                      styles.weekTaskTitle,
-                      { color: task.completed ? textMuted : text },
-                      task.completed && styles.taskCompletedTitle,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {task.title}
-                  </ThemedText>
-                  {renderTaskToggle(task)}
-                </View>
-                <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
-                  {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
-                </ThemedText>
-                <TaskAssignmentBadges task={task} primary={primary} currentUserId={currentUserId} compact />
-              </Pressable>
-            ))}
-          {tasks.length === 0 && (
-            <ThemedText style={[styles.empty, { color: textMuted }]}>Нет задач на эту неделю</ThemedText>
-          )}
-        </ScrollView>
       ) : (
-        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-          {tasks
-            .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-            .map((task) => (
-              <Pressable
-                key={task.id}
-                onPress={() => openTaskDetails(task)}
-                style={[
-                  styles.weekTask,
-                  {
-                    backgroundColor: task.completed ? 'rgba(148,163,184,0.14)' : cardBg,
-                    borderColor: task.completed ? 'rgba(148,163,184,0.45)' : border,
-                  },
-                ]}
-              >
-                <View style={styles.weekTaskTitleRow}>
-                  <ThemedText
-                    style={[
-                      styles.weekTaskTitle,
-                      { color: task.completed ? textMuted : text },
-                      task.completed && styles.taskCompletedTitle,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {task.title}
-                  </ThemedText>
-                  {renderTaskToggle(task)}
-                </View>
-                <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
-                  {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
+        <ScrollView
+          style={styles.list}
+          contentContainerStyle={scrollContentStyle}
+          showsVerticalScrollIndicator={false}
+        >
+          {sortedTasks.map((task) => (
+            <Pressable
+              key={task.id}
+              onPress={() => openTaskDetails(task)}
+              style={[
+                styles.weekTask,
+                {
+                  backgroundColor: task.completed ? 'rgba(148,163,184,0.14)' : cardBg,
+                  borderColor: task.completed ? 'rgba(148,163,184,0.45)' : border,
+                },
+              ]}
+            >
+              <View style={styles.weekTaskTitleRow}>
+                <ThemedText
+                  style={[
+                    styles.weekTaskTitle,
+                    { color: task.completed ? textMuted : text },
+                    task.completed && styles.taskCompletedTitle,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {task.title}
                 </ThemedText>
-                <TaskAssignmentBadges task={task} primary={primary} currentUserId={currentUserId} compact />
-              </Pressable>
-            ))}
-          {tasks.length === 0 && (
-            <ThemedText style={[styles.empty, { color: textMuted }]}>Нет задач на этот месяц</ThemedText>
+                {renderTaskToggle(task)}
+              </View>
+              <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
+                {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}
+              </ThemedText>
+              <TaskAssignmentBadges task={task} primary={primary} currentUserId={currentUserId} compact />
+            </Pressable>
+          ))}
+          {sortedTasks.length === 0 && (
+            <ThemedText style={[styles.empty, { color: textMuted }]}>{EMPTY_RANGE_LABELS[viewMode]}</ThemedText>
           )}
         </ScrollView>
       )}

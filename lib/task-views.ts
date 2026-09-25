@@ -9,6 +9,35 @@ import type { UserTask } from '@/lib/user-tasks-api';
 
 export type TaskMainView = 'inbox' | 'today' | 'upcoming' | 'completed';
 
+/** Стартовые значения формы создания задачи — зависят от экрана, с которого её открыли. */
+export interface TaskCreateDefaults {
+  /** YYYY-MM-DD (Asia/Almaty); null — «Без даты». */
+  dateKey: string | null;
+  /** Задача остаётся во «Входящих», даже если у неё есть дата. */
+  inbox: boolean;
+}
+
+export function getListTaskCreateDefaults(
+  view: TaskMainView,
+  keys: { todayKey: string; tomorrowKey: string; upcomingDateKey: string | null }
+): TaskCreateDefaults {
+  switch (view) {
+    case 'inbox':
+      return { dateKey: keys.tomorrowKey, inbox: true };
+    case 'today':
+      return { dateKey: keys.todayKey, inbox: false };
+    case 'upcoming':
+      return { dateKey: keys.upcomingDateKey ?? keys.tomorrowKey, inbox: false };
+    case 'completed':
+      return { dateKey: null, inbox: false };
+  }
+}
+
+/** Выбранный в календаре день, но не раньше сегодня — новая задача не должна сразу стать просроченной. */
+export function getCalendarTaskCreateDefaults(selectedDateKey: string, todayKey: string): TaskCreateDefaults {
+  return { dateKey: selectedDateKey < todayKey ? todayKey : selectedDateKey, inbox: false };
+}
+
 export interface TaskSection {
   id: string;
   title: string;

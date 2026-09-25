@@ -27,10 +27,12 @@ import { ThemedView } from '@/components/themed-view';
 import { ScreenHeader } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList, type UseTodoListQuery } from '@/hooks/use-todo-list';
-import { addCalendarDaysToDateKey, todayTaskDateKey } from '@/lib/dateTimeUtils';
+import { addCalendarDaysToDateKey, toAppDateKey, todayTaskDateKey } from '@/lib/dateTimeUtils';
 import {
   type TaskMainView,
   formatSectionDateLabel,
+  getCalendarTaskCreateDefaults,
+  getListTaskCreateDefaults,
   getTodaySections,
 } from '@/lib/task-views';
 import type { UserTask } from '@/lib/user-tasks-api';
@@ -62,6 +64,8 @@ const UPCOMING_DAY_CELL_WIDTH = 42;
 const UPCOMING_STRIP_PADDING_RIGHT = 16;
 /** Сумма paddingHorizontal у topBar — ширина области горизонтального ScrollView */
 const UPCOMING_STRIP_VIEWPORT_INSET = 32;
+const ADD_FAB_SIZE = 56;
+const ADD_FAB_GAP = 8;
 
 function upcomingStripScrollToSelectedX(idx: number, viewportWidth: number, daysCount: number): number {
   const stride = UPCOMING_DAY_ITEM_WIDTH;
@@ -128,6 +132,7 @@ export default function TasksScreen() {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>(() =>
     paramView === 'calendar' ? 'calendar' : 'list'
   );
+  const [calendarDate, setCalendarDate] = useState(() => new Date());
   const [upcomingDate, setUpcomingDate] = useState<string | null>(null);
   const [upcomingVisibleDateKey, setUpcomingVisibleDateKey] = useState<string | null>(null);
   const upcomingScrollRef = useRef<ScrollView | null>(null);
@@ -295,6 +300,18 @@ export default function TasksScreen() {
       },
     ];
   }, [tasks, mainView, todayKey, upcomingDate, tomorrowKey]);
+
+  const taskCreateDefaults = useMemo(
+    () =>
+      viewMode === 'calendar'
+        ? getCalendarTaskCreateDefaults(toAppDateKey(calendarDate), todayKey)
+        : getListTaskCreateDefaults(mainView, { todayKey, tomorrowKey, upcomingDateKey: upcomingDate }),
+    [viewMode, calendarDate, mainView, todayKey, tomorrowKey, upcomingDate]
+  );
+
+  const addFabBottom = Math.max(insets.bottom, 16) + ADD_FAB_GAP;
+  /** Запас снизу у прокручиваемого контента, чтобы последние задачи не уходили под FAB. */
+  const addFabContentInset = addFabBottom + ADD_FAB_SIZE + ADD_FAB_GAP;
 
   const openAddSheet = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -596,66 +613,68 @@ export default function TasksScreen() {
 
       {viewMode === 'calendar' ? (
         <View style={styles.calendarWrap}>
-          <CalendarTab />
+          <CalendarTab
+            selectedDate={calendarDate}
+            onSelectedDateChange={setCalendarDate}
+            contentBottomInset={addFabContentInset}
+          />
         </View>
       ) : loadingTasks ? (
         <View style={styles.loader}>
           <ActivityIndicator size="large" color={primary} />
         </View>
       ) : (
-        <View style={styles.listWithFab}>
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-          >
-            <SectionList<UserTask, TaskSectionRow>
-              sections={sections}
-              keyExtractor={(item) => {
-                if (item?.id != null) return String(item.id);
-                const created = (item as any)?.created_at ?? '';
-                const title = (item as any)?.title ?? '';
-                return `tmp-${created}-${title}`;
-              }}
-              renderItem={renderItem}
-              renderSectionHeader={({ section: { title } }) =>
-                title ? (
-                  <ThemedText style={[styles.sectionHeader, { color: headerSubtitle }]}>{title}</ThemedText>
-                ) : null
-              }
-              stickySectionHeadersEnabled={false}
-              contentContainerStyle={[styles.listContent, { paddingBottom: 88 }]}
-              ListEmptyComponent={ListEmpty}
-              ListFooterComponent={
-                loadingMore ? (
-                  <View style={styles.loaderFooter}>
-                    <ActivityIndicator size="small" color={primary} />
-                  </View>
-                ) : null
-              }
-              onEndReached={() => {
-                if (hasMore && !loadingMore) void loadMore();
-              }}
-              onEndReachedThreshold={0.35}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            />
-          </KeyboardAvoidingView>
-          <Pressable
-            onPress={openAddSheet}
-            accessibilityLabel="Добавить задачу"
-            style={[
-              styles.listFab,
-              {
-                backgroundColor: primary,
-                bottom: Math.max(insets.bottom, 16) + 8,
-              },
-            ]}
-          >
-            <MaterialIcons name="add" size={28} color="#fff" />
-          </Pressable>
-        </View>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <SectionList<UserTask, TaskSectionRow>
+            sections={sections}
+            keyExtractor={(item) => {
+              if (item?.id != null) return String(item.id);
+              const created = (item as any)?.created_at ?? '';
+              const title = (item as any)?.title ?? '';
+              return `tmp-${created}-${title}`;
+            }}
+            renderItem={renderItem}
+            renderSectionHeader={({ section: { title } }) =>
+              title ? (
+                <ThemedText style={[styles.sectionHeader, { color: headerSubtitle }]}>{title}</ThemedText>
+              ) : null
+            }
+            stickySectionHeadersEnabled={false}
+            contentContainerStyle={[styles.listContent, { paddingBottom: addFabContentInset }]}
+            ListEmptyComponent={ListEmpty}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.loaderFooter}>
+                  <ActivityIndicator size="small" color={primary} />
+                </View>
+              ) : null
+            }
+            onEndReached={() => {
+              if (hasMore && !loadingMore) void loadMore();
+            }}
+            onEndReachedThreshold={0.35}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          />
+        </KeyboardAvoidingView>
       )}
+
+      <Pressable
+        onPress={openAddSheet}
+        accessibilityRole="button"
+        accessibilityLabel="Добавить задачу"
+        style={({ pressed }) => [
+          styles.addFab,
+          { backgroundColor: primary, bottom: addFabBottom },
+          pressed && styles.addFabPressed,
+        ]}
+      >
+        <MaterialIcons name="add" size={28} color="#fff" />
+      </Pressable>
 
       <Modal
         visible={displayMenuOpen}
@@ -803,10 +822,9 @@ export default function TasksScreen() {
       <TaskAddSheet
         visible={addSheetOpen}
         onClose={() => setAddSheetOpen(false)}
-        mainView={mainView}
+        defaults={taskCreateDefaults}
         todayKey={todayKey}
         tomorrowKey={tomorrowKey}
-        defaultDateKey={mainView === 'upcoming' ? upcomingDate : null}
         addTask={addTask}
       />
       {teamsPanelOpen ? (
@@ -977,13 +995,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  listWithFab: { flex: 1 },
-  listFab: {
+  addFab: {
     position: 'absolute',
     right: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: ADD_FAB_SIZE,
+    height: ADD_FAB_SIZE,
+    borderRadius: ADD_FAB_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 6,
@@ -992,6 +1009,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
   },
+  addFabPressed: { opacity: 0.9 },
   listContent: { paddingHorizontal: 16, paddingTop: 12, flexGrow: 1 },
   sectionHeader: {
     fontSize: 12,

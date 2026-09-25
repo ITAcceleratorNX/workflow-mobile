@@ -34,7 +34,7 @@ import { useTeams } from '@/hooks/use-teams';
 import { formatDateForApi, formatTaskTime, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
 import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
 import { parseTaskScheduleFromText } from '@/lib/parseTaskScheduleFromText';
-import type { TaskMainView } from '@/lib/task-views';
+import type { TaskCreateDefaults } from '@/lib/task-views';
 import { useAuthStore } from '@/stores/auth-store';
 import type { TaskPriority } from '@/lib/user-tasks-api';
 
@@ -61,10 +61,10 @@ type SubModalId = 'schedule' | 'team' | 'executor' | 'priority' | 'reminders' | 
 export interface TaskAddSheetProps {
   visible: boolean;
   onClose: () => void;
-  mainView: TaskMainView;
+  /** Применяются при каждом открытии шита. */
+  defaults: TaskCreateDefaults;
   todayKey: string;
   tomorrowKey: string;
-  defaultDateKey?: string | null;
   addTask: (
     title: string,
     scheduledAt?: string | null,
@@ -84,12 +84,12 @@ export interface TaskAddSheetProps {
 export function TaskAddSheet({
   visible,
   onClose,
-  mainView,
+  defaults,
   todayKey,
   tomorrowKey,
-  defaultDateKey,
   addTask,
 }: TaskAddSheetProps) {
+  const { dateKey: defaultDateKey, inbox: createInInbox } = defaults;
   const insets = useSafeAreaInsets();
   const background = useThemeColor({}, 'background');
   const headerText = useThemeColor({}, 'text');
@@ -229,9 +229,7 @@ export function TaskAddSheet({
     setPriority('medium');
     setRemindersDisabled(false);
     setRemindBeforeMinutes(null);
-    if (mainView === 'completed') setScheduledDate(null);
-    else if (mainView === 'today') setScheduledDate(todayKey);
-    else setScheduledDate(defaultDateKey ?? tomorrowKey);
+    setScheduledDate(defaultDateKey);
     setTeamId(null);
     setExecutor(null);
     nlpHintLatestRef.current = null;
@@ -242,7 +240,7 @@ export function TaskAddSheet({
     setNlpScheduleHint(null);
     setAllowEmptyTitleFromNlp(false);
     setRecurrenceDraft(defaultRecurrenceNone());
-  }, [visible, mainView, todayKey, tomorrowKey, defaultDateKey]);
+  }, [visible, defaultDateKey]);
 
   useEffect(() => {
     if (scheduledDate == null) setRecurrenceDraft(defaultRecurrenceNone());
@@ -472,7 +470,7 @@ export function TaskAddSheet({
       },
       priority,
       recurrenceDraft,
-      { inbox: mainView === 'inbox' }
+      { inbox: createInInbox }
     );
     setSaving(false);
     if (created) {
@@ -495,7 +493,7 @@ export function TaskAddSheet({
     executor,
     allowEmptyTitleFromNlp,
     recurrenceDraft,
-    mainView,
+    createInInbox,
   ]);
 
   const canSubmit =
