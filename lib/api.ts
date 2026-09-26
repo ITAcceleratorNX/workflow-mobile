@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 
+import { failureFromResponse, type RequestFailure } from '@/lib/api-errors';
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -17,7 +18,7 @@ type RequestOptions = RequestInit & { params?: Record<string, string> };
 export async function request<T>(
   path: string,
   options: RequestOptions = {}
-): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
+): Promise<{ data: T; ok: true } | RequestFailure> {
   const { params, ...init } = options;
   const url = params
     ? `${apiBaseUrl}${path}?${new URLSearchParams(params).toString()}`
@@ -145,18 +146,14 @@ export async function request<T>(
           useAuthStore.getState().clearAuth();
           router.replace('/login');
         }
-        return { ok: false, error: 'Сессия истекла. Войдите снова.' };
+        return { ok: false, error: 'Сессия истекла. Войдите снова.', status: 401 };
       }
-      const error =
-        (data as { error?: string })?.error ||
-        (data as { message?: string })?.message ||
-        (Array.isArray((data as { details?: { message?: string }[] })?.details) &&
-          (data as { details: { message?: string }[] }).details[0]?.message) ||
-        'Произошла ошибка';
-      return { ok: false, error };
+      return failureFromResponse(res.status, data, res.headers.get('Retry-After'));
     }
     return { ok: true, data: data as T };
   } catch (e) {
+    // Отмену заказал вызывающий: это не сбой сети, в лог её не пишем.
+    if (init.signal?.aborted) return { ok: false, error: 'Запрос отменён', aborted: true };
     const message = e instanceof Error ? e.message : 'Сетевая ошибка';
     console.error(`[API Error] ${path}:`, message);
     return { ok: false, error: message };

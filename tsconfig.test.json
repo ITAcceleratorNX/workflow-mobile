@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "lib/__tests__/**/*.ts",
+    "lib/task-comments/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
