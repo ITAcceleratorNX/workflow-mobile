@@ -16,13 +16,13 @@ import {
   Platform,
   Pressable,
   TextInput as RNTextInput,
-  ScrollView,
   StyleSheet,
   Switch,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { TaskCommentsList } from '@/components/task-comments/task-comments-list';
 import {
   TaskExecutorPickerOverlay,
   TaskTeamPickerOverlay,
@@ -193,7 +193,6 @@ export default function TaskDetailsScreen() {
 
   const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const scrollRef = useRef<ScrollView | null>(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [scheduleDraftDate, setScheduleDraftDate] = useState<string | null>(null);
   const [scheduleDraftTime, setScheduleDraftTime] = useState('09:00');
@@ -693,14 +692,10 @@ export default function TaskDetailsScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <ScrollView
-          ref={(r) => {
-            scrollRef.current = r;
-          }}
+        <TaskCommentsList
+          taskId={task.id}
           style={styles.scroll}
           contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
         >
         <View style={[styles.titleCard, { backgroundColor: cardBg, borderColor: border }]}>
           <RNTextInput
@@ -1102,7 +1097,7 @@ export default function TaskDetailsScreen() {
             </View>
           </Pressable>
         </View>
-        </ScrollView>
+        </TaskCommentsList>
       </KeyboardAvoidingView>
 
       {scheduleModalOpen ? (
