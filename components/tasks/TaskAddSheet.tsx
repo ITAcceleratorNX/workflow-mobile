@@ -24,10 +24,8 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import {
-  TaskExecutorPickerOverlay,
-  TaskTeamPickerOverlay,
-} from '@/components/tasks/task-assignment-pickers';
+import { TaskTeamPickerOverlay } from '@/components/tasks/task-assignment-pickers';
+import { TaskRecipientPickerOverlay } from '@/components/tasks/TaskRecipientPickerOverlay';
 import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTeams } from '@/hooks/use-teams';
@@ -37,6 +35,12 @@ import { parseTaskScheduleFromText } from '@/lib/parseTaskScheduleFromText';
 import type { TaskCreateDefaults } from '@/lib/task-views';
 import { useAuthStore } from '@/stores/auth-store';
 import type { TaskPriority } from '@/lib/user-tasks-api';
+import { confirmMassAssignment } from '@/lib/group-task-completion';
+import {
+  massAssignmentConfirmText,
+  recipientSelectionLabel,
+  type RecipientSelection,
+} from '@/lib/task-recipients-api';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
@@ -74,6 +78,7 @@ export interface TaskAddSheetProps {
       team_id?: number | null;
       executor_id?: number | null;
       executor?: { id: number; full_name: string } | null;
+      recipient?: RecipientSelection | null;
     },
     priority?: TaskPriority,
     recurrence?: TaskRecurrencePayload,
@@ -99,6 +104,7 @@ export function TaskAddSheet({
   const cardBg = useThemeColor({}, 'cardBackground');
 
   const isGuest = useAuthStore((s) => s.isGuest);
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const { teams, loading: teamsLoading } = useTeams();
 
   const [title, setTitle] = useState('');
@@ -117,7 +123,8 @@ export function TaskAddSheet({
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [teamId, setTeamId] = useState<number | null>(null);
-  const [executor, setExecutor] = useState<{ id: number; full_name: string } | null>(null);
+  /** Поле «Исполнитель»: компания / отдел / сотрудники одной компании. */
+  const [recipient, setRecipient] = useState<RecipientSelection | null>(null);
 
   const [nlpScheduleHint, setNlpScheduleHint] = useState<string | null>(null);
   const nlpHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -231,7 +238,7 @@ export function TaskAddSheet({
     setRemindBeforeMinutes(null);
     setScheduledDate(defaultDateKey);
     setTeamId(null);
-    setExecutor(null);
+    setRecipient(null);
     nlpHintLatestRef.current = null;
     if (nlpHintTimerRef.current) {
       clearTimeout(nlpHintTimerRef.current);
@@ -283,13 +290,14 @@ export function TaskAddSheet({
 
   const handleSelectTeam = useCallback((id: number | null) => {
     setTeamId(id);
-    setExecutor(null);
+    setRecipient(null);
     setSubModal(null);
   }, []);
 
-  const handleSelectExecutor = useCallback((user: { id: number; full_name: string } | null) => {
-    setExecutor(user);
-    setTeamId(null);
+  /** Команда и получатель из оргструктуры взаимоисключающие, как раньше команда и исполнитель. */
+  const handleSelectRecipient = useCallback((selection: RecipientSelection | null) => {
+    setRecipient(selection);
+    if (selection) setTeamId(null);
     setSubModal(null);
   }, []);
 
@@ -404,12 +412,17 @@ export function TaskAddSheet({
     return teams.find((t) => t.id === teamId)?.name ?? 'Команда';
   }, [teamId, teams]);
 
-  const executorChipLabel = useMemo(() => {
-    if (!executor) return 'Исполнитель';
-    return executor.full_name;
-  }, [executor]);
+  const executorChipLabel = useMemo(() => recipientSelectionLabel(recipient), [recipient]);
+  const executorChipIcon =
+    recipient?.type === 'company'
+      ? 'business'
+      : recipient?.type === 'department'
+        ? 'apartment'
+        : recipient?.type === 'users' && recipient.users.length > 1
+          ? 'people-outline'
+          : 'person-outline';
   const teamChipOn = teamId != null;
-  const executorChipOn = executor != null;
+  const executorChipOn = recipient != null;
 
   const priorityChipLabel = useMemo(
     () => PRIORITY_OPTIONS.find((o) => o.value === priority)?.label ?? 'Приоритет',
@@ -456,6 +469,11 @@ export function TaskAddSheet({
     }
 
     setSaving(true);
+    // Компания или отдел целиком — задача уйдёт всем сотрудникам: спрашиваем явно.
+    if (!(await confirmMassAssignment(massAssignmentConfirmText(recipient)))) {
+      setSaving(false);
+      return;
+    }
     const scheduledAtIso =
       effDate != null && effDate !== '' ? toUtcIsoFromAppDateTime(effDate, effTime) : null;
     const created = await addTask(
@@ -465,8 +483,7 @@ export function TaskAddSheet({
       remindBeforeMinutes,
       {
         team_id: teamId,
-        executor_id: executor?.id ?? null,
-        executor,
+        recipient,
       },
       priority,
       recurrenceDraft,
@@ -490,7 +507,7 @@ export function TaskAddSheet({
     addTask,
     onClose,
     teamId,
-    executor,
+    recipient,
     allowEmptyTitleFromNlp,
     recurrenceDraft,
     createInInbox,
@@ -677,7 +694,7 @@ export function TaskAddSheet({
                         ]}
                       >
                         <MaterialIcons
-                          name="person-outline"
+                          name={executorChipIcon}
                           size={18}
                           color={executorChipOn ? primary : headerSubtitle}
                         />
@@ -819,13 +836,12 @@ export function TaskAddSheet({
             selectedTeamId={teamId}
             onSelect={handleSelectTeam}
           />
-          <TaskExecutorPickerOverlay
+          <TaskRecipientPickerOverlay
             visible={subModal === 'executor'}
             onClose={closeSub}
-            teamScope={false}
-            team={null}
-            selectedExecutor={executor}
-            onSelect={handleSelectExecutor}
+            currentUserId={currentUserId}
+            value={recipient}
+            onConfirm={handleSelectRecipient}
           />
 
           {subModal === 'priority' && (
