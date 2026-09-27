@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { FontSizes, LineHeights, Radius, Spacing } from '@/constants/theme';
@@ -16,6 +16,9 @@ export interface CommentPalette {
   text: string;
   textMuted: string;
   primary: string;
+  onPrimary: string;
+  danger: string;
+  background: string;
   card: string;
   border: string;
   ownCard: string;
@@ -26,16 +29,33 @@ interface CommentItemProps {
   /** Свой комментарий: выделяется фоном. */
   own: boolean;
   palette: CommentPalette;
+  /** Идёт правка или удаление этого комментария. */
+  changing?: 'edit' | 'delete' | null;
+  /** Действия со своим комментарием — долгим нажатием; нет, если менять его нельзя. */
+  onActions?: (comment: TaskComment) => void;
 }
 
+const CHANGING_LABEL = { edit: 'сохраняется…', delete: 'удаляется…' } as const;
+
 /** Комментарий ленты задачи: автор, текст с упоминаниями, дата, время и метка «изменено». */
-export const CommentItem = memo(function CommentItem({ comment, own, palette }: CommentItemProps) {
+export const CommentItem = memo(function CommentItem({ comment, own, palette, changing = null, onActions }: CommentItemProps) {
   const moment = formatCommentMoment(comment.created_at);
   const deleted = comment.deleted_at !== null || comment.text === null;
   const edited = !deleted && comment.edited_at !== null;
+  const meta = [moment, edited ? 'изменено' : null, changing ? CHANGING_LABEL[changing] : null].filter(Boolean).join(' · ');
+  const actionable = onActions !== undefined && changing === null;
 
   return (
-    <View style={styles.row} accessible accessibilityLabel={commentAccessibilityLabel(comment, moment)}>
+    <Pressable
+      style={styles.row}
+      onLongPress={actionable ? () => onActions?.(comment) : undefined}
+      delayLongPress={350}
+      accessible
+      accessibilityLabel={commentAccessibilityLabel(comment, moment)}
+      accessibilityHint={actionable ? 'Удерживайте, чтобы изменить или удалить' : undefined}
+      accessibilityActions={actionable ? [{ name: 'longpress', label: 'Изменить или удалить' }] : undefined}
+      onAccessibilityAction={actionable ? () => onActions?.(comment) : undefined}
+    >
       <View style={[styles.avatar, { backgroundColor: palette.card }]}>
         <ThemedText style={[styles.avatarText, { color: palette.primary }]}>
           {authorInitial(comment.author.full_name)}
@@ -71,11 +91,9 @@ export const CommentItem = memo(function CommentItem({ comment, own, palette }: 
             </Text>
           </View>
         )}
-        <ThemedText style={[styles.meta, { color: palette.textMuted }]}>
-          {edited ? `${moment} · изменено` : moment}
-        </ThemedText>
+        <ThemedText style={[styles.meta, { color: palette.textMuted }]}>{meta}</ThemedText>
       </View>
-    </View>
+    </Pressable>
   );
 });
 

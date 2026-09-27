@@ -5,6 +5,7 @@ import {
   toAppDateKey,
 } from '@/lib/dateTimeUtils';
 
+import type { TaskCommentFailure } from './errors';
 import type { TaskComment, TaskCommentMention } from './types';
 
 export interface TextSegment {
@@ -52,4 +53,12 @@ export function commentAccessibilityLabel(comment: TaskComment, moment: string):
   const when = comment.edited_at && comment.deleted_at === null ? `${moment}, изменено` : moment;
   const body = comment.deleted_at !== null || comment.text === null ? 'комментарий удалён' : comment.text;
   return `${comment.author.full_name}, ${when}: ${body}`;
+}
+
+/**
+ * Почему запись не прошла, словами для человека: ошибки полей точнее общего текста — например,
+ * «Имя изменилось: выберите человека заново» вместо «Упоминание недоступно».
+ */
+export function failureText(failure: TaskCommentFailure): string {
+  return failure.details.length ? failure.details.map((detail) => detail.message).join('. ') : failure.message;
 }

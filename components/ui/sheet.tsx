@@ -169,12 +169,17 @@ export function Sheet({
       onRequestClose={onClose}
       testID={testID}
     >
-      <Pressable
-        style={styles.backdrop}
-        onPress={dismissOnBackdropPress ? onClose : undefined}
-        accessibilityRole="button"
-        accessibilityLabel="Закрыть"
-      >
+      <View style={styles.backdrop}>
+        {/*
+          Затемнение — отдельный слой под панелью, а не обёртка: иначе панель оказывается внутри
+          кнопки «Закрыть», и её кнопки не видны экранному диктору (а на вебе — вложенные <button>).
+        */}
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={dismissOnBackdropPress ? onClose : undefined}
+          accessibilityRole="button"
+          accessibilityLabel="Закрыть"
+        />
         {avoidKeyboard ? (
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -189,7 +194,7 @@ export function Sheet({
         ) : (
           Body
         )}
-      </Pressable>
+      </View>
     </Modal>
   );
 }

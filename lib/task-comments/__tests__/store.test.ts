@@ -450,6 +450,30 @@ describe('editing and deleting', () => {
   });
 });
 
+describe('the draft of a new message', () => {
+  it('keeps the unsent text of each task until it is emptied, and forgets all of it with the user', () => {
+    const { auth, comments } = setup();
+    comments.setDraft(1, { text: 'Привет, @Анна', mentions: [{ user_id: 4, start: 8, end: 13 }] });
+    comments.setDraft(2, draft('Другая задача'));
+    assert.deepEqual(comments.store.getState().drafts[1], {
+      text: 'Привет, @Анна',
+      mentions: [{ user_id: 4, start: 8, end: 13 }],
+    });
+    comments.setDraft(2, draft(''));
+    assert.deepEqual(Object.keys(comments.store.getState().drafts), ['1']);
+
+    auth.signIn('8');
+    assert.deepEqual(comments.store.getState().drafts, {});
+  });
+
+  it('keeps no draft without a signed-in user', () => {
+    const { auth, comments } = setup();
+    auth.signIn(null);
+    comments.setDraft(1, draft('Привет'));
+    assert.deepEqual(comments.store.getState().drafts, {});
+  });
+});
+
 describe('the session', () => {
   it('forgets everything and ignores answers of the previous user when the user changes', async () => {
     const { server, auth, comments, feed, open } = setup({ honorAbort: false });

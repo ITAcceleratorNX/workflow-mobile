@@ -6,11 +6,12 @@ import { formatTaskTime } from '@/lib/dateTimeUtils';
 import {
   authorInitial,
   commentAccessibilityLabel,
+  failureText,
   formatCommentMoment,
   mentionSegments,
 } from '../presentation';
 import type { TaskCommentMention } from '../types';
-import { comment, tombstone } from './fakes';
+import { comment, serverFailure, tombstone } from './fakes';
 
 // Устройство в UTC: подписи дней обязаны считаться по Asia/Almaty, а не по часам устройства.
 process.env.TZ = 'UTC';
@@ -103,5 +104,17 @@ describe('author and screen reader', () => {
     const edited = comment(1, { text: 'Готово', edited_at: '2026-09-26T09:00:00Z' });
     assert.equal(commentAccessibilityLabel(edited, 'Сегодня, 14:00'), 'Иванов Иван, Сегодня, 14:00, изменено: Готово');
     assert.equal(commentAccessibilityLabel(tombstone(edited), 'Сегодня, 14:00'), 'Иванов Иван, Сегодня, 14:00: комментарий удалён');
+  });
+});
+
+describe('why a write failed', () => {
+  it('prefers the field errors to the general message', () => {
+    const refused = serverFailure(409, 'MENTION_NOT_AVAILABLE', 'Упоминание недоступно');
+    assert.equal(failureText(refused), 'Упоминание недоступно');
+    refused.details = [
+      { field: 'mentions.0', message: 'Имя изменилось: выберите человека заново' },
+      { field: 'mentions.2', message: 'Нельзя упомянуть себя' },
+    ];
+    assert.equal(failureText(refused), 'Имя изменилось: выберите человека заново. Нельзя упомянуть себя');
   });
 });

@@ -88,6 +88,8 @@ export interface CommentSession {
 
 export interface TaskCommentsState {
   feeds: Record<number, TaskCommentsFeed>;
+  /** Недописанное новое сообщение по задачам: переживает ошибки, закрытие карточки и потерю прав. */
+  drafts: Record<number, CommentDraft>;
 }
 
 export interface TaskComments {
@@ -102,6 +104,8 @@ export interface TaskComments {
   retry(taskId: number, localId: string): Promise<WriteOutcome>;
   /** Убрать неотправленное; возвращает его текст, чтобы вернуть в поле ввода. */
   discard(taskId: number, localId: string): CommentDraft | null;
+  /** Запомнить недописанное сообщение; пустое — забыть. */
+  setDraft(taskId: number, draft: CommentDraft): void;
   edit(taskId: number, commentId: string, draft: CommentDraft): Promise<WriteOutcome>;
   remove(taskId: number, commentId: string): Promise<WriteOutcome>;
 }
@@ -162,7 +166,7 @@ export function createTaskComments({
   limits = {},
 }: TaskCommentsOptions): TaskComments {
   const { pageSize = PAGE_SIZE, maxLoaded = MAX_LOADED, maxCachedTasks = MAX_CACHED_TASKS } = limits;
-  const store = createStore<TaskCommentsState>(() => ({ feeds: {} }));
+  const store = createStore<TaskCommentsState>(() => ({ feeds: {}, drafts: {} }));
 
   let owner = session.current();
   /** Растёт при смене сессии: записи прежней сессии не применяют свои ответы. */
@@ -518,7 +522,7 @@ export function createTaskComments({
     sends.clear();
     changes.clear();
     recency.length = 0;
-    store.setState({ feeds: {} });
+    store.setState({ feeds: {}, drafts: {} });
   }
 
   session.subscribe(() => {
@@ -547,5 +551,13 @@ export function createTaskComments({
     };
   }
 
-  return { store, retain, refresh, loadOlder, send, retry, discard, edit, remove };
+  function setDraft(taskId: number, draft: CommentDraft): void {
+    if (owner === null) return;
+    store.setState((state) => {
+      const { [taskId]: _previous, ...others } = state.drafts;
+      return { drafts: draft.text === '' ? others : { ...others, [taskId]: copyDraft(draft) } };
+    });
+  }
+
+  return { store, retain, refresh, loadOlder, send, retry, discard, setDraft, edit, remove };
 }

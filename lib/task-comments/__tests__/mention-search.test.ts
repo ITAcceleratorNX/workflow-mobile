@@ -126,15 +126,22 @@ describe('mention candidates search', () => {
     assert.equal(search.getState().loading, false);
   });
 
-  it('cancels the wait and the request when the picker closes', () => {
-    const { server, clock, search } = setup();
+  it('cancels the wait and the request when the picker closes, and searches again when it opens', async () => {
+    const { server, clock, search } = setup({ honorAbort: false });
     search.search('а');
     clock.advance(300);
+    const early = server.next('searchMentionCandidates');
     search.search('аб');
-    search.dispose();
-    assert.equal(server.calls[0].signal?.aborted, true);
+    search.reset();
+    assert.equal(early.signal?.aborted, true);
     assert.equal(clock.scheduled(), 0);
+    assert.deepEqual(search.getState(), { query: '', items: [], hasMore: false, loading: false, failure: null });
+    await early.answer(candidates([person(1, 'Абаев Арман')]));
+    assert.deepEqual(search.getState().items, [], 'a late answer after closing lands nowhere');
+
+    search.search('аб');
     clock.advance(300);
-    assert.equal(server.calls.length, 1);
+    await server.next('searchMentionCandidates').answer(candidates([person(1, 'Абаев Арман')]));
+    assert.deepEqual(search.getState().items, [person(1, 'Абаев Арман')]);
   });
 });

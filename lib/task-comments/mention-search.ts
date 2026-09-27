@@ -33,8 +33,8 @@ export interface MentionSearch {
   /** Искать `query` после паузы в наборе. Прежний поиск отменяется, его ответ не применяется. */
   search(query: string): void;
   loadMore(): void;
-  /** Экран закрыт: отменить всё. */
-  dispose(): void;
+  /** Список закрыт: отменить ожидание и запрос, забыть найденное. Поиск можно начать заново. */
+  reset(): void;
 }
 
 /**
@@ -54,7 +54,8 @@ export function createMentionSearch({
   pageSize?: number;
   timers?: Timers;
 }): MentionSearch {
-  let state: MentionSearchState = { query: '', items: [], hasMore: false, loading: false, failure: null };
+  const initial: MentionSearchState = { query: '', items: [], hasMore: false, loading: false, failure: null };
+  let state = initial;
   /** Запрос, чьи кандидаты показаны или ищутся; null — поиска ещё не было. */
   let searched: string | null = null;
   let cursor: string | null = null;
@@ -62,7 +63,6 @@ export function createMentionSearch({
   let controller: AbortController | null = null;
   /** Номер последнего запроса: ответы более ранних не применяются. */
   let latest = 0;
-  let disposed = false;
   const listeners = new Set<() => void>();
 
   function set(next: Partial<MentionSearchState>): void {
@@ -82,7 +82,7 @@ export function createMentionSearch({
     const request = ++latest;
     controller = new AbortController();
     void api.searchMentionCandidates(taskId, { q: query, limit: pageSize, cursor: after }, controller.signal).then((result) => {
-      if (disposed || request !== latest) return;
+      if (request !== latest) return;
       controller = null;
       if (!result.ok) {
         set({ loading: false, failure: result.failure });
@@ -113,7 +113,6 @@ export function createMentionSearch({
     },
 
     search(input) {
-      if (disposed) return;
       const query = input.trim();
       if (query === searched && !state.failure) return;
       stop();
@@ -132,15 +131,16 @@ export function createMentionSearch({
     },
 
     loadMore() {
-      if (disposed || state.loading || cursor === null) return;
+      if (state.loading || cursor === null) return;
       set({ loading: true, failure: null });
       run(state.query, cursor);
     },
 
-    dispose() {
-      disposed = true;
+    reset() {
       stop();
-      listeners.clear();
+      searched = null;
+      cursor = null;
+      if (state !== initial) set(initial);
     },
   };
 }
