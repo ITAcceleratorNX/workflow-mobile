@@ -27,6 +27,7 @@ import {
   TaskExecutorPickerOverlay,
   TaskTeamPickerOverlay,
 } from '@/components/tasks/task-assignment-pickers';
+import { GroupTaskDetails } from '@/components/tasks/GroupTaskDetails';
 import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -58,6 +59,7 @@ import {
   getUserTaskAttachments,
   uploadUserTaskAttachments,
 } from '@/lib/user-tasks-api';
+import { groupToggleBlockedReason, isGroupTask } from '@/lib/group-task-completion';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -137,6 +139,7 @@ export default function TaskDetailsScreen() {
 
   const { tasks, updateTask, removeTask, toggleComplete } = useTodoList({ filter: 'all', enabled: false });
   const tasksInvalidateVersion = useUserTasksInvalidateStore((s) => s.version);
+  const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
 
   const [fetchedTask, setFetchedTask] = useState<UserTask | null>(null);
   const [loadingTask, setLoadingTask] = useState(false);
@@ -674,6 +677,8 @@ export default function TaskDetailsScreen() {
   const scheduledPrimaryLine = task.scheduled_at
     ? `${scheduledDateLabel} · ${scheduledTimeLabel}`
     : 'Без срока';
+  const groupTask = isGroupTask(task);
+  const completeBlockedReason = groupToggleBlockedReason(task);
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
@@ -873,6 +878,10 @@ export default function TaskDetailsScreen() {
 
         <View style={{ height: 16 }} />
 
+        {groupTask ? (
+          <GroupTaskDetails task={task} currentUserId={currentUserId} onChanged={bumpTasks} />
+        ) : (
+        <>
         <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Организация</ThemedText>
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
           {!isGuest ? (
@@ -950,6 +959,8 @@ export default function TaskDetailsScreen() {
             </>
           ) : null}
         </View>
+        </>
+        )}
 
         <View style={{ height: 16 }} />
 
@@ -1081,10 +1092,16 @@ export default function TaskDetailsScreen() {
               <Switch
                 value={task.completed}
                 onValueChange={() => void handleCompleteSwitch()}
+                disabled={completeBlockedReason != null}
                 {...detailSwitchProps}
               />
             </View>
           </View>
+          {completeBlockedReason ? (
+            <View style={[styles.remindersHintWrap, { borderColor: border }]}>
+              <ThemedText style={[styles.remindersHint, { color: textMuted }]}>{completeBlockedReason}</ThemedText>
+            </View>
+          ) : null}
           <View style={[styles.divider, { backgroundColor: border }]} />
           <Pressable
             disabled={!canEditDetails}

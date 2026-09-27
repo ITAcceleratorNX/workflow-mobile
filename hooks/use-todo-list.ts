@@ -11,6 +11,8 @@ import {
   type TaskListView,
 } from '@/lib/user-tasks-api';
 import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
+import { confirmGroupTaskToggle } from '@/lib/group-task-completion';
+import { toAssignmentInput, type RecipientSelection } from '@/lib/task-recipients-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useToast } from '@/context/toast-context';
@@ -220,6 +222,8 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         team_id?: number | null;
         executor_id?: number | null;
         executor?: { id: number; full_name: string } | null;
+        /** Получатель из поля «Исполнитель» (компания / отдел / сотрудники). */
+        recipient?: RecipientSelection | null;
       },
       priority: TaskPriority = 'medium',
       recurrence?: TaskRecurrencePayload,
@@ -235,8 +239,17 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         return null;
       }
       const optimisticId = nextTempId();
-      const executorId = assignment?.executor_id ?? assignment?.executor?.id ?? null;
-      const executor = assignment?.executor ?? null;
+      const recipient = assignment?.recipient ?? null;
+      const groupInput = recipient ? toAssignmentInput(recipient) : null;
+      const singleUser =
+        recipient?.type === 'legacy_user'
+          ? recipient.user
+          : recipient?.type === 'users' && recipient.users.length === 1
+            ? recipient.users[0]
+            : null;
+      const executor = singleUser ?? assignment?.executor ?? null;
+      const executorId = singleUser?.id ?? assignment?.executor_id ?? assignment?.executor?.id ?? null;
+      const groupType = groupInput && !singleUser ? groupInput.type : null;
       const rec = recurrence ?? defaultRecurrenceNone();
       const inboxFlag = options?.inbox === true;
       const optimistic: UserTask = {
@@ -265,6 +278,13 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         team_id: assignment?.team_id ?? null,
         executor_id: executorId,
         executor: executor ?? undefined,
+        assignment_type: groupType,
+        targetCompany: groupType === 'company' && recipient?.type === 'company' ? recipient.company : null,
+        targetDepartment:
+          groupType === 'department' && recipient?.type === 'department'
+            ? { ...recipient.department, company_id: recipient.company.id, company: recipient.company }
+            : null,
+        targetUsers: groupType === 'users' && recipient?.type === 'users' ? recipient.users : [],
       };
 
       const before = tasksRef.current;
@@ -280,8 +300,10 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         priority,
         reminders_disabled: remindersDisabled,
         remind_before_minutes: remindBeforeMinutes ?? null,
-        team_id: assignment?.team_id ?? null,
-        executor_id: executorId,
+        // Получатель из оргструктуры сервер проверяет заново; team/executor при этом не передаём.
+        ...(groupInput
+          ? { assignment: groupInput }
+          : { team_id: assignment?.team_id ?? null, executor_id: executorId }),
         recurrence_type: rec.recurrence_type,
         recurrence_interval: rec.recurrence_interval,
         recurrence_custom_unit: rec.recurrence_custom_unit,
@@ -315,6 +337,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         });
         return;
       }
+      if (!(await confirmGroupTaskToggle(task))) return;
       const before = tasksRef.current;
       const nextCompleted = !task.completed;
       setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, completed: nextCompleted } : t)));

@@ -2,10 +2,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import type { TaskExecutorRef, TaskTeamRef } from '@/lib/user-tasks-api';
+import type { GroupTaskFields, TaskExecutorRef, TaskTeamRef } from '@/lib/user-tasks-api';
 
 /** Минимум полей для бейджей (списки, календарь, детали). */
-export type TaskBadgeSource = {
+export type TaskBadgeSource = Pick<
+  GroupTaskFields,
+  'assignment_type' | 'targetCompany' | 'targetDepartment' | 'targetUsers' | 'responsible'
+> & {
   team_id?: number | null;
   executor_id?: number | null;
   team?: TaskTeamRef | null;
@@ -21,6 +24,16 @@ export type TaskAssignmentBadgesProps = {
   compact?: boolean;
 };
 
+function groupBadge(task: TaskBadgeSource): { icon: keyof typeof MaterialIcons.glyphMap; label: string } | null {
+  if (task.assignment_type === 'company') return { icon: 'business', label: task.targetCompany?.name ?? 'Компания' };
+  if (task.assignment_type === 'department') return { icon: 'apartment', label: task.targetDepartment?.name ?? 'Отдел' };
+  if (task.assignment_type === 'users') {
+    const count = task.targetUsers?.length ?? 0;
+    return { icon: 'people', label: count ? `Сотрудники: ${count}` : 'Сотрудники' };
+  }
+  return null;
+}
+
 /** Бейджи команды и исполнителей для списков, календаря и деталей. */
 export function TaskAssignmentBadges({
   task,
@@ -28,6 +41,33 @@ export function TaskAssignmentBadges({
   currentUserId,
   compact,
 }: TaskAssignmentBadgesProps) {
+  const group = groupBadge(task);
+  if (group) {
+    const responsible = task.responsible?.full_name
+      ? currentUserId != null && task.responsible.id === currentUserId
+        ? 'Вы'
+        : task.responsible.full_name
+      : null;
+    return (
+      <View style={[styles.wrap, compact && styles.wrapCompact]}>
+        <View style={[styles.pill, styles.pillOutline, { borderColor: primary }]}>
+          <MaterialIcons name={group.icon} size={compact ? 11 : 12} color={primary} />
+          <ThemedText style={[styles.pillText, { color: primary }]} numberOfLines={1}>
+            {group.label}
+          </ThemedText>
+        </View>
+        {responsible ? (
+          <View style={[styles.pill, styles.pillOutline, { borderColor: primary, backgroundColor: `${primary}18` }]}>
+            <MaterialIcons name="verified-user" size={compact ? 11 : 12} color={primary} />
+            <ThemedText style={[styles.pillText, { color: primary }]} numberOfLines={1}>
+              {responsible}
+            </ThemedText>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
   const teamName = task.team_id && task.team?.name ? task.team.name : null;
   const executorName =
     !teamName && task.executor_id && task.executor?.full_name ? task.executor.full_name : null;
