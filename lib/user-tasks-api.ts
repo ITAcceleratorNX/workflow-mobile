@@ -2,6 +2,7 @@ import { request } from './api';
 
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
+import type { TaskAssignmentInput } from '@/lib/task-recipients-api';
 import {
   normalizeRecurrenceFromApi,
   type RecurrenceCustomUnit,
@@ -23,7 +24,38 @@ export interface TaskExecutorRef {
   full_name: string;
 }
 
-export interface UserTask {
+/** Групповое назначение через оргструктуру; null — личная задача, исполнитель или команда. */
+export type TaskAssignmentType = 'company' | 'department' | 'users';
+
+/** Права текущего пользователя в групповой задаче (приходят с API только для групповых). */
+export interface GroupTaskPermissions {
+  can_complete: boolean;
+  can_reopen: boolean;
+  can_manage_responsible: boolean;
+  can_take_responsibility: boolean;
+}
+
+/** Поля групповой задачи: получатель, ответственный и права. */
+export interface GroupTaskFields {
+  assignment_type?: TaskAssignmentType | null;
+  target_company_id?: number | null;
+  target_department_id?: number | null;
+  targetCompany?: { id: number; name: string } | null;
+  targetDepartment?: {
+    id: number;
+    name: string;
+    company_id: number;
+    company?: { id: number; name: string } | null;
+  } | null;
+  targetUsers?: TaskExecutorRef[];
+  responsible_id?: number | null;
+  responsible?: TaskExecutorRef | null;
+  group_permissions?: GroupTaskPermissions | null;
+  /** Только в карточке задачи (GET /user-tasks/:id). */
+  participants_count?: number;
+}
+
+export interface UserTask extends GroupTaskFields {
   id: number;
   creator_id: number;
   title: string;
@@ -98,7 +130,7 @@ export interface UserTaskAttachment {
   created_at: string;
 }
 
-export interface CalendarTask {
+export interface CalendarTask extends GroupTaskFields {
   id: number;
   title: string;
   scheduled_at: string;
@@ -215,6 +247,8 @@ export async function createUserTask(body: {
   recurrence_custom_unit?: RecurrenceCustomUnit | null;
   recurrence_weekdays?: number[] | null;
   inbox?: boolean;
+  /** Компания / отдел / сотрудники одной компании из поля «Исполнитель». */
+  assignment?: TaskAssignmentInput;
 }): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
   const result = await request<{ task: UserTask }>('/user-tasks', {
     method: 'POST',
