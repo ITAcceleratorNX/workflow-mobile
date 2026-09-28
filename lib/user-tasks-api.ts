@@ -22,6 +22,8 @@ export interface TaskTeamRef {
 export interface TaskExecutorRef {
   id: number;
   full_name: string;
+  /** Текущая должность сотрудника (в карточке задачи); null — не указана. */
+  position?: string | null;
 }
 
 /** Групповое назначение через оргструктуру; null — личная задача, исполнитель или команда. */
@@ -73,6 +75,8 @@ export interface GroupTaskFields {
 export interface UserTask extends GroupTaskFields {
   id: number;
   creator_id: number;
+  /** Автор с должностью; у старого backend поля нет. */
+  creator?: TaskExecutorRef | null;
   title: string;
   completed: boolean;
   completed_at: string | null;
@@ -92,7 +96,7 @@ export interface UserTask extends GroupTaskFields {
   updated_at: string;
   assignee_ids: number[];
   /** Исполнители с именами (приходит с API при list/getById/create/update) */
-  assignees?: { id: number; full_name: string }[];
+  assignees?: TaskExecutorRef[];
   /** Вложения (приходит с /attachments или может быть подмешано на клиенте) */
   attachments?: UserTaskAttachment[];
   team_id?: number | null;

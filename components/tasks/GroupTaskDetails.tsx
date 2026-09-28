@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { TaskPersonRow } from '@/components/tasks/TaskPersonRow';
 import { ThemedText } from '@/components/themed-text';
 import { useToast } from '@/context/toast-context';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -52,6 +53,12 @@ export function GroupTaskDetails({ task, currentUserId, onChanged }: Props) {
     <>
       <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Групповая задача</ThemedText>
       <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
+        {task.creator && task.creator.id !== currentUserId ? (
+          <>
+            <TaskPersonRow icon="assignment-ind" title="Автор" person={task.creator} />
+            <View style={[styles.divider, { backgroundColor: border }]} />
+          </>
+        ) : null}
         <View style={styles.row}>
           <View style={styles.rowLeft}>
             <MaterialIcons
@@ -72,30 +79,18 @@ export function GroupTaskDetails({ task, currentUserId, onChanged }: Props) {
           </ThemedText>
         </View>
         <View style={[styles.divider, { backgroundColor: border }]} />
-        <Pressable
-          disabled={!canOpenResponsible}
+        <TaskPersonRow
+          icon="verified-user"
+          title="Ответственный"
+          person={task.responsible}
+          emptyLabel="Не назначен"
           onPress={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             setSheetOpen(true);
           }}
-          style={({ pressed }) => [styles.row, pressed && canOpenResponsible && { opacity: 0.65 }]}
-          accessibilityRole="button"
-          accessibilityLabel="Ответственный"
-        >
-          <View style={styles.rowLeft}>
-            <MaterialIcons name="verified-user" size={20} color={textMuted} />
-            <ThemedText style={[styles.rowTitle, { color: text }]}>Ответственный</ThemedText>
-          </View>
-          <View style={styles.rowRight}>
-            <ThemedText
-              style={[styles.rowValue, { color: responsibleName ? text : textMuted, flexShrink: 1 }]}
-              numberOfLines={1}
-            >
-              {responsibleName ?? 'Не назначен'}
-            </ThemedText>
-            {canOpenResponsible ? <MaterialIcons name="chevron-right" size={22} color={textMuted} /> : null}
-          </View>
-        </Pressable>
+          actionable={canOpenResponsible}
+          disabled={!canOpenResponsible}
+        />
         {task.completed && completedBy?.full_name ? (
           <>
             <View style={[styles.divider, { backgroundColor: border }]} />
@@ -255,7 +250,7 @@ function ResponsibleSheetBody({ task, currentUserId, onClose, onApply }: SheetPr
                 <TextInput
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Участник задачи"
+                  placeholder="ФИО или должность участника"
                   placeholderTextColor={textMuted}
                   style={[styles.searchInput, { color: text }]}
                   autoCorrect={false}
@@ -323,14 +318,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     flexShrink: 0,
-  },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flex: 1,
-    justifyContent: 'flex-end',
-    minWidth: 0,
   },
   rowTitle: { fontSize: 15, fontWeight: '600' },
   rowValue: { fontSize: 13 },

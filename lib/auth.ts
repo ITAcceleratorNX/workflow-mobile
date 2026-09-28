@@ -31,6 +31,9 @@ export interface User {
   /** company_id заполнен только у клиентов; null/undefined — компания «Не указана». */
   company_id?: number | null;
   company?: { id: number; name: string } | null;
+  department?: { id: number; name: string } | null;
+  /** Должность — сотрудник указывает сам в профиле; null — не указана. На права не влияет. */
+  position?: string | null;
 }
 
 export async function loginWithPhone(

@@ -25,6 +25,7 @@ import { TaskCommentsList } from '@/components/task-comments/task-comments-list'
 import { TaskTeamPickerOverlay } from '@/components/tasks/task-assignment-pickers';
 import { GroupTaskDetails } from '@/components/tasks/GroupTaskDetails';
 import { TaskHistorySection } from '@/components/tasks/TaskHistorySection';
+import { TaskPersonRow } from '@/components/tasks/TaskPersonRow';
 import { TaskRecipientPickerOverlay } from '@/components/tasks/TaskRecipientPickerOverlay';
 import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
 import { ThemedText } from '@/components/themed-text';
@@ -47,6 +48,7 @@ import {
 } from '@/lib/task-recurrence';
 import {
   canEditUserTaskDetails,
+  type TaskExecutorRef,
   type TaskPriority,
   type UserTask,
   type UserTaskAttachment,
@@ -80,12 +82,12 @@ function isoForDateTime(dateKey: string, time: string) {
 
 const TITLE_SAVE_DEBOUNCE_MS = 450;
 
-function getExecutorFromTask(t: UserTask): { id: number; full_name: string } | null {
+function getExecutorFromTask(t: UserTask): TaskExecutorRef | null {
   if (t.executor_id && t.executor?.full_name) {
-    return { id: t.executor_id, full_name: t.executor.full_name };
+    return { id: t.executor_id, full_name: t.executor.full_name, position: t.executor.position };
   }
   if (t.assignees && t.assignees.length > 0) {
-    return { id: t.assignees[0].id, full_name: t.assignees[0].full_name };
+    return t.assignees[0];
   }
   if (t.assignee_ids?.length) {
     const id = t.assignee_ids[0];
@@ -554,8 +556,6 @@ export default function TaskDetailsScreen() {
     [task]
   );
 
-  const executorRowSummary = useMemo(() => effectiveExecutor?.full_name ?? '—', [effectiveExecutor]);
-
   const completedByName = useMemo(() => {
     if (!task?.completed) return null;
     const u = task.completed_by_user ?? task.completedByUser;
@@ -905,6 +905,12 @@ export default function TaskDetailsScreen() {
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
           {!isGuest ? (
             <>
+              {task.creator && task.creator.id !== currentUserId ? (
+                <>
+                  <TaskPersonRow icon="assignment-ind" title="Автор" person={task.creator} />
+                  <View style={[styles.divider, { backgroundColor: border }]} />
+                </>
+              ) : null}
               <Pressable
                 onPress={() => {
                   if (!canEditDetails) {
@@ -933,27 +939,13 @@ export default function TaskDetailsScreen() {
                 </View>
               </Pressable>
               <View style={[styles.divider, { backgroundColor: border }]} />
-              <Pressable
+              <TaskPersonRow
+                icon="person-outline"
+                title="Исполнитель"
+                person={effectiveExecutor}
                 onPress={onExecutorRowPress}
-                style={({ pressed }) => [
-                  styles.row,
-                  pressed && canTransfer && styles.rowPressablePressed,
-                  !canTransfer && { opacity: 0.85 },
-                ]}
-              >
-                <View style={styles.rowLeft}>
-                  <MaterialIcons name="person-outline" size={20} color={textMuted} />
-                  <ThemedText style={[styles.rowTitle, { color: text }]}>Исполнитель</ThemedText>
-                </View>
-                <View style={styles.rowRight}>
-                  <ThemedText style={[styles.rowValue, { color: textMuted, flexShrink: 1 }]} numberOfLines={1}>
-                    {executorRowSummary}
-                  </ThemedText>
-                  {canTransfer ? (
-                    <MaterialIcons name="chevron-right" size={22} color={textMuted} />
-                  ) : null}
-                </View>
-              </Pressable>
+                actionable={canTransfer}
+              />
               {task.team_id && task.completed && completedByName ? (
                 <>
                   <View style={[styles.divider, { backgroundColor: border }]} />

@@ -23,12 +23,16 @@ import { useToast } from '@/context/toast-context';
 import {
   changePassword,
   sendEmailVerificationCode,
-  updateProfile,
+  updateOwnProfile,
   verifyEmail,
 } from '@/lib/profile-api';
 import { formatPhone } from '@/lib';
+import { POSITION_MAX_LENGTH, positionForSave } from '@/lib/employee-display';
 import { unregisterPushTokenFromBackend } from '@/lib/pushNotifications';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
+
+/** Правки профиля до «Сохранить»: «Отмена» их просто отбрасывает. */
+type ProfileDraft = { full_name: string; phone: string; position: string };
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -50,9 +54,9 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<ProfileTab>('profile');
 
   // Profile tab state
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
+  const isEditingProfile = profileDraft != null;
   const [profileError, setProfileError] = useState('');
-  const [profileSuccess, setProfileSuccess] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Email verification state
@@ -95,56 +99,68 @@ export default function ProfileScreen() {
     router.replace('/login');
   }, [router]);
 
-  const handlePhoneChange = useCallback(
-    (value: string) => {
-      const formatted = formatPhone(value);
-      updateUser((prev) => (prev ? { ...prev, phone: formatted } : null));
-    },
-    [updateUser]
-  );
-
-  const handleSaveProfile = useCallback(async (): Promise<boolean> => {
-    if (!user) return false;
+  const startEditingProfile = useCallback(() => {
+    if (!user) return;
     setProfileError('');
-    setProfileSuccess('');
-    if (!user.full_name || !user.phone) {
+    setProfileDraft({ full_name: user.full_name ?? '', phone: user.phone ?? '', position: user.position ?? '' });
+  }, [user]);
+
+  const cancelEditingProfile = useCallback(() => {
+    setProfileDraft(null);
+    setProfileError('');
+  }, []);
+
+  const handlePhoneChange = useCallback((value: string) => {
+    const formatted = formatPhone(value);
+    setProfileDraft((prev) => (prev ? { ...prev, phone: formatted } : prev));
+  }, []);
+
+  const handleSaveProfile = useCallback(async () => {
+    if (!profileDraft) return;
+    setProfileError('');
+    const next = {
+      full_name: profileDraft.full_name.trim(),
+      phone: profileDraft.phone,
+      position: positionForSave(profileDraft.position),
+    };
+    if (!next.full_name || !next.phone) {
       setProfileError('ФИО и Номер обязательны.');
-      return false;
+      return;
     }
 
     // Демо-профиль: не отправляем запросы на реальный backend
     if (isGuest) {
-      setProfileSuccess('Демо: профиль обновлён локально.');
+      updateUser(next);
+      setProfileDraft(null);
       showToast({
         title: 'Демо режим',
         description: 'Изменения сохранены только на этом устройстве.',
         variant: 'success',
       });
-      return true;
+      return;
     }
 
     setIsSavingProfile(true);
-    const result = await updateProfile(user.id, {
-      full_name: user.full_name,
-      phone: user.phone,
-    });
+    const result = await updateOwnProfile(next);
     setIsSavingProfile(false);
 
     if (!result.ok) {
       if (result.unauthorized) {
         handleUnauthorized();
-        return false;
+        return;
       }
       setProfileError(result.error);
-      return false;
+      return;
     }
-    setProfileSuccess('Профиль обновлён.');
+    // Профиль после сохранения: задачи и списки выбора читают должность с сервера сами.
+    const saved = result.data;
+    updateUser({ full_name: saved.full_name, phone: saved.phone, position: saved.position ?? null });
+    setProfileDraft(null);
     showToast({
       title: 'Профиль обновлён',
       variant: 'success',
     });
-    return true;
-  }, [user, handleUnauthorized, isGuest, showToast]);
+  }, [profileDraft, handleUnauthorized, isGuest, showToast, updateUser]);
 
   const handleSendVerificationCode = useCallback(async () => {
     const emailToSend = email || user?.email;
@@ -399,6 +415,15 @@ export default function ProfileScreen() {
                         </ThemedText>
                       </View>
                     ) : null}
+                    {user?.position ? (
+                      <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: border }]}>
+                        <MaterialIcons name="work-outline" size={22} color={textMuted} />
+                        <ThemedText style={[styles.infoLabel, { color: textMuted }]}>Должность</ThemedText>
+                        <ThemedText style={[styles.infoValue, { color: text }]} numberOfLines={2}>
+                          {user.position}
+                        </ThemedText>
+                      </View>
+                    ) : null}
                     <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
                       <MaterialIcons name="tag" size={22} color={textMuted} />
                       <ThemedText style={[styles.infoLabel, { color: textMuted }]}>ID</ThemedText>
@@ -409,7 +434,7 @@ export default function ProfileScreen() {
                   </View>
 
                   <Pressable
-                    onPress={() => setIsEditingProfile(true)}
+                    onPress={startEditingProfile}
                     style={({ pressed }) => [
                       styles.editButton,
                       { borderColor: primary },
@@ -432,7 +457,7 @@ export default function ProfileScreen() {
               )}
 
               {/* Режим редактирования */}
-              {isEditingProfile && (
+              {profileDraft && (
                 <>
                   <ThemedText style={styles.sectionTitle}>Редактирование профиля</ThemedText>
                   <ThemedText style={[styles.sectionSubtitle, { color: textMuted }]}>
@@ -441,20 +466,25 @@ export default function ProfileScreen() {
 
                   <TextInput
                     label="ФИО"
-                    value={user?.full_name ?? ''}
-                    onChangeText={(t) =>
-                      updateUser((prev) =>
-                        prev ? { ...prev, full_name: t } : null
-                      )
-                    }
+                    value={profileDraft.full_name}
+                    onChangeText={(t) => setProfileDraft((prev) => (prev ? { ...prev, full_name: t } : prev))}
                   />
                   <TextInput
                     label="Номер телефона"
                     placeholder="+7 XXX XXX XX XX"
-                    value={user?.phone ?? ''}
+                    value={profileDraft.phone}
                     onChangeText={handlePhoneChange}
                     keyboardType="phone-pad"
                     maxLength={19}
+                  />
+                  <TextInput
+                    label="Должность"
+                    placeholder="Например, Бухгалтер"
+                    value={profileDraft.position}
+                    onChangeText={(t) => setProfileDraft((prev) => (prev ? { ...prev, position: t } : prev))}
+                    maxLength={POSITION_MAX_LENGTH}
+                    autoCapitalize="sentences"
+                    helperText="Видна коллегам рядом с вашим именем и помогает найти вас при назначении задач. На права не влияет."
                   />
 
                     <View style={styles.field}>
@@ -582,11 +612,7 @@ export default function ProfileScreen() {
 
                   <View style={styles.editActions}>
                     <Pressable
-                      onPress={() => {
-                        setIsEditingProfile(false);
-                        setProfileError('');
-                        setProfileSuccess('');
-                      }}
+                      onPress={cancelEditingProfile}
                       style={({ pressed }) => [
                         styles.cancelButton,
                         { borderColor: border },
@@ -600,10 +626,7 @@ export default function ProfileScreen() {
                     <View style={styles.saveButtonWrap}>
                       <Button
                         title={isSavingProfile ? 'Сохранение...' : 'Сохранить'}
-                        onPress={async () => {
-                          const ok = await handleSaveProfile();
-                          if (ok) setIsEditingProfile(false);
-                        }}
+                        onPress={() => void handleSaveProfile()}
                         disabled={isSavingProfile}
                       />
                     </View>
@@ -611,11 +634,6 @@ export default function ProfileScreen() {
                   {profileError ? (
                     <ThemedText style={[styles.errorText, { color: errorColor }]}>
                       {profileError}
-                    </ThemedText>
-                  ) : null}
-                  {profileSuccess ? (
-                    <ThemedText style={[styles.successText, { color: success }]}>
-                      {profileSuccess}
                     </ThemedText>
                   ) : null}
                 </>

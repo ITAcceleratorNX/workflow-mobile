@@ -320,7 +320,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
             <TextInput
               value={leaderSearch}
               onChangeText={setLeaderSearch}
-              placeholder="Поиск по имени (от 2 символов)"
+              placeholder="ФИО или должность (от 2 символов)"
               placeholderTextColor={textMuted}
               style={[styles.input, { color: text }]}
               editable={canEditTeamMeta}

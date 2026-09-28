@@ -78,11 +78,18 @@ async function authRequest<T>(
   }
 }
 
-export async function updateProfile(
-  userId: number,
-  data: { full_name: string; phone: string }
-): Promise<ProfileApiResult<unknown>> {
-  return authRequest(`/users/${userId}`, {
+export interface OwnProfileInput {
+  full_name: string;
+  phone: string;
+  /** null — очистить должность. */
+  position: string | null;
+}
+
+/** Свой профиль любой роли: ФИО, телефон, должность. Ответ — профиль после сохранения. */
+export async function updateOwnProfile(
+  data: OwnProfileInput
+): Promise<ProfileApiResult<OwnProfileInput>> {
+  return authRequest<OwnProfileInput>('/users/me/profile', {
     method: 'PUT',
     body: JSON.stringify(data),
   });

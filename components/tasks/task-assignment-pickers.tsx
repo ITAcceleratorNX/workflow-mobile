@@ -321,7 +321,7 @@ export function TaskExecutorPickerOverlay({
                   <TextInput
                     value={search}
                     onChangeText={setSearch}
-                    placeholder="Имя или телефон (от 2 символов)"
+                    placeholder="ФИО, должность или телефон (от 2 символов)"
                     placeholderTextColor={textMuted}
                     style={[styles.searchInput, { color: headerText }]}
                   />
@@ -567,7 +567,7 @@ export function TaskAssigneesPickerOverlay({
                   <TextInput
                     value={search}
                     onChangeText={setSearch}
-                    placeholder="Имя или телефон (от 2 символов)"
+                    placeholder="ФИО, должность или телефон (от 2 символов)"
                     placeholderTextColor={textMuted}
                     style={[styles.searchInput, { color: headerText }]}
                   />

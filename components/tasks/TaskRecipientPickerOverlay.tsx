@@ -18,6 +18,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useTaskRecipients } from '@/hooks/use-task-recipients';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { employeeSubtitle, matchesEveryWord } from '@/lib/employee-display';
 import {
   recipientSelectionLabel,
   type RecipientCompany,
@@ -39,10 +40,6 @@ type Props = {
 };
 
 type Entry = { company: RecipientCompany; mine: boolean };
-
-function norm(s: string | null | undefined): string {
-  return (s ?? '').toLocaleLowerCase('ru').replace(/ё/g, 'е').trim();
-}
 
 function companyRef(c: RecipientCompany) {
   return { id: c.id, name: c.name };
@@ -331,9 +328,8 @@ function RecipientPicker({ onClose, currentUserId, value, onConfirm, title = 'И
   };
 
   const renderSearch = () => {
-    const q = norm(query);
     const out: ReactNode[] = [];
-    const companyHits = entries.filter((e) => norm(e.company.name).includes(q));
+    const companyHits = entries.filter((e) => matchesEveryWord(query, [e.company.name]));
     for (const e of companyHits) {
       out.push(
         e.company.whole
@@ -350,7 +346,7 @@ function RecipientPicker({ onClose, currentUserId, value, onConfirm, title = 'И
     }
     for (const e of entries) {
       for (const dp of e.company.departments) {
-        if (!norm(dp.name).includes(q)) continue;
+        if (!matchesEveryWord(query, [dp.name])) continue;
         out.push(
           renderRadioRow(
             `sd-${dp.id}`,
@@ -363,15 +359,18 @@ function RecipientPicker({ onClose, currentUserId, value, onConfirm, title = 'И
         );
       }
     }
+    // Сотрудник находится по ФИО или должности — только среди уже доступных получателей.
     let shown = 0;
     for (const e of entries) {
       const deptName = new Map(e.company.departments.map((dp) => [dp.id, dp.name]));
       for (const u of e.company.employees) {
         if (u.id === currentUserId || shown >= SEARCH_EMPLOYEES_LIMIT) continue;
-        if (!norm(u.full_name).includes(q)) continue;
+        if (!matchesEveryWord(query, [u.full_name, u.position])) continue;
         shown += 1;
         const dept = u.department_id == null ? 'Без отдела' : deptName.get(u.department_id);
-        out.push(renderUserRow(e.company, u, [e.company.name, dept].filter(Boolean).join(' · ')));
+        // Своя компания понятна из контекста; у внешнего сотрудника — «Компания · Отдел · Должность».
+        const company = e.mine ? null : e.company.name;
+        out.push(renderUserRow(e.company, u, employeeSubtitle([company, dept, u.position])));
       }
     }
     if (!out.length) {
@@ -457,7 +456,7 @@ function RecipientPicker({ onClose, currentUserId, value, onConfirm, title = 'И
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder="Компания, отдел или сотрудник"
+                placeholder="Компания, отдел, ФИО или должность"
                 placeholderTextColor={textMuted}
                 style={[styles.searchInput, { color: text }]}
                 autoCorrect={false}

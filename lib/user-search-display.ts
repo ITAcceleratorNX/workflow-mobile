@@ -1,19 +1,19 @@
 import type { UserSearchItem } from '@/lib/api';
+import { employeeSubtitle } from '@/lib/employee-display';
 
 const NO_COMPANY_LABEL = 'компания не указана';
 
-/** «Имя — Компания» или «Имя — компания не указана». */
-export function formatUserSearchLabel(user: Pick<UserSearchItem, 'full_name' | 'company'>): string {
-  const name = user.full_name?.trim() || 'Пользователь';
+type SearchedUser = Pick<UserSearchItem, 'full_name' | 'company' | 'department' | 'position'>;
+
+/** «Компания · Отдел · Должность»; без компании — «компания не указана · Должность». */
+export function formatUserSearchSubtitle(user: Omit<SearchedUser, 'full_name'>): string {
   const companyName = user.company?.name?.trim();
-  if (companyName) return `${name} — ${companyName}`;
-  return `${name} — ${NO_COMPANY_LABEL}`;
+  const context = companyName ? [companyName, user.department?.name] : [NO_COMPANY_LABEL];
+  return employeeSubtitle([...context, user.position]) ?? NO_COMPANY_LABEL;
 }
 
-/** Подпись компании для вторичной строки в списке. */
-export function formatUserSearchCompanySubtitle(
-  user: Pick<UserSearchItem, 'company'>
-): string {
-  const companyName = user.company?.name?.trim();
-  return companyName || NO_COMPANY_LABEL;
+/** «Имя — Компания · Отдел · Должность» или «Имя — компания не указана». */
+export function formatUserSearchLabel(user: SearchedUser): string {
+  const name = user.full_name?.trim() || 'Пользователь';
+  return `${name} — ${formatUserSearchSubtitle(user)}`;
 }
