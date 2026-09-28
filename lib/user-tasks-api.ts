@@ -2,7 +2,7 @@ import { request } from './api';
 
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
-import type { TaskAssignmentInput } from '@/lib/task-recipients-api';
+import type { TaskAssignmentInput, TaskTransferInput } from '@/lib/task-recipients-api';
 import {
   normalizeRecurrenceFromApi,
   type RecurrenceCustomUnit,
@@ -35,6 +35,19 @@ export interface GroupTaskPermissions {
   can_take_responsibility: boolean;
 }
 
+/**
+ * Права текущего пользователя в любой задаче. read_only — бывший участник после передачи:
+ * задача остаётся там же, где была, но менять её нельзя.
+ */
+export interface TaskPermissions {
+  can_complete: boolean;
+  can_reopen: boolean;
+  /** Уже учитывает, что выполненную задачу сначала возвращают в работу. */
+  can_transfer: boolean;
+  can_view_history: boolean;
+  read_only: boolean;
+}
+
 /** Поля групповой задачи: получатель, ответственный и права. */
 export interface GroupTaskFields {
   assignment_type?: TaskAssignmentType | null;
@@ -51,6 +64,8 @@ export interface GroupTaskFields {
   responsible_id?: number | null;
   responsible?: TaskExecutorRef | null;
   group_permissions?: GroupTaskPermissions | null;
+  /** Права в любой задаче (не только групповой); у старого backend поля нет. */
+  task_permissions?: TaskPermissions | null;
   /** Только в карточке задачи (GET /user-tasks/:id). */
   participants_count?: number;
 }
@@ -287,6 +302,22 @@ export async function updateUserTask(
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: unwrapTaskPayload(result.data) };
+}
+
+/**
+ * «Передать задачу»: та же задача (ID, поля, вложения, история) получает нового получателя.
+ * data: null — после передачи задача пользователю больше не видна.
+ */
+export async function transferUserTask(
+  id: number,
+  body: TaskTransferInput
+): Promise<{ ok: true; data: UserTask | null } | { ok: false; error: string }> {
+  const result = await request<{ task: UserTask | null }>(`/user-tasks/${id}/transfer`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data?.task ? unwrapTaskPayload(result.data) : null };
 }
 
 export async function deleteUserTask(

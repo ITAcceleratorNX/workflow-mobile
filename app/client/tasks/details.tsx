@@ -22,11 +22,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TaskCommentsList } from '@/components/task-comments/task-comments-list';
-import {
-  TaskExecutorPickerOverlay,
-  TaskTeamPickerOverlay,
-} from '@/components/tasks/task-assignment-pickers';
+import { TaskTeamPickerOverlay } from '@/components/tasks/task-assignment-pickers';
 import { GroupTaskDetails } from '@/components/tasks/GroupTaskDetails';
+import { TaskHistorySection } from '@/components/tasks/TaskHistorySection';
+import { TaskRecipientPickerOverlay } from '@/components/tasks/TaskRecipientPickerOverlay';
 import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -56,9 +55,16 @@ import {
   deleteUserTaskAttachment,
   getUserTask,
   getUserTaskAttachments,
+  transferUserTask,
   uploadUserTaskAttachments,
 } from '@/lib/user-tasks-api';
-import { groupToggleBlockedReason, isGroupTask } from '@/lib/group-task-completion';
+import {
+  confirmTaskTransfer,
+  isGroupTask,
+  isReadOnlyTask,
+  taskToggleBlockedReason,
+} from '@/lib/group-task-completion';
+import { toTransferInput, transferRecipientLabel, type RecipientSelection } from '@/lib/task-recipients-api';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -208,9 +214,8 @@ export default function TaskDetailsScreen() {
   const [remindTimingPickerOpen, setRemindTimingPickerOpen] = useState(false);
   const [remindTimingPickerDraft, setRemindTimingPickerDraft] = useState('default');
 
-  const [pickerSheet, setPickerSheet] = useState<'team' | 'executor' | null>(null);
-  const [executorDraft, setExecutorDraft] = useState<{ id: number; full_name: string } | null>(null);
-  const executorDraftRef = useRef<{ id: number; full_name: string } | null>(null);
+  const [pickerSheet, setPickerSheet] = useState<'team' | 'transfer' | null>(null);
+  const [transferBusy, setTransferBusy] = useState(false);
 
   const [attachments, setAttachments] = useState<UserTaskAttachment[]>([]);
   const [attachmentsLoading, setAttachmentsLoading] = useState(false);
@@ -571,52 +576,64 @@ export default function TaskDetailsScreen() {
     [task, canEditDetails, updateTask]
   );
 
-  const applyExecutor = useCallback(
-    async (next: { id: number; full_name: string } | null) => {
-      if (!task || !canEditDetails) return;
-      await updateTask(task, {
-        team_id: null,
-        executor_id: next?.id ?? null,
-        assignee_ids: next ? [next.id] : [],
-        assignees: next ? [next] : [],
-        executor: next ?? undefined,
-      });
-    },
-    [task, canEditDetails, updateTask]
-  );
-
   const openTeamPicker = useCallback(() => {
     if (!canEditDetails) return;
     Keyboard.dismiss();
     setPickerSheet('team');
   }, [canEditDetails]);
 
-  const openExecutorPicker = useCallback(() => {
-    if (!canEditDetails || !task) return;
-    Keyboard.dismiss();
-    const initial = getExecutorFromTask(task);
-    executorDraftRef.current = initial;
-    setExecutorDraft(initial);
-    setPickerSheet('executor');
-  }, [canEditDetails, task]);
+  const canTransfer = task?.task_permissions?.can_transfer === true;
 
-  /** Сохранение сразу при выборе строки (pick вызывает onSelect до ре-рендера — нельзя читать executorDraft в onClose). */
-  const handleExecutorSelect = useCallback(
-    (user: { id: number; full_name: string } | null) => {
-      executorDraftRef.current = user;
-      setExecutorDraft(user);
+  /** «Передать задачу»: выбор, как в поле «Исполнитель», затем подтверждение нового получателя. */
+  const openTransfer = useCallback(() => {
+    if (!canTransfer || transferBusy) return;
+    Keyboard.dismiss();
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPickerSheet('transfer');
+  }, [canTransfer, transferBusy]);
+
+  const handleTransferSelect = useCallback(
+    async (selection: RecipientSelection | null) => {
       setPickerSheet(null);
-      if (!task || !canEditDetails) return;
-      const current = getExecutorFromTask(task);
-      if ((current?.id ?? null) === (user?.id ?? null)) return;
-      void applyExecutor(user);
+      const t = taskRef.current;
+      if (!t || !selection) return;
+      const label = transferRecipientLabel(selection);
+      // «Отмена» — получатель и состояние задачи не меняются.
+      if (!(await confirmTaskTransfer(label))) return;
+      setTransferBusy(true);
+      const res = await transferUserTask(t.id, toTransferInput(selection));
+      setTransferBusy(false);
+      if (!res.ok) {
+        showToast({ title: 'Не удалось передать задачу', description: res.error, variant: 'destructive', duration: 4000 });
+        return;
+      }
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast({ title: 'Задача передана', description: label, variant: 'success', duration: 2500 });
+      bumpTasks();
+      if (res.data) {
+        setFetchedTask(res.data);
+      } else {
+        router.back();
+      }
     },
-    [task, canEditDetails, applyExecutor]
+    [bumpTasks, router, showToast]
   );
 
-  const closeExecutorPicker = useCallback(() => {
-    setPickerSheet(null);
-  }, []);
+  /** Исполнитель меняется только передачей: с подтверждением и записью в историю. */
+  const onExecutorRowPress = useCallback(() => {
+    if (canTransfer) {
+      openTransfer();
+      return;
+    }
+    showToast({
+      title: 'Передача недоступна',
+      description: task?.completed
+        ? 'Выполненную задачу сначала верните в работу.'
+        : 'Передать задачу может автор или текущий исполнитель.',
+      variant: 'default',
+      duration: 4000,
+    });
+  }, [canTransfer, openTransfer, showToast, task?.completed]);
 
   const remindTimingSelectOptions = useMemo(() => {
     if (!task) return [];
@@ -676,7 +693,8 @@ export default function TaskDetailsScreen() {
     ? `${scheduledDateLabel} · ${scheduledTimeLabel}`
     : 'Без срока';
   const groupTask = isGroupTask(task);
-  const completeBlockedReason = groupToggleBlockedReason(task);
+  const readOnly = isReadOnlyTask(task);
+  const completeBlockedReason = taskToggleBlockedReason(task);
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top, backgroundColor: background }]}>
@@ -720,6 +738,16 @@ export default function TaskDetailsScreen() {
             style={[styles.titleInput, { color: canEditDetails ? text : textMuted }]}
           />
         </View>
+
+        {readOnly ? (
+          <View style={[styles.readOnlyNotice, { backgroundColor: cardBg, borderColor: border }]}>
+            <MaterialIcons name="visibility" size={18} color={textMuted} />
+            <ThemedText style={[styles.readOnlyNoticeText, { color: textMuted }]}>
+              Задача передана другому получателю. Вы видите её текущее состояние и историю, но не можете менять
+              статус.
+            </ThemedText>
+          </View>
+        ) : null}
 
         <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>Вложения</ThemedText>
         <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
@@ -906,17 +934,11 @@ export default function TaskDetailsScreen() {
               </Pressable>
               <View style={[styles.divider, { backgroundColor: border }]} />
               <Pressable
-                onPress={() => {
-                  if (!canEditDetails) {
-                    notifyCreatorOnly();
-                    return;
-                  }
-                  openExecutorPicker();
-                }}
+                onPress={onExecutorRowPress}
                 style={({ pressed }) => [
                   styles.row,
-                  pressed && canEditDetails && styles.rowPressablePressed,
-                  !canEditDetails && { opacity: 0.85 },
+                  pressed && canTransfer && styles.rowPressablePressed,
+                  !canTransfer && { opacity: 0.85 },
                 ]}
               >
                 <View style={styles.rowLeft}>
@@ -927,7 +949,7 @@ export default function TaskDetailsScreen() {
                   <ThemedText style={[styles.rowValue, { color: textMuted, flexShrink: 1 }]} numberOfLines={1}>
                     {executorRowSummary}
                   </ThemedText>
-                  {canEditDetails ? (
+                  {canTransfer ? (
                     <MaterialIcons name="chevron-right" size={22} color={textMuted} />
                   ) : null}
                 </View>
@@ -952,6 +974,8 @@ export default function TaskDetailsScreen() {
         </View>
         </>
         )}
+
+        {!isGuest ? <TaskHistorySection task={task} /> : null}
 
         <View style={{ height: 16 }} />
 
@@ -1092,6 +1116,24 @@ export default function TaskDetailsScreen() {
             <View style={[styles.remindersHintWrap, { borderColor: border }]}>
               <ThemedText style={[styles.remindersHint, { color: textMuted }]}>{completeBlockedReason}</ThemedText>
             </View>
+          ) : null}
+          {canTransfer ? (
+            <>
+              <View style={[styles.divider, { backgroundColor: border }]} />
+              <Pressable
+                disabled={transferBusy}
+                onPress={openTransfer}
+                style={({ pressed }) => [styles.linkRow, pressed && styles.rowPressablePressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Передать задачу"
+              >
+                <View style={styles.rowLeft}>
+                  <MaterialIcons name="forward" size={20} color={primary} />
+                  <ThemedText style={[styles.rowTitle, { color: primary }]}>Передать задачу</ThemedText>
+                </View>
+                {transferBusy ? <ActivityIndicator size="small" color={primary} /> : null}
+              </Pressable>
+            </>
           ) : null}
           <View style={[styles.divider, { backgroundColor: border }]} />
           <Pressable
@@ -1308,13 +1350,13 @@ export default function TaskDetailsScreen() {
             selectedTeamId={task.team_id ?? null}
             onSelect={(id) => void applyTeam(id)}
           />
-          <TaskExecutorPickerOverlay
-            visible={pickerSheet === 'executor'}
-            onClose={closeExecutorPicker}
-            teamScope={false}
-            team={null}
-            selectedExecutor={executorDraft}
-            onSelect={handleExecutorSelect}
+          <TaskRecipientPickerOverlay
+            visible={pickerSheet === 'transfer'}
+            onClose={() => setPickerSheet(null)}
+            currentUserId={currentUserId}
+            value={null}
+            title="Передать задачу"
+            onConfirm={(selection) => void handleTransferSelect(selection)}
           />
         </>
       ) : null}
@@ -1324,6 +1366,17 @@ export default function TaskDetailsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  readOnlyNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  readOnlyNoticeText: { flex: 1, fontSize: 13, lineHeight: 18 },
   grabberWrap: {
     alignItems: 'center',
     paddingTop: 2,

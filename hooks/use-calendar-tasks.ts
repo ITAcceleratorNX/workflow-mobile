@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { addDaysToDateKey, toAppDateKey } from '@/lib/dateTimeUtils';
 import { getUserTasksCalendar, updateUserTask, type CalendarTask } from '@/lib/user-tasks-api';
-import { confirmGroupTaskToggle } from '@/lib/group-task-completion';
+import { confirmTaskToggle } from '@/lib/group-task-completion';
 import { useToast } from '@/context/toast-context';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
@@ -81,7 +81,7 @@ export function useCalendarTasks(startDate: Date, endDate: Date) {
         return;
       }
 
-      if (!(await confirmGroupTaskToggle(task))) return;
+      if (!(await confirmTaskToggle(task))) return;
       const before = tasksRef.current;
       const nextCompleted = !task.completed;
       setTogglingTaskIds((prev) => [...prev, task.id]);

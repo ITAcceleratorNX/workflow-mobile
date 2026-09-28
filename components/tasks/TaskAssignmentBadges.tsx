@@ -3,11 +3,12 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import type { GroupTaskFields, TaskExecutorRef, TaskTeamRef } from '@/lib/user-tasks-api';
+import { isReadOnlyTask } from '@/lib/group-task-completion';
 
 /** Минимум полей для бейджей (списки, календарь, детали). */
 export type TaskBadgeSource = Pick<
   GroupTaskFields,
-  'assignment_type' | 'targetCompany' | 'targetDepartment' | 'targetUsers' | 'responsible'
+  'assignment_type' | 'targetCompany' | 'targetDepartment' | 'targetUsers' | 'responsible' | 'task_permissions'
 > & {
   team_id?: number | null;
   executor_id?: number | null;
@@ -34,6 +35,18 @@ function groupBadge(task: TaskBadgeSource): { icon: keyof typeof MaterialIcons.g
   return null;
 }
 
+/** Переданная задача осталась у пользователя: видна там же, но только для просмотра. */
+function ReadOnlyPill({ color, compact }: { color: string; compact?: boolean }) {
+  return (
+    <View style={[styles.pill, styles.pillOutline, { borderColor: color }]}>
+      <MaterialIcons name="visibility" size={compact ? 11 : 12} color={color} />
+      <ThemedText style={[styles.pillText, { color }]} numberOfLines={1}>
+        Только просмотр
+      </ThemedText>
+    </View>
+  );
+}
+
 /** Бейджи команды и исполнителей для списков, календаря и деталей. */
 export function TaskAssignmentBadges({
   task,
@@ -41,6 +54,7 @@ export function TaskAssignmentBadges({
   currentUserId,
   compact,
 }: TaskAssignmentBadgesProps) {
+  const readOnly = isReadOnlyTask(task) ? <ReadOnlyPill color={primary} compact={compact} /> : null;
   const group = groupBadge(task);
   if (group) {
     const responsible = task.responsible?.full_name
@@ -50,6 +64,7 @@ export function TaskAssignmentBadges({
       : null;
     return (
       <View style={[styles.wrap, compact && styles.wrapCompact]}>
+        {readOnly}
         <View style={[styles.pill, styles.pillOutline, { borderColor: primary }]}>
           <MaterialIcons name={group.icon} size={compact ? 11 : 12} color={primary} />
           <ThemedText style={[styles.pillText, { color: primary }]} numberOfLines={1}>
@@ -77,10 +92,11 @@ export function TaskAssignmentBadges({
       : null;
   const personName = executorName ?? legacyAssignee;
 
-  if (!teamName && !personName) return null;
+  if (!teamName && !personName && !readOnly) return null;
 
   return (
     <View style={[styles.wrap, compact && styles.wrapCompact]}>
+      {readOnly}
       {teamName ? (
         <View style={[styles.pill, styles.pillOutline, { borderColor: primary }]}>
           <MaterialIcons name="groups" size={compact ? 11 : 12} color={primary} />

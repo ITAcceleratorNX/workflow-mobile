@@ -11,7 +11,7 @@ import {
   type TaskListView,
 } from '@/lib/user-tasks-api';
 import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
-import { confirmGroupTaskToggle } from '@/lib/group-task-completion';
+import { confirmTaskToggle } from '@/lib/group-task-completion';
 import { toAssignmentInput, type RecipientSelection } from '@/lib/task-recipients-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
@@ -337,7 +337,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         });
         return;
       }
-      if (!(await confirmGroupTaskToggle(task))) return;
+      if (!(await confirmTaskToggle(task))) return;
       const before = tasksRef.current;
       const nextCompleted = !task.completed;
       setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, completed: nextCompleted } : t)));
