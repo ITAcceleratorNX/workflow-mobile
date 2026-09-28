@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { FontSizes, LineHeights, Radius, Spacing } from '@/constants/theme';
 import { useToast } from '@/context/toast-context';
-import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useCommentDraft, type useTaskComments } from '@/hooks/use-task-comments';
 import {
   applyTextChange,
@@ -49,6 +48,8 @@ export interface CommentComposerHandle {
 
 interface CommentComposerProps {
   taskId: number;
+  /** Поле стоит прямо над клавиатурой: отступ под нижнюю системную полосу не нужен. */
+  keyboardOpen: boolean;
   comments: Comments;
   /** Свой комментарий, который правится; null — новое сообщение. */
   editing: TaskComment | null;
@@ -78,6 +79,7 @@ function editNotice(failure: TaskCommentFailure): string {
  */
 export function CommentComposer({
   taskId,
+  keyboardOpen,
   comments,
   editing,
   onStopEditing,
@@ -95,7 +97,6 @@ export function CommentComposer({
   const [notice, setNotice] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
-  const keyboardHeight = useKeyboardHeight(true);
   const { show: showToast } = useToast();
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
@@ -174,7 +175,7 @@ export function CommentComposer({
     setNotice(editNotice(failure));
   };
 
-  const paddingBottom = keyboardHeight > 0 ? Spacing.sm : Math.max(insets.bottom, Spacing.sm);
+  const paddingBottom = keyboardOpen ? Spacing.sm : Math.max(insets.bottom, Spacing.sm);
   const bar = [styles.bar, { borderTopColor: palette.border, backgroundColor: palette.background, paddingBottom }];
 
   if (!writable) {

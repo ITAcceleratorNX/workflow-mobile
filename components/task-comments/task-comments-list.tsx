@@ -9,15 +9,20 @@ import {
   View,
   type LayoutChangeEvent,
   type ListRenderItem,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { FontSizes, LineHeights, Spacing } from '@/constants/theme';
 import { useToast } from '@/context/toast-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useTaskComments } from '@/hooks/use-task-comments';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { keyboardOverlap } from '@/lib/keyboard-overlap';
 import { withoutRejectedMentions } from '@/lib/task-comments/composer';
 import { ownCommentActions } from '@/lib/task-comments/presentation';
 import type { PendingComment } from '@/lib/task-comments/store';
@@ -47,7 +52,8 @@ const keyOf = (comment: TaskComment) => comment.id;
  * Один виртуализированный список вместо ScrollView: длинная переписка не монтируется целиком.
  * История догружается кнопкой над первым комментарием: более ранние встают под ней, и то,
  * на что смотрит пользователь, не сдвигается. Под лентой закреплено поле ввода; свои
- * комментарии меняются и удаляются долгим нажатием.
+ * комментарии меняются и удаляются долгим нажатием. С открытой клавиатурой поле ввода стоит
+ * прямо над ней, как лист новой задачи.
  */
 export function TaskCommentsList({ taskId, children, style, contentContainerStyle }: TaskCommentsListProps) {
   const comments = useTaskComments(taskId);
@@ -59,6 +65,10 @@ export function TaskCommentsList({ taskId, children, style, contentContainerStyl
   const [editing, setEditing] = useState<TaskComment | null>(null);
   const [menu, setMenu] = useState<CommentMenuTarget | null>(null);
   const composerRef = useRef<CommentComposerHandle>(null);
+  // Клавиатура закрывает низ экрана: лента с полем ввода поднимается на эту высоту.
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight(true);
+  const keyboardOffset = keyboardOverlap(keyboardHeight, insets.bottom, Platform.OS);
 
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -102,6 +112,7 @@ export function TaskCommentsList({ taskId, children, style, contentContainerStyl
   // иначе плавная прокрутка через длинную переписку не успевает.
   const contentHeight = useRef(0);
   const viewportHeight = useRef(0);
+  const scrollOffset = useRef(0);
   const followEndUntil = useRef(0);
   const scrollToBottom = useCallback(() => {
     listRef.current?.scrollToOffset({ offset: Math.max(0, contentHeight.current - viewportHeight.current), animated: false });
@@ -117,8 +128,15 @@ export function TaskCommentsList({ taskId, children, style, contentContainerStyl
     },
     [scrollToBottom]
   );
+  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollOffset.current = event.nativeEvent.contentOffset.y;
+  }, []);
   const onLayout = useCallback((event: LayoutChangeEvent) => {
-    viewportHeight.current = event.nativeEvent.layout.height;
+    const height = event.nativeEvent.layout.height;
+    const shrunk = viewportHeight.current - height;
+    viewportHeight.current = height;
+    // Лента стала ниже — открылась клавиатура: низ ленты остаётся на месте, последнее видно.
+    if (shrunk > 0) listRef.current?.scrollToOffset({ offset: scrollOffset.current + shrunk, animated: false });
   }, []);
   const stopFollowingEnd = useCallback(() => {
     followEndUntil.current = 0;
@@ -182,7 +200,7 @@ export function TaskCommentsList({ taskId, children, style, contentContainerStyl
   const menuKey = menu === null ? 'none' : menu.kind === 'comment' ? `comment-${menu.comment.id}` : `pending-${menu.entry.localId}`;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, keyboardOffset > 0 && { paddingBottom: keyboardOffset }]}>
       <FlatList
         ref={listRef}
         style={style}
@@ -219,12 +237,15 @@ export function TaskCommentsList({ taskId, children, style, contentContainerStyl
         showsVerticalScrollIndicator={false}
         onContentSizeChange={onContentSizeChange}
         onLayout={onLayout}
+        onScroll={onScroll}
+        scrollEventThrottle={32}
         onScrollBeginDrag={stopFollowingEnd}
       />
       {shown ? (
         <CommentComposer
           key={editing ? `edit-${editing.id}` : 'new'}
           taskId={taskId}
+          keyboardOpen={keyboardOffset > 0}
           comments={comments}
           editing={editing}
           onStopEditing={stopEditing}

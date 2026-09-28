@@ -10,7 +10,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -692,11 +691,8 @@ export default function TaskDetailsScreen() {
         <View style={styles.headerBtn} />
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
+      {/* Над клавиатурой карточку поднимает сам список с полем комментария, на обеих платформах. */}
+      <View style={{ flex: 1 }}>
         <TaskCommentsList
           taskId={task.id}
           style={styles.scroll}
@@ -1115,7 +1111,7 @@ export default function TaskDetailsScreen() {
           </Pressable>
         </View>
         </TaskCommentsList>
-      </KeyboardAvoidingView>
+      </View>
 
       {scheduleModalOpen ? (
         <Modal visible={scheduleModalOpen} transparent animationType="slide" onRequestClose={closeScheduleModal}>
