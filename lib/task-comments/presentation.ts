@@ -48,11 +48,37 @@ export function authorInitial(fullName: string): string {
   return first ? first.toUpperCase() : '?';
 }
 
+/** Что остаётся в ленте на месте удалённого комментария. */
+export const DELETED_COMMENT_TEXT = 'Комментарий удалён';
+
+/** Удалён ли комментарий и изменён ли. У удалённого метки «изменено» нет: текста больше нет. */
+export function commentState(comment: TaskComment): { deleted: boolean; edited: boolean } {
+  const deleted = comment.deleted_at !== null || comment.text === null;
+  return { deleted, edited: !deleted && comment.edited_at !== null };
+}
+
+const CHANGING_LABEL = { edit: 'сохраняется…', delete: 'удаляется…' } as const;
+
+/** Строка под комментарием: «Сегодня, 14:05 · изменено · сохраняется…». */
+export function commentMeta(comment: TaskComment, moment: string, changing: 'edit' | 'delete' | null = null): string {
+  const { edited } = commentState(comment);
+  return [moment, edited ? 'изменено' : null, changing ? CHANGING_LABEL[changing] : null].filter(Boolean).join(' · ');
+}
+
+/**
+ * Что человек может сделать с комментарием: только со своим и не удалённым и только то, что
+ * разрешил сервер. Чужой комментарий действий не открывает, даже если права пришли в ответе.
+ */
+export function ownCommentActions(comment: TaskComment, currentUserId: number | null): { edit: boolean; remove: boolean } {
+  const own = currentUserId !== null && comment.author.id === currentUserId && !commentState(comment).deleted;
+  return { edit: own && comment.permissions.can_edit, remove: own && comment.permissions.can_delete };
+}
+
 /** Что прочитает экранный диктор: автор, время, метка «изменено» и текст — или что комментарий удалён. */
 export function commentAccessibilityLabel(comment: TaskComment, moment: string): string {
-  const when = comment.edited_at && comment.deleted_at === null ? `${moment}, изменено` : moment;
-  const body = comment.deleted_at !== null || comment.text === null ? 'комментарий удалён' : comment.text;
-  return `${comment.author.full_name}, ${when}: ${body}`;
+  const { deleted, edited } = commentState(comment);
+  const when = edited ? `${moment}, изменено` : moment;
+  return `${comment.author.full_name}, ${when}: ${deleted ? DELETED_COMMENT_TEXT.toLowerCase() : comment.text}`;
 }
 
 /**

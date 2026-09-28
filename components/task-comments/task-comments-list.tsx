@@ -19,6 +19,7 @@ import { useToast } from '@/context/toast-context';
 import { useTaskComments } from '@/hooks/use-task-comments';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { withoutRejectedMentions } from '@/lib/task-comments/composer';
+import { ownCommentActions } from '@/lib/task-comments/presentation';
 import type { PendingComment } from '@/lib/task-comments/store';
 import type { TaskComment } from '@/lib/task-comments/types';
 import { useAuthStore } from '@/stores/auth-store';
@@ -74,14 +75,10 @@ export function TaskCommentsList({ taskId, children, style, contentContainerStyl
   );
 
   const { changing, remove, retry, discard, peekDraft, setDraft } = comments;
-  const isActionable = useCallback(
-    (comment: TaskComment) =>
-      currentUserId !== null &&
-      comment.author.id === currentUserId &&
-      comment.deleted_at === null &&
-      (comment.permissions.can_edit || comment.permissions.can_delete),
-    [currentUserId]
-  );
+  const isActionable = useCallback((comment: TaskComment) => {
+    const actions = ownCommentActions(comment, currentUserId);
+    return actions.edit || actions.remove;
+  }, [currentUserId]);
   const openMenu = useCallback((comment: TaskComment) => setMenu({ kind: 'comment', comment }), []);
   const closeMenu = useCallback(() => setMenu(null), []);
   const stopEditing = useCallback(() => setEditing(null), []);

@@ -6,6 +6,9 @@ import { FontSizes, LineHeights, Radius, Spacing } from '@/constants/theme';
 import {
   authorInitial,
   commentAccessibilityLabel,
+  commentMeta,
+  commentState,
+  DELETED_COMMENT_TEXT,
   formatCommentMoment,
   mentionSegments,
 } from '@/lib/task-comments/presentation';
@@ -35,14 +38,11 @@ interface CommentItemProps {
   onActions?: (comment: TaskComment) => void;
 }
 
-const CHANGING_LABEL = { edit: 'сохраняется…', delete: 'удаляется…' } as const;
-
 /** Комментарий ленты задачи: автор, текст с упоминаниями, дата, время и метка «изменено». */
 export const CommentItem = memo(function CommentItem({ comment, own, palette, changing = null, onActions }: CommentItemProps) {
   const moment = formatCommentMoment(comment.created_at);
-  const deleted = comment.deleted_at !== null || comment.text === null;
-  const edited = !deleted && comment.edited_at !== null;
-  const meta = [moment, edited ? 'изменено' : null, changing ? CHANGING_LABEL[changing] : null].filter(Boolean).join(' · ');
+  const { deleted } = commentState(comment);
+  const meta = commentMeta(comment, moment, changing);
   const actionable = onActions !== undefined && changing === null;
 
   return (
@@ -67,7 +67,7 @@ export const CommentItem = memo(function CommentItem({ comment, own, palette, ch
         </ThemedText>
         {deleted ? (
           <View style={[styles.bubble, styles.deletedBubble, { borderColor: palette.border }]}>
-            <ThemedText style={[styles.deletedText, { color: palette.textMuted }]}>Комментарий удалён</ThemedText>
+            <ThemedText style={[styles.deletedText, { color: palette.textMuted }]}>{DELETED_COMMENT_TEXT}</ThemedText>
           </View>
         ) : (
           <View
