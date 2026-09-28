@@ -1,6 +1,9 @@
 import { request } from './api';
 
+import type { TaskEvent } from '@/lib/task-history';
 import type { TaskAssignmentType, UserTask } from '@/lib/user-tasks-api';
+
+export { describeTaskEvent, type TaskEvent } from '@/lib/task-history';
 
 /** Сотрудник в справочнике получателей. department_id: null — «Без отдела». */
 export interface RecipientEmployee {
@@ -59,6 +62,28 @@ export function toAssignmentInput(selection: RecipientSelection): TaskAssignment
       return { type: 'users', user_ids: selection.users.map((u) => u.id) };
     default:
       return null;
+  }
+}
+
+/** Тело POST /user-tasks/:id/transfer: тот же выбор, что в поле «Исполнитель». */
+export type TaskTransferInput = { assignment: TaskAssignmentInput } | { executor_id: number };
+
+export function toTransferInput(selection: RecipientSelection): TaskTransferInput {
+  if (selection.type === 'legacy_user') return { executor_id: selection.user.id };
+  return { assignment: toAssignmentInput(selection) as TaskAssignmentInput };
+}
+
+/** Новый получатель в подтверждении передачи: «Отдел Финансы», «Компания Extra», «Иван, Ольга». */
+export function transferRecipientLabel(selection: RecipientSelection): string {
+  switch (selection.type) {
+    case 'company':
+      return `Компания ${selection.company.name}`;
+    case 'department':
+      return `Отдел ${selection.department.name}`;
+    case 'users':
+      return selection.users.map((u) => u.full_name).join(', ');
+    case 'legacy_user':
+      return selection.user.full_name;
   }
 }
 
@@ -155,52 +180,10 @@ export async function setTaskResponsible(
   return { ok: true };
 }
 
-export type TaskEventAction =
-  | 'responsible_assigned'
-  | 'responsible_changed'
-  | 'responsible_removed'
-  | 'completed'
-  | 'reopened';
-
-type EventUser = { id: number; full_name: string | null } | null;
-
-export interface TaskEvent {
-  id: number;
-  action: TaskEventAction;
-  created_at: string;
-  actor: { id: number; full_name: string } | null;
-  details: { from?: EventUser; to?: EventUser; reason?: string; responsible_id?: number | null } | null;
-}
-
 export async function getTaskHistory(
   taskId: number
 ): Promise<{ ok: true; data: TaskEvent[] } | { ok: false; error: string }> {
   const result = await request<{ events: TaskEvent[] }>(`/user-tasks/${taskId}/history`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: result.data.events ?? [] };
-}
-
-/** Короткая строка истории: «Иван назначил ответственным Ольгу». */
-export function describeTaskEvent(event: TaskEvent): string {
-  const actor = event.actor?.full_name ?? 'Система';
-  const from = event.details?.from?.full_name ?? 'участника';
-  const to = event.details?.to?.full_name ?? 'участника';
-  switch (event.action) {
-    case 'responsible_assigned':
-      return event.actor && event.actor.id === event.details?.to?.id
-        ? `${actor} назначил(а) себя ответственным`
-        : `${actor} назначил(а) ответственным: ${to}`;
-    case 'responsible_changed':
-      return `${actor} сменил(а) ответственного: ${from} → ${to}`;
-    case 'responsible_removed':
-      return event.actor
-        ? `${actor} снял(а) ответственного: ${from}`
-        : `Ответственный снят: ${from} больше не участник задачи`;
-    case 'completed':
-      return `${actor} завершил(а) задачу`;
-    case 'reopened':
-      return `${actor} вернул(а) задачу в работу`;
-    default:
-      return actor;
-  }
 }

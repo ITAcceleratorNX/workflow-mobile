@@ -7,14 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { useToast } from '@/context/toast-context';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { formatRequestDate } from '@/lib/dateTimeUtils';
 import {
-  describeTaskEvent,
-  getTaskHistory,
   getTaskParticipants,
   groupRecipientLabel,
   setTaskResponsible,
-  type TaskEvent,
   type TaskParticipant,
 } from '@/lib/task-recipients-api';
 import type { UserTask } from '@/lib/user-tasks-api';
@@ -26,39 +22,20 @@ type Props = {
   onChanged: () => void;
 };
 
-/** Карточка групповой задачи: получатель, ответственный, правило завершения и история. */
+/** Карточка групповой задачи: получатель, ответственный и правило завершения (история — TaskHistorySection). */
 export function GroupTaskDetails({ task, currentUserId, onChanged }: Props) {
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
-  const primary = useThemeColor({}, 'primary');
   const cardBg = useThemeColor({}, 'cardBackground');
   const border = useThemeColor({}, 'border');
   const { show: showToast } = useToast();
 
   const [sheetOpen, setSheetOpen] = useState(false);
-  // История перечитывается после завершения, возврата и смены ответственного.
-  const historyKey = `${task.id}:${task.completed}:${task.responsible_id ?? ''}:${task.updated_at}`;
-  const [historyState, setHistoryState] = useState<{
-    key: string;
-    events: TaskEvent[];
-  } | null>(null);
-  const history = historyState?.events ?? [];
-  const historyLoading = historyState?.key !== historyKey;
 
   const perms = task.group_permissions;
   const canOpenResponsible = !!perms && (perms.can_manage_responsible || perms.can_take_responsibility);
   const responsibleName = task.responsible?.full_name ?? null;
   const completedBy = task.completed_by_user ?? task.completedByUser ?? null;
-
-  useEffect(() => {
-    let cancelled = false;
-    void getTaskHistory(task.id).then((res) => {
-      if (!cancelled) setHistoryState({ key: historyKey, events: res.ok ? res.data : [] });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [task.id, historyKey]);
 
   const recipientValue =
     task.participants_count != null
@@ -136,29 +113,6 @@ export function GroupTaskDetails({ task, currentUserId, onChanged }: Props) {
         <View style={[styles.hintWrap, { borderTopColor: border }]}>
           <ThemedText style={[styles.hint, { color: textMuted }]}>{ruleHint}</ThemedText>
         </View>
-      </View>
-
-      <ThemedText style={[styles.sectionLabel, { color: textMuted }]}>История</ThemedText>
-      <View style={[styles.card, { backgroundColor: cardBg, borderColor: border }]}>
-        {historyLoading && history.length === 0 ? (
-          <View style={styles.centerBlock}>
-            <ActivityIndicator size="small" color={primary} />
-          </View>
-        ) : history.length === 0 ? (
-          <ThemedText style={[styles.hint, styles.historyEmpty, { color: textMuted }]}>Пока нет действий</ThemedText>
-        ) : (
-          history.map((e, i) => (
-            <View key={e.id}>
-              {i > 0 ? <View style={[styles.divider, { backgroundColor: border }]} /> : null}
-              <View style={styles.historyRow}>
-                <ThemedText style={[styles.historyText, { color: text }]}>{describeTaskEvent(e)}</ThemedText>
-                <ThemedText style={[styles.historyTime, { color: textMuted }]}>
-                  {formatRequestDate(e.created_at)}
-                </ThemedText>
-              </View>
-            </View>
-          ))
-        )}
       </View>
 
       <ResponsibleSheet
@@ -389,10 +343,6 @@ const styles = StyleSheet.create({
   },
   hint: { fontSize: 12, lineHeight: 17 },
   centerBlock: { paddingVertical: 16, alignItems: 'center' },
-  historyEmpty: { paddingHorizontal: 14, paddingVertical: 14 },
-  historyRow: { paddingHorizontal: 14, paddingVertical: 10, gap: 2 },
-  historyText: { fontSize: 14 },
-  historyTime: { fontSize: 12 },
   modalRoot: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.38)' },
   sheet: {

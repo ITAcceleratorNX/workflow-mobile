@@ -34,6 +34,8 @@ type Props = {
   currentUserId: number | null;
   value: RecipientSelection | null;
   onConfirm: (selection: RecipientSelection | null) => void;
+  /** Заголовок листа: «Исполнитель» при создании, «Передать задачу» при передаче. */
+  title?: string;
 };
 
 type Entry = { company: RecipientCompany; mine: boolean };
@@ -56,7 +58,7 @@ export function TaskRecipientPickerOverlay(props: Props) {
   return <RecipientPicker {...props} />;
 }
 
-function RecipientPicker({ onClose, currentUserId, value, onConfirm }: Props) {
+function RecipientPicker({ onClose, currentUserId, value, onConfirm, title = 'Исполнитель' }: Props) {
   const insets = useSafeAreaInsets();
   const { height: windowH } = useWindowDimensions();
   const keyboardHeight = useKeyboardHeight(true);
@@ -443,7 +445,7 @@ function RecipientPicker({ onClose, currentUserId, value, onConfirm }: Props) {
             <Pressable onPress={onClose} hitSlop={12} style={styles.headerBtn} accessibilityLabel="Закрыть">
               <MaterialIcons name="close" size={24} color={text} />
             </Pressable>
-            <ThemedText style={[styles.headerTitle, { color: text }]}>Исполнитель</ThemedText>
+            <ThemedText style={[styles.headerTitle, { color: text }]}>{title}</ThemedText>
             <Pressable onPress={confirm} hitSlop={12} style={styles.headerBtn} accessibilityLabel="Готово">
               <MaterialIcons name="check" size={24} color={primary} />
             </Pressable>
