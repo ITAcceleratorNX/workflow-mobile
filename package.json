@@ -9,6 +9,9 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "start:local": "EXPO_PUBLIC_API_BASE_URL=${LOCAL_API_URL:-http://localhost:3001/api} expo start --clear",
+    "ios:local": "EXPO_PUBLIC_API_BASE_URL=${LOCAL_API_URL:-http://localhost:3001/api} expo run:ios",
+    "android:local": "EXPO_PUBLIC_API_BASE_URL=${LOCAL_API_URL:-http://10.0.2.2:3001/api} expo run:android",
     "lint": "expo lint",
     "test": "tsc --noEmit -p tsconfig.test.json && tsx --test lib/__tests__/*.test.ts lib/task-comments/__tests__/*.test.ts"
   },
