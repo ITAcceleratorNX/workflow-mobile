@@ -387,7 +387,7 @@ export default function TasksScreen() {
     if (mainView === 'inbox') {
       return {
         title: 'Входящие пусты',
-        subtitle: 'Добавьте задачу — без срока или с датой, она останется во входящих',
+        subtitle: 'Здесь появятся все невыполненные задачи — с датой и без',
         icon: 'inbox' as const,
       };
     }
