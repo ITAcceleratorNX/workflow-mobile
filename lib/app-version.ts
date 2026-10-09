@@ -26,6 +26,18 @@ export function isUpdateRequired(current: string | null | undefined, min: string
   return false;
 }
 
+type VersionConfig = { version?: string; ios?: { version?: string }; android?: { version?: string } } | null | undefined;
+
+/**
+ * Версия приложения, которую видит стор платформы: `ios.version` / `android.version`
+ * из app.json, если задана, иначе общая `version`. Общая может отставать от
+ * платформенной (у iOS 1.0.7 общая была 1.0.0) — тогда сравнение блокировало бы всех.
+ */
+export function appVersionFor(platform: string, expoConfig: VersionConfig): string | null {
+  const own = platform === 'ios' ? expoConfig?.ios?.version : platform === 'android' ? expoConfig?.android?.version : undefined;
+  return own ?? expoConfig?.version ?? null;
+}
+
 /** Ссылка на страницу приложения в сторе платформы. */
 export function storeUrl(platform: string): string {
   return platform === 'ios'

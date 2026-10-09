@@ -1,9 +1,19 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { fetchMinAppVersion, isUpdateRequired, storeUrl, storeWebUrl } from '../app-version';
+import { appVersionFor, fetchMinAppVersion, isUpdateRequired, storeUrl, storeWebUrl } from '../app-version';
 
 describe('forced app update', () => {
+  it('compares the version the store sees, not a stale common one', () => {
+    const config = { version: '1.0.0', ios: { version: '1.0.7' } };
+    assert.equal(appVersionFor('ios', config), '1.0.7');
+    assert.equal(appVersionFor('android', config), '1.0.0');
+    assert.equal(appVersionFor('android', { version: '1.0.7', android: { version: '1.0.8' } }), '1.0.8');
+    assert.equal(appVersionFor('web', config), '1.0.0');
+    assert.equal(appVersionFor('ios', null), null);
+    assert.equal(isUpdateRequired(appVersionFor('ios', config), '1.0.7'), false, 'An updated iPhone is let in');
+  });
+
   it('requires an update only when the app is older than the minimal version', () => {
     assert.equal(isUpdateRequired('1.0.6', '1.0.7'), true);
     assert.equal(isUpdateRequired('1.0.9', '1.0.10'), true, 'Numbers, not strings: 9 < 10');

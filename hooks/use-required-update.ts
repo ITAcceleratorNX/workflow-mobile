@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import Constants from 'expo-constants';
 
-import { fetchMinAppVersion, isUpdateRequired } from '@/lib/app-version';
+import { appVersionFor, fetchMinAppVersion, isUpdateRequired } from '@/lib/app-version';
 
 /**
  * Обязательно ли обновить приложение из стора: версия приложения старше
@@ -16,7 +16,7 @@ export function useRequiredUpdate() {
     let active = true;
     const check = () =>
       fetchMinAppVersion().then((min) => {
-        if (active) setRequired(isUpdateRequired(Constants.expoConfig?.version, min));
+        if (active) setRequired(isUpdateRequired(appVersionFor(Platform.OS, Constants.expoConfig), min));
       });
 
     check();
