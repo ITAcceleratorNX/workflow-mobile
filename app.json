@@ -2,7 +2,7 @@
   "expo": {
     "name": "Workflow",
     "slug": "workflow-mobile",
-    "version": "1.0.0",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "workflowmobile",
@@ -12,7 +12,7 @@
     },
     "ios": {
       "version": "1.0.7",
-      "buildNumber": "22",
+      "buildNumber": "23",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -61,7 +61,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 14,
+      "versionCode": 15,
       "package": "com.workflow.kz"
     },
     "web": {
