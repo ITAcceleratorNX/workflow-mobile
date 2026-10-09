@@ -18,6 +18,7 @@ import { config } from '@/lib/config';
 import type { NewsReactionKind } from '@/lib/news-reactions';
 import { normalizeReactionCounts } from '@/lib/news-reactions';
 import { useAuthStore } from '@/stores/auth-store';
+import { formDataFile } from '@/lib/form-data-file';
 
 const { apiBaseUrl } = config;
 
@@ -239,11 +240,7 @@ export async function createNews(params: {
     const img = params.image;
     const fileName = img.name ?? `image_${Date.now()}.jpg`;
     const mimeType = img.type ?? 'image/jpeg';
-    formData.append('image', {
-      uri: img.uri,
-      name: fileName,
-      type: mimeType,
-    } as unknown as Blob);
+    formData.append('image', formDataFile({ uri: img.uri, name: fileName, type: mimeType }));
   }
 
   const raw = useAuthStore.getState().token;
@@ -332,11 +329,7 @@ export async function updateNews(
     const img = params.image;
     const fileName = img.name ?? `image_${Date.now()}.jpg`;
     const mimeType = img.type ?? 'image/jpeg';
-    formData.append('image', {
-      uri: img.uri,
-      name: fileName,
-      type: mimeType,
-    } as unknown as Blob);
+    formData.append('image', formDataFile({ uri: img.uri, name: fileName, type: mimeType }));
   }
 
   const raw = useAuthStore.getState().token;

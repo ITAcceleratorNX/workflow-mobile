@@ -59,6 +59,7 @@ import {
   SLA_OPTIONS,
 } from '@/constants/requests';
 import { Spacing } from '@/constants/theme';
+import { formDataFile } from '@/lib/form-data-file';
 
 type CreateUserRole = 'client' | 'admin-worker' | 'department-head' | 'executor' | 'manager';
 
@@ -644,11 +645,7 @@ export default function CreateRequestScreen() {
     const { compressRequestPhotos } = await import('@/lib/request-photo-compression');
     const compressedBeforePhotos = await compressRequestPhotos(photos, 'request_before');
     compressedBeforePhotos.forEach((photo) => {
-      formData.append('photos', {
-        uri: photo.uri,
-        type: photo.type,
-        name: photo.name,
-      } as unknown as Blob);
+      formData.append('photos', formDataFile({ uri: photo.uri, type: photo.type, name: photo.name }));
     });
 
     if (role === 'executor' && createMode === 'createAndComplete') {

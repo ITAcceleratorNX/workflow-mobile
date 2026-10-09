@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { AppUpdateBanner } from '@/components/app-update-banner';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { ForceUpdateGate } from '@/components/force-update-gate';
 import { SleepSurveyGate } from '@/components/sleep-survey-gate';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { PushNotificationsHost } from '@/components/push-notifications-host';
@@ -65,6 +66,7 @@ export default function RootLayout() {
             </Stack>
             <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             <AppUpdateBanner />
+            <ForceUpdateGate />
           </ToastProvider>
         </ThemeProvider>
       </GestureHandlerRootView>

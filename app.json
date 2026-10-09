@@ -11,8 +11,8 @@
       "policy": "appVersion"
     },
     "ios": {
-      "version": "1.0.5",
-      "buildNumber": "20",
+      "version": "1.0.7",
+      "buildNumber": "22",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -61,7 +61,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 13,
+      "versionCode": 14,
       "package": "com.workflow.kz"
     },
     "web": {

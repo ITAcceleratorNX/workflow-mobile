@@ -33,6 +33,7 @@ import {
   updateMeetingRoom,
   deleteMeetingRoom,
 } from '@/lib/api';
+import { formDataFile } from '@/lib/form-data-file';
 
 /** "HH:mm" or "HH:mm:ss" -> "HH:mm:ss" */
 function toHHmmss(v: string): string {
@@ -331,11 +332,7 @@ export default function AdminWorkerOfficeScreen() {
         fd.append('floor', floorParsed.value === null ? '' : String(floorParsed.value));
         const asset = editOfficePhoto;
         const ext = asset.uri.split('.').pop() || 'jpg';
-        fd.append('photo', {
-          uri: asset.uri,
-          type: (asset as { mimeType?: string }).mimeType || 'image/jpeg',
-          name: `photo.${ext}`,
-        } as unknown as Blob);
+        fd.append('photo', formDataFile({ uri: asset.uri, type: (asset as { mimeType?: string }).mimeType || 'image/jpeg', name: `photo.${ext}` }));
         result = await updateOfficeWithPhoto(officeId, fd);
         setEditOfficePhoto(null);
       } else {
@@ -396,11 +393,7 @@ export default function AdminWorkerOfficeScreen() {
       fd.append('floor', floorParsed.value === null ? '' : String(floorParsed.value));
       const asset = newOfficePhoto;
       const ext = asset.uri.split('.').pop() || 'jpg';
-      fd.append('photo', {
-        uri: asset.uri,
-        type: (asset as { mimeType?: string }).mimeType || 'image/jpeg',
-        name: `photo.${ext}`,
-      } as unknown as Blob);
+      fd.append('photo', formDataFile({ uri: asset.uri, type: (asset as { mimeType?: string }).mimeType || 'image/jpeg', name: `photo.${ext}` }));
       result = await createOfficeWithPhoto(fd);
     } else {
       result = await createOffice({

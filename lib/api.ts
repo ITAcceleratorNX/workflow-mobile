@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { failureFromResponse, type RequestFailure } from '@/lib/api-errors';
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
+import { formDataFile } from '@/lib/form-data-file';
 
 const { apiBaseUrl } = config;
 
@@ -1236,11 +1237,7 @@ export async function uploadRequestPhotos(
     `request_${photoType}`
   );
   compressedPhotos.forEach((p) => {
-    formData.append('photos', {
-      uri: p.uri,
-      type: p.type,
-      name: p.name,
-    } as unknown as Blob);
+    formData.append('photos', formDataFile({ uri: p.uri, type: p.type, name: p.name }));
   });
   formData.append('type', photoType);
 
