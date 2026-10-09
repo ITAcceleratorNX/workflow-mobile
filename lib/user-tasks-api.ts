@@ -8,6 +8,7 @@ import {
   type RecurrenceCustomUnit,
   type RecurrenceType,
 } from '@/lib/task-recurrence';
+import { formDataFile } from '@/lib/form-data-file';
 
 export type TaskPriority = 'low' | 'medium' | 'high';
 
@@ -370,11 +371,7 @@ export async function uploadUserTaskAttachments(
   files.forEach((f) => {
     formData.append(
       'files',
-      {
-        uri: f.uri,
-        name: f.name,
-        type: f.type ?? 'application/octet-stream',
-      } as unknown as Blob
+      formDataFile({ uri: f.uri, name: f.name, type: f.type ?? 'application/octet-stream' })
     );
   });
 
