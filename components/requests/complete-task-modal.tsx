@@ -65,7 +65,6 @@ export function CompleteTaskModal({
   };
 
   const handleSubmit = async () => {
-    if (photos.length === 0) return;
     await onSubmit(comment.trim(), photos);
     setComment('');
     setPhotos([]);
@@ -116,7 +115,7 @@ export function CompleteTaskModal({
               textAlignVertical="top"
             />
             <ThemedText style={[styles.label, { color: textMuted }]}>
-              Фото результата (обязательно, макс. 3)
+              Фото результата (необязательно, макс. 3)
             </ThemedText>
             <View style={styles.photosRow}>
               {photos.map((uri, i) => (
@@ -146,7 +145,7 @@ export function CompleteTaskModal({
               title={loading ? 'Отправка...' : 'Завершить'}
               onPress={handleSubmit}
               variant="primary"
-              disabled={photos.length === 0 || loading}
+              disabled={loading}
             />
             <Button
               title="Отмена"

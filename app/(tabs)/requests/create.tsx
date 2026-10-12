@@ -462,7 +462,7 @@ export default function CreateRequestScreen() {
     canProceedStep4 &&
     (role !== 'admin-worker' && role !== 'department-head' ? true : complexity && sla) &&
     (role !== 'department-head' || selectedExecutors.length === 0 || selectedExecutors.some((e) => e.role === 'leader')) &&
-    (role !== 'executor' || createMode !== 'createAndComplete' || (completionComment.trim() && afterPhotos.length > 0));
+    (role !== 'executor' || createMode !== 'createAndComplete' || completionComment.trim());
 
   const handleDetectNearestOffice = useCallback(async () => {
     if (!offices.length) return;
@@ -1582,7 +1582,7 @@ export default function CreateRequestScreen() {
                     onSubmitEditing={dismissKeyboard}
                   />
 
-                  <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Фото результата *</ThemedText>
+                  <ThemedText style={[styles.fieldLabel, { color: mutedColor }]}>Фото результата (необязательно)</ThemedText>
                   <View style={styles.photoRow}>
                     {afterPhotos.map((uri, i) => (
                       <View key={i} style={styles.photoWrap}>
