@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { isExecutorServiceCategory } from '@/constants/requests';
 import {
   KeyboardFormOverlay,
   ScreenHeader,
@@ -81,6 +82,13 @@ function userMatchesSearch(row: OfficeUserRow, query: string) {
     .join(' ')
     .toLowerCase();
   return `${haystack} ${categoryNames}`.includes(query);
+}
+
+/** Категории Исполнителя для формы: «Администрацию» Исполнителю больше не назначают. */
+function executorCategoryIds(executor: ExecutorInCategory): number[] {
+  return (executor.serviceCategories ?? [])
+    .filter((c) => isExecutorServiceCategory(c.name))
+    .map((c) => c.id);
 }
 
 export default function DepartmentHeadUsersScreen() {
@@ -250,7 +258,7 @@ export default function DepartmentHeadUsersScreen() {
 
   const applyExecutorFields = useCallback((executor: ExecutorInCategory) => {
     setSpecialty(executor.specialty?.trim() ?? '');
-    setSelectedCategoryIds(executor.serviceCategories?.map((c) => c.id) ?? []);
+    setSelectedCategoryIds(executorCategoryIds(executor));
     if (executor.user?.full_name) setFullName(executor.user.full_name);
     if (executor.user?.phone) setPhone(formatPhone(executor.user.phone));
   }, []);
@@ -267,9 +275,7 @@ export default function DepartmentHeadUsersScreen() {
     setFullName(row.full_name ?? '');
     setPhone(formatPhone(row.phone ?? ''));
     setSpecialty(row.executor?.specialty?.trim() ?? '');
-    setSelectedCategoryIds(
-      row.executor?.serviceCategories?.map((c) => c.id) ?? []
-    );
+    setSelectedCategoryIds(row.executor ? executorCategoryIds(row.executor) : []);
     setDraftCompanyId(row.company_id != null ? String(row.company_id) : '');
     setNewPassword('');
     setConfirmPassword('');
@@ -333,7 +339,10 @@ export default function DepartmentHeadUsersScreen() {
         byId.set(id, { id: fromExecutor.id, name: fromExecutor.name });
       }
     }
-    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    // «Администрацию» ведёт Офис-менеджер: Исполнителю её не назначают.
+    return [...byId.values()]
+      .filter((c) => isExecutorServiceCategory(c.name))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   }, [categories, selectedCategoryIds, editingUser]);
 
   const initialRole = editingUser?.role as OfficeStaffRole | undefined;

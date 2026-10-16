@@ -124,6 +124,14 @@ export function classifyServiceCategory(
 }
 
 /**
+ * Категорию можно назначить Исполнителю. «Администрация» — направление заявок
+ * Офис-менеджера: Исполнителю её не назначают (бэк отклонит такой выбор).
+ */
+export function isExecutorServiceCategory(apiCategoryName: string | undefined | null): boolean {
+  return classifyServiceCategory(apiCategoryName) !== 'admin';
+}
+
+/**
  * Единый короткий заголовок направления для карточек, деталей и селектов:
  * «Админ», «Клининг», «Техника» и синонимы из API.
  */

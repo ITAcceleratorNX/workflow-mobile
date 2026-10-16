@@ -37,7 +37,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FontSizes, LineHeights, Spacing } from '@/constants/theme';
-import { formatServiceCategoryDisplayName } from '@/constants/requests';
+import { formatServiceCategoryDisplayName, isExecutorServiceCategory } from '@/constants/requests';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -330,10 +330,13 @@ export default function RegisterScreen() {
                     onValueChange={(v) =>
                       setFormData((p) => ({ ...p, service_category_id: v }))
                     }
-                    options={categories.map((c) => ({
-                      value: String(c.id),
-                      label: formatServiceCategoryDisplayName(c.name),
-                    }))}
+                    // Категории выбирает только Исполнитель: «Администрацию» ведёт Офис-менеджер.
+                    options={categories
+                      .filter((c) => isExecutorServiceCategory(c.name))
+                      .map((c) => ({
+                        value: String(c.id),
+                        label: formatServiceCategoryDisplayName(c.name),
+                      }))}
                     placeholder="Категория услуг"
                   />
                 </View>
