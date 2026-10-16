@@ -4,6 +4,7 @@ import { failureFromResponse, type RequestFailure } from '@/lib/api-errors';
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
 import { formDataFile } from '@/lib/form-data-file';
+import { isRequestStateMutation, notifyRequestStateChanged } from '@/lib/request-action-count';
 
 const { apiBaseUrl } = config;
 
@@ -132,6 +133,8 @@ export async function request<T>(
   try {
     console.log(`[API] ${init.method || 'GET'} ${path}`, { hasToken: !!token });
     const res = await fetch(url, { ...init, headers });
+    // Заявка сдвинулась по маршруту — бейдж «Заявки» перечитывает число.
+    if (res.ok && isRequestStateMutation(init.method, path)) notifyRequestStateChanged();
     if (res.status === 204) return { ok: true, data: undefined as T };
     const data = await res.json().catch(() => ({}));
 
@@ -1348,6 +1351,7 @@ export async function assignExecutorsToRequest(
         'Произошла ошибка';
       return { ok: false, error: detailMsg ? `${error}: ${detailMsg}` : error };
     }
+    notifyRequestStateChanged();
     return { ok: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Сетевая ошибка';
@@ -1391,6 +1395,7 @@ export async function createRequestGroup(
         'Ошибка создания заявки';
       return { ok: false, error: err };
     }
+    notifyRequestStateChanged();
     return { ok: true, data: data as RequestGroup };
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Ошибка создания заявки';

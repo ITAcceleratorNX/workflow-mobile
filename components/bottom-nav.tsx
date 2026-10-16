@@ -3,6 +3,8 @@ import * as Haptics from 'expo-haptics';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useRequestActionCount } from '@/hooks/use-request-action-count';
+import { formatRequestActionBadge } from '@/lib/request-action-count';
 import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 
 /** Отступ сверху + высота блока иконка+подпись (без safe area). Для `(tabs)/_layout`. */
@@ -42,6 +44,7 @@ export type BottomNavProps = {
 export function BottomNav({ state, navigation }: BottomNavProps) {
   const insets = useSafeAreaInsets();
   const hideBookingForm = useBookingTabUiStore((s) => s.hideBottomNavForBookingForm);
+  const requestActionCount = useRequestActionCount();
 
   const currentRouteName = state.routes[state.index]?.name ?? 'index';
   const currentTabRoute = state.routes[state.index];
@@ -82,13 +85,23 @@ export function BottomNav({ state, navigation }: BottomNavProps) {
       {NAV_ITEMS.map((item) => {
         const isActive = currentRouteName === item.routeName;
         const color = isActive ? ACTIVE_COLOR : INACTIVE_COLOR;
+        const badge = item.key === 'requests' ? formatRequestActionBadge(requestActionCount) : null;
         return (
           <Pressable
             key={item.key}
             onPress={() => handlePress(item.routeName)}
             style={styles.item}
+            accessibilityRole="button"
+            accessibilityLabel={badge ? `${item.label}, требуют действия: ${requestActionCount}` : item.label}
           >
-            <MaterialIcons name={item.icon} size={24} color={color} />
+            <View>
+              <MaterialIcons name={item.icon} size={24} color={color} />
+              {badge && (
+                <View style={styles.badge} pointerEvents="none">
+                  <Text style={styles.badgeText}>{badge}</Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.label, { color }]}>{item.label}</Text>
           </Pressable>
         );
@@ -120,5 +133,26 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 10,
     fontWeight: '500',
+  },
+  // Бейдж поверх иконки: размеры иконки и панели не меняются.
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -9,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: BAR_BACKGROUND,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: BAR_BACKGROUND,
+    fontSize: 10,
+    lineHeight: 12,
+    fontWeight: '700',
   },
 });
