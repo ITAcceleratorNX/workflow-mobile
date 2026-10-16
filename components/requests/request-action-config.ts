@@ -334,7 +334,7 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
     if (onAdminAcceptGroup && canProcessGroup && !request.taken_by_admin_id) {
       actions.push({
         icon: 'playlist-add-check',
-        label: 'Передать Офис-менеджеру',
+        label: 'Передать или назначить',
         onClick: onAdminAcceptGroup,
         variant: 'primary',
       });
@@ -487,7 +487,7 @@ export function getRequestPrimaryActions(params: GetActionsParams): PrimaryActio
   if (adminCanRoute && onAdminAcceptGroup) {
     actions.push({
       key: 'accept',
-      label: 'Передать Офис-менеджеру',
+      label: 'Передать или назначить',
       variant: adminCanRoute && onAdminTakeGroup ? 'default' : 'primary',
       onClick: onAdminAcceptGroup,
     });

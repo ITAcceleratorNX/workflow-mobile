@@ -558,7 +558,16 @@ export default function RequestDetailScreen() {
       try {
         const res = await patchRequestGroup(request.id, 1, body);
         if (res.ok) {
-          showToast({ title: 'Заявка передана офис-менеджеру', variant: 'success' });
+          const direct = body.sub_requests.filter((sr) => sr.executors?.length).length;
+          showToast({
+            title:
+              direct === 0
+                ? 'Заявка передана офис-менеджеру'
+                : direct === body.sub_requests.length
+                  ? 'Исполнитель назначен'
+                  : 'Исполнители назначены, остальное передано офис-менеджеру',
+            variant: 'success',
+          });
           refetch();
           setShowAcceptGroupModal(false);
         } else {

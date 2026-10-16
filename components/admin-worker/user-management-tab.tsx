@@ -20,11 +20,9 @@ import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
-  changeCategoryHead,
   changeUserPassword,
   getExecutorByUserId,
   getExecutors,
-  getExecutorsByCategory,
   getOfficeCompanies,
   getUsersForManagement,
   updateExecutor,
@@ -38,6 +36,13 @@ import {
 } from '@/lib/api';
 import { formatPhone } from '@/lib';
 import { useAuthStore } from '@/stores/auth-store';
+import {
+  formatExecutorOfficeAccess,
+  isExecutorOfficeAccessValid,
+  sameExecutorOfficeAccess,
+  toggleExecutorOffice,
+  type ExecutorOfficeAccess,
+} from '@/lib/executor-office-access';
 
 const ROLE_LABELS: Record<string, string> = {
   client: 'Клиент',
@@ -128,6 +133,10 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
   const [confirmPassword, setConfirmPassword] = useState('');
   const [newRole, setNewRole] = useState('');
   const [draftOfficeId, setDraftOfficeId] = useState('');
+  const [draftOfficeAccess, setDraftOfficeAccess] = useState<ExecutorOfficeAccess>({
+    all_offices: false,
+    office_ids: [],
+  });
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('+7 ');
   const [specialty, setSpecialty] = useState('');
@@ -141,13 +150,6 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
   const [companiesByOfficeId, setCompaniesByOfficeId] = useState<Record<number, Company[]>>({});
   const [draftCompanyId, setDraftCompanyId] = useState<string>('');
 
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [executors, setExecutors] = useState<ExecutorInCategory[]>([]);
-  const [selectedExecutorId, setSelectedExecutorId] = useState<number | null>(null);
-  const [isLoadingExecutors, setIsLoadingExecutors] = useState(false);
-  const [isChangingHead, setIsChangingHead] = useState(false);
-  const [changeHeadError, setChangeHeadError] = useState<string | null>(null);
-  const [showCategoryHeadPanel, setShowCategoryHeadPanel] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -253,25 +255,6 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     loadUsers();
   }, [isActive, loadUsers]);
 
-  useEffect(() => {
-    if (!selectedCategoryId) {
-      setExecutors([]);
-      setSelectedExecutorId(null);
-      return;
-    }
-    setIsLoadingExecutors(true);
-    setChangeHeadError(null);
-    getExecutorsByCategory(selectedCategoryId).then((res) => {
-      if (res.ok) {
-        setExecutors(res.data.filter((e) => e.user?.role === 'executor'));
-      } else {
-        setExecutors([]);
-        setChangeHeadError('Не удалось загрузить исполнителей');
-      }
-      setIsLoadingExecutors(false);
-    });
-  }, [selectedCategoryId]);
-
   const stats = useMemo(() => {
     const byRole: Record<string, number> = {};
     for (const u of officeUsers) {
@@ -346,8 +329,16 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
 
   const selectDraftOffice = useCallback(
     (id: string) => {
+      const prevOid = Number(draftOfficeId);
       setDraftOfficeId(id);
       const oidNum = Number(id);
+      // Основной офис Исполнителя меняется и в выборе офисов, остальные офисы остаются.
+      setDraftOfficeAccess((prev) => {
+        if (prev.all_offices || !Number.isFinite(oidNum) || oidNum <= 0) return prev;
+        const ids = prev.office_ids.filter((x) => x !== prevOid);
+        if (!ids.includes(oidNum)) ids.push(oidNum);
+        return { all_offices: false, office_ids: ids.sort((a, b) => a - b) };
+      });
       setSelectedCategoryIds((prev) => {
         if (!Number.isFinite(oidNum)) return prev;
         return prev.filter((catId) => {
@@ -361,7 +352,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
         void loadCompaniesForOffice(oidNum);
       }
     },
-    [categories, loadCompaniesForOffice]
+    [categories, draftOfficeId, loadCompaniesForOffice]
   );
 
   const selectRole = (roleId: string) => {
@@ -387,6 +378,12 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     setNewRole(user.role);
     setDraftOfficeId(user.office_id != null ? String(user.office_id) : '');
     setDraftCompanyId(user.company_id != null ? String(user.company_id) : '');
+    setDraftOfficeAccess(
+      user.executor_office_access ?? {
+        all_offices: false,
+        office_ids: user.office_id != null ? [Number(user.office_id)] : [],
+      }
+    );
     setFullName(user.full_name ?? '');
     setPhone(formatPhone(user.phone ?? ''));
     setSpecialty(executor?.specialty?.trim() ?? '');
@@ -410,6 +407,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     setSelectedCategoryIds([]);
     setDraftOfficeId('');
     setDraftCompanyId('');
+    setDraftOfficeAccess({ all_offices: false, office_ids: [] });
     setPasswordError(null);
     setRoleError(null);
   };
@@ -457,6 +455,10 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
         });
         return;
       }
+      if (!isExecutorOfficeAccessValid(draftOfficeAccess)) {
+        showToast({ title: 'Выберите хотя бы один офис или «Все офисы»', variant: 'destructive' });
+        return;
+      }
     }
 
     const initialOfficeNumeric =
@@ -501,6 +503,25 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     const companyChanged =
       !roleChanged && newRole === 'client' && draftCompanyNumeric !== initialCompanyId;
 
+    // При переводе Исполнителя в другой основной офис сервер заменяет в выборе прежний офис
+    // новым, поэтому сравниваем с тем, что получится после этой замены.
+    const accessAfterOfficeChange: ExecutorOfficeAccess | null = (() => {
+      if (initialRole !== 'executor' || !editUser.executor_office_access) {
+        return Number.isFinite(draftOfficeNumeric)
+          ? { all_offices: false, office_ids: [draftOfficeNumeric] }
+          : Number.isFinite(initialOfficeNumeric)
+            ? { all_offices: false, office_ids: [initialOfficeNumeric] }
+            : null;
+      }
+      const current = editUser.executor_office_access;
+      if (!officeChanged || current.all_offices) return current;
+      const ids = current.office_ids.filter((oid) => oid !== initialOfficeNumeric);
+      if (!ids.includes(draftOfficeNumeric)) ids.push(draftOfficeNumeric);
+      return { all_offices: false, office_ids: ids };
+    })();
+    const officeAccessChanged =
+      isExecutorForm && !sameExecutorOfficeAccess(draftOfficeAccess, accessAfterOfficeChange);
+
     if (
       !passwordFilled &&
       !officeChanged &&
@@ -508,7 +529,8 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       !needsUserProfileUpdate &&
       !executorFieldsChanged &&
       !promotingToExecutor &&
-      !companyChanged
+      !companyChanged &&
+      !officeAccessChanged
     ) {
       showToast({ title: 'Нет изменений', variant: 'default' });
       return;
@@ -596,29 +618,19 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       }
     }
 
+    if (officeAccessChanged) {
+      const accessRes = await updateUserProfile(editUser.id, { office_access: draftOfficeAccess });
+      if (!accessRes.ok) {
+        setSaving(false);
+        setRoleError(accessRes.error);
+        return;
+      }
+    }
+
     setSaving(false);
     showToast({ title: 'Сохранено', variant: 'success' });
     closeEdit();
     loadUsers();
-  };
-
-  const handleChangeCategoryHead = async () => {
-    if (!selectedCategoryId || !selectedExecutorId) return;
-    setChangeHeadError(null);
-    setIsChangingHead(true);
-    const result = await changeCategoryHead(selectedCategoryId, selectedExecutorId);
-    if (result.ok) {
-      const msg = result.data?.newHead?.name
-        ? `Новый руководитель: ${result.data.newHead.name}`
-        : 'Руководитель изменён';
-      showToast({ title: 'Готово', description: msg, variant: 'success' });
-      setSelectedCategoryId(null);
-      setSelectedExecutorId(null);
-      setExecutors([]);
-    } else {
-      setChangeHeadError(result.error);
-    }
-    setIsChangingHead(false);
   };
 
   const onRefresh = () => {
@@ -886,7 +898,15 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
                     <ThemedText style={{ color: textMuted, fontSize: 14 }}>{user.phone}</ThemedText>
                   </View>
                 ) : null}
-                {!officeFilterId && user.office?.name ? (
+                {user.role === 'executor' && user.executor_office_access ? (
+                  <View style={styles.metaRow}>
+                    <MaterialIcons name="business" size={15} color={textMuted} />
+                    <ThemedText style={{ color: textMuted, fontSize: 14 }}>
+                      {formatExecutorOfficeAccess(user.executor_office_access, offices) ||
+                        user.office?.name}
+                    </ThemedText>
+                  </View>
+                ) : !officeFilterId && user.office?.name ? (
                   <View style={styles.metaRow}>
                     <MaterialIcons name="business" size={15} color={textMuted} />
                     <ThemedText style={{ color: textMuted, fontSize: 14 }}>{user.office.name}</ThemedText>
@@ -905,123 +925,6 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
           </View>
         )}
 
-        <Pressable
-          onPress={() => setShowCategoryHeadPanel((v) => !v)}
-          style={[styles.collapsibleHeader, { borderColor: border, backgroundColor: surfaceElevated }]}
-        >
-          <View style={styles.collapsibleTitleRow}>
-            <MaterialIcons name="star-outline" size={22} color={primary} />
-            <View style={styles.collapsibleTextWrap}>
-              <ThemedText style={[styles.collapsibleTitle, { color: text }]}>
-                Руководитель категории
-              </ThemedText>
-              <ThemedText style={{ color: textMuted, fontSize: 12 }}>
-                Назначить исполнителя руководителем категории услуг
-              </ThemedText>
-            </View>
-          </View>
-          <MaterialIcons
-            name={showCategoryHeadPanel ? 'expand-less' : 'expand-more'}
-            size={24}
-            color={textMuted}
-          />
-        </Pressable>
-
-        {showCategoryHeadPanel ? (
-          <View style={[styles.categoryHeadCard, { borderColor: border, backgroundColor: surfaceElevated }]}>
-            <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Категория</ThemedText>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.pillsContent}
-              style={styles.pillsScroll}
-            >
-              {categories.map((c) => {
-                const active = selectedCategoryId === c.id;
-                return (
-                  <Pressable
-                    key={c.id}
-                    onPress={() => {
-                      setSelectedCategoryId(active ? null : c.id);
-                      setSelectedExecutorId(null);
-                    }}
-                    style={[
-                      styles.pill,
-                      { borderColor: border },
-                      active && { backgroundColor: `${primary}22`, borderColor: primary },
-                    ]}
-                  >
-                    <ThemedText
-                      style={{ color: active ? primary : text, fontSize: 13, fontWeight: '600' }}
-                    >
-                      {c.name}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-
-            {selectedCategoryId ? (
-              <>
-                <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Исполнитель</ThemedText>
-                {isLoadingExecutors ? (
-                  <ActivityIndicator color={primary} style={{ marginVertical: 12 }} />
-                ) : executors.length === 0 ? (
-                  <ThemedText style={{ color: textMuted, fontSize: 14, marginBottom: 8 }}>
-                    Нет исполнителей в этой категории
-                  </ThemedText>
-                ) : (
-                  <View style={styles.executorChips}>
-                    {executors.map((e) => {
-                      const active = selectedExecutorId === e.id;
-                      return (
-                        <Pressable
-                          key={e.id}
-                          onPress={() => setSelectedExecutorId(active ? null : e.id)}
-                          style={[
-                            styles.pill,
-                            { borderColor: border },
-                            active && { backgroundColor: primary, borderColor: primary },
-                          ]}
-                        >
-                          <ThemedText
-                            style={{
-                              color: active ? '#fff' : text,
-                              fontSize: 13,
-                              fontWeight: '600',
-                            }}
-                          >
-                            {e.user?.full_name ?? `Исполнитель #${e.id}`}
-                          </ThemedText>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                )}
-              </>
-            ) : null}
-
-            {changeHeadError ? (
-              <ThemedText style={{ color: danger, fontSize: 13, marginTop: 4 }}>{changeHeadError}</ThemedText>
-            ) : null}
-
-            <Pressable
-              style={[
-                styles.primaryButton,
-                { backgroundColor: primary },
-                (!selectedCategoryId || !selectedExecutorId || isChangingHead) && styles.buttonDisabled,
-              ]}
-              onPress={handleChangeCategoryHead}
-              disabled={!selectedCategoryId || !selectedExecutorId || isChangingHead}
-            >
-              {isChangingHead ? (
-                <ActivityIndicator color={onPrimary} />
-              ) : (
-                <ThemedText style={{ color: onPrimary, fontWeight: '600' }}>Назначить руководителя</ThemedText>
-              )}
-            </Pressable>
-          </View>
-        ) : null}
       </ScrollView>
 
       <KeyboardFormOverlay visible={!!editUser} backgroundColor="rgba(0,0,0,0.5)">
@@ -1101,7 +1004,64 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
                 <ThemedText style={{ color: danger, fontSize: 13 }}>{roleError}</ThemedText>
               ) : null}
 
-              <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Офис</ThemedText>
+              {isExecutorForm && sortedOffices.length > 0 ? (
+                <>
+                  <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Офис</ThemedText>
+                  <ThemedText style={{ color: textMuted, fontSize: 12, marginBottom: 8 }}>
+                    На заявки каких офисов можно назначать Исполнителя. «Все офисы» включает и
+                    новые офисы.
+                  </ThemedText>
+                  <View style={styles.officeAccessWrap}>
+                    {[{ id: 0, name: 'Все офисы' }, ...sortedOffices].map((o) => {
+                      const isAll = o.id === 0;
+                      const active = isAll
+                        ? draftOfficeAccess.all_offices
+                        : !draftOfficeAccess.all_offices &&
+                          draftOfficeAccess.office_ids.includes(Number(o.id));
+                      return (
+                        <Pressable
+                          key={o.id}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: active }}
+                          onPress={() =>
+                            setDraftOfficeAccess((prev) =>
+                              isAll
+                                ? prev.all_offices
+                                  ? {
+                                      all_offices: false,
+                                      office_ids: draftOfficeId ? [Number(draftOfficeId)] : [],
+                                    }
+                                  : { all_offices: true, office_ids: [] }
+                                : toggleExecutorOffice(prev, Number(o.id))
+                            )
+                          }
+                          style={[
+                            styles.pill,
+                            { borderColor: border },
+                            active && { backgroundColor: `${primary}22`, borderColor: primary },
+                          ]}
+                        >
+                          <ThemedText
+                            style={{ color: active ? primary : text, fontSize: 13, fontWeight: '600' }}
+                            numberOfLines={1}
+                          >
+                            {o.name}
+                          </ThemedText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : null}
+
+              <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>
+                {isExecutorForm ? 'Основной офис' : 'Офис'}
+              </ThemedText>
+              {isExecutorForm ? (
+                <ThemedText style={{ color: textMuted, fontSize: 12, marginBottom: 8 }}>
+                  Определяет категории услуг и Офис-менеджера Исполнителя.
+                </ThemedText>
+              ) : null}
               {['department-head', 'manager', 'admin-worker'].includes(editUser.role) ? (
                 <ThemedText style={{ color: textMuted, fontSize: 13, marginBottom: 8 }}>
                   Для пользователей с этой ролью смена офиса здесь недоступна.
@@ -1316,6 +1276,7 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', marginBottom: -4 },
   pillsScroll: { marginHorizontal: -16, flexGrow: 0 },
   pillsContent: { paddingHorizontal: 16, gap: 8, flexDirection: 'row' },
+  officeAccessWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   pill: {
     borderWidth: 1,
     borderRadius: 20,
@@ -1358,33 +1319,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  collapsibleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 8,
-  },
-  collapsibleTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  collapsibleTextWrap: { flex: 1, gap: 2 },
-  collapsibleTitle: { fontSize: 15, fontWeight: '600' },
-  categoryHeadCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    gap: 10,
-    marginTop: -4,
-  },
   fieldLabel: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
-  executorChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  primaryButton: {
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 4,
-  },
   buttonDisabled: { opacity: 0.5 },
   modalCard: { borderRadius: 16, padding: 20, gap: 4 },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 4 },

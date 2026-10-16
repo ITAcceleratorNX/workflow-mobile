@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
   Modal,
@@ -24,14 +24,19 @@ import {
 } from '@/constants/requests';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import {
+  getExecutors,
   getSubRequestCategoryId,
   type AcceptSubRequestPayload,
+  type ExecutorInCategory,
   type Office,
   type RequestGroup,
 } from '@/lib/api';
 
 import { useBottomSheetScrollMetrics } from './use-bottom-sheet-scroll-metrics';
 import { useSheetPanDismiss } from './use-sheet-pan-dismiss';
+
+/** Значение Select «Исполнитель»: заявка уходит Офис-менеджеру. */
+const HAND_TO_DEPARTMENT_HEAD = 'department-head';
 
 export type AdminAcceptRequestPayload = {
   request_type: string;
@@ -83,6 +88,11 @@ export function AdminAcceptRequestModal({
   /** category_id подзаявки в выбранном офисе (строка — значение Select). */
   const [subCategoryIds, setSubCategoryIds] = useState<Record<number, string>>({});
   const [localError, setLocalError] = useState<string | null>(null);
+  /** Исполнитель подзаявки при прямом назначении; HAND_TO_DEPARTMENT_HEAD — передать Офис-менеджеру. */
+  const [subExecutorIds, setSubExecutorIds] = useState<Record<number, string>>({});
+  /** Исполнители, которым открыт офис, по ключу `${officeId}:${categoryId}`; нет ключа — загружаются. */
+  const [executorsByKey, setExecutorsByKey] = useState<Record<string, ExecutorInCategory[]>>({});
+  const requestedExecutorKeys = useRef(new Set<string>());
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const {
@@ -139,6 +149,7 @@ export function AdminAcceptRequestModal({
     setOfficeId(String(request.office_id ?? ''));
     setSubSettings({});
     setSubCategoryIds({});
+    setSubExecutorIds({});
     setLocalError(null);
   }, [visible, request]);
 
@@ -185,7 +196,53 @@ export function AdminAcceptRequestModal({
 
   const setSubCategory = useCallback((subRequestId: number, value: string) => {
     setSubCategoryIds((prev) => ({ ...prev, [subRequestId]: value }));
+    setSubExecutorIds((prev) => ({ ...prev, [subRequestId]: HAND_TO_DEPARTMENT_HEAD }));
   }, []);
+
+  const officeNumericForExecutors = Number(officeId);
+  const executorKeyFor = useCallback(
+    (subRequestId: number) => {
+      const categoryId = Number(subCategoryIds[subRequestId]);
+      if (
+        !Number.isInteger(officeNumericForExecutors) ||
+        officeNumericForExecutors <= 0 ||
+        !Number.isInteger(categoryId) ||
+        categoryId <= 0
+      ) {
+        return null;
+      }
+      return `${officeNumericForExecutors}:${categoryId}`;
+    },
+    [officeNumericForExecutors, subCategoryIds]
+  );
+
+  /** Исполнители офиса заявки (выбран этот офис или «Все офисы») с категорией подзаявки. */
+  useEffect(() => {
+    if (!visible) return;
+    const keys = new Set(
+      subRequests.map((sr) => executorKeyFor(sr.id)).filter((k): k is string => k != null)
+    );
+    keys.forEach((key) => {
+      if (requestedExecutorKeys.current.has(key)) return;
+      requestedExecutorKeys.current.add(key);
+      const [oid, cid] = key.split(':').map(Number);
+      void getExecutors(cid, oid).then((res) => {
+        setExecutorsByKey((prev) => ({ ...prev, [key]: res.ok ? res.data : [] }));
+      });
+    });
+  }, [visible, subRequests, executorKeyFor]);
+
+  /** При смене офиса выбранные Исполнители могут быть ему не открыты — сбрасываем выбор. */
+  const selectOffice = useCallback((value: string) => {
+    setOfficeId(value);
+    setSubExecutorIds({});
+  }, []);
+
+  const directAssignCount = subRequests.filter((sr) => {
+    const picked = subExecutorIds[sr.id];
+    return picked && picked !== HAND_TO_DEPARTMENT_HEAD;
+  }).length;
+  const allDirect = subRequests.length > 0 && directAssignCount === subRequests.length;
 
   const handleAccept = async () => {
     if (!request) return;
@@ -225,6 +282,9 @@ export function AdminAcceptRequestModal({
         sla: requestType === 'planned' ? null : s?.sla ?? null,
         complexity: requestType === 'planned' ? null : s?.complexity ?? null,
         category_id: Number(subCategoryIds[sr.id]),
+        ...(subExecutorIds[sr.id] && subExecutorIds[sr.id] !== HAND_TO_DEPARTMENT_HEAD
+          ? { executors: [{ id: Number(subExecutorIds[sr.id]), role: 'leader' as const }] }
+          : {}),
       };
     });
     const payload: AdminAcceptRequestPayload = {
@@ -258,7 +318,7 @@ export function AdminAcceptRequestModal({
                   <View style={styles.handle} />
                 </View>
                 <ThemedText style={[styles.title, { color: textColor }]}>
-                  Передать Офис-менеджеру
+                  {allDirect ? 'Назначить Исполнителя' : 'Передать Офис-менеджеру'}
                 </ThemedText>
               </View>
             </GestureDetector>
@@ -284,7 +344,7 @@ export function AdminAcceptRequestModal({
             <ThemedText style={[styles.label, { color: mutedColor }]}>Офис</ThemedText>
             <Select
               value={officeId}
-              onValueChange={setOfficeId}
+              onValueChange={selectOffice}
               options={officeOptions}
               placeholder="Выберите офис"
             />
@@ -316,6 +376,39 @@ export function AdminAcceptRequestModal({
                   placeholder={categoriesLoading ? 'Загрузка...' : 'Выберите категорию'}
                   disabled={categoriesLoading || categoryOptions.length === 0}
                 />
+                {(() => {
+                  const key = executorKeyFor(sr.id);
+                  const list = key ? executorsByKey[key] : undefined;
+                  const executorsLoading = key != null && list === undefined;
+                  const executorList = list ?? [];
+                  return (
+                    <>
+                      <ThemedText style={[styles.subLabel, { color: mutedColor }]}>
+                        Исполнитель
+                      </ThemedText>
+                      <Select
+                        value={subExecutorIds[sr.id] || HAND_TO_DEPARTMENT_HEAD}
+                        onValueChange={(v) =>
+                          setSubExecutorIds((prev) => ({ ...prev, [sr.id]: v }))
+                        }
+                        options={[
+                          { value: HAND_TO_DEPARTMENT_HEAD, label: 'Передать Офис-менеджеру' },
+                          ...executorList.map((e) => ({
+                            value: String(e.id),
+                            label: e.user?.full_name || `Исполнитель #${e.id}`,
+                          })),
+                        ]}
+                        placeholder={executorsLoading ? 'Загрузка...' : 'Офис-менеджер'}
+                        disabled={!key || executorsLoading}
+                      />
+                      {key && list && executorList.length === 0 ? (
+                        <ThemedText style={[styles.hint, { color: mutedColor }]}>
+                          Нет Исполнителей, которым открыт этот офис и категория
+                        </ThemedText>
+                      ) : null}
+                    </>
+                  );
+                })()}
                 {requestType !== 'planned' && (
                   <View style={styles.row}>
                     <View style={styles.rowField}>
@@ -408,7 +501,7 @@ export function AdminAcceptRequestModal({
               ]}
             >
               <ThemedText style={[styles.actionLabel, styles.actionLabelPrimary]}>
-                {loading ? 'Отправка...' : 'Передать'}
+                {loading ? 'Отправка...' : allDirect ? 'Назначить' : 'Передать'}
               </ThemedText>
             </Pressable>
             <Pressable

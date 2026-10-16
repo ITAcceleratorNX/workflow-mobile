@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 
 import { failureFromResponse, type RequestFailure } from '@/lib/api-errors';
 import { config } from '@/lib/config';
+import { readExecutorOfficeAccess, type ExecutorOfficeAccess } from '@/lib/executor-office-access';
 import { useAuthStore } from '@/stores/auth-store';
 import { formDataFile } from '@/lib/form-data-file';
 import { isRequestStateMutation, notifyRequestStateChanged } from '@/lib/request-action-count';
@@ -569,6 +570,8 @@ export interface ExecutorInCategory {
   department_id?: number;
   user?: { id: number; full_name: string; phone?: string; role?: string; office_id?: number };
   serviceCategories?: Array<{ id: number; name: string }>;
+  /** Офисы, на заявки которых Исполнителя можно назначить. */
+  office_access?: ExecutorOfficeAccess | null;
 }
 
 export function normalizeExecutorInCategory(raw: unknown): ExecutorInCategory | null {
@@ -630,6 +633,7 @@ export function normalizeExecutorInCategory(raw: unknown): ExecutorInCategory | 
           : undefined,
     user,
     serviceCategories,
+    office_access: readExecutorOfficeAccess(o, user?.office_id ?? null),
   };
 }
 
@@ -691,18 +695,6 @@ export async function assignExecutorToCategory(
   );
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
-}
-
-export async function changeCategoryHead(
-  categoryId: number,
-  executorId: number
-): Promise<{ ok: true; data?: { newHead?: { name: string }; processedTasks?: { message?: string } } } | { ok: false; error: string }> {
-  const result = await request<{ newHead?: { name: string }; processedTasks?: { message?: string } }>(
-    `/service-categories/${categoryId}/change-head`,
-    { method: 'POST', body: JSON.stringify({ newHeadUserId: executorId }) }
-  );
-  if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, data: result.data };
 }
 
 export async function createSubcategory(
@@ -954,6 +946,8 @@ export interface AcceptSubRequestPayload {
   sla?: string | null;
   complexity?: string | null;
   category_id?: number;
+  /** Прямое назначение Администратором, минуя Офис-менеджера. */
+  executors?: { id: number; role: 'leader' | 'executor' }[];
 }
 
 export interface UpdateSubRequestPayload {
@@ -1478,12 +1472,17 @@ export async function getRegistrationRequests(filters?: {
   };
 }
 
-export async function approveRegistrationRequest(requestId: number): Promise<
-  { ok: true } | { ok: false; error: string }
-> {
+export async function approveRegistrationRequest(
+  requestId: number,
+  /** Офисы Исполнителя (только Администратор); без них открыт офис из регистрации. */
+  officeAccess?: ExecutorOfficeAccess
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await request<unknown>(
     `/registration-requests/${requestId}/approve`,
-    { method: 'PUT' }
+    {
+      method: 'PUT',
+      ...(officeAccess ? { body: JSON.stringify({ office_access: officeAccess }) } : {}),
+    }
   );
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
@@ -1543,6 +1542,8 @@ export interface OfficeUser {
   /** company_id заполнен только у клиентов; null — компания «Не указана». */
   company_id?: number | null;
   company?: { id: number; name: string } | null;
+  /** Офисы, на заявки которых Исполнителя можно назначить (только для роли executor). */
+  executor_office_access?: ExecutorOfficeAccess | null;
 }
 
 function normalizeManagementUser(raw: unknown): OfficeUser | null {
@@ -1590,7 +1591,9 @@ function normalizeManagementUser(raw: unknown): OfficeUser | null {
     const cname = typeof cc.name === 'string' ? cc.name : '';
     if (Number.isFinite(cid) && cname) company = { id: cid, name: cname };
   }
-  return { id, full_name, phone, role, office_id, office, company_id, company };
+  const executor_office_access =
+    role === 'executor' ? readExecutorOfficeAccess(o, office_id ?? null) : null;
+  return { id, full_name, phone, role, office_id, office, company_id, company, executor_office_access };
 }
 
 const USERS_MANAGEMENT_PAGE_SIZE = 100;
@@ -1759,6 +1762,8 @@ export async function updateUserProfile(
     category_ids?: number[];
     /** Привязка клиента к компании. null — снять (Не указана). undefined — не менять. */
     company_id?: number | null;
+    /** Офисы Исполнителя: один, несколько или «Все офисы» (только Администратор). */
+    office_access?: ExecutorOfficeAccess;
   }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const body: {
@@ -1767,6 +1772,7 @@ export async function updateUserProfile(
     office_id?: number;
     category_ids?: number[];
     company_id?: number | null;
+    office_access?: ExecutorOfficeAccess;
   } = {};
   if (data.full_name !== undefined) body.full_name = data.full_name.trim();
   if (data.phone !== undefined) body.phone = data.phone;
@@ -1775,6 +1781,7 @@ export async function updateUserProfile(
     body.category_ids = data.category_ids;
   }
   if (data.company_id !== undefined) body.company_id = data.company_id;
+  if (data.office_access !== undefined) body.office_access = data.office_access;
   const result = await request<unknown>(`/users/${userId}`, {
     method: 'PUT',
     body: JSON.stringify(body),

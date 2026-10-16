@@ -32,6 +32,12 @@ import {
 } from '@/lib/api';
 import { formatServiceCategoryDisplayName } from '@/constants/requests';
 import { formatRequestDate } from '@/lib/dateTimeUtils';
+import {
+  isExecutorOfficeAccessValid,
+  sameExecutorOfficeAccess,
+  toggleExecutorOffice,
+  type ExecutorOfficeAccess,
+} from '@/lib/executor-office-access';
 
 type TabType = 'requests' | 'management';
 
@@ -131,10 +137,35 @@ export default function AdminWorkerUsersScreen() {
     loadRequests();
   }, [loadRequests]);
 
+  // Офисы Исполнителя, выбранные до подтверждения: по умолчанию — офис из регистрации.
+  const [officeAccessByRequestId, setOfficeAccessByRequestId] = useState<
+    Record<number, ExecutorOfficeAccess>
+  >({});
+
+  const defaultOfficeAccess = useCallback((req: RegistrationRequestItem): ExecutorOfficeAccess => {
+    const oid = Number(req.office_id ?? req.office?.id);
+    return { all_offices: false, office_ids: Number.isFinite(oid) && oid > 0 ? [oid] : [] };
+  }, []);
+
+  const officeAccessFor = useCallback(
+    (req: RegistrationRequestItem) => officeAccessByRequestId[req.id] ?? defaultOfficeAccess(req),
+    [officeAccessByRequestId, defaultOfficeAccess]
+  );
+
   const handleApprove = useCallback(
-    async (requestId: number) => {
+    async (req: RegistrationRequestItem) => {
+      const requestId = req.id;
+      let officeAccess: ExecutorOfficeAccess | undefined;
+      if (req.role === 'executor') {
+        const chosen = officeAccessFor(req);
+        if (!isExecutorOfficeAccessValid(chosen)) {
+          showToast({ title: 'Выберите хотя бы один офис или «Все офисы»', variant: 'destructive' });
+          return;
+        }
+        if (!sameExecutorOfficeAccess(chosen, defaultOfficeAccess(req))) officeAccess = chosen;
+      }
       setActionRequestId(requestId);
-      const result = await approveRegistrationRequest(requestId);
+      const result = await approveRegistrationRequest(requestId, officeAccess);
       if (result.ok) {
         showToast({ title: 'Успешно', description: 'Запрос одобрен, пользователь создан', variant: 'success' });
         loadRequests();
@@ -143,7 +174,7 @@ export default function AdminWorkerUsersScreen() {
       }
       setActionRequestId(null);
     },
-    [showToast, loadRequests]
+    [showToast, loadRequests, officeAccessFor, defaultOfficeAccess]
   );
 
   const handleReject = useCallback(
@@ -436,6 +467,51 @@ export default function AdminWorkerUsersScreen() {
                   <ThemedText style={[styles.requestMeta, { color: textMuted }]}>
                     Дата: {formatRequestDate(req.created_at)}
                   </ThemedText>
+                  {req.status === 'pending' && req.role === 'executor' && offices.length > 0 && (
+                    <View style={styles.officeAccessBlock}>
+                      <ThemedText style={[styles.officeAccessLabel, { color: textMuted }]}>
+                        Офисы для назначения
+                      </ThemedText>
+                      <View style={styles.officeAccessWrap}>
+                        {[{ id: 0, name: 'Все офисы' }, ...offices].map((o) => {
+                          const access = officeAccessFor(req);
+                          const isAll = o.id === 0;
+                          const active = isAll
+                            ? access.all_offices
+                            : !access.all_offices && access.office_ids.includes(Number(o.id));
+                          return (
+                            <Pressable
+                              key={o.id}
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: active }}
+                              onPress={() =>
+                                setOfficeAccessByRequestId((prev) => ({
+                                  ...prev,
+                                  [req.id]: isAll
+                                    ? access.all_offices
+                                      ? defaultOfficeAccess(req)
+                                      : { all_offices: true, office_ids: [] }
+                                    : toggleExecutorOffice(access, Number(o.id)),
+                                }))
+                              }
+                              style={[
+                                styles.officeAccessPill,
+                                { borderColor: border },
+                                active && { backgroundColor: `${primary}22`, borderColor: primary },
+                              ]}
+                            >
+                              <ThemedText
+                                style={{ color: active ? primary : text, fontSize: 12, fontWeight: '600' }}
+                                numberOfLines={1}
+                              >
+                                {o.name}
+                              </ThemedText>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
                   {req.status === 'pending' && (
                     <>
                       <View style={styles.requestActions}>
@@ -449,7 +525,7 @@ export default function AdminWorkerUsersScreen() {
                             },
                             actionRequestId === req.id && styles.buttonDisabled,
                           ]}
-                          onPress={() => handleApprove(req.id)}
+                          onPress={() => handleApprove(req)}
                           disabled={actionRequestId === req.id}
                         >
                           {actionRequestId === req.id ? (
@@ -573,6 +649,17 @@ export default function AdminWorkerUsersScreen() {
 }
 
 const styles = StyleSheet.create({
+  officeAccessBlock: { marginTop: 10 },
+  officeAccessLabel: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', marginBottom: 6 },
+  officeAccessWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  officeAccessPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    minHeight: 32,
+    justifyContent: 'center',
+  },
   container: {
     flex: 1,
   },
