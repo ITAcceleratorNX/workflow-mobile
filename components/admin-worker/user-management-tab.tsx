@@ -36,7 +36,11 @@ import {
 } from '@/lib/api';
 import { formatPhone } from '@/lib';
 import { useAuthStore } from '@/stores/auth-store';
-import { isExecutorServiceCategory } from '@/constants/requests';
+import {
+  formatExecutorSpecialty,
+  formatServiceCategoryName,
+  isExecutorServiceCategory,
+} from '@/constants/requests';
 import {
   formatExecutorOfficeAccess,
   isExecutorOfficeAccessValid,
@@ -101,7 +105,7 @@ function applyExecutorToForm(
     setPhone?: (v: string) => void;
   }
 ) {
-  setters.setSpecialty(executor.specialty?.trim() ?? '');
+  setters.setSpecialty(formatExecutorSpecialty(executor.specialty));
   setters.setSelectedCategoryIds(executorCategoryIds(executor));
   if (setters.setFullName && executor.user?.full_name) {
     setters.setFullName(executor.user.full_name);
@@ -396,7 +400,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     );
     setFullName(user.full_name ?? '');
     setPhone(formatPhone(user.phone ?? ''));
-    setSpecialty(executor?.specialty?.trim() ?? '');
+    setSpecialty(formatExecutorSpecialty(executor?.specialty));
     setSelectedCategoryIds(executor ? executorCategoryIds(executor) : []);
     setNewPassword('');
     setConfirmPassword('');
@@ -495,7 +499,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     const executorFieldsChanged =
       useExecutorApiForProfile &&
       editingExecutor &&
-      (specialty.trim() !== (editingExecutor.specialty ?? '').trim() ||
+      (specialty.trim() !== formatExecutorSpecialty(editingExecutor.specialty) ||
         JSON.stringify([...selectedCategoryIds].sort()) !==
           JSON.stringify(
             (editingExecutor.serviceCategories?.map((c) => c.id) ?? []).sort()
@@ -1242,7 +1246,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
                                 fontWeight: '600',
                               }}
                             >
-                              {c.name}
+                              {formatServiceCategoryName(c.name)}
                             </ThemedText>
                           </Pressable>
                         );

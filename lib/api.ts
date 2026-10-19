@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 
 import { failureFromResponse, type RequestFailure } from '@/lib/api-errors';
+import { formatExecutorSpecialty } from '@/constants/requests';
 import { config } from '@/lib/config';
 import { readExecutorOfficeAccess, type ExecutorOfficeAccess } from '@/lib/executor-office-access';
 import { useAuthStore } from '@/stores/auth-store';
@@ -653,7 +654,7 @@ export function getExecutorDisplayParts(executor: ExecutorInCategory): {
 } {
   return {
     name: executor.user?.full_name ?? `Исполнитель #${executor.id}`,
-    specialty: executor.specialty?.trim() ?? '',
+    specialty: formatExecutorSpecialty(executor.specialty),
   };
 }
 
@@ -1035,7 +1036,7 @@ export async function adminCompleteRequest(
   return { ok: true };
 }
 
-/** «Взять в работу»: администратор закрепляет КТО/Клининг заявку за собой */
+/** «Взять в работу»: администратор закрепляет Техника/Клининг заявку за собой */
 export async function takeRequestGroup(
   groupId: number
 ): Promise<{ ok: true; data: RequestGroup } | { ok: false; error: string }> {

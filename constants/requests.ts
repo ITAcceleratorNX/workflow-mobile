@@ -123,6 +123,30 @@ export function classifyServiceCategory(
   return 'other';
 }
 
+/** Прежнее название технического направления — аббревиатура «КТО» (в БД её заменила миграция). */
+const LEGACY_TECH_NAMES = ['кто', 'kto'];
+const LEGACY_TECH_ABBREVIATION = /(^|[^0-9A-Za-zА-Яа-яЁё])(?:КТО|KTO)(?=$|[^0-9A-Za-zА-Яа-яЁё])/g;
+
+function replaceLegacyTechName(text: string | undefined | null, replacement: string): string {
+  const t = text?.trim() ?? '';
+  if (LEGACY_TECH_NAMES.includes(t.toLowerCase())) return replacement;
+  return t.replace(LEGACY_TECH_ABBREVIATION, `$1${replacement}`);
+}
+
+/**
+ * Название категории, как его завёл администратор, но без аббревиатуры «КТО» — для
+ * справочников и управления, где категории различаются по собственному названию.
+ */
+export function formatServiceCategoryName(apiCategoryName: string | undefined | null): string {
+  return replaceLegacyTechName(apiCategoryName, 'Техника');
+}
+
+/** Специальность Исполнителя: у технического направления — «Техник». */
+export function formatExecutorSpecialty(specialty: string | undefined | null): string {
+  const t = replaceLegacyTechName(specialty, 'Техник');
+  return t.toLowerCase() === 'техника' ? 'Техник' : t;
+}
+
 /**
  * Категорию можно назначить Исполнителю. «Администрация» — направление заявок
  * Офис-менеджера: Исполнителю её не назначают (бэк отклонит такой выбор).
@@ -146,10 +170,8 @@ export function formatServiceCategoryDisplayName(
       return 'Админ';
     case 'tech':
       return 'Техника';
-    default: {
-      const t = apiCategoryName?.trim() ?? '';
-      return t || 'Не указано';
-    }
+    default:
+      return formatServiceCategoryName(apiCategoryName) || 'Не указано';
   }
 }
 
@@ -180,7 +202,7 @@ export interface OfficeServiceCategory {
  * офиса у заявки прежний category_id остаётся чужим: исполнители подбираются по
  * офису категории, и дальнейший флоу уходит в старый офис.
  * Подбирает категорию нового офиса: сначала по точному названию, затем по
- * направлению (КТО / Клининг / Админ). Без совпадения — undefined: категорию
+ * направлению (Техника / Клининг / Админ). Без совпадения — undefined: категорию
  * выбирает администратор.
  */
 export function matchServiceCategoryInOffice(
@@ -220,7 +242,6 @@ export function getServiceCategoryVisualMeta(
   apiCategoryName: string | undefined | null
 ): ServiceCategoryVisualMeta {
   const kind = classifyServiceCategory(apiCategoryName);
-  const raw = apiCategoryName?.trim() ?? '';
 
   switch (kind) {
     case 'cleaning':
@@ -243,7 +264,7 @@ export function getServiceCategoryVisualMeta(
       };
     default:
       return {
-        title: raw || 'Категория',
+        title: formatServiceCategoryName(apiCategoryName) || 'Категория',
         description: null,
         icon: 'category',
       };

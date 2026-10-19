@@ -13,7 +13,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { isExecutorServiceCategory } from '@/constants/requests';
+import {
+  formatExecutorSpecialty,
+  formatServiceCategoryName,
+  isExecutorServiceCategory,
+} from '@/constants/requests';
 import {
   KeyboardFormOverlay,
   ScreenHeader,
@@ -73,12 +77,12 @@ function normalizeSearchText(value: string) {
 
 function userMatchesSearch(row: OfficeUserRow, query: string) {
   if (!query) return true;
-  const haystack = [row.full_name, row.phone, row.executor?.specialty]
+  const haystack = [row.full_name, row.phone, formatExecutorSpecialty(row.executor?.specialty)]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
   const categoryNames = (row.executor?.serviceCategories ?? [])
-    .map((c) => c.name)
+    .map((c) => formatServiceCategoryName(c.name))
     .join(' ')
     .toLowerCase();
   return `${haystack} ${categoryNames}`.includes(query);
@@ -257,7 +261,7 @@ export default function DepartmentHeadUsersScreen() {
   };
 
   const applyExecutorFields = useCallback((executor: ExecutorInCategory) => {
-    setSpecialty(executor.specialty?.trim() ?? '');
+    setSpecialty(formatExecutorSpecialty(executor.specialty));
     setSelectedCategoryIds(executorCategoryIds(executor));
     if (executor.user?.full_name) setFullName(executor.user.full_name);
     if (executor.user?.phone) setPhone(formatPhone(executor.user.phone));
@@ -274,7 +278,7 @@ export default function DepartmentHeadUsersScreen() {
     );
     setFullName(row.full_name ?? '');
     setPhone(formatPhone(row.phone ?? ''));
-    setSpecialty(row.executor?.specialty?.trim() ?? '');
+    setSpecialty(formatExecutorSpecialty(row.executor?.specialty));
     setSelectedCategoryIds(row.executor ? executorCategoryIds(row.executor) : []);
     setDraftCompanyId(row.company_id != null ? String(row.company_id) : '');
     setNewPassword('');
@@ -716,7 +720,7 @@ export default function DepartmentHeadUsersScreen() {
                         }}
                         numberOfLines={1}
                       >
-                        {c.name}
+                        {formatServiceCategoryName(c.name)}
                       </ThemedText>
                     </Pressable>
                   );
@@ -870,7 +874,7 @@ export default function DepartmentHeadUsersScreen() {
                 <View style={styles.metaRow}>
                   <MaterialIcons name="work-outline" size={16} color={muted} />
                   <ThemedText style={[styles.specialty, { color: text }]}>
-                    {row.executor.specialty}
+                    {formatExecutorSpecialty(row.executor.specialty)}
                   </ThemedText>
                 </View>
               ) : null}
@@ -881,7 +885,9 @@ export default function DepartmentHeadUsersScreen() {
                       key={c.id}
                       style={[styles.categoryTag, { borderColor: border, backgroundColor: surfaceMuted }]}
                     >
-                      <ThemedText style={{ color: muted, fontSize: 12 }}>{c.name}</ThemedText>
+                      <ThemedText style={{ color: muted, fontSize: 12 }}>
+                        {formatServiceCategoryName(c.name)}
+                      </ThemedText>
                     </View>
                   ))}
                 </View>
@@ -1070,7 +1076,7 @@ export default function DepartmentHeadUsersScreen() {
                           ]}
                         >
                           <ThemedText style={{ color: active ? '#fff' : text, fontSize: 13 }}>
-                            {c.name}
+                            {formatServiceCategoryName(c.name)}
                           </ThemedText>
                         </Pressable>
                       );

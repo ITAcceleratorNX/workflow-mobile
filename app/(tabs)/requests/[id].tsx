@@ -639,7 +639,7 @@ export default function RequestDetailScreen() {
     [request, refetch, showToast]
   );
 
-  /** «Взять в работу»: администратор закрепляет КТО/Клининг заявку за собой. */
+  /** «Взять в работу»: администратор закрепляет Техника/Клининг заявку за собой. */
   const handleAdminTakeGroup = useCallback(async () => {
     if (!request) return;
     setActionLoading(true);

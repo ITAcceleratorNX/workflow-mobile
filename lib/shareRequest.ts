@@ -1,6 +1,10 @@
 import { Share } from 'react-native';
 
-import { getTypeLabel, formatServiceCategoryDisplayName } from '@/constants/requests';
+import {
+  formatServiceCategoryDisplayName,
+  formatServiceCategoryName,
+  getTypeLabel,
+} from '@/constants/requests';
 import { config } from '@/lib/config';
 import type { RequestGroup, SubRequest } from '@/lib/api';
 
@@ -54,7 +58,7 @@ export function buildShareRequestParams(
     officeName: request.office?.name,
     officeAddress: request.office?.address,
     location: request.location_detail?.trim() || request.location?.trim(),
-    categoryName: sub?.category?.name?.trim() || sub?.title?.trim(),
+    categoryName: formatServiceCategoryName(sub?.category?.name) || sub?.title?.trim(),
     description: sub?.description?.trim(),
     createdDate: formatShareCreatedDate(request.created_date || sub?.created_date),
   };

@@ -15,6 +15,7 @@ import { EditableCatalogRow } from '@/components/categories/editable-catalog-row
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, ScreenHeader, Select, TextInput } from '@/components/ui';
+import { formatServiceCategoryName } from '@/constants/requests';
 import { FontSizes, FontWeights, Radius, Spacing } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
@@ -154,7 +155,7 @@ export function CategoryManagementScreen({
   const categoryOptions = useMemo(
     () => [
       { value: '', label: 'Выберите категорию' },
-      ...categories.map((c) => ({ value: String(c.id), label: c.name })),
+      ...categories.map((c) => ({ value: String(c.id), label: formatServiceCategoryName(c.name) })),
     ],
     [categories]
   );
@@ -193,7 +194,7 @@ export function CategoryManagementScreen({
       if (editingKey === `category-${cat.id}`) cancelEdit();
       Alert.alert(
         'Удалить категорию?',
-        `${cat.name}\n\nКатегория будет снята у исполнителей и в существующих заявках (поле станет пустым). Заявки не удаляются.`,
+        `${formatServiceCategoryName(cat.name)}\n\nКатегория будет снята у исполнителей и в существующих заявках (поле станет пустым). Заявки не удаляются.`,
         [
           { text: 'Отмена', style: 'cancel' },
           {
@@ -398,7 +399,7 @@ export function CategoryManagementScreen({
                   </ThemedText>
                   <TextInput
                     label="Название"
-                    placeholder="Например: КТО"
+                    placeholder="Например: Техника"
                     value={newCategoryName}
                     onChangeText={setNewCategoryName}
                     editable={!isCreatingCategory && editingKey == null}
@@ -447,13 +448,13 @@ export function CategoryManagementScreen({
                         icon="category"
                         iconBackgroundColor={accentSoft}
                         iconColor={primary}
-                        name={cat.name}
+                        name={formatServiceCategoryName(cat.name)}
                         subtitle={subcategoryCountLabel(subCount)}
                         isEditing={editingKey === key}
-                        draft={editingKey === key ? editDraft : cat.name}
+                        draft={editingKey === key ? editDraft : formatServiceCategoryName(cat.name)}
                         isSaving={savingKey === key}
                         {...rowTheme}
-                        onStartEdit={() => startEdit(key, cat.name)}
+                        onStartEdit={() => startEdit(key, formatServiceCategoryName(cat.name))}
                         onChangeDraft={setEditDraft}
                         onSave={handleSaveEdit}
                         onCancel={cancelEdit}
@@ -501,7 +502,7 @@ export function CategoryManagementScreen({
                         Новая подкатегория
                       </ThemedText>
                       <ThemedText style={[styles.formSubtitle, { color: textMuted }]}>
-                        в «{selectedCategory.name}»
+                        в «{formatServiceCategoryName(selectedCategory.name)}»
                       </ThemedText>
                       <TextInput
                         label="Название"
