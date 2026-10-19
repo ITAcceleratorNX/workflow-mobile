@@ -9,8 +9,10 @@ export const STATUS_LABELS: Record<string, string> = {
   in_progress: 'В обработке',
   awaiting_assignment: 'Ожидает назначения',
   execution: 'Исполнение',
+  awaiting_admin_review: 'На проверке',
+  awaiting_confirmation: 'Ожидает подтверждения',
   assigned: 'Назначена',
-  rejected: 'Отклонено',
+  rejected: 'Отклонена',
   cancelled: 'Отменено',
 };
 
@@ -71,6 +73,9 @@ export function getStatusBadgeTheme(status: string): {
     case 'assigned':
     case 'awaiting_assignment':
       return { bg: 'infoSoft', text: 'info' };
+    case 'awaiting_admin_review':
+    case 'awaiting_confirmation':
+      return { bg: 'warningSoft', text: 'warning' };
     default:
       return { bg: 'surfaceElevated', text: 'textSecondary' };
   }

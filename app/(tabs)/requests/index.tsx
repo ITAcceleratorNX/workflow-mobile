@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PageLoader, PullToRefresh, Select } from '@/components/ui';
+import { DeletionAuditList } from '@/components/requests/deletion-audit-list';
 import { LongTermBadge } from '@/components/requests/long-term-badge';
 import {
     formatServiceCategoryDisplayName,
@@ -31,6 +32,7 @@ import {
     type RequestGroupsRole,
     type RequestGroupsSegments,
 } from '@/lib/api';
+import { isRejectedRequest } from '@/lib/request-permissions';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 
@@ -72,6 +74,8 @@ function getStatusOptionsForRole(
     { value: 'in_progress', label: 'В обработке' },
     { value: 'awaiting_assignment', label: 'Ожидает назначения' },
     { value: 'execution', label: 'Исполнение' },
+    { value: 'awaiting_admin_review', label: 'На проверке' },
+    { value: 'awaiting_confirmation', label: 'Ожидает подтверждения' },
     { value: 'completed', label: 'Завершено' },
     { value: 'overdue', label: 'Просроченные' },
   ];
@@ -80,32 +84,32 @@ function getStatusOptionsForRole(
     case 'client':
       return [
         ...base.filter((o) => o.value !== 'overdue'),
-        { value: 'rejected', label: 'Отклонено' },
+        { value: 'rejected', label: 'Отклонена' },
       ];
     case 'admin-worker':
       return [
         ...base,
         { value: 'assigned', label: 'Назначен' },
         { value: 'long_term', label: 'Долгосрочные' },
-        { value: 'rejected', label: 'Отклонено' },
+        { value: 'rejected', label: 'Отклонена' },
       ];
     case 'department-head':
       return [
         ...base,
-        { value: 'rejected', label: 'Отклонено' },
+        { value: 'rejected', label: 'Отклонена' },
         { value: 'long_term', label: 'Долгосрочные' },
       ];
     case 'executor':
       return [
         ...base,
         { value: 'long_term', label: 'Долгосрочные' },
-        { value: 'rejected', label: 'Отклонено' },
+        { value: 'rejected', label: 'Отклонена' },
       ];
     case 'manager':
       return [
         ...base,
         { value: 'long_term', label: 'Долгосрочные' },
-        { value: 'rejected', label: 'Отклонено' },
+        { value: 'rejected', label: 'Отклонена' },
       ];
     default:
       return base;
@@ -119,7 +123,12 @@ const PERIOD_OPTIONS = [
   { value: 'year', label: 'Год' },
 ];
 
-/** Вкладки по ролям. admin-worker и department-head: только Входящие и Мои (без Повторяющиеся). */
+/** Вкладка «Отклонённые» (admin-worker, manager): только заявки со статусом rejected. */
+const REJECTED_TAB = 'rejected';
+/** Вкладка «Журнал удалений» (manager): контрольный журнал вместо списка заявок. */
+const DELETION_AUDIT_TAB = 'deleted';
+
+/** Вкладки по ролям. department-head: только Входящие и Мои. */
 const TABS_BY_ROLE: Record<string, { key: string; label: string }[]> = {
   executor: [
     { key: 'tasks', label: 'Мои задачи' },
@@ -129,6 +138,12 @@ const TABS_BY_ROLE: Record<string, { key: string; label: string }[]> = {
   'admin-worker': [
     { key: 'incoming', label: 'Входящие' },
     { key: 'my', label: 'Мои' },
+    { key: REJECTED_TAB, label: 'Отклонённые' },
+  ],
+  manager: [
+    { key: 'all', label: 'Все' },
+    { key: REJECTED_TAB, label: 'Отклонённые' },
+    { key: DELETION_AUDIT_TAB, label: 'Журнал удалений' },
   ],
   'department-head': [
     { key: 'incoming', label: 'Входящие' },
@@ -373,6 +388,10 @@ export default function RequestsListScreen() {
   const tabsConfig = role ? TABS_BY_ROLE[role] ?? null : null;
   const firstTabKey = tabsConfig?.[0]?.key ?? 'all';
   const [activeTab, setActiveTab] = useState(firstTabKey);
+  const isRejectedTab = activeTab === REJECTED_TAB;
+  const isDeletionAuditTab = role === 'manager' && activeTab === DELETION_AUDIT_TAB;
+  /** Pull-to-refresh на вкладке журнала перечитывает журнал. */
+  const [auditReloadKey, setAuditReloadKey] = useState(0);
 
   const statusOptions = useMemo(
     () => getStatusOptionsForRole(role),
@@ -482,29 +501,47 @@ export default function RequestsListScreen() {
     }
   }, [role]);
 
-  useEffect(() => {
-    load(1);
-  }, [load]);
+  // Перечитываем список при каждом возврате на экран: статус заявки могли изменить
+  // другие участники (отклонить, подтвердить, вернуть), а вкладка остаётся смонтированной.
+  useFocusEffect(
+    useCallback(() => {
+      load(1);
+    }, [load])
+  );
 
   const onRefresh = useCallback(async () => {
+    if (isDeletionAuditTab) {
+      setAuditReloadKey((k) => k + 1);
+      return;
+    }
     setRefreshing(true);
     setHasMore(true);
     await load(1);
     setRefreshing(false);
-  }, [load]);
+  }, [load, isDeletionAuditTab]);
 
   const onEndReached = useCallback(() => {
-    if (!hasMore || loading || loadingMore) return;
+    if (isDeletionAuditTab || !hasMore || loading || loadingMore) return;
     setLoadingMore(true);
     load(page + 1).finally(() => setLoadingMore(false));
-  }, [hasMore, loading, loadingMore, page, load]);
+  }, [hasMore, loading, loadingMore, page, load, isDeletionAuditTab]);
 
   const rawListForDisplay = useMemo(() => {
+    if (isDeletionAuditTab) return [];
+    if (isRejectedTab) {
+      // Отклонённые из всех вкладок роли, без повторов.
+      const source = segments ? Object.values(segments).flat() : list;
+      const byId = new Map<number, RequestGroup>();
+      source.forEach((r) => {
+        if (isRejectedRequest(r)) byId.set(r.id, r);
+      });
+      return [...byId.values()];
+    }
     if (segments && activeTab && segments[activeTab]) {
       return segments[activeTab];
     }
     return list;
-  }, [segments, activeTab, list]);
+  }, [segments, activeTab, list, isRejectedTab, isDeletionAuditTab]);
 
   const sortedList = useMemo(() => {
     let base = rawListForDisplay;
@@ -518,7 +555,7 @@ export default function RequestsListScreen() {
       });
     } else {
       const statusOk = (r: RequestGroup) => {
-        if (filterStatus === 'all') return true;
+        if (filterStatus === 'all' || isRejectedTab) return true;
         if (filterStatus === 'long_term') {
           return isLongTermRequestGroup(r);
         }
@@ -556,7 +593,7 @@ export default function RequestsListScreen() {
       const db = new Date(b.created_date).getTime();
       return Number.isNaN(db) ? 0 : Number.isNaN(da) ? 1 : db - da;
     });
-  }, [rawListForDisplay, role, filterStatus, filterPriority, filterOffice, filterPeriod]);
+  }, [rawListForDisplay, role, filterStatus, filterPriority, filterOffice, filterPeriod, isRejectedTab]);
 
   const openDetail = useCallback(
     (request: RequestGroup) => {
@@ -609,64 +646,68 @@ export default function RequestsListScreen() {
           </View>
         )}
 
-        <View style={styles.filtersRow}>
-          {showStatusFilter && (
-            <View style={styles.filterItem}>
-              <Select
-                value={filterStatus}
-                onValueChange={setFilterStatus}
-                options={statusOptions}
-                placeholder="Статус"
-              />
-            </View>
-          )}
-          <View style={styles.filterItem}>
-            <Select
-              value={filterPriority}
-              onValueChange={setFilterPriority}
-              options={TYPE_OPTIONS}
-              placeholder="Тип"
-            />
-          </View>
-        </View>
-        {(role === 'manager' || role === 'admin-worker') && (
-          <View style={styles.filtersRow}>
-            <View style={styles.filterItem}>
-              <Select
-                value={filterOffice}
-                onValueChange={setFilterOffice}
-                options={officeOptions}
-                placeholder="Офис"
-              />
-            </View>
-            {role === 'manager' && (
+        {!isDeletionAuditTab && (
+          <>
+            <View style={styles.filtersRow}>
+              {showStatusFilter && !isRejectedTab && (
+                <View style={styles.filterItem}>
+                  <Select
+                    value={filterStatus}
+                    onValueChange={setFilterStatus}
+                    options={statusOptions}
+                    placeholder="Статус"
+                  />
+                </View>
+              )}
               <View style={styles.filterItem}>
                 <Select
-                  value={filterPeriod}
-                  onValueChange={setFilterPeriod}
-                  options={PERIOD_OPTIONS}
-                  placeholder="Период"
+                  value={filterPriority}
+                  onValueChange={setFilterPriority}
+                  options={TYPE_OPTIONS}
+                  placeholder="Тип"
                 />
               </View>
+            </View>
+            {(role === 'manager' || role === 'admin-worker') && (
+              <View style={styles.filtersRow}>
+                <View style={styles.filterItem}>
+                  <Select
+                    value={filterOffice}
+                    onValueChange={setFilterOffice}
+                    options={officeOptions}
+                    placeholder="Офис"
+                  />
+                </View>
+                {role === 'manager' && (
+                  <View style={styles.filterItem}>
+                    <Select
+                      value={filterPeriod}
+                      onValueChange={setFilterPeriod}
+                      options={PERIOD_OPTIONS}
+                      placeholder="Период"
+                    />
+                  </View>
+                )}
+              </View>
             )}
-          </View>
-        )}
 
-        <Pressable
-          onPress={openCreate}
-          accessibilityRole="button"
-          accessibilityLabel="Создать заявку"
-          style={({ pressed }) => [
-            styles.createBtn,
-            styles.createBtnFullWidth,
-            { backgroundColor: primaryColor, opacity: pressed ? 0.85 : 1 },
-          ]}
-        >
-          <MaterialIcons name="add" size={20} color={onPrimary} />
-          <ThemedText style={[styles.createBtnText, { color: onPrimary }]}>
-            Создать
-          </ThemedText>
-        </Pressable>
+            <Pressable
+              onPress={openCreate}
+              accessibilityRole="button"
+              accessibilityLabel="Создать заявку"
+              style={({ pressed }) => [
+                styles.createBtn,
+                styles.createBtnFullWidth,
+                { backgroundColor: primaryColor, opacity: pressed ? 0.85 : 1 },
+              ]}
+            >
+              <MaterialIcons name="add" size={20} color={onPrimary} />
+              <ThemedText style={[styles.createBtnText, { color: onPrimary }]}>
+                Создать
+              </ThemedText>
+            </Pressable>
+          </>
+        )}
       </View>
     ),
     [
@@ -687,10 +728,12 @@ export default function RequestsListScreen() {
       showStatusFilter,
       statusOptions,
       officeOptions,
+      isRejectedTab,
+      isDeletionAuditTab,
     ]
   );
 
-  if (loading && sortedList.length === 0) {
+  if (loading && sortedList.length === 0 && !isDeletionAuditTab) {
     return (
       <ThemedView style={styles.centered}>
         <View
@@ -737,12 +780,16 @@ export default function RequestsListScreen() {
             ) : null
           }
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <MaterialIcons name="inbox" size={48} color={mutedColor} />
-              <ThemedText style={[styles.emptyText, { color: mutedColor }]}>
-                {error || 'Нет заявок'}
-              </ThemedText>
-            </View>
+            isDeletionAuditTab ? (
+              <DeletionAuditList reloadKey={auditReloadKey} />
+            ) : (
+              <View style={styles.empty}>
+                <MaterialIcons name="inbox" size={48} color={mutedColor} />
+                <ThemedText style={[styles.emptyText, { color: mutedColor }]}>
+                  {error || (isRejectedTab ? 'Отклонённых заявок нет' : 'Нет заявок')}
+                </ThemedText>
+              </View>
+            )
           }
           renderItem={({ item }) => (
             <RequestCard

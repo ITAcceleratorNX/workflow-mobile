@@ -14,7 +14,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { AssignExecutorsModal } from '@/components/requests/assign-executors-modal';
 import { CompleteTaskModal } from '@/components/requests/complete-task-modal';
+import { ClientRemarkModal } from '@/components/requests/client-remark-modal';
 import { CommentsModal } from '@/components/requests/comments-modal';
+import { DeleteRequestModal } from '@/components/requests/delete-request-modal';
 import {
   AdminAcceptRequestModal,
   AdminRejectRequestModal,
@@ -24,6 +26,8 @@ import { EditRequestGroupModal } from '@/components/requests/edit-request-group-
 import { RatingModal } from '@/components/requests/rating-modal';
 import { RedirectModal } from '@/components/requests/redirect-modal';
 import { RejectModal } from '@/components/requests/reject-modal';
+import { RequestClosureInfo } from '@/components/requests/request-closure-info';
+import { RequestRejectionInfo } from '@/components/requests/request-rejection-info';
 import { RequestActionMenu, type RequestUserRole } from '@/components/requests/request-action-menu';
 import {
   getRequestPrimaryActions,
@@ -43,8 +47,11 @@ import { useToast } from '@/context/toast-context';
 import {
   assignExecutorsToRequest,
   changeExecutorsToRequest,
+  clientConfirmRequest,
+  clientRemarkRequest,
+  confirmRequestWork,
   completeRequest,
-  deleteRequest,
+  deleteRequestGroup,
   executeRequest,
   getExecutors,
   getSubRequestCategoryId,
@@ -121,6 +128,11 @@ export default function RequestDetailScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAcceptGroupModal, setShowAcceptGroupModal] = useState(false);
   const [showRejectGroupModal, setShowRejectGroupModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [showRemarkModal, setShowRemarkModal] = useState(false);
+  const [remarkError, setRemarkError] = useState<string | null>(null);
 
   const [taskForComplete, setTaskForComplete] = useState<SubRequest | null>(null);
   const [subForReject, setSubForReject] = useState<SubRequest | null>(null);
@@ -303,8 +315,9 @@ export default function RequestDetailScreen() {
 
   const defaultStaffCompleteComment =
     role === 'department-head' ? 'Завершено офис-менеджером' : 'Завершено администратором';
+  /** Сотрудник отметил выполнение сам — заявка сразу уходит Клиенту на подтверждение. */
   const staffCompleteSuccessTitle =
-    role === 'department-head' ? 'Заявка завершена' : 'Заявка завершена администратором';
+    'Выполнение отмечено — заявка передана Клиенту на подтверждение';
 
   const handleCompleteTask = useCallback(
     async (comment: string, photoUris: string[]) => {
@@ -365,7 +378,7 @@ export default function RequestDetailScreen() {
           }
         }
         if (res.ok) {
-          showToast({ title: 'Заявка завершена', variant: 'success' });
+          showToast({ title: 'Работы отмечены выполненными', variant: 'success' });
           setShowCompleteModal(false);
           setTaskForComplete(null);
           refetch();
@@ -517,38 +530,124 @@ export default function RequestDetailScreen() {
     [subForAssign, refetch, showToast]
   );
 
-  const handleDelete = useCallback(
-    (sub: SubRequest) => {
-      Alert.alert(
-        'Удалить заявку?',
-        'Это действие нельзя отменить.',
-        [
-          { text: 'Отмена', style: 'cancel' },
-          {
-            text: 'Удалить',
-            style: 'destructive',
-            onPress: async () => {
-              // В демо-режиме просто закрываем экран, ничего не шлём на сервер
-              if (isGuest && request && request.id < 0) {
-                showToast({ title: 'Демо', description: 'Заявка удалена локально', variant: 'default' });
-                goBack();
-                return;
-              }
+  /** Удаление — только Руководитель платформы: вся заявка, логически, с необязательной причиной. */
+  const handleDelete = useCallback(() => {
+    setDeleteError(null);
+    setShowDeleteModal(true);
+  }, []);
 
-              const res = await deleteRequest(sub.id);
-              if (res.ok) {
-                showToast({ title: 'Заявка удалена', variant: 'success' });
-                goBack();
-              } else {
-                showToast({ title: res.error, variant: 'destructive' });
-              }
-            },
-          },
-        ]
-      );
+  const handleConfirmDelete = useCallback(
+    async (reason: string | null) => {
+      if (!request) return;
+      // В демо-режиме просто закрываем экран, ничего не шлём на сервер
+      if (isGuest && request.id < 0) {
+        setShowDeleteModal(false);
+        showToast({ title: 'Демо', description: 'Заявка удалена локально', variant: 'default' });
+        goBack();
+        return;
+      }
+      setDeleting(true);
+      setDeleteError(null);
+      try {
+        const res = await deleteRequestGroup(request.id, reason);
+        if (res.ok) {
+          setShowDeleteModal(false);
+          showToast({
+            title: 'Заявка удалена',
+            description: 'Запись сохранена в журнале удалений',
+            variant: 'success',
+          });
+          goBack();
+        } else {
+          setDeleteError(res.error);
+        }
+      } finally {
+        setDeleting(false);
+      }
     },
     [goBack, showToast, isGuest, request]
   );
+
+  /** Администратор подтверждает выполненные работы — заявка уходит Клиенту. */
+  const handleAdminConfirmWork = useCallback(() => {
+    if (!request) return;
+    Alert.alert(
+      'Подтвердить выполнение?',
+      'Заявка уйдёт Клиенту на подтверждение. Если он не ответит за 24 часа, она закроется автоматически.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Подтвердить',
+          onPress: async () => {
+            setActionLoading(true);
+            try {
+              const res = await confirmRequestWork(request.id);
+              if (res.ok) {
+                showToast({ title: 'Заявка передана Клиенту на подтверждение', variant: 'success' });
+                refetch();
+              } else {
+                showToast({ title: res.error, variant: 'destructive' });
+              }
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [request, refetch, showToast]);
+
+  /** Автор принимает результат — заявка закрывается. */
+  const handleClientConfirm = useCallback(() => {
+    if (!request) return;
+    Alert.alert('Подтвердить выполнение?', 'Заявка будет закрыта.', [
+      { text: 'Отмена', style: 'cancel' },
+      {
+        text: 'Подтвердить',
+        onPress: async () => {
+          setActionLoading(true);
+          try {
+            const res = await clientConfirmRequest(request.id);
+            if (res.ok) {
+              showToast({ title: 'Заявка закрыта', description: 'Спасибо за подтверждение', variant: 'success' });
+              refetch();
+            } else {
+              showToast({ title: res.error, variant: 'destructive' });
+            }
+          } finally {
+            setActionLoading(false);
+          }
+        },
+      },
+    ]);
+  }, [request, refetch, showToast]);
+
+  /** Автор возвращает заявку на доработку с замечаниями. */
+  const handleClientRemark = useCallback(
+    async (remark: string) => {
+      if (!request || !remark) return;
+      setRemarkError(null);
+      setActionLoading(true);
+      try {
+        const res = await clientRemarkRequest(request.id, remark);
+        if (res.ok) {
+          setShowRemarkModal(false);
+          showToast({ title: 'Замечания отправлены', description: 'Заявка возвращена на доработку', variant: 'success' });
+          refetch();
+        } else {
+          setRemarkError(res.error);
+        }
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [request, refetch, showToast]
+  );
+
+  const openRemarkModal = useCallback(() => {
+    setRemarkError(null);
+    setShowRemarkModal(true);
+  }, []);
 
   const handleAdminAccept = useCallback(
     async (body: AdminAcceptRequestPayload) => {
@@ -768,6 +867,9 @@ export default function RequestDetailScreen() {
           onAdminCompleteGroup: handleAdminCompleteGroup,
           onStaffStartGroup: (s) => void handleStaffStartGroup(s),
           onAdminTakeGroup: () => void handleAdminTakeGroup(),
+          onAdminConfirmWork: handleAdminConfirmWork,
+          onClientConfirm: handleClientConfirm,
+          onClientRemark: openRemarkModal,
           onAdminAcceptGroup: () => {
             setAdminAcceptError(null);
             setShowAcceptGroupModal(true);
@@ -856,6 +958,9 @@ export default function RequestDetailScreen() {
             onAdminCompleteGroup={handleAdminCompleteGroup}
             onStaffStartGroup={(s) => void handleStaffStartGroup(s)}
             onAdminTakeGroup={() => void handleAdminTakeGroup()}
+            onAdminConfirmWork={handleAdminConfirmWork}
+            onClientConfirm={handleClientConfirm}
+            onClientRemark={openRemarkModal}
             onAdminAcceptGroup={() => {
               setAdminAcceptError(null);
               setShowAcceptGroupModal(true);
@@ -880,6 +985,13 @@ export default function RequestDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <RequestDetailHeader request={request} sub={sub} isLongTerm={isLongTerm} />
+
+        <RequestRejectionInfo request={request} userRole={role} />
+
+        <RequestClosureInfo
+          request={request}
+          isAuthor={user?.id != null && Number(request.client_id) === Number(user.id)}
+        />
 
         {isAdministrative && role === 'admin-worker' ? (
           <RequestObserverNotice text="Административная заявка. Её ведёт офис-менеджер офиса — вы видите её для контроля статуса и истории." />
@@ -1013,6 +1125,27 @@ export default function RequestDetailScreen() {
           />
         </>
       )}
+
+      {showRemarkModal ? (
+        <ClientRemarkModal
+          visible
+          loading={actionLoading}
+          error={remarkError}
+          onClose={() => setShowRemarkModal(false)}
+          onSubmit={handleClientRemark}
+        />
+      ) : null}
+
+      {role === 'manager' ? (
+        <DeleteRequestModal
+          visible={showDeleteModal}
+          requestId={request.id}
+          loading={deleting}
+          error={deleteError}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={handleConfirmDelete}
+        />
+      ) : null}
 
       <RejectModal
         visible={showRejectModal}

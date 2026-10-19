@@ -1,6 +1,13 @@
 import type { MaterialIcons } from '@expo/vector-icons';
 import { isAdministrativeRequestGroup } from '@/constants/requests';
 import type { RequestGroup, SubRequest } from '@/lib/api';
+import {
+  canRateWork,
+  canClientRespond,
+  canConfirmWork,
+  canDeleteRequests,
+  canRejectRequest,
+} from '@/lib/request-permissions';
 
 export type RequestUserRole =
   | 'client'
@@ -44,6 +51,12 @@ export interface GetActionsParams {
   onStaffStartGroup?: (subReq: SubRequest) => void;
   /** «Взять в работу» — администратор закрепляет Техника/Клининг заявку за собой. */
   onAdminTakeGroup?: () => void;
+  /** «Подтвердить выполнение» — Администратор передаёт выполненные работы Клиенту. */
+  onAdminConfirmWork?: () => void;
+  /** Автор заявки принимает результат. */
+  onClientConfirm?: () => void;
+  /** Автор заявки возвращает её на доработку с замечаниями. */
+  onClientRemark?: () => void;
   onEditRequestGroup?: () => void;
   onOpenComments?: () => void;
 }
@@ -117,6 +130,9 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
     onAdminRejectGroup,
     onStaffStartGroup,
     onAdminTakeGroup,
+    onAdminConfirmWork,
+    onClientConfirm,
+    onClientRemark,
     onEditRequestGroup,
     onOpenComments,
   } = params;
@@ -152,9 +168,30 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
     });
   }
 
+  // Выполненная заявка ждёт автора: закрыть её вместо него другие роли не могут.
+  if (canClientRespond(userId, request)) {
+    if (onClientConfirm) {
+      actions.push({
+        icon: 'check-circle',
+        label: 'Подтвердить',
+        onClick: onClientConfirm,
+        variant: 'primary',
+      });
+    }
+    if (onClientRemark) {
+      actions.push({
+        icon: 'rate-review',
+        label: 'Есть замечания',
+        onClick: onClientRemark,
+        variant: 'default',
+      });
+    }
+  }
+
   if (userRole === 'client') {
     if (isSub && subRequest) {
-      if (subRequest.status === 'completed' && onRateRequest) {
+      // Оценка необязательна и доступна после закрытия заявки.
+      if (subRequest.status === 'completed' && canRateWork(request) && onRateRequest) {
         actions.push({
           icon: 'star',
           label: subRequest.rating ? 'Изменить оценку' : 'Оценить работу',
@@ -162,21 +199,6 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
           variant: 'primary',
         });
       }
-      if (subRequest.status === 'in_progress' && onDelete) {
-        actions.push({
-          icon: 'delete',
-          label: 'Удалить заявку',
-          onClick: () => onDelete(subRequest),
-          variant: 'destructive',
-        });
-      }
-    } else if (!isSub && request.status === 'in_progress' && onDelete) {
-      actions.push({
-        icon: 'delete',
-        label: 'Удалить заявку',
-        onClick: () => onDelete(request.requests?.[0] ?? ({} as SubRequest)),
-        variant: 'destructive',
-      });
     }
   }
 
@@ -231,7 +253,7 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
   }
 
   if (userRole === 'manager') {
-    if (isSub && subRequest?.status === 'completed' && onRateRequest) {
+    if (isSub && subRequest?.status === 'completed' && canRateWork(request) && onRateRequest) {
       actions.push({
         icon: 'star',
         label: subRequest.rating ? 'Изменить оценку' : 'Оценить работу',
@@ -239,11 +261,12 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
         variant: 'primary',
       });
     }
+    // Удалять заявки может только Руководитель платформы — логически, с записью в журнале.
     const deleteTarget = isSub && subRequest ? subRequest : request.requests?.[0];
-    if (onDelete && deleteTarget) {
+    if (onDelete && deleteTarget && canDeleteRequests(userRole)) {
       actions.push({
         icon: 'delete',
-        label: 'Удалить',
+        label: 'Удалить заявку',
         onClick: () => onDelete(deleteTarget),
         variant: 'destructive',
       });
@@ -307,20 +330,21 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
         variant: 'primary',
       });
     }
-    if (onDelete) {
-      actions.push({
-        icon: 'delete',
-        label: 'Удалить заявку',
-        onClick: () => onDelete(subRequest),
-        variant: 'destructive',
-      });
-    }
   }
 
   if (userRole === 'admin-worker' && isSub && subRequest) {
     // Административную заявку администратор не подтверждает, не отклоняет,
     // не завершает и не редактирует — она закреплена за офис-менеджером.
     const canProcessGroup = request.status === 'in_progress' && !isAdministrative;
+
+    if (onAdminConfirmWork && canConfirmWork(userRole, request)) {
+      actions.push({
+        icon: 'check-circle',
+        label: 'Подтвердить выполнение',
+        onClick: onAdminConfirmWork,
+        variant: 'primary',
+      });
+    }
 
     if (onAdminTakeGroup && canProcessGroup && !request.taken_by_admin_id) {
       actions.push({
@@ -340,7 +364,8 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
       });
     }
 
-    if (onAdminRejectGroup && canProcessGroup) {
+    // Отклонить можно только новую заявку до первоначального подтверждения.
+    if (onAdminRejectGroup && canProcessGroup && canRejectRequest(userRole, request)) {
       actions.push({
         icon: 'cancel',
         label: 'Отклонить заявку',
@@ -363,7 +388,7 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
       });
     }
 
-    if (subRequest.status === 'completed' && onRateRequest) {
+    if (subRequest.status === 'completed' && canRateWork(request) && onRateRequest) {
       actions.push({
         icon: 'star',
         label: subRequest.rating ? 'Изменить оценку' : 'Оценить работу',
@@ -392,14 +417,6 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
         variant: 'default',
       });
     }
-    if (!isAdministrative && onDelete) {
-      actions.push({
-        icon: 'delete',
-        label: 'Удалить заявку',
-        onClick: () => onDelete(subRequest),
-        variant: 'destructive',
-      });
-    }
     if (
       !isAdministrative &&
       request.status !== 'completed' &&
@@ -421,20 +438,20 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
         variant: 'default',
       });
     }
-    if (!isAdministrative && onDelete && request.requests?.[0]) {
-      actions.push({
-        icon: 'delete',
-        label: 'Удалить',
-        onClick: () => onDelete(request.requests[0]),
-        variant: 'destructive',
-      });
-    }
   }
 
   return actions;
 }
 
-export type PrimaryActionKey = 'take' | 'accept' | 'start' | 'complete' | 'share';
+export type PrimaryActionKey =
+  | 'take'
+  | 'accept'
+  | 'start'
+  | 'complete'
+  | 'confirm-work'
+  | 'client-confirm'
+  | 'client-remark'
+  | 'share';
 
 export interface PrimaryActionItem {
   key: PrimaryActionKey;
@@ -459,6 +476,10 @@ export function getRequestPrimaryActions(params: GetActionsParams): PrimaryActio
     onAdminAcceptGroup,
     onStaffStartGroup,
     onAdminTakeGroup,
+    onAdminConfirmWork,
+    onClientConfirm,
+    onClientRemark,
+    userId,
   } = params;
 
   const actions: PrimaryActionItem[] = [];
@@ -491,6 +512,34 @@ export function getRequestPrimaryActions(params: GetActionsParams): PrimaryActio
       variant: adminCanRoute && onAdminTakeGroup ? 'default' : 'primary',
       onClick: onAdminAcceptGroup,
     });
+  }
+
+  if (onAdminConfirmWork && subRequest && canConfirmWork(userRole, request)) {
+    actions.push({
+      key: 'confirm-work',
+      label: 'Подтвердить выполнение',
+      variant: 'primary',
+      onClick: onAdminConfirmWork,
+    });
+  }
+
+  if (canClientRespond(userId, request)) {
+    if (onClientConfirm) {
+      actions.push({
+        key: 'client-confirm',
+        label: 'Подтвердить',
+        variant: 'primary',
+        onClick: onClientConfirm,
+      });
+    }
+    if (onClientRemark) {
+      actions.push({
+        key: 'client-remark',
+        label: 'Есть замечания',
+        variant: 'default',
+        onClick: onClientRemark,
+      });
+    }
   }
 
   if (
