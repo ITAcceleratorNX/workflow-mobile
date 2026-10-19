@@ -62,11 +62,12 @@ async function authRequest<T>(
     }
 
     if (!res.ok) {
+      // Ошибка поля точнее общего `error` («Validation error»), поэтому она первая — как в lib/auth.
       const error =
-        (data as { error?: string })?.error ||
-        (data as { message?: string })?.message ||
         (Array.isArray((data as { details?: { message?: string }[] })?.details) &&
           (data as { details: { message?: string }[] }).details[0]?.message) ||
+        (data as { error?: string })?.error ||
+        (data as { message?: string })?.message ||
         'Произошла ошибка';
       return { ok: false, error };
     }
@@ -131,6 +132,16 @@ export async function updateNotificationsSettings(data: {
   return authRequest('/users/notifications-settings', {
     method: 'PUT',
     body: JSON.stringify(data),
+  });
+}
+
+/** Только admin-worker: адрес для писем о новых сервисных заявках. null — очистить, письма не отправляются. */
+export async function updateNotificationEmail(
+  email: string | null
+): Promise<ProfileApiResult<{ notification_email: string | null }>> {
+  return authRequest<{ notification_email: string | null }>('/users/me/notification-email', {
+    method: 'PUT',
+    body: JSON.stringify({ notification_email: email }),
   });
 }
 

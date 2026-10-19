@@ -15,6 +15,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { show: showToast } = useToast();
   const isGuest = useAuthStore((state: AuthState) => state.isGuest);
+  const isAdminWorker = useAuthStore((state: AuthState) => state.user?.role === 'admin-worker');
+  const notificationEmail = useAuthStore((state: AuthState) => state.user?.notification_email);
 
   const background = useThemeColor({}, 'background');
   const text = useThemeColor({}, 'text');
@@ -72,6 +74,42 @@ export default function SettingsScreen() {
           </View>
           <MaterialIcons name="chevron-right" size={22} color={muted} />
         </Pressable>
+
+        {/* Email для писем о новых заявках — только администратор */}
+        {isAdminWorker ? (
+          <Pressable
+            onPress={() => {
+              if (isGuest) {
+                showToast({
+                  title: 'Демо режим',
+                  description: 'Email для уведомлений недоступен в демо-версии.',
+                  variant: 'default',
+                });
+                return;
+              }
+              router.push('/notification-email');
+            }}
+            style={({ pressed }) => [
+              styles.item,
+              { borderColor: border },
+              pressed && styles.itemPressed,
+            ]}
+          >
+            <View style={styles.itemIcon}>
+              <MaterialIcons name="alternate-email" size={22} color={primary} />
+            </View>
+            <View style={styles.itemText}>
+              <ThemedText style={styles.itemTitle}>Email для уведомлений</ThemedText>
+              <ThemedText
+                style={[styles.itemSubtitle, { color: muted }]}
+                numberOfLines={1}
+              >
+                {notificationEmail || 'Не указан'}
+              </ThemedText>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={muted} />
+          </Pressable>
+        ) : null}
 
         {/* Пароль */}
         <Pressable
