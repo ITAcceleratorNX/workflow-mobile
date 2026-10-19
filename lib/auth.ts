@@ -34,6 +34,8 @@ export interface User {
   department?: { id: number; name: string } | null;
   /** Должность — сотрудник указывает сам в профиле; null — не указана. На права не влияет. */
   position?: string | null;
+  /** Только admin-worker: адрес для писем о новых сервисных заявках; null — письма не отправляются. */
+  notification_email?: string | null;
 }
 
 export async function loginWithPhone(
