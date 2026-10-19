@@ -41,6 +41,9 @@ interface RequestActionMenuProps {
   onAdminRejectGroup?: () => void;
   onStaffStartGroup?: (subReq: SubRequest) => void;
   onAdminTakeGroup?: () => void;
+  onAdminConfirmWork?: () => void;
+  onClientConfirm?: () => void;
+  onClientRemark?: () => void;
   onEditRequestGroup?: () => void;
   onOpenComments?: () => void;
 }
@@ -67,6 +70,9 @@ export function RequestActionMenu({
   onAdminRejectGroup,
   onStaffStartGroup,
   onAdminTakeGroup,
+  onAdminConfirmWork,
+  onClientConfirm,
+  onClientRemark,
   onEditRequestGroup,
   onOpenComments,
 }: RequestActionMenuProps) {
@@ -112,6 +118,9 @@ export function RequestActionMenu({
     onAdminRejectGroup,
     onStaffStartGroup,
     onAdminTakeGroup,
+    onAdminConfirmWork,
+    onClientConfirm,
+    onClientRemark,
     onEditRequestGroup,
     onOpenComments,
   });

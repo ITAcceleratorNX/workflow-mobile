@@ -1,4 +1,4 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -27,6 +27,11 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const hideBookingFormNav = useBookingTabUiStore((s) => s.hideBottomNavForBookingForm);
   const router = useRouter();
+  // Текущий экран вкладки: route.state в screenOptions expo-router заполняет не всегда, и тогда
+  // навбар на карточке заявки скрыт (BottomNav читает состояние навигатора), а запас под него
+  // оставался — внизу была пустая тёмная полоса.
+  const segments = useSegments() as string[];
+  const focusedNestedRoute = (tab: string) => (segments[1] === tab ? segments[2] : undefined);
   const pendingRequestId = useDeepLinkStore((s) => s.pendingRequestId);
   const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
   const contentPaddingBottom = BOTTOM_NAV_ROW_HEIGHT + bottomNavBottomInset(insets.bottom);
@@ -49,7 +54,7 @@ export default function TabLayout() {
     <Tabs
       tabBar={(props) => <BottomNav {...props} />}
       screenOptions={({ route }) => {
-        const nestedRoute = getNestedRouteName(route);
+        const nestedRoute = focusedNestedRoute(route.name) ?? getNestedRouteName(route);
         const isCreateRequest = route.name === 'requests' && nestedRoute === 'create';
         const isRequestDetail = route.name === 'requests' && nestedRoute === '[id]';
         const paddingBottom =

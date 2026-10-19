@@ -802,6 +802,19 @@ export interface RequestGroup {
   status: string;
   request_type: string;
   rejection_reason?: string;
+  /** Кто и когда отклонил заявку (GET /request-groups/:id). */
+  rejected_by?: number | null;
+  rejected_at?: string | null;
+  rejectedBy?: { id: number; full_name: string; role?: string } | null;
+  /** Исполнитель завершил последнюю подзаявку — ждёт подтверждения Администратора. */
+  work_done_at?: string | null;
+  /** Результат передан Клиенту: с этого момента идут 24 часа до автозакрытия. */
+  confirmation_requested_at?: string | null;
+  closed_at?: string | null;
+  close_method?: 'client' | 'auto' | null;
+  /** Последнее замечание Клиента, с которым заявка вернулась на доработку. */
+  last_remark?: string | null;
+  last_remark_at?: string | null;
   planned_date?: string;
   created_date: string;
   client?: { full_name: string; phone?: string; role?: string };
@@ -1036,6 +1049,41 @@ export async function adminCompleteRequest(
   return { ok: true };
 }
 
+/** Администратор подтверждает выполненные работы — заявка уходит Клиенту на подтверждение. */
+export async function confirmRequestWork(
+  groupId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/request-groups/${groupId}/confirm-work`, {
+    method: 'PATCH',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Автор заявки принимает результат — заявка закрывается. */
+export async function clientConfirmRequest(
+  groupId: number
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/request-groups/${groupId}/client-confirm`, {
+    method: 'PATCH',
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
+/** Автор заявки оставляет замечания — заявка возвращается на доработку. */
+export async function clientRemarkRequest(
+  groupId: number,
+  remark: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await request<unknown>(`/request-groups/${groupId}/client-remark`, {
+    method: 'PATCH',
+    body: JSON.stringify({ remark }),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
+}
+
 /** «Взять в работу»: администратор закрепляет Техника/Клининг заявку за собой */
 export async function takeRequestGroup(
   groupId: number
@@ -1183,15 +1231,100 @@ export async function deleteRequest(
   return { ok: true };
 }
 
-/** Удалить группу заявок */
+/**
+ * Логически удалить группу заявок (только Руководитель платформы).
+ * Причина необязательна и попадает в журнал удалений.
+ */
 export async function deleteRequestGroup(
-  groupId: number
+  groupId: number,
+  reason?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await request<unknown>(`/request-groups/${groupId}`, {
     method: 'DELETE',
+    body: JSON.stringify({ reason: reason?.trim() || null }),
   });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
+}
+
+/** Запись истории заявки (request_logs). */
+export interface RequestHistoryEntry {
+  id: number;
+  action_type: string;
+  action_description: string;
+  created_at: string;
+  user?: { id: number; full_name: string; role?: string } | null;
+}
+
+/** Снимок заявки на момент удаления — как её отдавал API. */
+export interface DeletedRequestSnapshot {
+  id: number;
+  status?: string;
+  request_type?: string;
+  location?: string;
+  location_detail?: string | null;
+  created_date?: string;
+  rejection_reason?: string | null;
+  client?: { id: number; full_name: string; phone?: string } | null;
+  office?: { id: number; name: string; city?: string } | null;
+  requests?: { id: number; title: string; status: string; description?: string | null }[];
+}
+
+/** Запись контрольного журнала удалений. */
+export interface RequestDeletionAuditEntry {
+  id: number;
+  request_group_id: number;
+  /** Подзаявка, если удалялась она одна; null — удалена вся заявка. */
+  request_id: number | null;
+  deleted_by: number;
+  deleted_by_name: string | null;
+  deleted_by_role: string | null;
+  reason: string | null;
+  snapshot: DeletedRequestSnapshot | null;
+  history: RequestHistoryEntry[] | null;
+  deleted_at: string;
+}
+
+export interface RequestDeletionAuditPage {
+  data: RequestDeletionAuditEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+/** Журнал удалений, новые записи первыми — только Руководитель платформы. */
+export async function getRequestDeletionAudit(
+  page: number,
+  pageSize = 20
+): Promise<{ ok: true; data: RequestDeletionAuditPage } | { ok: false; error: string }> {
+  const result = await request<RequestDeletionAuditPage>('/request-groups/deletion-audit', {
+    params: { page: String(page), pageSize: String(pageSize) },
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  const data = result.data;
+  return {
+    ok: true,
+    data: {
+      data: Array.isArray(data?.data) ? data.data : [],
+      total: data?.total ?? 0,
+      page: data?.page ?? page,
+      pageSize: data?.pageSize ?? pageSize,
+      totalPages: data?.totalPages ?? 0,
+    },
+  };
+}
+
+/** История статусов и действий по заявке, от старых к новым. */
+export async function getRequestHistory(
+  requestGroupId: number
+): Promise<{ ok: true; data: RequestHistoryEntry[] } | { ok: false; error: string }> {
+  const result = await request<{ logs?: RequestHistoryEntry[] }>(
+    `/request-logs/request/${requestGroupId}`,
+    { params: { page: '1', pageSize: '100' } }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: [...(result.data?.logs ?? [])].reverse() };
 }
 
 /** Оценить работу исполнителя */

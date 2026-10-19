@@ -350,6 +350,13 @@ export function RequestPrimaryActions({ actions }: { actions: PrimaryActionItem[
                   color={isPrimary ? onPrimary : text}
                   style={styles.actionIcon}
                 />
+              ) : action.key === 'client-remark' ? (
+                <MaterialIcons
+                  name="rate-review"
+                  size={20}
+                  color={isPrimary ? onPrimary : text}
+                  style={styles.actionIcon}
+                />
               ) : action.key === 'take' || action.key === 'start' ? (
                 <MaterialIcons
                   name="play-arrow"
