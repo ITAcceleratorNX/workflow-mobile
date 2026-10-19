@@ -28,7 +28,6 @@ export interface TextInputProps
     | 'numberOfLines'
     | 'autoComplete'
     | 'textContentType'
-    | 'clearButtonMode'
   > {
   label?: string;
   placeholder?: string;
@@ -68,7 +67,6 @@ export function TextInput({
   numberOfLines,
   autoComplete,
   textContentType,
-  clearButtonMode,
 }: TextInputProps) {
   const text = useThemeColor({}, 'text');
   const border = useThemeColor({}, 'border');
@@ -142,7 +140,6 @@ export function TextInput({
           numberOfLines={numberOfLines}
           autoComplete={autoComplete}
           textContentType={textContentType}
-          clearButtonMode={clearButtonMode}
           accessibilityLabel={label ?? placeholder}
           accessibilityState={{ disabled: !editable }}
         />

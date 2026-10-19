@@ -2,6 +2,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,6 +23,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
 import {
   changePassword,
+  removeEmail,
   sendEmailVerificationCode,
   updateOwnProfile,
   verifyEmail,
@@ -60,10 +62,11 @@ export default function ProfileScreen() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Email verification state
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(user?.email ?? '');
   const [verificationCode, setVerificationCode] = useState('');
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isRemovingEmail, setIsRemovingEmail] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [emailSuccess, setEmailSuccess] = useState('');
 
@@ -76,9 +79,13 @@ export default function ProfileScreen() {
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  useEffect(() => {
-    if (user?.email) setEmail(user.email);
-  }, [user?.email]);
+  // Поле показывает сохранённый email и сбрасывается вслед за ним (в том числе после удаления);
+  // стёртое пользователем поле остаётся пустым, а не подставляет старый адрес.
+  const [shownSavedEmail, setShownSavedEmail] = useState(user?.email);
+  if (shownSavedEmail !== user?.email) {
+    setShownSavedEmail(user?.email);
+    setEmail(user?.email ?? '');
+  }
 
   useEffect(() => {
     if (
@@ -163,7 +170,7 @@ export default function ProfileScreen() {
   }, [profileDraft, handleUnauthorized, isGuest, showToast, updateUser]);
 
   const handleSendVerificationCode = useCallback(async () => {
-    const emailToSend = email || user?.email;
+    const emailToSend = email.trim();
     if (!emailToSend) {
       setEmailError('Введите email');
       return;
@@ -207,6 +214,46 @@ export default function ProfileScreen() {
     });
   }, [email, user?.email, user?.email_verified, handleUnauthorized, isGuest, showToast]);
 
+  const handleRemoveEmail = useCallback(async () => {
+    if (!user?.email || isRemovingEmail) return;
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Удалить email?',
+        role === 'admin-worker'
+          ? 'Письма о новых заявках и другие уведомления на почту перестанут приходить. Указать email можно снова в любой момент.'
+          : 'Уведомления на почту перестанут приходить. Указать email можно снова в любой момент.',
+        [
+          { text: 'Отмена', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Удалить', style: 'destructive', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) }
+      );
+    });
+    if (!confirmed) return;
+
+    if (!isGuest) {
+      setIsRemovingEmail(true);
+      setEmailError('');
+      setEmailSuccess('');
+      const result = await removeEmail();
+      setIsRemovingEmail(false);
+      if (!result.ok) {
+        if (result.unauthorized) {
+          handleUnauthorized();
+          return;
+        }
+        setEmailError(result.error);
+        return;
+      }
+    }
+
+    updateUser((prev) => (prev ? { ...prev, email: undefined, email_verified: false } : null));
+    setVerificationCode('');
+    setEmailError('');
+    setEmailSuccess('');
+    showToast({ title: 'Email удалён', variant: 'success' });
+  }, [user?.email, isRemovingEmail, role, isGuest, handleUnauthorized, updateUser, showToast]);
+
   const handleVerifyEmail = useCallback(async () => {
     if (!verificationCode || verificationCode.length !== 6) {
       setEmailError('Введите 6-значный код');
@@ -215,7 +262,7 @@ export default function ProfileScreen() {
 
     // В демо-режиме просто помечаем email как верифицированный локально
     if (isGuest) {
-      const emailToUpdate = email || user?.email;
+      const emailToUpdate = email.trim() || user?.email;
       updateUser((prev) =>
         prev ? { ...prev, email: emailToUpdate ?? '', email_verified: true } : null
       );
@@ -242,7 +289,7 @@ export default function ProfileScreen() {
       setEmailError(result.error);
       return;
     }
-    const emailToUpdate = email || user?.email;
+    const emailToUpdate = email.trim() || user?.email;
     updateUser((prev) =>
       prev ? { ...prev, email: emailToUpdate ?? '', email_verified: true } : null
     );
@@ -323,8 +370,14 @@ export default function ProfileScreen() {
     return null;
   }
 
+  const isEmailBusy = isSendingCode || isVerifying || isRemovingEmail;
+  /** «Код»: есть адрес и он не совпадает с уже подтверждённым. */
+  const canSendEmailCode =
+    !isEmailBusy && email.trim() !== '' && !(user?.email_verified && email.trim() === user?.email);
+  const canRemoveEmail = !isEmailBusy && Boolean(user?.email);
+
   const showEmailVerificationBlock =
-    (email || user?.email) &&
+    (email.trim() || user?.email) &&
     (!user?.email_verified || emailSuccess?.includes('Код верификации отправлен'));
 
   return (
@@ -500,45 +553,61 @@ export default function ProfileScreen() {
                       <View style={styles.emailInputFullWidth}>
                         <TextInput
                           placeholder="example@mail.com"
-                          value={email || user?.email || ''}
+                          value={email}
                           onChangeText={(t) => {
                             setEmail(t);
                             setEmailError('');
                             setEmailSuccess('');
                           }}
                           keyboardType="email-address"
-                          editable={!isSendingCode && !isVerifying}
+                          autoCapitalize="none"
+                          editable={!isEmailBusy}
                         />
                       </View>
-                      <Pressable
-                        onPress={handleSendVerificationCode}
-                        disabled={
-                          isSendingCode ||
-                          isVerifying ||
-                          (!email && !user?.email) ||
-                          (user?.email_verified &&
-                            (email || user?.email) === user?.email)
-                        }
-                        style={({ pressed }) => [
-                          styles.codeButtonWrapper,
-                          styles.codeButton,
-                          { borderColor: border },
-                          (isSendingCode || isVerifying || (!email && !user?.email) ||
-                            (user?.email_verified &&
-                              (email || user?.email) === user?.email)) &&
-                            styles.buttonDisabled,
-                          pressed && styles.buttonPressed,
-                        ]}
-                      >
-                        {isSendingCode ? (
-                          <MaterialIcons name="hourglass-empty" size={20} color={textMuted} />
-                        ) : (
-                          <MaterialIcons name="mail" size={20} color={text} />
-                        )}
-                        <ThemedText style={[styles.codeButtonText, { color: text }]}>
-                          {isSendingCode ? 'Отправка...' : 'Код'}
-                        </ThemedText>
-                      </Pressable>
+                      <View style={styles.emailActions}>
+                        <Pressable
+                          onPress={handleSendVerificationCode}
+                          disabled={!canSendEmailCode}
+                          style={({ pressed }) => [
+                            styles.codeButton,
+                            { borderColor: border },
+                            !canSendEmailCode && styles.buttonDisabled,
+                            pressed && styles.buttonPressed,
+                          ]}
+                        >
+                          {isSendingCode ? (
+                            <MaterialIcons name="hourglass-empty" size={20} color={textMuted} />
+                          ) : (
+                            <MaterialIcons name="mail" size={20} color={text} />
+                          )}
+                          <ThemedText style={[styles.codeButtonText, { color: text }]}>
+                            {isSendingCode ? 'Отправка...' : 'Код'}
+                          </ThemedText>
+                        </Pressable>
+                        {user?.email ? (
+                          <Pressable
+                            onPress={handleRemoveEmail}
+                            disabled={!canRemoveEmail}
+                            accessibilityRole="button"
+                            accessibilityLabel="Удалить email"
+                            style={({ pressed }) => [
+                              styles.codeButton,
+                              { borderColor: border },
+                              !canRemoveEmail && styles.buttonDisabled,
+                              pressed && styles.buttonPressed,
+                            ]}
+                          >
+                            <MaterialIcons
+                              name={isRemovingEmail ? 'hourglass-empty' : 'delete-outline'}
+                              size={20}
+                              color={isRemovingEmail ? textMuted : errorColor}
+                            />
+                            <ThemedText style={[styles.codeButtonText, { color: errorColor }]}>
+                              {isRemovingEmail ? 'Удаление...' : 'Удалить'}
+                            </ThemedText>
+                          </Pressable>
+                        ) : null}
+                      </View>
                     </View>
                     {emailSuccess ? (
                       <ThemedText style={[styles.successText, { color: success }]}>
@@ -830,8 +899,9 @@ const styles = StyleSheet.create({
   emailInputFullWidth: {
     width: '100%',
   },
-  codeButtonWrapper: {
-    alignSelf: 'flex-start',
+  emailActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
   codeInputWrapper: {
     flex: 1,
