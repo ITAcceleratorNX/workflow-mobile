@@ -18,6 +18,7 @@ import {
     View,
 } from 'react-native';
 
+import { OfficeBookingsTab } from '@/components/booking/office-bookings-tab';
 import { ThemedText } from '@/components/themed-text';
 import { PullToRefresh } from '@/components/ui';
 import { useToast } from '@/context/toast-context';
@@ -42,6 +43,7 @@ import {
 } from '@/lib/dateTimeUtils';
 import { getImageUri, getPrimaryPhotoUri, getRoomPhotoUris } from '@/lib/image-uri';
 import { findNearestOffice } from '@/lib/nearest-office';
+import { canSeeOfficeBookings, getBookingStatusText, officeBookingsTabLabel } from '@/lib/office-bookings';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
@@ -79,7 +81,7 @@ for (let hour = 9; hour < 24; hour++) {
 }
 
 type Step = 'offices' | 'rooms' | 'form';
-type BookingTab = 'book' | 'my-bookings';
+type BookingTab = 'book' | 'my-bookings' | 'office-bookings';
 type MyBookingsFilter = 'active' | 'completed' | 'cancelled';
 
 function enrichCreatedBooking(
@@ -93,24 +95,6 @@ function enrichCreatedBooking(
     meeting_room: meetingRoom,
     meetingRoom: (booking.meetingRoom ?? booking.meeting_room ?? room) as MeetingRoom,
   };
-}
-
-function getBookingStatusText(status?: string): string {
-  switch (status) {
-    case 'scheduled':
-      return 'Запланировано';
-    case 'in_progress':
-      return 'В процессе';
-    case 'completed':
-      return 'Завершено';
-    case 'cancelled':
-    case 'auto_cancelled':
-      return 'Отменено';
-    case 'confirmed':
-      return 'Подтверждено';
-    default:
-      return 'Активно';
-  }
 }
 
 /** Текст экрана «Бронь»: всегда белый на градиенте в любой теме приложения. */
@@ -156,6 +140,9 @@ export default function BookingScreen() {
   const [highlightBookingId, setHighlightBookingId] = useState<number | null>(null);
 
   const isGuest = useAuthStore((s) => s.isGuest);
+  const role = useAuthStore((s) => s.user?.role ?? s.role);
+  const ownOfficeName = useAuthStore((s) => s.user?.office?.name);
+  const showOfficeBookings = !isGuest && canSeeOfficeBookings(role);
   const {
     bookings: guestBookings,
     addBooking: addGuestBooking,
@@ -1033,7 +1020,7 @@ export default function BookingScreen() {
         <View style={styles.tabsRowWhite}>
           <Pressable
             onPress={() => setActiveTab('book')}
-            style={[styles.tabWhite, activeTab === 'book' && styles.tabWhiteActive]}
+            style={[styles.tabWhite, showOfficeBookings && styles.tabWhiteCompact, activeTab === 'book' && styles.tabWhiteActive]}
           >
             <BookingText style={[styles.tabTextWhite, activeTab === 'book' && styles.tabTextWhiteActive]}>
               Бронировать
@@ -1041,12 +1028,24 @@ export default function BookingScreen() {
           </Pressable>
           <Pressable
             onPress={() => setActiveTab('my-bookings')}
-            style={[styles.tabWhite, activeTab === 'my-bookings' && styles.tabWhiteActive]}
+            style={[styles.tabWhite, showOfficeBookings && styles.tabWhiteCompact, activeTab === 'my-bookings' && styles.tabWhiteActive]}
           >
             <BookingText style={[styles.tabTextWhite, activeTab === 'my-bookings' && styles.tabTextWhiteActive]}>
-              Мои бронирования
+              {showOfficeBookings ? 'Мои брони' : 'Мои бронирования'}
             </BookingText>
           </Pressable>
+          {showOfficeBookings && (
+            <Pressable
+              onPress={() => setActiveTab('office-bookings')}
+              style={[styles.tabWhite, showOfficeBookings && styles.tabWhiteCompact, activeTab === 'office-bookings' && styles.tabWhiteActive]}
+            >
+              <BookingText
+                style={[styles.tabTextWhite, activeTab === 'office-bookings' && styles.tabTextWhiteActive]}
+              >
+                {officeBookingsTabLabel(role)}
+              </BookingText>
+            </Pressable>
+          )}
         </View>
 
         {activeTab === 'book' && (
@@ -1287,6 +1286,10 @@ export default function BookingScreen() {
           </>
         )}
 
+      {activeTab === 'office-bookings' && showOfficeBookings && (
+        <OfficeBookingsTab role={role} ownOfficeName={ownOfficeName} offices={offices} />
+      )}
+
       {activeTab === 'my-bookings' && (
         <View style={styles.myBookingsTab}>
           <BookingText style={styles.myBookingsSubtitleWhite}>
@@ -1468,6 +1471,10 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         paddingHorizontal: 14,
         alignItems: 'center',
+    },
+    /** Три вкладки в ряд у персонала — меньше боковых отступов, чтобы подписи не переносились. */
+    tabWhiteCompact: {
+        paddingHorizontal: 4,
     },
     tabWhiteActive: {
         backgroundColor: 'rgba(255,255,255,0.25)',

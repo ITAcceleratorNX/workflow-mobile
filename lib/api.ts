@@ -2434,6 +2434,8 @@ export interface MeetingRoomBooking {
   meeting_room?: MeetingRoom;
   meetingRoom?: MeetingRoom;
   office?: Office;
+  /** Кто забронировал — приходит в списке бронирований офиса для персонала. */
+  client?: { id: number; full_name?: string | null; phone?: string | null; role?: string | null } | null;
 }
 
 export interface RoomAvailabilitySlot {
@@ -2608,6 +2610,38 @@ export async function getMyBookings(params?: GetMyBookingsParams): Promise<
   const pageSize = typeof (raw as GetMyBookingsResponse).pageSize === 'number' ? (raw as GetMyBookingsResponse).pageSize : list.length;
   const hasMore = typeof (raw as GetMyBookingsResponse).hasMore === 'boolean' ? (raw as GetMyBookingsResponse).hasMore : false;
   return { ok: true, data: list, total, page, pageSize, hasMore };
+}
+
+export interface GetOfficeBookingsParams extends GetMyBookingsParams {
+  /** Только для Администратора: Офис-менеджеру бэкенд всегда отдаёт его офис. */
+  officeId?: number | null;
+}
+
+/**
+ * Бронирования офисов для персонала (включая брони Клиентов):
+ * Администратор — все офисы, Офис-менеджер — только свой офис.
+ */
+export async function getOfficeBookings(params?: GetOfficeBookingsParams): Promise<
+  | { ok: true; data: MeetingRoomBooking[]; total: number; page: number; hasMore: boolean }
+  | { ok: false; error: string }
+> {
+  const search = new URLSearchParams();
+  if (params?.status) search.set('status', params.status);
+  if (params?.page != null) search.set('page', String(params.page));
+  if (params?.pageSize != null) search.set('pageSize', String(params.pageSize));
+  if (params?.officeId) search.set('office_id', String(params.officeId));
+  const qs = search.toString();
+  const result = await request<GetMyBookingsResponse>(qs ? `/meeting-room-bookings?${qs}` : '/meeting-room-bookings');
+  if (!result.ok) return { ok: false, error: result.error };
+  const raw = result.data;
+  const list = Array.isArray(raw?.data) ? raw.data : [];
+  return {
+    ok: true,
+    data: list,
+    total: typeof raw?.total === 'number' ? raw.total : list.length,
+    page: typeof raw?.page === 'number' ? raw.page : params?.page ?? 1,
+    hasMore: typeof raw?.hasMore === 'boolean' ? raw.hasMore : false,
+  };
 }
 
 export async function cancelMeetingRoomBooking(
