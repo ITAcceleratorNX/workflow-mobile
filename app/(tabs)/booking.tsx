@@ -6,19 +6,18 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps 
 import {
     ActivityIndicator,
     Alert,
-    Dimensions,
     FlatList,
-    KeyboardAvoidingView,
     Linking,
-    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
-    TextInput,
     View,
 } from 'react-native';
 
 import { OfficeBookingsTab } from '@/components/booking/office-bookings-tab';
+import { RoomBookingScreen } from '@/components/booking/flow/room-booking-screen';
+import { EquipmentChips } from '@/components/booking/flow/equipment-chips';
+import { BookingDetailsScreen } from '@/components/booking/flow/booking-details-screen';
 import { ThemedText } from '@/components/themed-text';
 import { PullToRefresh } from '@/components/ui';
 import { useToast } from '@/context/toast-context';
@@ -28,30 +27,21 @@ import {
     type MyBookingsStatusFilter,
     type Office,
     cancelMeetingRoomBooking,
-    createMeetingRoomBooking,
     getMeetingRooms,
     getMyBookings,
     getOffices,
-    getRoomDailyAvailability,
 } from '@/lib/api';
-import { getBookingConfirmationWebUrl } from '@/lib/booking-web-url';
-import {
-    formatDateForApi,
-    formatDisplayDateFromIso,
-    formatTimeOnly,
-    getAlmatySlotKey,
-} from '@/lib/dateTimeUtils';
-import { getImageUri, getPrimaryPhotoUri, getRoomPhotoUris } from '@/lib/image-uri';
+import { formatDisplayDateFromIso, formatTimeOnly } from '@/lib/dateTimeUtils';
+import { getImageUri, getPrimaryPhotoUri } from '@/lib/image-uri';
 import { findNearestOffice } from '@/lib/nearest-office';
 import { canSeeOfficeBookings, getBookingStatusText, officeBookingsTabLabel } from '@/lib/office-bookings';
+import { almatyDay, almatyMinutes, formatBookingDay, formatDuration, formatTime, officeHours } from '@/lib/booking-flow';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
 /** Нижний стоп градиента — тот же цвет, что `BOOKING_TAB_SCENE_UNDERLAY` в `app/(tabs)/_layout.tsx` (зона под навбаром). */
@@ -62,22 +52,6 @@ const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
  */
 function getRoomPhotoUri(room: MeetingRoom | null | undefined): string | null {
   return getPrimaryPhotoUri(room);
-}
-
-/** URL страницы подтверждения брони в браузере (та же ссылка, что в QR). */
-function getBookingPageUrl(bookingId: number): string {
-  return getBookingConfirmationWebUrl(bookingId);
-}
-
-const TIME_SLOTS: { label: string; start: string; end: string }[] = [];
-for (let hour = 9; hour < 24; hour++) {
-  const startHour = hour.toString().padStart(2, '0');
-  const endHour = (hour + 1).toString().padStart(2, '0');
-  TIME_SLOTS.push({
-    label: `${startHour}:00-${endHour}:00`,
-    start: `${startHour}:00`,
-    end: `${endHour}:00`,
-  });
 }
 
 type Step = 'offices' | 'rooms' | 'form';
@@ -102,10 +76,17 @@ function BookingText(props: ComponentProps<typeof ThemedText>) {
   return <ThemedText {...props} lightColor="#FFFFFF" darkColor="#FFFFFF" />;
 }
 
+function pluralRooms(n: number) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'переговорная';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'переговорные';
+  return 'переговорных';
+}
+
 export default function BookingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const { show: showToast } = useToast();
   const gradientColors = ORANGE_GRADIENT;
 
@@ -125,18 +106,13 @@ export default function BookingScreen() {
   const [loadingOffices, setLoadingOffices] = useState(false);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [loadingBookings, setLoadingBookings] = useState(false);
-  const [loadingAvailability, setLoadingAvailability] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [detailsBooking, setDetailsBooking] = useState<MeetingRoomBooking | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   /** Защита от гонок при смене фильтра / параллельных запросов «мои бронирования». */
   const myBookingsLoadSeqRef = useRef(0);
   const myBookingsListRef = useRef<FlatList<MeetingRoomBooking>>(null);
-  const bookingFormScrollRef = useRef<ScrollView>(null);
-  const companyFieldWrapRef = useRef<View>(null);
-  const bookingFormScrollYRef = useRef(0);
-  const companyFieldFocusedRef = useRef(false);
   const [highlightBookingId, setHighlightBookingId] = useState<number | null>(null);
 
   const isGuest = useAuthStore((s) => s.isGuest);
@@ -145,17 +121,10 @@ export default function BookingScreen() {
   const showOfficeBookings = !isGuest && canSeeOfficeBookings(role);
   const {
     bookings: guestBookings,
-    addBooking: addGuestBooking,
     removeBooking: removeGuestBooking,
   } = useGuestDemoStore();
 
-  // Form state
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState('');
-  const [bookedSlots, setBookedSlots] = useState<Set<string>>(new Set());
   const [roomImageFailedIds, setRoomImageFailedIds] = useState<Set<number>>(new Set());
-  const [formRoomImageFailed, setFormRoomImageFailed] = useState(false);
 
   const setHideBottomNavForBookingForm = useBookingTabUiStore(
     (s) => s.setHideBottomNavForBookingForm
@@ -163,61 +132,12 @@ export default function BookingScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setHideBottomNavForBookingForm(step === 'form');
+      setHideBottomNavForBookingForm(step === 'form' || detailsBooking !== null);
       return () => {
         setHideBottomNavForBookingForm(false);
       };
-    }, [step, setHideBottomNavForBookingForm])
+    }, [step, detailsBooking, setHideBottomNavForBookingForm])
   );
-
-  const bookingFormKeyboardHeight = useKeyboardHeight(step === 'form');
-
-  const scrollCompanyFieldAboveKeyboard = useCallback(() => {
-    const wrap = companyFieldWrapRef.current;
-    const scroll = bookingFormScrollRef.current;
-    if (!wrap || !scroll) return;
-
-    const keyboardInset =
-      bookingFormKeyboardHeight > 0
-        ? bookingFormKeyboardHeight
-        : Platform.OS === 'android'
-          ? 280
-          : 0;
-    if (keyboardInset <= 0) return;
-
-    wrap.measureInWindow((_x, fieldTop, _w, fieldHeight) => {
-      const windowH = Dimensions.get('window').height;
-      const headerApprox = insets.top + 56;
-      const visibleBottom = windowH - keyboardInset - Math.max(insets.bottom, 12);
-      const fieldBottom = fieldTop + fieldHeight;
-      const gap = 16;
-      if (fieldBottom > visibleBottom - gap) {
-        const overflow = fieldBottom - (visibleBottom - gap);
-        scroll.scrollTo({
-          y: bookingFormScrollYRef.current + overflow,
-          animated: true,
-        });
-        return;
-      }
-      if (Platform.OS === 'android') {
-        scroll.scrollToEnd({ animated: true });
-      }
-    });
-  }, [bookingFormKeyboardHeight, insets.top, insets.bottom]);
-
-  const focusCompanyField = useCallback(() => {
-    companyFieldFocusedRef.current = true;
-    const delays = Platform.OS === 'android' ? [80, 220, 400] : [280];
-    delays.forEach((delay) => {
-      setTimeout(scrollCompanyFieldAboveKeyboard, delay);
-    });
-  }, [scrollCompanyFieldAboveKeyboard]);
-
-  useEffect(() => {
-    if (step === 'form' && companyFieldFocusedRef.current && bookingFormKeyboardHeight > 0) {
-      scrollCompanyFieldAboveKeyboard();
-    }
-  }, [step, bookingFormKeyboardHeight, scrollCompanyFieldAboveKeyboard]);
 
   const loadOffices = useCallback(async () => {
     setLoadingOffices(true);
@@ -443,44 +363,9 @@ export default function BookingScreen() {
     if (selectedOffice) loadRooms(selectedOffice.id);
   }, [selectedOffice?.id, loadRooms]);
 
-  useEffect(() => {
-    if (step === 'form' && selectedRoom && selectedDate && !isGuest) {
-      const dateStr = formatDateForApi(selectedDate);
-      setLoadingAvailability(true);
-      getRoomDailyAvailability(selectedRoom.id, dateStr, 60)
-        .then((res) => {
-          const booked = new Set<string>();
-          if (res.ok && res.data.slots) {
-            res.data.slots.forEach((slot) => {
-              if (!slot.is_available && slot.start_time) {
-                const key = getAlmatySlotKey(slot.start_time);
-                if (key) booked.add(key);
-              }
-            });
-          }
-          if (res.ok && res.data.bookings) {
-            res.data.bookings.forEach((b) => {
-              const startStr = typeof b.start_time === 'string' ? b.start_time : (b.start_time as Date).toISOString?.() ?? '';
-              const key = getAlmatySlotKey(startStr);
-              if (key) booked.add(key);
-            });
-          }
-          setBookedSlots(booked);
-        })
-        .catch(() => setBookedSlots(new Set()))
-        .finally(() => setLoadingAvailability(false));
-    } else {
-      setBookedSlots(new Set());
-    }
-  }, [step, selectedRoom?.id, selectedDate, isGuest]);
-
   const goBack = useCallback(() => {
     if (step === 'form') {
       setSelectedRoom(null);
-      setSelectedDate(null);
-      setFormRoomImageFailed(false);
-      setSelectedTimeSlot(null);
-      setCompanyName('');
       setStep('rooms');
     } else if (step === 'rooms') {
       setSelectedOffice(null);
@@ -494,9 +379,6 @@ export default function BookingScreen() {
 
   const handleSelectRoom = useCallback((room: MeetingRoom) => {
     setSelectedRoom(room);
-    setSelectedDate(null);
-    setSelectedTimeSlot(null);
-    setCompanyName('');
     setStep('form');
   }, []);
 
@@ -504,10 +386,6 @@ export default function BookingScreen() {
     setStep('offices');
     setSelectedOffice(null);
     setSelectedRoom(null);
-    setSelectedDate(null);
-    setSelectedTimeSlot(null);
-    setCompanyName('');
-    setFormRoomImageFailed(false);
   }, []);
 
   const afterBookingCreated = useCallback(
@@ -515,8 +393,8 @@ export default function BookingScreen() {
       const enriched = enrichCreatedBooking(created, selectedRoom);
 
       showToast({
-        title: 'Готово',
-        description: 'Бронирование создано',
+        title: 'Бронь создана',
+        description: `${formatBookingDay(almatyDay(new Date(created.start_time)))} · ${formatTime(almatyMinutes(created.start_time))}–${formatTime(almatyMinutes(created.end_time))}`,
         variant: 'success',
         duration: 3500,
       });
@@ -549,129 +427,8 @@ export default function BookingScreen() {
     [selectedRoom, showToast, resetBookingForm, isGuest, loadMyBookings]
   );
 
-  const handleSubmitBooking = useCallback(async () => {
-    if (!selectedRoom || !selectedDate || !selectedTimeSlot) {
-      showToast({
-        title: 'Ошибка',
-        description: 'Выберите дату и время',
-        variant: 'destructive',
-        duration: 4000,
-      });
-      return;
-    }
-    const slot = TIME_SLOTS.find((s) => s.label === selectedTimeSlot);
-    if (!slot) return;
-    const startFormatted = slot.start.includes(':00:00') ? slot.start : `${slot.start}:00`;
-    const endFormatted = slot.end.includes(':00:00') ? slot.end : `${slot.end}:00`;
-    const now = new Date();
-    const isToday = formatDateForApi(selectedDate) === formatDateForApi(now);
-    const [h] = slot.start.split(':');
-    const slotDate = new Date(selectedDate);
-    slotDate.setHours(parseInt(h, 10), 0, 0, 0);
-    if (isToday && slotDate < now) {
-      showToast({
-        title: 'Ошибка',
-        description: 'Нельзя бронировать прошедшее время',
-        variant: 'destructive',
-        duration: 4000,
-      });
-      return;
-    }
-    if (!isGuest && bookedSlots.has(slot.start)) {
-      showToast({
-        title: 'Время занято',
-        description: 'Выберите другое время',
-        variant: 'destructive',
-        duration: 4000,
-      });
-      return;
-    }
-    setSubmitting(true);
-
-    if (isGuest) {
-      const start_time = `${formatDateForApi(selectedDate)}T${startFormatted}`;
-      const end_time = `${formatDateForApi(selectedDate)}T${endFormatted}`;
-
-      const newId = addGuestBooking({
-        meeting_room_id: selectedRoom.id,
-        start_time,
-        end_time,
-        status: 'scheduled',
-        company_name: companyName.trim() || null,
-        meetingRoom: {
-          id: selectedRoom.id,
-          name: selectedRoom.name,
-          floor: selectedRoom.floor,
-          capacity: selectedRoom.capacity,
-          office_id: selectedRoom.office_id,
-          office: selectedRoom.office,
-          status: selectedRoom.status,
-          room_type: selectedRoom.room_type,
-          description: selectedRoom.description,
-          photos: selectedRoom.photos,
-          photo: selectedRoom.photo,
-          isActive: selectedRoom.isActive,
-        },
-      } as any);
-
-      setSubmitting(false);
-      await afterBookingCreated({
-        id: newId,
-        meeting_room_id: selectedRoom.id,
-        start_time,
-        end_time,
-        status: 'scheduled',
-        company_name: companyName.trim() || null,
-        meetingRoom: {
-          id: selectedRoom.id,
-          name: selectedRoom.name,
-          floor: selectedRoom.floor,
-          capacity: selectedRoom.capacity,
-          office_id: selectedRoom.office_id,
-          office: selectedRoom.office,
-          status: selectedRoom.status,
-          room_type: selectedRoom.room_type,
-          description: selectedRoom.description,
-          photos: selectedRoom.photos,
-          photo: selectedRoom.photo,
-          isActive: selectedRoom.isActive,
-        },
-      } as MeetingRoomBooking);
-      return;
-    }
-
-    const res = await createMeetingRoomBooking({
-      meeting_room_id: selectedRoom.id,
-      booking_date: formatDateForApi(selectedDate),
-      start_time: startFormatted,
-      end_time: endFormatted,
-      company_name: companyName.trim() || null,
-    });
-    setSubmitting(false);
-    if (res.ok) {
-      await afterBookingCreated(res.data);
-    } else {
-      showToast({
-        title: 'Ошибка',
-        description: res.error,
-        variant: 'destructive',
-        duration: 4000,
-      });
-    }
-  }, [
-    selectedRoom,
-    selectedDate,
-    selectedTimeSlot,
-    companyName,
-    bookedSlots,
-    showToast,
-    isGuest,
-    addGuestBooking,
-    afterBookingCreated,
-  ]);
-
   const handleCancelBooking = useCallback(
-    (item: MeetingRoomBooking) => {
+    (item: MeetingRoomBooking, onCancelled?: () => void) => {
       const room = item.meeting_room ?? item.meetingRoom;
       Alert.alert(
         'Отменить бронирование?',
@@ -686,6 +443,7 @@ export default function BookingScreen() {
               if (isGuest) {
                 removeGuestBooking(item.id);
                 setCancellingId(null);
+                onCancelled?.();
                 showToast({
                   title: 'Демо',
                   description: 'Бронирование отменено локально',
@@ -697,6 +455,7 @@ export default function BookingScreen() {
               const res = await cancelMeetingRoomBooking(item.id);
               setCancellingId(null);
               if (res.ok) {
+                onCancelled?.();
                 showToast({
                   title: 'Бронирование отменено',
                   description: 'Бронирование успешно отменено',
@@ -719,17 +478,6 @@ export default function BookingScreen() {
     [showToast, loadMyBookings, myBookingsFilter, isGuest, removeGuestBooking]
   );
 
-  const datesForPicker = useMemo(() => {
-    const arr: Date[] = [];
-    const today = new Date();
-    for (let i = 0; i < 31; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      arr.push(d);
-    }
-    return arr;
-  }, []);
-
   const visibleRooms = useMemo(
     () =>
       rooms.filter(
@@ -738,14 +486,6 @@ export default function BookingScreen() {
           (r.room_type === 'meeting' || r.room_type === undefined)
       ),
     [rooms]
-  );
-  const totalAvailable = useMemo(
-    () => visibleRooms.filter((r) => r.status === 'available').length,
-    [visibleRooms]
-  );
-  const totalBooked = useMemo(
-    () => visibleRooms.filter((r) => r.status === 'booked').length,
-    [visibleRooms]
   );
 
   const sortedMyBookings = useMemo(
@@ -806,208 +546,26 @@ export default function BookingScreen() {
     return () => cancelAnimationFrame(frame);
   }, [activeTab, highlightBookingId, myBookingsListData]);
 
-  const isSlotDisabled = useCallback(
-    (slot: { start: string }) => {
-      if (bookedSlots.has(slot.start)) return true;
-
-      if (!selectedDate) return false;
-
-      const now = new Date();
-      const selected = new Date(selectedDate);
-      if (
-        selected.getFullYear() !== now.getFullYear() ||
-        selected.getMonth() !== now.getMonth() ||
-        selected.getDate() !== now.getDate()
-      ) {
-        // Для будущих и прошлых дат не блокируем слоты по времени, только по бронированиям
-        return false;
-      }
-
-      // Собираем дату-время начала слота в локальной TZ
-      const [hourStr, minuteStr] = slot.start.split(':');
-      const slotDateTime = new Date(
-        selected.getFullYear(),
-        selected.getMonth(),
-        selected.getDate(),
-        Number(hourStr),
-        Number(minuteStr),
-        0,
-        0
-      );
-
-      return slotDateTime.getTime() <= now.getTime();
-    },
-    [bookedSlots, selectedDate]
-  );
+  if (detailsBooking) {
+    return (
+      <BookingDetailsScreen
+        booking={detailsBooking}
+        onClose={() => setDetailsBooking(null)}
+        onShowQr={() => router.push(`/booking/${detailsBooking.id}`)}
+        onCancel={() => handleCancelBooking(detailsBooking, () => setDetailsBooking(null))}
+        cancelling={cancellingId === detailsBooking.id}
+      />
+    );
+  }
 
   if (step === 'form' && selectedRoom) {
-    const roomPhotoUris = getRoomPhotoUris(selectedRoom);
-    const roomPhotoCount = roomPhotoUris.length;
-    const showFormImages = roomPhotoCount > 0 && !formRoomImageFailed;
-    const formImageWidth = windowWidth - 40;
-
-    const formScrollPaddingBottom =
-      Platform.OS === 'android'
-        ? Math.max(insets.bottom, 16) + 24
-        : Math.max(insets.bottom, 16) + bookingFormKeyboardHeight + 12;
-
     return (
-      <LinearGradient colors={gradientColors} style={styles.gradientFill}>
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoid}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
-        >
-          <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
-            <Pressable style={styles.backRowWhite} onPress={goBack}>
-              <MaterialIcons name="arrow-back" size={24} color="#fff" />
-              <BookingText style={styles.backTextWhite}>Назад</BookingText>
-            </Pressable>
-            <ScrollView
-              ref={bookingFormScrollRef}
-              style={styles.scroll}
-              contentContainerStyle={[styles.formContent, { paddingBottom: formScrollPaddingBottom }]}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-              automaticallyAdjustKeyboardInsets
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-              scrollEventThrottle={16}
-              onScroll={(e) => {
-                bookingFormScrollYRef.current = e.nativeEvent.contentOffset.y;
-              }}
-            >
-            <View style={styles.roomImageContainer}>
-              {showFormImages ? (
-                <>
-                  <ScrollView
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    style={StyleSheet.absoluteFill}
-                    contentContainerStyle={[styles.roomFormPhotoScrollContent, { width: formImageWidth * roomPhotoCount }]}
-                  >
-                    {roomPhotoUris.map((uri, i) => (
-                      <View key={i} style={[styles.roomFormPhotoSlide, { width: formImageWidth }]}>
-                        <Image
-                          source={{ uri }}
-                          style={styles.roomImage}
-                          contentFit="cover"
-                          cachePolicy="disk"
-                          onError={() => setFormRoomImageFailed(true)}
-                        />
-                      </View>
-                    ))}
-                  </ScrollView>
-                  {roomPhotoCount > 1 && (
-                    <View style={styles.roomImageBadge}>
-                      <BookingText style={styles.roomImageBadgeText}>+{roomPhotoCount - 1} фото</BookingText>
-                    </View>
-                  )}
-                </>
-              ) : (
-                <View style={styles.roomImagePlaceholder}>
-                  <MaterialIcons name="image" size={48} color="rgba(255,255,255,0.4)" />
-                  <BookingText style={styles.roomImagePlaceholderText}>Фото не загружено</BookingText>
-                </View>
-              )}
-            </View>
-            <BookingText type="title" style={styles.formTitleWhite}>
-              Бронирование
-            </BookingText>
-            <BookingText style={styles.formSubtitleWhite}>
-              {selectedRoom.name}
-              {selectedRoom.floor != null && ` • ${selectedRoom.floor} этаж`}
-              {selectedRoom.capacity != null && ` • до ${selectedRoom.capacity} чел.`}
-            </BookingText>
-            <BookingText style={styles.labelWhite}>Дата</BookingText>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.datesRow}>
-            {datesForPicker.map((d) => {
-              const key = formatDateForApi(d);
-              const isSelected = selectedDate ? formatDateForApi(selectedDate) === key : false;
-              return (
-                <Pressable
-                  key={key}
-                  onPress={() => setSelectedDate(d)}
-                  style={[
-                    styles.dateChip,
-                    styles.dateChipForm,
-                    isSelected && styles.dateChipFormSelected,
-                  ]}
-                >
-                  <BookingText style={[styles.dateChipText, isSelected && styles.dateChipTextSelected]}>
-                    {d.getDate()}
-                  </BookingText>
-                  <BookingText style={[styles.dateChipSub, isSelected && styles.dateChipTextSelected]}>
-                    {['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][d.getDay()]}
-                  </BookingText>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <BookingText style={styles.labelWhite}>Время</BookingText>
-          {loadingAvailability ? (
-            <ActivityIndicator size="small" color="#fff" style={styles.loader} />
-          ) : (
-            <View style={styles.slotsGrid}>
-              {TIME_SLOTS.map((slot) => {
-                const disabled = isSlotDisabled(slot);
-                const isSelected = selectedTimeSlot === slot.label;
-                return (
-                  <Pressable
-                    key={slot.label}
-                    onPress={() => !disabled && setSelectedTimeSlot(slot.label)}
-                    disabled={disabled}
-                    style={[
-                      styles.slotChip,
-                      styles.slotChipForm,
-                      disabled && styles.slotChipDisabled,
-                      isSelected && styles.slotChipFormSelected,
-                    ]}
-                  >
-                    <BookingText
-                      style={[
-                        styles.slotChipText,
-                        disabled && styles.slotChipTextFormDisabled,
-                        isSelected && styles.dateChipTextSelected,
-                      ]}
-                    >
-                      {slot.label}
-                    </BookingText>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-          <BookingText style={styles.labelWhite}>Компания (необязательно)</BookingText>
-          <View ref={companyFieldWrapRef} collapsable={false}>
-            <TextInput
-              value={companyName}
-              onChangeText={setCompanyName}
-              placeholder="Название компании"
-              placeholderTextColor="rgba(255,255,255,0.6)"
-              style={styles.inputForm}
-              onFocus={focusCompanyField}
-              onBlur={() => {
-                companyFieldFocusedRef.current = false;
-              }}
-            />
-          </View>
-          <Pressable
-            onPress={handleSubmitBooking}
-            disabled={submitting}
-            style={[styles.submitBtn, styles.submitBtnForm]}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <BookingText style={styles.submitBtnText}>Забронировать</BookingText>
-            )}
-          </Pressable>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </LinearGradient>
+      <RoomBookingScreen
+        room={selectedRoom}
+        office={selectedOffice}
+        onClose={goBack}
+        onBooked={(booking) => void afterBookingCreated(booking)}
+      />
     );
   }
 
@@ -1184,13 +742,16 @@ export default function BookingScreen() {
                   <BookingText style={styles.backTextWhite}>Назад к выбору офисов</BookingText>
                 </Pressable>
                 <BookingText style={styles.officeNameWhite}>{selectedOffice.name}</BookingText>
-                {(selectedOffice.city || selectedOffice.address) && (
-                  <BookingText style={styles.officeAddressWhite}>
-                    {[selectedOffice.city, selectedOffice.address].filter(Boolean).join(', ')}
-                  </BookingText>
-                )}
+                <BookingText style={styles.officeAddressWhite}>
+                  {[
+                    [selectedOffice.city, selectedOffice.address].filter(Boolean).join(', '),
+                    `работает ${formatTime(officeHours(selectedOffice).start)}–${formatTime(officeHours(selectedOffice).end)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </BookingText>
                 <BookingText style={styles.badgesLabelWhite}>
-                  Доступно: {totalAvailable} · Забронировано: {totalBooked}
+                  {visibleRooms.length} {pluralRooms(visibleRooms.length)}
                 </BookingText>
                 {loadingRooms ? (
                   <ActivityIndicator size="large" color="#fff" style={styles.loader} />
@@ -1210,12 +771,8 @@ export default function BookingScreen() {
                     loaderSize={96}
                     topOffset={16}
                   >
-                    <ScrollView showsVerticalScrollIndicator={false}>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.roomsScroll}
-                      >
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.roomsList}>
+                      <View style={{ gap: 14 }}>
                         {visibleRooms.map((item) => {
                           const photoUri = getRoomPhotoUri(item);
                           const photoCount = item.photos?.length ?? (item.photo ? 1 : 0);
@@ -1273,10 +830,15 @@ export default function BookingScreen() {
                                   </BookingText>
                                 )}
                               </View>
+                              {item.equipment?.length ? (
+                                <View style={styles.roomCardEquipment}>
+                                  <EquipmentChips items={item.equipment} max={3} />
+                                </View>
+                              ) : null}
                             </Pressable>
                           );
                         })}
-                      </ScrollView>
+                      </View>
                     </ScrollView>
                   </PullToRefresh>
                 )}
@@ -1370,7 +932,10 @@ export default function BookingScreen() {
                 const canCancel = !isCancelled && !isCompleted;
                 const isHighlighted = highlightBookingId === item.id;
                 return (
-                  <View
+                  <Pressable
+                    onPress={() => setDetailsBooking(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Бронь «${room?.name ?? 'Комната'}», подробнее`}
                     style={[
                       styles.bookingCardOrange,
                       isHighlighted && styles.bookingCardHighlighted,
@@ -1389,22 +954,42 @@ export default function BookingScreen() {
                         </BookingText>
                       </View>
                     </View>
-                    <BookingText style={styles.bookingMetaWhite}>
-                      {formatDisplayDateFromIso(startStr)} • {formatTimeOnly(startStr)}–
-                      {formatTimeOnly(endStr)}
-                    </BookingText>
-                    {item.company_name && (
-                      <BookingText style={styles.bookingMetaWhite}>
-                        {item.company_name}
+                    <View style={styles.bookingRow}>
+                      <MaterialIcons name="calendar-today" size={16} color="rgba(255,255,255,0.75)" />
+                      <BookingText style={styles.bookingRowText}>
+                        {startStr
+                          ? `${formatBookingDay(almatyDay(new Date(startStr)))} · ${formatTime(almatyMinutes(startStr))}–${formatTime(almatyMinutes(endStr))}`
+                          : `${formatDisplayDateFromIso(startStr)} • ${formatTimeOnly(startStr)}–${formatTimeOnly(endStr)}`}
+                        {startStr && endStr
+                          ? ` · ${formatDuration(Math.round((new Date(endStr).getTime() - new Date(startStr).getTime()) / 60000))}`
+                          : ''}
                       </BookingText>
-                    )}
+                    </View>
+                    {item.company_name ? (
+                      <View style={styles.bookingRow}>
+                        <MaterialIcons name="business" size={16} color="rgba(255,255,255,0.75)" />
+                        <BookingText style={styles.bookingRowText}>
+                          <BookingText style={styles.bookingRowLabel}>Компания: </BookingText>
+                          {item.company_name}
+                        </BookingText>
+                      </View>
+                    ) : null}
+                    {item.comment ? (
+                      <View style={styles.bookingRow}>
+                        <MaterialIcons name="chat-bubble-outline" size={16} color="rgba(255,255,255,0.75)" />
+                        <BookingText style={styles.bookingRowText}>
+                          <BookingText style={styles.bookingRowLabel}>Комментарий: </BookingText>
+                          {item.comment}
+                        </BookingText>
+                      </View>
+                    ) : null}
                     <View style={styles.bookingCardActions}>
                       <Pressable
                         onPress={() => router.push(`/booking/${item.id}`)}
                         style={styles.viewBookingBtnOrange}
                       >
                         <MaterialIcons name="qr-code-2" size={18} color="#fff" />
-                        <BookingText style={styles.viewBookingBtnText}>QR код</BookingText>
+                        <BookingText style={styles.viewBookingBtnText}>QR-код</BookingText>
                       </Pressable>
                       {canCancel && (
                         <Pressable
@@ -1422,7 +1007,7 @@ export default function BookingScreen() {
                         </Pressable>
                       )}
                     </View>
-                  </View>
+                  </Pressable>
                 );
               }}
             />
@@ -1435,6 +1020,29 @@ export default function BookingScreen() {
 }
 
 const styles = StyleSheet.create({
+    bookingRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        marginTop: 6,
+    },
+    bookingRowText: {
+        flex: 1,
+        fontSize: 14,
+        color: '#fff',
+    },
+    bookingRowLabel: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.65)',
+    },
+    roomsList: {
+        paddingBottom: 120,
+    },
+    roomCardEquipment: {
+        paddingHorizontal: 14,
+        paddingBottom: 14,
+        marginTop: -2,
+    },
     gradientFill: {
         flex: 1,
     },
@@ -1659,13 +1267,15 @@ const styles = StyleSheet.create({
         maxHeight: 200,
     },
     roomCardOrange: {
-        width: 112,
-        marginRight: 12,
+        borderRadius: 18,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.28)',
     },
     roomCardImageWrap: {
-        width: 112,
-        height: 145,
-        borderRadius: 10,
+        width: '100%',
+        height: 150,
         overflow: 'hidden',
         backgroundColor: 'rgba(255,255,255,0.1)',
     },
@@ -1693,19 +1303,22 @@ const styles = StyleSheet.create({
         color: '#fff',
     },
     roomCardNameWhite: {
-        fontSize: 11,
+        fontSize: 18,
         fontWeight: '600',
         color: '#fff',
-        marginTop: 6,
+        marginTop: 12,
+        paddingHorizontal: 14,
     },
     roomCardMetaRow: {
         flexDirection: 'row',
-        gap: 8,
-        marginTop: 2,
+        gap: 14,
+        marginTop: 4,
+        marginBottom: 12,
+        paddingHorizontal: 14,
     },
     roomCardMetaWhite: {
-        fontSize: 10,
-        color: 'rgba(255,255,255,0.7)',
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.85)',
     },
     formTitleWhite: {
         marginBottom: 8,

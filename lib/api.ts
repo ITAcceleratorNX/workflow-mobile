@@ -2380,6 +2380,17 @@ export interface MeetingRoom {
   photos?: string[];
   /** Одно фото — если бэкенд отдаёт только photo */
   photo?: string | null;
+  /** Оснащение (названия; общий справочник — /meeting-rooms/equipment). */
+  equipment?: string[];
+}
+
+/** Общий справочник оборудования переговорных (Администратор, Руководитель). */
+export async function getMeetingRoomEquipmentCatalog(): Promise<
+  { ok: true; data: { id: number; name: string }[] } | { ok: false; error: string }
+> {
+  const result = await request<{ id: number; name: string }[]>('/meeting-rooms/equipment');
+  if (result.ok) return { ok: true, data: Array.isArray(result.data) ? result.data : [] };
+  return { ok: false, error: result.error };
 }
 
 /** Тот же офис, что в демо на экране создания заявки (`requests/create.tsx`). */
@@ -2436,6 +2447,8 @@ export interface MeetingRoomBooking {
   office?: Office;
   /** Кто забронировал — приходит в списке бронирований офиса для персонала. */
   client?: { id: number; full_name?: string | null; phone?: string | null; role?: string | null } | null;
+  /** Пожелания к подготовке переговорной (необязательно). */
+  comment?: string | null;
 }
 
 export interface RoomAvailabilitySlot {
@@ -2495,10 +2508,12 @@ export async function createMeetingRoom(body: {
   capacity?: number;
   room_type?: string;
   description?: string | null;
+  equipment?: string[];
 }): Promise<
   { ok: true; data: MeetingRoom } | { ok: false; error: string }
 > {
   const payload = {
+    ...(body.equipment != null && { equipment: body.equipment }),
     name: body.name.trim(),
     office_id: body.office_id,
     floor: body.floor ?? 0,
@@ -2516,7 +2531,7 @@ export async function createMeetingRoom(body: {
 
 export async function updateMeetingRoom(
   id: number,
-  body: Partial<Pick<MeetingRoom, 'name' | 'floor' | 'capacity' | 'room_type' | 'description'>>
+  body: Partial<Pick<MeetingRoom, 'name' | 'floor' | 'capacity' | 'room_type' | 'description' | 'equipment'>>
 ): Promise<
   { ok: true; data: MeetingRoom } | { ok: false; error: string }
 > {
@@ -2556,10 +2571,13 @@ export async function getRoomDailyAvailability(
 
 export async function createMeetingRoomBooking(data: {
   meeting_room_id: number;
-  booking_date: string;
+  /** Без даты start/end — полные ISO-моменты с часовым поясом. */
+  booking_date?: string;
   start_time: string;
   end_time: string;
+  /** Пусто — бэкенд подставит компанию из профиля Клиента. */
   company_name?: string | null;
+  comment?: string | null;
 }): Promise<
   | { ok: true; data: MeetingRoomBooking }
   | { ok: false; error: string }
@@ -2567,7 +2585,7 @@ export async function createMeetingRoomBooking(data: {
   const { booking_date, ...rest } = data;
   const result = await request<MeetingRoomBooking>('/meeting-room-bookings', {
     method: 'POST',
-    body: JSON.stringify({ ...rest, date: booking_date }),
+    body: JSON.stringify(booking_date ? { ...rest, date: booking_date } : rest),
   });
   if (result.ok) return { ok: true, data: result.data };
   return { ok: false, error: result.error };
