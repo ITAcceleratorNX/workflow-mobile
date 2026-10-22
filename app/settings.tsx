@@ -73,6 +73,37 @@ export default function SettingsScreen() {
           <MaterialIcons name="chevron-right" size={22} color={muted} />
         </Pressable>
 
+        {/* Календарь */}
+        <Pressable
+          onPress={() => {
+            if (isGuest) {
+              showToast({
+                title: 'Демо режим',
+                description: 'Подключение календаря недоступно в демо-версии.',
+                variant: 'default',
+              });
+              return;
+            }
+            router.push('/calendar-settings');
+          }}
+          style={({ pressed }) => [
+            styles.item,
+            { borderColor: border },
+            pressed && styles.itemPressed,
+          ]}
+        >
+          <View style={styles.itemIcon}>
+            <MaterialIcons name="event" size={22} color={primary} />
+          </View>
+          <View style={styles.itemText}>
+            <ThemedText style={styles.itemTitle}>Календарь</ThemedText>
+            <ThemedText style={[styles.itemSubtitle, { color: muted }]}>
+              Задачи в Google, Apple и Outlook
+            </ThemedText>
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color={muted} />
+        </Pressable>
+
         {/* Пароль */}
         <Pressable
           onPress={() => {
