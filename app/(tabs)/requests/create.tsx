@@ -1,13 +1,11 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -21,9 +19,9 @@ import {
 } from 'react-native';
 
 import { ExecutorAssignCard } from '@/components/requests/executor-assign-card';
+import { OfficePickerGrid } from '@/components/requests/office-picker-grid';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { getPrimaryPhotoUri } from '@/lib/image-uri';
 import { PageLoader, Select } from '@/components/ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useToast } from '@/context/toast-context';
@@ -70,24 +68,11 @@ const REQUEST_TYPES: { value: string; label: string }[] = [
   { value: 'recurring', label: 'Повторяющаяся задача' },
 ];
 
-/**
- * Декоративный градиент-плейсхолдер для карточек офисов без фото.
- * Это арт-цвета бренда, не часть theme system, — оставлены как есть.
- */
-const OFFICE_GRADIENT: [string, string] = ['#114A65', '#B8400E'];
-
 /** Резерв под нижнюю панель действий (кнопки + отступы), чтобы контент не уезжал под футер */
 const FOOTER_BTN_MIN_HEIGHT = 52;
 const FOOTER_BAR_PADDING_V = 10;
 /** Небольшой зазор между последним контентом и панелью кнопок */
 const FOOTER_SCROLL_GAP = 12;
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_GAP = 8;
-const CARD_COLS = 2;
-const OFFICE_CARD_WIDTH = (SCREEN_WIDTH - 48 - CARD_GAP) / CARD_COLS;
-const OFFICE_CARD_ASPECT = 108 / 134;
-const OFFICE_CARD_HEIGHT = OFFICE_CARD_WIDTH / OFFICE_CARD_ASPECT;
 
 export default function CreateRequestScreen() {
   const router = useRouter();
@@ -106,6 +91,7 @@ export default function CreateRequestScreen() {
   const onPrimary = useThemeColor({}, 'onPrimary');
   const dangerColor = useThemeColor({}, 'danger');
   const surfaceMuted = useThemeColor({}, 'surfaceMuted');
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
   const accentSoft = useThemeColor({}, 'accentSoft');
   const insets = useSafeAreaInsets();
   /** Минимум 8 — чтобы на устройствах без home indicator кнопки не прилипали к краю */
@@ -113,22 +99,9 @@ export default function CreateRequestScreen() {
 
   const themeStyles = useMemo(
     () => ({
-      stepDotInactive: { backgroundColor: borderColor },
+      stepDotInactive: { backgroundColor: mutedColor, opacity: 0.45 },
       stepDotActive: { backgroundColor: primaryColor },
       chipActive: { backgroundColor: primaryColor, borderColor: primaryColor },
-      officeChip: { backgroundColor: cardBackground },
-      officeChipActive: {
-        backgroundColor: primaryColor,
-        borderColor: primaryColor,
-      },
-      officeCard: { backgroundColor: cardBackground },
-      officeCardSelected: {
-        borderColor: primaryColor,
-        shadowColor: primaryColor,
-        shadowOpacity: 0.5,
-        shadowRadius: 6,
-      },
-      officeCardImage: { backgroundColor: borderColor },
       toggleRow: { backgroundColor: cardBackground },
       summaryCard: { backgroundColor: cardBackground },
       /** Фон на всю ширину до нижнего края экрана (включая safe area), иначе под кнопками «пустая» полоса */
@@ -138,10 +111,15 @@ export default function CreateRequestScreen() {
         borderTopColor: borderColor,
       },
     }),
-    [borderColor, primaryColor, cardBackground, backgroundColor]
+    [borderColor, mutedColor, primaryColor, cardBackground, backgroundColor]
   );
 
   const [step, setStep] = useState(1);
+  // Позиции для прокрутки к офису, найденному по геолокации.
+  const scrollRef = useRef<ScrollView>(null);
+  const stepY = useRef(0);
+  const officeGridY = useRef(0);
+  const officeCardY = useRef<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -512,7 +490,11 @@ export default function CreateRequestScreen() {
         lat: current.coords.latitude,
         lon: current.coords.longitude,
       });
-      if (nearest.kind === 'nearby') setSelectedOfficeId(nearest.office.id);
+      if (nearest.kind === 'nearby') {
+        setSelectedOfficeId(nearest.office.id);
+        const y = officeCardY.current[nearest.office.id];
+        if (y != null) scrollRef.current?.scrollTo({ y: officeGridY.current + y - 12, animated: true });
+      }
       showToast({ ...nearestOfficeNotice(nearest), duration: 3500 });
     } catch (e) {
       console.error('[RequestsCreate] detect nearest office error', e);
@@ -755,7 +737,7 @@ export default function CreateRequestScreen() {
     <ThemedView style={[styles.container, { backgroundColor }]}>
       <View style={[styles.header, { paddingTop: 12 + insets.top, borderBottomColor: borderColor }]}>
         <Pressable onPress={goBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <MaterialIcons name="arrow-back" size={24} color={textColor} />
+          <MaterialIcons name="chevron-left" size={28} color={textColor} />
         </Pressable>
         <ThemedText style={[styles.headerTitle, { color: textColor }]}>Создать заявку</ThemedText>
       </View>
@@ -766,6 +748,7 @@ export default function CreateRequestScreen() {
         keyboardVerticalOffset={80}
       >
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={[
             styles.scrollContent,
@@ -786,7 +769,7 @@ export default function CreateRequestScreen() {
                 key={s}
                 style={[
                   styles.stepDot,
-                  step >= s ? themeStyles.stepDotActive : themeStyles.stepDotInactive,
+                  step === s ? themeStyles.stepDotActive : themeStyles.stepDotInactive,
                   step === s && styles.stepDotCurrent,
                 ]}
               />
@@ -794,7 +777,12 @@ export default function CreateRequestScreen() {
           </View>
 
           {step === 1 && (
-            <View style={styles.step}>
+            <View
+              style={styles.step}
+              onLayout={(e) => {
+                stepY.current = e.nativeEvent.layout.y;
+              }}
+            >
               <ThemedText style={[styles.stepTitle, { color: textColor }]}>
                 Где находится заявка?
               </ThemedText>
@@ -889,90 +877,35 @@ export default function CreateRequestScreen() {
                     onPress={handleDetectNearestOffice}
                     accessibilityRole="button"
                     accessibilityLabel="Определить ближайший офис"
-                    style={[
+                    disabled={isDetectingNearestOffice}
+                    style={({ pressed }) => [
                       styles.geoButton,
-                      { borderColor: primaryColor, backgroundColor: accentSoft },
+                      { borderColor: textColor },
+                      (pressed || isDetectingNearestOffice) && { opacity: 0.7 },
                     ]}
                   >
-                    <MaterialIcons name="my-location" size={18} color={primaryColor} />
-                    <ThemedText style={[styles.geoButtonText, { color: primaryColor }]}>
-                      {isDetectingNearestOffice ? 'Определяем ближайший офис...' : 'Определить ближайший офис'}
+                    {isDetectingNearestOffice ? (
+                      <ActivityIndicator size="small" color={textColor} />
+                    ) : (
+                      <MaterialIcons name="my-location" size={18} color={textColor} />
+                    )}
+                    <ThemedText style={[styles.geoButtonText, { color: textColor }]}>
+                      {isDetectingNearestOffice ? 'Определяем…' : 'Определить ближайший офис'}
                     </ThemedText>
                   </Pressable>
-                  <View style={styles.officeChipRow}>
-                    {offices.map((office) => (
-                      <Pressable
-                        key={office.id}
-                        onPress={() => setSelectedOfficeId(office.id)}
-                        style={[
-                          styles.officeChip,
-                          themeStyles.officeChip,
-                          selectedOfficeId === office.id && themeStyles.officeChipActive,
-                        ]}
-                      >
-                        <ThemedText
-                          style={[
-                            styles.officeChipText,
-                            { color: selectedOfficeId === office.id ? onPrimary : textColor },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {office.name}
-                        </ThemedText>
-                      </Pressable>
-                    ))}
-                  </View>
-                  <View style={styles.officeGrid}>
-                    {offices.map((office) => {
-                      const photoUri = getPrimaryPhotoUri(office);
-                      const isSelected = selectedOfficeId === office.id;
-                      return (
-                        <Pressable
-                          key={office.id}
-                          onPress={() => setSelectedOfficeId(office.id)}
-                          style={[
-                            styles.officeCard,
-                            themeStyles.officeCard,
-                            isSelected && themeStyles.officeCardSelected,
-                          ]}
-                        >
-                          <View style={[styles.officeCardImage, themeStyles.officeCardImage]}>
-                            {photoUri ? (
-                              <Image
-                                source={{ uri: photoUri }}
-                                style={styles.officeCardImageImg}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <LinearGradient
-                                colors={OFFICE_GRADIENT}
-                                style={styles.officeCardImagePlaceholder}
-                              >
-                                <MaterialIcons name="location-on" size={32} color="rgba(255,255,255,0.5)" />
-                              </LinearGradient>
-                            )}
-                          </View>
-                          <View style={styles.officeCardInfo}>
-                            <ThemedText
-                              style={[styles.officeCardName, { color: isSelected ? primaryColor : textColor }]}
-                              numberOfLines={2}
-                            >
-                              {office.name}
-                            </ThemedText>
-                            {office.city && (
-                              <ThemedText style={[styles.officeCardMeta, { color: mutedColor }]} numberOfLines={1}>
-                                {office.city}
-                              </ThemedText>
-                            )}
-                            {office.address && (
-                              <ThemedText style={[styles.officeCardMeta, { color: mutedColor }]} numberOfLines={2}>
-                                {office.address}
-                              </ThemedText>
-                            )}
-                          </View>
-                        </Pressable>
-                      );
-                    })}
+                  <View
+                    onLayout={(e) => {
+                      officeGridY.current = stepY.current + e.nativeEvent.layout.y;
+                    }}
+                  >
+                  <OfficePickerGrid
+                    offices={offices}
+                    selectedId={selectedOfficeId}
+                    onSelect={setSelectedOfficeId}
+                    onCardLayout={(id, y) => {
+                      officeCardY.current[id] = y;
+                    }}
+                  />
                   </View>
                 </>
               )}
@@ -1608,7 +1541,7 @@ export default function CreateRequestScreen() {
                 style={({ pressed }) => [
                   styles.footerBtn,
                   styles.footerBtnSecondary,
-                  { borderColor: borderColor },
+                  { borderColor, backgroundColor: surfaceElevated },
                   pressed && styles.footerBtnPressed,
                 ]}
               >
@@ -1651,7 +1584,7 @@ export default function CreateRequestScreen() {
                 style={({ pressed }) => [
                   styles.footerBtn,
                   styles.footerBtnSecondary,
-                  { borderColor: borderColor },
+                  { borderColor, backgroundColor: surfaceElevated },
                   pressed && styles.footerBtnPressed,
                 ]}
               >
@@ -1715,8 +1648,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '600',
     flex: 1,
   },
   keyboard: {
@@ -1732,13 +1665,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   stepTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   stepHint: {
     fontSize: 14,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   fieldLabel: {
     fontSize: 14,
@@ -1759,82 +1692,21 @@ const styles = StyleSheet.create({
   stepDotCurrent: {
     width: 24,
   },
-  officeChipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  officeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  officeChipText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
   geoButton: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    marginTop: 8,
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
+    marginBottom: 14,
+    paddingLeft: 12,
+    paddingRight: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
     borderWidth: 1,
     gap: 6,
   },
   geoButtonText: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  officeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: CARD_GAP,
-  },
-  officeCard: {
-    width: OFFICE_CARD_WIDTH,
-    borderRadius: 10,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  officeCardSelected: {
-    shadowOpacity: 0.35,
-    borderWidth: 2,
-  },
-  officeCardImage: {
-    width: '100%',
-    height: OFFICE_CARD_HEIGHT * 0.7,
-  },
-  officeCardImageImg: {
-    width: '100%',
-    height: '100%',
-  },
-  officeCardImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  officeCardInfo: {
-    padding: 8,
-    gap: 2,
-  },
-  officeCardName: {
-    fontSize: 10,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  officeCardMeta: {
-    fontSize: 9,
-    textAlign: 'center',
   },
   officeName: {
     fontSize: 16,
@@ -2075,14 +1947,13 @@ const styles = StyleSheet.create({
   footerBtn: {
     flex: 1,
     minHeight: FOOTER_BTN_MIN_HEIGHT,
-    borderRadius: 16,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 12,
   },
   footerBtnSecondary: {
-    borderWidth: StyleSheet.hairlineWidth * 2,
-    backgroundColor: 'transparent',
+    borderWidth: 1,
   },
   footerBtnLabel: {
     fontSize: 16,

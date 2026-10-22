@@ -26,6 +26,8 @@ export interface SelectProps {
   containerStyle?: ViewStyle;
   /** Не открывать список и не менять значение */
   disabled?: boolean;
+  /** `compact` — фильтр в списке (46 pt, шрифт 15), как в макете заявок */
+  size?: 'default' | 'compact';
 }
 
 export function Select({
@@ -35,6 +37,7 @@ export function Select({
   placeholder = 'Выберите',
   containerStyle,
   disabled = false,
+  size = 'default',
 }: SelectProps) {
   const [open, setOpen] = useState(false);
   const text = useThemeColor({}, 'text');
@@ -56,12 +59,21 @@ export function Select({
       <Pressable
         disabled={disabled}
         onPress={() => !disabled && setOpen(true)}
-        style={[styles.trigger, { borderColor: border }, disabled && { opacity: 0.55 }]}
+        style={[
+          styles.trigger,
+          size === 'compact' && styles.triggerCompact,
+          // compact: рамка 16% от цвета текста — заметнее на чёрном фоне, как в макете
+          { borderColor: size === 'compact' ? `${text}29` : border },
+          disabled && { opacity: 0.55 },
+        ]}
       >
-        <ThemedText style={[styles.triggerText, { color: displayColor }]}>
+        <ThemedText
+          style={[styles.triggerText, size === 'compact' && styles.triggerTextCompact, { color: displayColor }]}
+          numberOfLines={1}
+        >
           {display}
         </ThemedText>
-        <MaterialIcons name="keyboard-arrow-down" size={20} color={textMuted} />
+        <MaterialIcons name="keyboard-arrow-down" size={20} color={size === 'compact' ? text : textMuted} />
       </Pressable>
       <Modal
         visible={open}
@@ -110,9 +122,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  triggerCompact: {
+    height: 46,
+    borderRadius: 10,
+    paddingLeft: 16,
+    paddingRight: 12,
+  },
   triggerText: {
+    flexShrink: 1,
     fontSize: 16,
     lineHeight: 22,
+  },
+  triggerTextCompact: {
+    fontSize: 15,
+    lineHeight: 18,
   },
   backdrop: {
     flex: 1,

@@ -9,16 +9,19 @@ import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 
 /** Отступ сверху + высота блока иконка+подпись (без safe area). Для `(tabs)/_layout`. */
 export const BOTTOM_NAV_TOP_PAD = 10;
-export const BOTTOM_NAV_ROW_HEIGHT = BOTTOM_NAV_TOP_PAD + 42;
+/** Пилюля 30 + зазор 4 + подпись 13 (+1 запас на округление шрифта). */
+export const BOTTOM_NAV_ROW_HEIGHT = BOTTOM_NAV_TOP_PAD + 48;
 /** Чуть уменьшаем системный inset снизу — меньше «воздуха» над жестовой зоной. */
 export const BOTTOM_NAV_INSET_TRIM_PX = 8;
 
 export function bottomNavBottomInset(insetBottom: number) {
   return Math.max(insetBottom - BOTTOM_NAV_INSET_TRIM_PX, 0);
 }
+// Тёмный таб-бар (макет «Таб-бар · тёмный, вариант 3»): активная вкладка — оранжевая пилюля.
 const ACTIVE_COLOR = '#FFFFFF';
 const INACTIVE_COLOR = 'rgba(255, 255, 255, 0.55)';
-const BAR_BACKGROUND = '#F35713';
+const BAR_BACKGROUND = '#1C1C1E';
+const ACTIVE_PILL = '#F45714';
 
 const NAV_ITEMS: { key: string; routeName: string; label: string; icon: 'home' | 'grid-on' | 'checklist' | 'message' | 'person' }[] = [
   { key: 'home', routeName: 'index', label: 'Главная', icon: 'home' },
@@ -91,18 +94,19 @@ export function BottomNav({ state, navigation }: BottomNavProps) {
             key={item.key}
             onPress={() => handlePress(item.routeName)}
             style={styles.item}
-            accessibilityRole="button"
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
             accessibilityLabel={badge ? `${item.label}, требуют действия: ${requestActionCount}` : item.label}
           >
-            <View>
-              <MaterialIcons name={item.icon} size={24} color={color} />
+            <View style={[styles.pill, isActive && styles.pillActive]}>
+              <MaterialIcons name={item.icon} size={22} color={color} />
               {badge && (
                 <View style={styles.badge} pointerEvents="none">
                   <Text style={styles.badgeText}>{badge}</Text>
                 </View>
               )}
             </View>
-            <Text style={[styles.label, { color }]}>{item.label}</Text>
+            <Text style={[styles.label, isActive && styles.labelActive, { color }]}>{item.label}</Text>
           </Pressable>
         );
       })}
@@ -118,6 +122,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 50,
     backgroundColor: BAR_BACKGROUND,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
@@ -128,17 +137,31 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
+  },
+  pill: {
+    width: 56,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillActive: {
+    backgroundColor: ACTIVE_PILL,
   },
   label: {
-    fontSize: 10,
+    fontSize: 11,
+    lineHeight: 13,
     fontWeight: '500',
+  },
+  labelActive: {
+    fontWeight: '600',
   },
   // Бейдж поверх иконки: размеры иконки и панели не меняются.
   badge: {
     position: 'absolute',
-    top: -5,
-    right: -9,
+    top: -4,
+    right: 6,
     minWidth: 16,
     height: 16,
     paddingHorizontal: 4,
@@ -150,7 +173,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: {
-    color: BAR_BACKGROUND,
+    color: ACTIVE_PILL,
     fontSize: 10,
     lineHeight: 12,
     fontWeight: '700',
