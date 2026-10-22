@@ -452,23 +452,23 @@ export function RoomBookingScreen({
 
   return (
     <LinearGradient colors={ORANGE_GRADIENT} style={{ flex: 1 }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1, paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 12) }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {stage === 'room' ? (
-          <>
-            <Header title={room.name} subtitle={subtitle} icon="chevron-left" onPress={onClose} />
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll}>
-              <RoomInfo room={room} office={office} />
-            </ScrollView>
-            <View style={styles.footer}>
-              <PrimaryButton label="Выбрать время" onPress={() => setStage('flow')} />
-            </View>
-          </>
-        ) : (
-          <BookingFlow room={room} office={office} onBack={() => setStage('room')} onBooked={onBooked} />
-        )}
+      {/* KeyboardAvoidingView (padding) сам задаёт paddingBottom и затирал отступ под home indicator — он внутри. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 12) }}>
+          {stage === 'room' ? (
+            <>
+              <Header title={room.name} subtitle={subtitle} icon="chevron-left" onPress={onClose} />
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll}>
+                <RoomInfo room={room} office={office} />
+              </ScrollView>
+              <View style={styles.footer}>
+                <PrimaryButton label="Выбрать время" onPress={() => setStage('flow')} />
+              </View>
+            </>
+          ) : (
+            <BookingFlow room={room} office={office} onBack={() => setStage('room')} onBooked={onBooked} />
+          )}
+        </View>
       </KeyboardAvoidingView>
     </LinearGradient>
   );
