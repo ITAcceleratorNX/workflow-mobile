@@ -13,6 +13,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { RoomEquipmentEditor } from '@/components/booking/flow/room-equipment-editor';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { PullToRefresh, ScreenHeader } from '@/components/ui';
@@ -125,12 +126,14 @@ export default function AdminWorkerOfficeScreen() {
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomFloor, setNewRoomFloor] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState('');
+  const [newRoomEquipment, setNewRoomEquipment] = useState<string[]>([]);
   const [roomCreateError, setRoomCreateError] = useState<string | null>(null);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
   const [editRoomName, setEditRoomName] = useState('');
   const [editRoomFloor, setEditRoomFloor] = useState('');
   const [editRoomCapacity, setEditRoomCapacity] = useState('');
+  const [editRoomEquipment, setEditRoomEquipment] = useState<string[]>([]);
   const [savingRoomId, setSavingRoomId] = useState<number | null>(null);
   const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
 
@@ -211,12 +214,14 @@ export default function AdminWorkerOfficeScreen() {
         office_id: officeId,
         floor,
         capacity,
+        equipment: newRoomEquipment,
       });
       if (result.ok) {
         showToast({ title: 'Переговорная добавлена', variant: 'success' });
         setNewRoomName('');
         setNewRoomFloor('');
         setNewRoomCapacity('');
+        setNewRoomEquipment([]);
         setShowAddRoom(false);
         await loadRooms(officeId);
       } else {
@@ -224,7 +229,7 @@ export default function AdminWorkerOfficeScreen() {
       }
       setIsCreatingRoom(false);
     },
-    [newRoomName, newRoomFloor, newRoomCapacity, showToast, loadRooms]
+    [newRoomName, newRoomFloor, newRoomCapacity, newRoomEquipment, showToast, loadRooms]
   );
 
   const startEditRoom = useCallback((room: MeetingRoom) => {
@@ -232,6 +237,7 @@ export default function AdminWorkerOfficeScreen() {
     setEditRoomName(room.name ?? '');
     setEditRoomFloor(String(room.floor ?? 0));
     setEditRoomCapacity(String(room.capacity ?? 1));
+    setEditRoomEquipment(room.equipment ?? []);
   }, []);
 
   const cancelEditRoom = useCallback(() => {
@@ -252,7 +258,7 @@ export default function AdminWorkerOfficeScreen() {
         return;
       }
       setSavingRoomId(roomId);
-      const result = await updateMeetingRoom(roomId, { name, floor, capacity });
+      const result = await updateMeetingRoom(roomId, { name, floor, capacity, equipment: editRoomEquipment });
       if (result.ok) {
         showToast({ title: 'Данные комнаты сохранены', variant: 'success' });
         setEditingRoomId(null);
@@ -262,7 +268,7 @@ export default function AdminWorkerOfficeScreen() {
       }
       setSavingRoomId(null);
     },
-    [editRoomName, editRoomFloor, editRoomCapacity, showToast, loadRooms]
+    [editRoomName, editRoomFloor, editRoomCapacity, editRoomEquipment, showToast, loadRooms]
   );
 
   const handleDeleteRoom = useCallback(
@@ -947,6 +953,12 @@ export default function AdminWorkerOfficeScreen() {
                                         />
                                       </View>
                                     </View>
+                                    <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Оснащение</ThemedText>
+                                    <RoomEquipmentEditor
+                                      value={editRoomEquipment}
+                                      onChange={setEditRoomEquipment}
+                                      colors={{ text, textMuted, primary, border }}
+                                    />
                                     <View style={styles.roomEditActions}>
                                       <Pressable
                                         style={[styles.roomActionBtn, savingRoomId === r.id && styles.buttonDisabled]}
@@ -976,6 +988,7 @@ export default function AdminWorkerOfficeScreen() {
                                         </ThemedText>
                                         <ThemedText style={[styles.roomChipMeta, { color: textMuted }]}>
                                           этаж {r.floor ?? 0} · {r.capacity ?? 0} чел.
+                                          {r.equipment?.length ? ` · ${r.equipment.length} в оснащении` : ''}
                                         </ThemedText>
                                       </View>
                                     </View>
@@ -1054,6 +1067,12 @@ export default function AdminWorkerOfficeScreen() {
                                   />
                                 </View>
                               </View>
+                              <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Оснащение</ThemedText>
+                              <RoomEquipmentEditor
+                                value={newRoomEquipment}
+                                onChange={setNewRoomEquipment}
+                                colors={{ text, textMuted, primary, border }}
+                              />
                               {roomCreateError ? (
                                 <ThemedText style={styles.errorText}>{roomCreateError}</ThemedText>
                               ) : null}
@@ -1077,6 +1096,7 @@ export default function AdminWorkerOfficeScreen() {
                                     setNewRoomName('');
                                     setNewRoomFloor('');
                                     setNewRoomCapacity('');
+                                    setNewRoomEquipment([]);
                                   }}
                                 >
                                   <ThemedText style={[styles.roomActionBtnTextSecondary, { color: textMuted }]}>
