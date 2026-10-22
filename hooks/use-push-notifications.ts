@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
+import { Platform } from 'react-native';
 
 import { useAuthStore } from '@/stores/auth-store';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
@@ -232,6 +233,8 @@ export function usePushNotifications(): void {
   }, [token, isGuest]);
 
   useEffect(() => {
+    // На вебе метода нет — expo-notifications бросает ошибку при открытии приложения.
+    if (Platform.OS === 'web') return;
     let cancelled = false;
     (async () => {
       const last = await Notifications.getLastNotificationResponseAsync();

@@ -1,10 +1,10 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Image } from 'expo-image';
 import {
     ActivityIndicator,
     FlatList,
-    Image,
     Pressable,
     StyleSheet,
     View,
@@ -32,14 +32,14 @@ import {
     type RequestGroupsRole,
     type RequestGroupsSegments,
 } from '@/lib/api';
+import { getImageUri } from '@/lib/image-uri';
 import { isRejectedRequest } from '@/lib/request-permissions';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 
-// Размеры карточки заявки.
-const CARD_PHOTO_WIDTH = 140;
-const CARD_PHOTO_HEIGHT = 100;
-const CARD_GAP = Spacing.lg;
+// Карточка заявки по макету: квадратное превью 84 pt, текст справа.
+const CARD_PHOTO_SIZE = 84;
+const CARD_GAP = 14;
 const PAGE_SIZE = 20;
 
 const TYPE_OPTIONS = [
@@ -177,9 +177,31 @@ function mergeSegments(
 /** Первое фото заявки: с группы (как в kcell compact — request.photos[0]) или с первой подзаявки */
 function getFirstPhotoUrl(request: RequestGroup): string | null {
   const fromGroup = request.photos?.[0]?.photo_url;
-  if (fromGroup) return fromGroup;
+  if (fromGroup) return getImageUri(fromGroup);
   const sub = request.requests?.[0];
-  return sub?.photos?.[0]?.photo_url ?? null;
+  return getImageUri(sub?.photos?.[0]?.photo_url);
+}
+
+/** Превью заявки; без фото или если оно не загрузилось — иконка. */
+function RequestPhoto({ uri }: { uri: string | null }) {
+  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
+  const textMuted = useThemeColor({}, 'textMuted');
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  return (
+    <View style={[styles.photoWrap, { backgroundColor: surfaceElevated }]}>
+      {uri && failedUri !== uri ? (
+        <Image
+          source={{ uri }}
+          style={styles.photoImage}
+          contentFit="cover"
+          transition={150}
+          onError={() => setFailedUri(uri)}
+        />
+      ) : (
+        <MaterialIcons name="image" size={24} color={textMuted} />
+      )}
+    </View>
+  );
 }
 
 function getPrimarySubRequest(request: RequestGroup) {
@@ -232,8 +254,6 @@ function RequestCard({
 }) {
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
-  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
-  const surfaceElevated = useThemeColor({}, 'surfaceElevated');
   const successSoft = useThemeColor({}, 'successSoft');
   const success = useThemeColor({}, 'success');
   const textSecondary = useThemeColor({}, 'textSecondary');
@@ -255,21 +275,7 @@ function RequestCard({
       accessibilityLabel={`Заявка ${request.id}, ${statusLabel}${isLongTerm ? ', долгосрочная' : ''}, ${serviceName}, ${officeText}`}
       style={({ pressed }) => [styles.card, { opacity: pressed ? 0.85 : 1 }]}
     >
-      <View style={[styles.photoWrap, { backgroundColor: surfaceMuted }]}>
-        {photoUrl ? (
-          <Image
-            source={{ uri: photoUrl }}
-            style={styles.photoImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View
-            style={[styles.photoPlaceholder, { backgroundColor: surfaceElevated }]}
-          >
-            <MaterialIcons name="image" size={28} color={textMuted} />
-          </View>
-        )}
-      </View>
+      <RequestPhoto uri={photoUrl} />
 
       <View style={styles.cardContent}>
         {isExecutor ? (
@@ -302,25 +308,17 @@ function RequestCard({
         ) : (
           <View style={styles.cardContentInner}>
             <View style={styles.cardTitleRow}>
-              <View style={styles.cardTitleLeft}>
-                <ThemedText
-                  style={[styles.cardCompactId, { color: text }]}
-                  numberOfLines={1}
-                >
-                  #{request.id}
-                </ThemedText>
-                {request.request_type && request.request_type !== 'normal' ? (
-                  <View style={[styles.badgeTypeMini, { backgroundColor: successSoft }]}>
-                    <ThemedText
-                      style={[styles.badgeTypeMiniText, { color: success }]}
-                      numberOfLines={1}
-                    >
-                      {typeLabel}
-                    </ThemedText>
-                  </View>
-                ) : null}
-                {isLongTerm ? <LongTermBadge /> : null}
-              </View>
+              <ThemedText style={[styles.cardCompactId, { color: text }]} numberOfLines={1}>
+                #{request.id}
+              </ThemedText>
+              {request.request_type && request.request_type !== 'normal' ? (
+                <View style={[styles.badgeTypeMini, { backgroundColor: successSoft }]}>
+                  <ThemedText style={[styles.badgeTypeMiniText, { color: success }]} numberOfLines={1}>
+                    {typeLabel}
+                  </ThemedText>
+                </View>
+              ) : null}
+              {isLongTerm ? <LongTermBadge /> : null}
               <ThemedText
                 style={[styles.cardCompactStatus, { color: textMuted }]}
                 numberOfLines={1}
@@ -337,7 +335,7 @@ function RequestCard({
               {serviceAndOffice}
             </ThemedText>
             <ThemedText
-              style={[styles.cardCompactLine3, { color: textMuted }]}
+              style={[styles.cardCompactLine3, { color: textMuted, opacity: 0.7 }]}
               numberOfLines={1}
             >
               {dateShort}
@@ -348,8 +346,8 @@ function RequestCard({
 
       <MaterialIcons
         name="chevron-right"
-        size={22}
-        color={textMuted}
+        size={20}
+        color={text}
         style={styles.chevron}
       />
     </Pressable>
@@ -368,6 +366,7 @@ export default function RequestsListScreen() {
   const primaryColor = useThemeColor({}, 'primary');
   const onPrimary = useThemeColor({}, 'onPrimary');
   const borderColor = useThemeColor({}, 'border');
+  const dividerColor = useThemeColor({}, 'divider');
   const accentSoft = useThemeColor({}, 'accentSoft');
   const surfaceElevated = useThemeColor({}, 'surfaceElevated');
 
@@ -610,12 +609,6 @@ export default function RequestsListScreen() {
   const listHeader = useMemo(
     () => (
       <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <ThemedText type="title" style={[styles.title, { color: textColor }]}>
-            Заявки
-          </ThemedText>
-        </View>
-
         {tabsConfig && tabsConfig.length > 0 && (
           <View style={[styles.tabsRow, { borderColor }]}>
             {tabsConfig.map((tab) => {
@@ -656,6 +649,7 @@ export default function RequestsListScreen() {
                     onValueChange={setFilterStatus}
                     options={statusOptions}
                     placeholder="Статус"
+                    size="compact"
                   />
                 </View>
               )}
@@ -665,6 +659,7 @@ export default function RequestsListScreen() {
                   onValueChange={setFilterPriority}
                   options={TYPE_OPTIONS}
                   placeholder="Тип"
+                  size="compact"
                 />
               </View>
             </View>
@@ -676,6 +671,7 @@ export default function RequestsListScreen() {
                     onValueChange={setFilterOffice}
                     options={officeOptions}
                     placeholder="Офис"
+                    size="compact"
                   />
                 </View>
                 {role === 'manager' && (
@@ -685,6 +681,7 @@ export default function RequestsListScreen() {
                       onValueChange={setFilterPeriod}
                       options={PERIOD_OPTIONS}
                       placeholder="Период"
+                      size="compact"
                     />
                   </View>
                 )}
@@ -712,7 +709,6 @@ export default function RequestsListScreen() {
     ),
     [
       role,
-      textColor,
       mutedColor,
       borderColor,
       primaryColor,
@@ -753,11 +749,16 @@ export default function RequestsListScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 16, borderBottomColor: dividerColor }]}>
+        <ThemedText style={[styles.title, { color: textColor }]} accessibilityRole="header">
+          Заявки
+        </ThemedText>
+      </View>
       <PullToRefresh
         refreshing={refreshing}
         onRefresh={onRefresh}
         loaderSize={96}
-        topOffset={insets.top + Spacing.lg}
+        topOffset={Spacing.lg}
       >
         <FlatList
           data={sortedList}
@@ -766,7 +767,7 @@ export default function RequestsListScreen() {
           contentContainerStyle={[
             styles.listContent,
             {
-              paddingTop: insets.top + Spacing.md,
+              paddingTop: 16,
               paddingBottom: insets.bottom + Spacing.giant + Spacing.md,
             },
           ]}
@@ -826,36 +827,33 @@ const styles = StyleSheet.create({
     lineHeight: LineHeights.bodySmall,
   },
   listContent: {
-    paddingHorizontal: Spacing.xxl,
+    paddingHorizontal: 24,
   },
   header: {
-    marginBottom: Spacing.lg,
+    marginBottom: CARD_GAP,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.sm,
+  topBar: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
   },
   title: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 28,
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 24,
   },
   createBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs + 2,
-    minHeight: 44,
+    minHeight: 47,
     paddingHorizontal: Spacing.md + 2,
     paddingVertical: Spacing.md,
-    borderRadius: Radius.sm,
+    borderRadius: 12,
   },
   createBtnFullWidth: {
     width: '100%',
     justifyContent: 'center',
-    marginTop: Spacing.xs,
   },
   createBtnText: {
     fontSize: FontSizes.body,
@@ -882,8 +880,8 @@ const styles = StyleSheet.create({
   filtersRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
+    gap: CARD_GAP,
+    marginBottom: CARD_GAP,
   },
   filterItem: {
     flex: 1,
@@ -893,76 +891,60 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: CARD_GAP,
-    marginBottom: Spacing.lg,
+    marginBottom: CARD_GAP,
     backgroundColor: 'transparent',
   },
   photoWrap: {
-    width: CARD_PHOTO_WIDTH,
-    height: CARD_PHOTO_HEIGHT,
+    width: CARD_PHOTO_SIZE,
+    height: CARD_PHOTO_SIZE,
     flexShrink: 0,
-    borderRadius: Radius.md,
+    borderRadius: 12,
     overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   photoImage: {
     width: '100%',
     height: '100%',
   },
-  photoPlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   cardContent: {
     flex: 1,
     minWidth: 0,
-    height: CARD_PHOTO_HEIGHT,
-    justifyContent: 'center',
   },
   cardContentInner: {
-    height: CARD_PHOTO_HEIGHT,
-    justifyContent: 'space-between',
+    gap: 8,
     minWidth: 0,
   },
   cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: 8,
     minWidth: 0,
   },
-  cardTitleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    flexShrink: 0,
-  },
   cardCompactId: {
-    fontSize: FontSizes.body,
+    fontSize: 17,
     lineHeight: 20,
     fontWeight: '700',
+    flexShrink: 0,
   },
   cardCompactStatus: {
-    flex: 1,
-    fontSize: 12,
+    flexShrink: 1,
+    fontSize: 13,
     lineHeight: 16,
-    fontWeight: '500',
-    textAlign: 'right',
     minWidth: 0,
   },
   cardCompactLine1: {
-    fontSize: 12,
+    fontSize: 13,
     lineHeight: 16,
     fontWeight: '600',
   },
   cardCompactLine2: {
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '500',
+    fontSize: 14,
+    lineHeight: 17,
   },
   cardCompactLine3: {
     fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '400',
+    lineHeight: 14,
   },
   cardMetaRow: {
     flexDirection: 'row',
@@ -971,14 +953,15 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   badgeTypeMini: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.pill,
-    maxWidth: 88,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 12,
+    flexShrink: 0,
   },
   badgeTypeMiniText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
+    lineHeight: 13,
+    fontWeight: '600',
   },
   cardCompactExecutorTitle: {
     fontWeight: '700',
