@@ -14,6 +14,7 @@
  * - PATCH /news/admin/:id/unhide
  */
 
+import { networkFailure } from '@/lib/api-errors';
 import { config } from '@/lib/config';
 import type { NewsReactionKind } from '@/lib/news-reactions';
 import { normalizeReactionCounts } from '@/lib/news-reactions';
@@ -95,7 +96,7 @@ async function publicRequest<T>(path: string): Promise<{ data: T; ok: true } | {
     }
     return { ok: true, data: data as T };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Сетевая ошибка' };
+    return networkFailure(path, e);
   }
 }
 
@@ -120,7 +121,7 @@ async function authRequest<T>(
     }
     return { ok: true, data: data as T };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Сетевая ошибка' };
+    return networkFailure(path, e);
   }
 }
 
@@ -174,7 +175,7 @@ export async function recordNewsView(
     }
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Сетевая ошибка' };
+    return networkFailure(`/news/${id}/view`, e);
   }
 }
 

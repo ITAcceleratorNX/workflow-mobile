@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 
-import { failureFromResponse, type RequestFailure } from '@/lib/api-errors';
+import { failureFromResponse, networkFailure, type RequestFailure } from '@/lib/api-errors';
 import { formatExecutorSpecialty } from '@/constants/requests';
 import { config } from '@/lib/config';
 import { readExecutorOfficeAccess, type ExecutorOfficeAccess } from '@/lib/executor-office-access';
@@ -160,9 +160,7 @@ export async function request<T>(
   } catch (e) {
     // Отмену заказал вызывающий: это не сбой сети, в лог её не пишем.
     if (init.signal?.aborted) return { ok: false, error: 'Запрос отменён', aborted: true };
-    const message = e instanceof Error ? e.message : 'Сетевая ошибка';
-    console.error(`[API Error] ${path}:`, message);
-    return { ok: false, error: message };
+    return networkFailure(path, e);
   }
 }
 
@@ -204,8 +202,7 @@ async function requestFormData<T>(
     }
     return { ok: true, data: data as T };
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Сетевая ошибка';
-    return { ok: false, error: message };
+    return networkFailure(path, e);
   }
 }
 
@@ -315,6 +312,8 @@ export async function updateOffice(
       | 'address'
       | 'block'
       | 'floor'
+      | 'lat'
+      | 'lon'
       | 'working_hours_start'
       | 'working_hours_end'
       | 'auto_track_enabled'
@@ -335,6 +334,8 @@ export async function createOffice(body: {
   city: string;
   block?: string | null;
   floor?: number | null;
+  lat?: number | null;
+  lon?: number | null;
   working_hours_start?: string;
   working_hours_end?: string;
   auto_track_enabled?: boolean;
@@ -1482,8 +1483,7 @@ export async function assignExecutorsToRequest(
     notifyRequestStateChanged();
     return { ok: true };
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Сетевая ошибка';
-    return { ok: false, error: message };
+    return networkFailure(`/request-executors/${subRequestId}/assign`, e);
   }
 }
 

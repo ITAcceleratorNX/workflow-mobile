@@ -8,7 +8,6 @@ import {
     Alert,
     Dimensions,
     FlatList,
-    KeyboardAvoidingView,
     Linking,
     Platform,
     Pressable,
@@ -42,7 +41,7 @@ import {
     getAlmatySlotKey,
 } from '@/lib/dateTimeUtils';
 import { getImageUri, getPrimaryPhotoUri, getRoomPhotoUris } from '@/lib/image-uri';
-import { findNearestOffice } from '@/lib/nearest-office';
+import { findNearestOffice, nearestOfficeNotice } from '@/lib/nearest-office';
 import { canSeeOfficeBookings, getBookingStatusText, officeBookingsTabLabel } from '@/lib/office-bookings';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
@@ -54,6 +53,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
+/** По `Date.getDay()`: 0 — воскресенье. */
+const WEEKDAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'] as const;
 /** Нижний стоп градиента — тот же цвет, что `BOOKING_TAB_SCENE_UNDERLAY` в `app/(tabs)/_layout.tsx` (зона под навбаром). */
 
 /**
@@ -170,24 +171,25 @@ export default function BookingScreen() {
     }, [step, setHideBottomNavForBookingForm])
   );
 
-  const bookingFormKeyboardHeight = useKeyboardHeight(step === 'form');
+  /**
+   * Клавиатура над формой брони. iOS: ScrollView с `automaticallyAdjustKeyboardInsets` сам даёт
+   * отступ на клавиатуру и поднимает поле в фокусе ровно до её края — без нашей помощи. Прежние
+   * KeyboardAvoidingView, отступ на высоту клавиатуры и ручная прокрутка складывались с ним,
+   * и форма уезжала вверх: дата и время пропадали с экрана. Android сдвигаем вручную, как раньше.
+   */
+  const scrollsCompanyFieldManually = Platform.OS === 'android';
+  const bookingFormKeyboardHeight = useKeyboardHeight(step === 'form' && scrollsCompanyFieldManually);
 
   const scrollCompanyFieldAboveKeyboard = useCallback(() => {
     const wrap = companyFieldWrapRef.current;
     const scroll = bookingFormScrollRef.current;
     if (!wrap || !scroll) return;
 
-    const keyboardInset =
-      bookingFormKeyboardHeight > 0
-        ? bookingFormKeyboardHeight
-        : Platform.OS === 'android'
-          ? 280
-          : 0;
-    if (keyboardInset <= 0) return;
+    // Высота клавиатуры приходит после keyboardDidShow; до неё — типичная.
+    const keyboardInset = bookingFormKeyboardHeight > 0 ? bookingFormKeyboardHeight : 280;
 
     wrap.measureInWindow((_x, fieldTop, _w, fieldHeight) => {
       const windowH = Dimensions.get('window').height;
-      const headerApprox = insets.top + 56;
       const visibleBottom = windowH - keyboardInset - Math.max(insets.bottom, 12);
       const fieldBottom = fieldTop + fieldHeight;
       const gap = 16;
@@ -199,25 +201,28 @@ export default function BookingScreen() {
         });
         return;
       }
-      if (Platform.OS === 'android') {
-        scroll.scrollToEnd({ animated: true });
-      }
+      scroll.scrollToEnd({ animated: true });
     });
-  }, [bookingFormKeyboardHeight, insets.top, insets.bottom]);
+  }, [bookingFormKeyboardHeight, insets.bottom]);
 
   const focusCompanyField = useCallback(() => {
     companyFieldFocusedRef.current = true;
-    const delays = Platform.OS === 'android' ? [80, 220, 400] : [280];
-    delays.forEach((delay) => {
+    if (!scrollsCompanyFieldManually) return;
+    [80, 220, 400].forEach((delay) => {
       setTimeout(scrollCompanyFieldAboveKeyboard, delay);
     });
-  }, [scrollCompanyFieldAboveKeyboard]);
+  }, [scrollsCompanyFieldManually, scrollCompanyFieldAboveKeyboard]);
 
   useEffect(() => {
-    if (step === 'form' && companyFieldFocusedRef.current && bookingFormKeyboardHeight > 0) {
+    if (
+      scrollsCompanyFieldManually &&
+      step === 'form' &&
+      companyFieldFocusedRef.current &&
+      bookingFormKeyboardHeight > 0
+    ) {
       scrollCompanyFieldAboveKeyboard();
     }
-  }, [step, bookingFormKeyboardHeight, scrollCompanyFieldAboveKeyboard]);
+  }, [scrollsCompanyFieldManually, step, bookingFormKeyboardHeight, scrollCompanyFieldAboveKeyboard]);
 
   const loadOffices = useCallback(async () => {
     setLoadingOffices(true);
@@ -274,23 +279,8 @@ export default function BookingScreen() {
         lat: current.coords.latitude,
         lon: current.coords.longitude,
       });
-      if (!nearest) {
-        showToast({
-          title: 'Офисы не найдены',
-          description: 'Нет офисов с координатами для определения ближайшего.',
-          variant: 'destructive',
-            duration: 4000,
-        });
-        return;
-      }
-
-      setSelectedOffice(nearest);
-      showToast({
-        title: 'Ближайший офис',
-        description: `Рекомендуемый офис: ${nearest.name}`,
-        variant: 'success',
-        duration: 2500,
-      });
+      if (nearest.kind === 'nearby') setSelectedOffice(nearest.office);
+      showToast({ ...nearestOfficeNotice(nearest), duration: 3500 });
     } catch (e) {
       console.error('[Booking] detect nearest office error', e);
       showToast({
@@ -846,18 +836,17 @@ export default function BookingScreen() {
     const showFormImages = roomPhotoCount > 0 && !formRoomImageFailed;
     const formImageWidth = windowWidth - 40;
 
-    const formScrollPaddingBottom =
-      Platform.OS === 'android'
-        ? Math.max(insets.bottom, 16) + 24
-        : Math.max(insets.bottom, 16) + bookingFormKeyboardHeight + 12;
+    // Отступ на клавиатуру даёт сам ScrollView (automaticallyAdjustKeyboardInsets), здесь — только safe area.
+    const formScrollPaddingBottom = Math.max(insets.bottom, 16) + 24;
+    const selectionSummary =
+      selectedDate && selectedTimeSlot
+        ? `${WEEKDAYS_SHORT[selectedDate.getDay()]}, ${String(selectedDate.getDate()).padStart(2, '0')}.${String(
+            selectedDate.getMonth() + 1
+          ).padStart(2, '0')} · ${selectedTimeSlot}`
+        : null;
 
     return (
       <LinearGradient colors={gradientColors} style={styles.gradientFill}>
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoid}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
-        >
           <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
             <Pressable style={styles.backRowWhite} onPress={goBack}>
               <MaterialIcons name="arrow-back" size={24} color="#fff" />
@@ -868,7 +857,8 @@ export default function BookingScreen() {
               style={styles.scroll}
               contentContainerStyle={[styles.formContent, { paddingBottom: formScrollPaddingBottom }]}
               keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
+              // iOS: прокрутка вверх к дате и времени не прячет клавиатуру — её закрывает только жест вниз по ней.
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
               automaticallyAdjustKeyboardInsets
               nestedScrollEnabled
               showsVerticalScrollIndicator={false}
@@ -939,7 +929,7 @@ export default function BookingScreen() {
                     {d.getDate()}
                   </BookingText>
                   <BookingText style={[styles.dateChipSub, isSelected && styles.dateChipTextSelected]}>
-                    {['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][d.getDay()]}
+                    {WEEKDAYS_SHORT[d.getDay()]}
                   </BookingText>
                 </Pressable>
               );
@@ -979,6 +969,13 @@ export default function BookingScreen() {
               })}
             </View>
           )}
+          {/* Дата и время рядом с полем компании: пока открыта клавиатура, выбор виден без прокрутки. */}
+          <BookingText
+            style={[styles.selectionSummary, !selectionSummary && styles.selectionSummaryEmpty]}
+            accessibilityLiveRegion="polite"
+          >
+            {selectionSummary ?? 'Выберите дату и время'}
+          </BookingText>
           <BookingText style={styles.labelWhite}>Компания (необязательно)</BookingText>
           <View ref={companyFieldWrapRef} collapsable={false}>
             <TextInput
@@ -987,6 +984,7 @@ export default function BookingScreen() {
               placeholder="Название компании"
               placeholderTextColor="rgba(255,255,255,0.6)"
               style={styles.inputForm}
+              returnKeyType="done"
               onFocus={focusCompanyField}
               onBlur={() => {
                 companyFieldFocusedRef.current = false;
@@ -1006,7 +1004,6 @@ export default function BookingScreen() {
           </Pressable>
             </ScrollView>
           </View>
-        </KeyboardAvoidingView>
       </LinearGradient>
     );
   }
@@ -1438,9 +1435,6 @@ const styles = StyleSheet.create({
     gradientFill: {
         flex: 1,
     },
-    keyboardAvoid: {
-        flex: 1,
-    },
     container: {
         flex: 1,
         paddingHorizontal: 20,
@@ -1722,6 +1716,16 @@ const styles = StyleSheet.create({
         marginTop: 12,
         marginBottom: 6,
         color: 'rgba(255,255,255,0.9)',
+    },
+    selectionSummary: {
+        marginTop: 16,
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#fff',
+    },
+    selectionSummaryEmpty: {
+        fontWeight: '400',
+        color: 'rgba(255,255,255,0.7)',
     },
     roomImageContainer: {
         width: '100%',

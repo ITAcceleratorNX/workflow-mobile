@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -34,6 +35,14 @@ import {
   deleteMeetingRoom,
 } from '@/lib/api';
 import { formDataFile } from '@/lib/form-data-file';
+import {
+  coordinatesMapUrl,
+  hasOfficeCoordinates,
+  officeCoordinatesInput,
+  parseOfficeCoordinates,
+  splitCoordinatesPair,
+  type OfficeCoordinatesInput,
+} from '@/lib/office-coordinates';
 
 /** "HH:mm" or "HH:mm:ss" -> "HH:mm:ss" */
 function toHHmmss(v: string): string {
@@ -96,6 +105,7 @@ export default function AdminWorkerOfficeScreen() {
   const [editCity, setEditCity] = useState('');
   const [editBlock, setEditBlock] = useState('');
   const [editFloor, setEditFloor] = useState('');
+  const [editCoordinates, setEditCoordinates] = useState<OfficeCoordinatesInput>({ lat: '', lon: '' });
   const [savingDataId, setSavingDataId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -104,6 +114,7 @@ export default function AdminWorkerOfficeScreen() {
   const [newCity, setNewCity] = useState('');
   const [newBlock, setNewBlock] = useState('');
   const [newFloor, setNewFloor] = useState('');
+  const [newCoordinates, setNewCoordinates] = useState<OfficeCoordinatesInput>({ lat: '', lon: '' });
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [newOfficePhoto, setNewOfficePhoto] = useState<ImagePicker.ImagePickerAsset | null>(null);
@@ -169,6 +180,7 @@ export default function AdminWorkerOfficeScreen() {
       setEditCity(office.city ?? '');
       setEditBlock(office.block ?? '');
       setEditFloor(office.floor != null ? String(office.floor) : '');
+      setEditCoordinates(officeCoordinatesInput(office));
       setRooms([]);
       await loadRooms(id);
     },
@@ -320,6 +332,11 @@ export default function AdminWorkerOfficeScreen() {
         showToast({ title: 'Этаж — целое число ≥ 0', variant: 'destructive', duration: 4000 });
         return;
       }
+      const coordinates = parseOfficeCoordinates(editCoordinates);
+      if (!coordinates.ok) {
+        showToast({ title: coordinates.error, variant: 'destructive', duration: 4000 });
+        return;
+      }
       const blockTrim = editBlock.trim();
       setSavingDataId(officeId);
       let result;
@@ -330,6 +347,8 @@ export default function AdminWorkerOfficeScreen() {
         fd.append('city', editCity.trim());
         fd.append('block', blockTrim);
         fd.append('floor', floorParsed.value === null ? '' : String(floorParsed.value));
+        fd.append('lat', coordinates.lat === null ? '' : String(coordinates.lat));
+        fd.append('lon', coordinates.lon === null ? '' : String(coordinates.lon));
         const asset = editOfficePhoto;
         const ext = asset.uri.split('.').pop() || 'jpg';
         fd.append('photo', formDataFile({ uri: asset.uri, type: (asset as { mimeType?: string }).mimeType || 'image/jpeg', name: `photo.${ext}` }));
@@ -342,6 +361,8 @@ export default function AdminWorkerOfficeScreen() {
           city: editCity.trim() || undefined,
           block: blockTrim || null,
           floor: floorParsed.value,
+          lat: coordinates.lat,
+          lon: coordinates.lon,
         });
       }
       if (result.ok) {
@@ -357,6 +378,8 @@ export default function AdminWorkerOfficeScreen() {
                   city: editCity.trim(),
                   block: d?.block ?? (blockTrim || null),
                   floor: d?.floor ?? floorParsed.value,
+                  lat: d ? d.lat : coordinates.lat,
+                  lon: d ? d.lon : coordinates.lon,
                   photo: d?.photo ?? o.photo,
                 }
               : o
@@ -367,7 +390,7 @@ export default function AdminWorkerOfficeScreen() {
       }
       setSavingDataId(null);
     },
-    [editName, editAddress, editCity, editBlock, editFloor, editOfficePhoto, showToast]
+    [editName, editAddress, editCity, editBlock, editFloor, editCoordinates, editOfficePhoto, showToast]
   );
 
   const handleCreateOffice = useCallback(async () => {
@@ -378,6 +401,11 @@ export default function AdminWorkerOfficeScreen() {
     const floorParsed = parseFloorField(newFloor);
     if (!floorParsed.ok) {
       setCreateError('Этаж — целое число ≥ 0');
+      return;
+    }
+    const coordinates = parseOfficeCoordinates(newCoordinates);
+    if (!coordinates.ok) {
+      setCreateError(coordinates.error);
       return;
     }
     setCreateError(null);
@@ -391,6 +419,8 @@ export default function AdminWorkerOfficeScreen() {
       fd.append('city', newCity.trim());
       fd.append('block', blockTrim);
       fd.append('floor', floorParsed.value === null ? '' : String(floorParsed.value));
+      fd.append('lat', coordinates.lat === null ? '' : String(coordinates.lat));
+      fd.append('lon', coordinates.lon === null ? '' : String(coordinates.lon));
       const asset = newOfficePhoto;
       const ext = asset.uri.split('.').pop() || 'jpg';
       fd.append('photo', formDataFile({ uri: asset.uri, type: (asset as { mimeType?: string }).mimeType || 'image/jpeg', name: `photo.${ext}` }));
@@ -402,6 +432,8 @@ export default function AdminWorkerOfficeScreen() {
         city: newCity.trim(),
         block: blockTrim || undefined,
         floor: floorParsed.value,
+        lat: coordinates.lat,
+        lon: coordinates.lon,
       });
     }
     if (result.ok) {
@@ -411,6 +443,7 @@ export default function AdminWorkerOfficeScreen() {
       setNewCity('');
       setNewBlock('');
       setNewFloor('');
+      setNewCoordinates({ lat: '', lon: '' });
       setNewOfficePhoto(null);
       setShowCreateForm(false);
       load();
@@ -418,7 +451,7 @@ export default function AdminWorkerOfficeScreen() {
       setCreateError(result.error);
     }
     setIsCreating(false);
-  }, [newName, newAddress, newCity, newBlock, newFloor, newOfficePhoto, showToast, load]);
+  }, [newName, newAddress, newCity, newBlock, newFloor, newCoordinates, newOfficePhoto, showToast, load]);
 
   const handleDeleteOffice = useCallback(
     (office: Office) => {
@@ -517,6 +550,66 @@ export default function AdminWorkerOfficeScreen() {
     ],
   );
 
+  /** Широта и долгота офиса: по ним «Определить ближайший офис» находит офис рядом с пользователем. */
+  const renderCoordinatesFields = (value: OfficeCoordinatesInput, onChange: (next: OfficeCoordinatesInput) => void) => {
+    const parsed = parseOfficeCoordinates(value);
+    // Строку «43.2149, 76.8721» из карт можно вставить в любое поле — заполнятся оба. Вставка
+    // приходит одним изменением на много символов; посимвольный ввод такой строки не делим.
+    const change = (field: keyof OfficeCoordinatesInput) => (next: string) => {
+      const pasted = next.length - value[field].length > 1;
+      onChange((pasted && splitCoordinatesPair(next)) || { ...value, [field]: next });
+    };
+    return (
+      <>
+        <View style={[styles.rowInputs, styles.coordinatesRow]}>
+          <View style={styles.fieldColumn}>
+            <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Широта</ThemedText>
+            <TextInput
+              style={[styles.input, styles.inputInRow, { color: text }]}
+              placeholder="43.238949"
+              placeholderTextColor={textMuted}
+              value={value.lat}
+              onChangeText={change('lat')}
+              keyboardType="numbers-and-punctuation"
+              accessibilityLabel="Широта"
+            />
+          </View>
+          <View style={styles.fieldColumn}>
+            <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Долгота</ThemedText>
+            <TextInput
+              style={[styles.input, styles.inputInRow, { color: text }]}
+              placeholder="76.889709"
+              placeholderTextColor={textMuted}
+              value={value.lon}
+              onChangeText={change('lon')}
+              keyboardType="numbers-and-punctuation"
+              accessibilityLabel="Долгота"
+            />
+          </View>
+        </View>
+        {!parsed.ok ? (
+          <ThemedText style={styles.errorText} accessibilityLiveRegion="polite">
+            {parsed.error}
+          </ThemedText>
+        ) : parsed.lat !== null && parsed.lon !== null ? (
+          <Pressable
+            style={styles.coordinatesLink}
+            onPress={() => void Linking.openURL(coordinatesMapUrl(parsed.lat!, parsed.lon!))}
+            accessibilityRole="link"
+          >
+            <MaterialIcons name="place" size={16} color={primary} />
+            <ThemedText style={[styles.coordinatesLinkText, { color: primary }]}>Проверить точку на карте</ThemedText>
+          </Pressable>
+        ) : (
+          <ThemedText style={[styles.coordinatesHint, { color: textMuted }]}>
+            Скопируйте точку здания в Google Maps или 2ГИС и вставьте в любое поле. Без координат офис не
+            предлагается как ближайший.
+          </ThemedText>
+        )}
+      </>
+    );
+  };
+
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <ScreenHeader title="Офис" subtitle="Офисы, рабочие часы и переговорные" />
@@ -612,6 +705,7 @@ export default function AdminWorkerOfficeScreen() {
                   />
                 </View>
               </View>
+              {renderCoordinatesFields(newCoordinates, setNewCoordinates)}
               <Pressable style={styles.addRoomButton} onPress={pickPhotoForNew}>
                 <MaterialIcons name="add-a-photo" size={20} color={primary} />
                 <ThemedText style={[styles.addRoomButtonText, { color: primary }]}>
@@ -670,6 +764,11 @@ export default function AdminWorkerOfficeScreen() {
                           {hoursStr}
                           {office.auto_track_enabled ? ' · авто-трекер' : ''}
                         </ThemedText>
+                        {!hasOfficeCoordinates(office) ? (
+                          <ThemedText style={styles.noCoordinates} numberOfLines={1}>
+                            Нет координат — не определяется как ближайший
+                          </ThemedText>
+                        ) : null}
                       </View>
                     </View>
                     <MaterialIcons
@@ -736,6 +835,7 @@ export default function AdminWorkerOfficeScreen() {
                           />
                         </View>
                       </View>
+                      {renderCoordinatesFields(editCoordinates, setEditCoordinates)}
                       <Pressable style={[styles.addRoomButton, { marginBottom: 12 }]} onPress={pickPhotoForEdit}>
                         <MaterialIcons name="add-a-photo" size={20} color={primary} />
                         <ThemedText style={[styles.addRoomButtonText, { color: primary }]}>
@@ -1013,7 +1113,8 @@ export default function AdminWorkerOfficeScreen() {
           <View style={styles.hintBox}>
             <MaterialIcons name="info-outline" size={18} color={primary} />
             <ThemedText style={styles.hintText}>
-              Координаты на карте (широта и долгота) при необходимости задаются в веб-версии.
+              Широта и долгота офиса нужны для «Определить ближайший офис»: скопируйте точку здания в Google Maps
+              или 2ГИС и вставьте в любое из этих полей.
             </ThemedText>
           </View>
           </ScrollView>
@@ -1178,6 +1279,30 @@ function createOfficeStyles(c: {
   inputInRow: {
     flex: 1,
     marginBottom: 0,
+  },
+  coordinatesRow: {
+    marginBottom: 6,
+  },
+  coordinatesHint: {
+    fontSize: 12,
+    marginBottom: 14,
+  },
+  coordinatesLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    minHeight: 32,
+    marginBottom: 8,
+  },
+  coordinatesLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  noCoordinates: {
+    fontSize: 12,
+    marginTop: 2,
+    color: '#F59E0B',
   },
   timeInput: {
     alignSelf: 'stretch',

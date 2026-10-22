@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { addDaysToDateKey, toAppDateKey } from '@/lib/dateTimeUtils';
 import { getUserTasksCalendar, updateUserTask, type CalendarTask } from '@/lib/user-tasks-api';
 import { confirmTaskToggle } from '@/lib/group-task-completion';
+import { nextOccurrenceAfterCompletion, recurringCompletionNotice } from '@/lib/recurring-completion';
 import { useToast } from '@/context/toast-context';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
@@ -91,7 +92,14 @@ export function useCalendarTasks(startDate: Date, endDate: Date) {
       setTogglingTaskIds((prev) => prev.filter((id) => id !== task.id));
 
       if (res.ok) {
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, completed: res.data.completed } : t)));
+        // Выполненный повтор сервер переносит на следующую дату — переносим и в календаре.
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === task.id ? { ...t, completed: res.data.completed, scheduled_at: res.data.scheduled_at ?? t.scheduled_at } : t
+          )
+        );
+        const nextAt = nextOccurrenceAfterCompletion(task, res.data);
+        if (nextAt) showToast({ ...recurringCompletionNotice(nextAt), variant: 'success', duration: 4000 });
         return;
       }
 

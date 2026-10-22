@@ -21,6 +21,19 @@ export interface RequestFailure {
 
 const FALLBACK_MESSAGE = 'Произошла ошибка';
 
+/** Текст для экрана, когда ответа сервера нет: нет сети, сервер недоступен, соединение оборвалось. */
+export const NETWORK_FAILURE_MESSAGE = 'Нет соединения с сервером. Проверьте интернет и повторите';
+
+/**
+ * Запрос упал без ответа сервера. Сообщение исключения — например, «fetch failed:
+ * UnexpectedException… (at ExpoModulesCore/Promise.swift:56)» — пишем только в лог, на экран
+ * идёт понятный текст. Записать запрос мог успеть: экран не должен считать действие выполненным.
+ */
+export function networkFailure(path: string, error: unknown): { ok: false; error: string } {
+  console.error(`[API Error] ${path}:`, error instanceof Error ? error.message : error);
+  return { ok: false, error: NETWORK_FAILURE_MESSAGE };
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 

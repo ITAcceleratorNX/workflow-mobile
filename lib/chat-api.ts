@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 
+import { networkFailure } from '@/lib/api-errors';
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -59,8 +60,7 @@ async function authRequest<T>(
 
     return { ok: true, data: data as T };
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'Сетевая ошибка';
-    return { ok: false, error: message };
+    return networkFailure(path, e);
   }
 }
 

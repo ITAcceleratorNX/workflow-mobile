@@ -1,4 +1,4 @@
-import type { RequestFailure } from '@/lib/api-errors';
+import { NETWORK_FAILURE_MESSAGE, type RequestFailure } from '@/lib/api-errors';
 
 /** Машинные коды API комментариев. */
 export const TASK_COMMENT_ERROR_CODES = [
@@ -95,7 +95,7 @@ function kindOfStatus(status: number): TaskCommentFailureKind {
 
 /** Свои тексты — там, где серверного нет или он бессмыслен: нет ответа, старый сервер, прокси. */
 const MESSAGES: Partial<Record<TaskCommentFailureKind, string>> = {
-  offline: 'Нет соединения с сервером. Проверьте интернет и повторите',
+  offline: NETWORK_FAILURE_MESSAGE,
   cancelled: 'Запрос отменён',
   unsupported: 'Комментарии пока недоступны',
   rate_limited: 'Слишком много запросов. Повторите чуть позже',
