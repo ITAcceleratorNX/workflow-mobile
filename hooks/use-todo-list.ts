@@ -12,6 +12,7 @@ import {
 } from '@/lib/user-tasks-api';
 import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
 import { confirmTaskToggle } from '@/lib/group-task-completion';
+import { nextOccurrenceAfterCompletion, recurringCompletionNotice } from '@/lib/recurring-completion';
 import { toAssignmentInput, type RecipientSelection } from '@/lib/task-recipients-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
@@ -346,6 +347,9 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
       if (res.ok) {
         setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...res.data } : t)));
         bump();
+        // Повтор выполнен, задача перенесена: без пояснения галочка, вернувшаяся назад, выглядит как сбой.
+        const nextAt = nextOccurrenceAfterCompletion(task, res.data);
+        if (nextAt) showToast({ ...recurringCompletionNotice(nextAt), variant: 'success', duration: 4000 });
         return;
       }
       setTasks(before);
@@ -354,8 +358,9 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
     [token, isGuest, bump, showToast]
   );
 
+  /** true — сервер подтвердил удаление; false — задача осталась, пользователь увидел причину. */
   const removeTask = useCallback(
-    async (task: UserTask) => {
+    async (task: UserTask): Promise<boolean> => {
       if (!token || isGuest) {
         showToast({
           title: 'Недоступно',
@@ -363,7 +368,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
           variant: 'destructive',
           duration: 4000,
         });
-        return;
+        return false;
       }
       const before = tasksRef.current;
       setTasks((prev) => prev.filter((t) => t.id !== task.id));
@@ -371,10 +376,11 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
       const res = await deleteUserTask(task.id);
       if (res.ok) {
         bump();
-        return;
+        return true;
       }
       setTasks(before);
       showToast({ title: 'Не удалось удалить задачу', description: res.error, variant: 'destructive', duration: 4000 });
+      return false;
     },
     [token, isGuest, bump, showToast]
   );

@@ -33,7 +33,7 @@ import {
 } from '@/lib/api';
 import { formatDisplayDateFromIso, formatTimeOnly } from '@/lib/dateTimeUtils';
 import { getImageUri, getPrimaryPhotoUri } from '@/lib/image-uri';
-import { findNearestOffice } from '@/lib/nearest-office';
+import { findNearestOffice, nearestOfficeNotice } from '@/lib/nearest-office';
 import { canSeeOfficeBookings, getBookingStatusText, officeBookingsTabLabel } from '@/lib/office-bookings';
 import { almatyDay, almatyMinutes, formatBookingDay, formatDuration, formatTime, officeHours } from '@/lib/booking-flow';
 import { useAuthStore } from '@/stores/auth-store';
@@ -194,23 +194,8 @@ export default function BookingScreen() {
         lat: current.coords.latitude,
         lon: current.coords.longitude,
       });
-      if (!nearest) {
-        showToast({
-          title: 'Офисы не найдены',
-          description: 'Нет офисов с координатами для определения ближайшего.',
-          variant: 'destructive',
-            duration: 4000,
-        });
-        return;
-      }
-
-      setSelectedOffice(nearest);
-      showToast({
-        title: 'Ближайший офис',
-        description: `Рекомендуемый офис: ${nearest.name}`,
-        variant: 'success',
-        duration: 2500,
-      });
+      if (nearest.kind === 'nearby') setSelectedOffice(nearest.office);
+      showToast({ ...nearestOfficeNotice(nearest), duration: 3500 });
     } catch (e) {
       console.error('[Booking] detect nearest office error', e);
       showToast({
@@ -1044,9 +1029,6 @@ const styles = StyleSheet.create({
         marginTop: -2,
     },
     gradientFill: {
-        flex: 1,
-    },
-    keyboardAvoid: {
         flex: 1,
     },
     container: {

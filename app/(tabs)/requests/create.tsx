@@ -49,7 +49,7 @@ import {
   hasRoomsForFloorZone,
   type OfficeLocationCatalogRow,
 } from '@/lib/office-location-catalog-utils';
-import { findNearestOffice } from '@/lib/nearest-office';
+import { findNearestOffice, nearestOfficeNotice } from '@/lib/nearest-office';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -512,23 +512,8 @@ export default function CreateRequestScreen() {
         lat: current.coords.latitude,
         lon: current.coords.longitude,
       });
-      if (!nearest) {
-        showToast({
-          title: 'Офисы не найдены',
-          description: 'Нет офисов с координатами для определения ближайшего.',
-          variant: 'destructive',
-          duration: 3000,
-        });
-        return;
-      }
-
-      setSelectedOfficeId(nearest.id);
-      showToast({
-        title: 'Ближайший офис',
-        description: `Рекомендуемый офис: ${nearest.name}`,
-        variant: 'success',
-        duration: 2500,
-      });
+      if (nearest.kind === 'nearby') setSelectedOfficeId(nearest.office.id);
+      showToast({ ...nearestOfficeNotice(nearest), duration: 3500 });
     } catch (e) {
       console.error('[RequestsCreate] detect nearest office error', e);
       showToast({

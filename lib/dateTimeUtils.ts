@@ -15,7 +15,7 @@ function toDate(value: DateInput): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatWithOptions(
+export function formatWithOptions(
   value: DateInput,
   options: Intl.DateTimeFormatOptions
 ): string {

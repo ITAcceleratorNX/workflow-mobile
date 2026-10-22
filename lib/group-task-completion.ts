@@ -72,6 +72,21 @@ export function confirmTaskTransfer(recipientLabel: string): Promise<boolean> {
   });
 }
 
+/** «Удалить задачу?» — как на вебе; «Отмена» и закрытие окна задачу не трогают. */
+export function confirmTaskDelete(title: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Удалить задачу?',
+      `Задача «${title}» будет удалена. Это действие нельзя отменить.`,
+      [
+        { text: 'Отмена', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Удалить', style: 'destructive', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) }
+    );
+  });
+}
+
 /** Подтверждение массового назначения компании / отдела перед созданием задачи. */
 export function confirmMassAssignment(message: string | null): Promise<boolean> {
   if (!message) return Promise.resolve(true);

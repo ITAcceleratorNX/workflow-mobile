@@ -61,12 +61,15 @@ import {
   uploadUserTaskAttachments,
 } from '@/lib/user-tasks-api';
 import {
+  confirmTaskDelete,
+  confirmTaskToggle,
   confirmTaskTransfer,
   isGroupTask,
   isReadOnlyTask,
   taskToggleBlockedReason,
 } from '@/lib/group-task-completion';
 import { toTransferInput, transferRecipientLabel, type RecipientSelection } from '@/lib/task-recipients-api';
+import { nextOccurrenceAfterCompletion, recurringCompletionNotice } from '@/lib/recurring-completion';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -144,17 +147,32 @@ export default function TaskDetailsScreen() {
     return Platform.OS === 'ios' ? { ...common, ios_backgroundColor: border } : common;
   }, [border, primary]);
 
-  const { tasks, updateTask, removeTask, toggleComplete } = useTodoList({ filter: 'all', enabled: false });
+  const { tasks, updateTask: saveTask, removeTask } = useTodoList({ filter: 'all', enabled: false });
   const tasksInvalidateVersion = useUserTasksInvalidateStore((s) => s.version);
   const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
 
   const [fetchedTask, setFetchedTask] = useState<UserTask | null>(null);
   const [loadingTask, setLoadingTask] = useState(false);
 
-  const task = useMemo(() => {
-    if (!taskId) return null;
-    return tasks.find((t) => t.id === taskId) ?? fetchedTask;
-  }, [tasks, taskId, fetchedTask]);
+  // Сама задача, а не массив: каждое изменение пересоздаёт пустой список хука, и с массивом
+  // в зависимостях карточка перечитывала задачу посреди сохранения и откатывала переключатель.
+  const listedTask = useMemo(() => (taskId ? tasks.find((t) => t.id === taskId) ?? null : null), [tasks, taskId]);
+  const task = taskId ? listedTask ?? fetchedTask : null;
+
+  // Список хука выключен, и его оптимистичное обновление до экрана не доходит: экран показывает
+  // загруженную задачу. Меняем её сразу — переключатели двигаются по нажатию, — затем берём ответ
+  // сервера, а при ошибке возвращаем прежние значения изменённых полей.
+  const updateTask = useCallback(
+    async (t: UserTask, updates: Partial<UserTask>) => {
+      const patch = (fields: Partial<UserTask>) =>
+        setFetchedTask((current) => (current?.id === t.id ? { ...current, ...fields } : current));
+      patch(updates);
+      const saved = await saveTask(t, updates);
+      patch(saved ?? (Object.fromEntries(Object.keys(updates).map((key) => [key, t[key as keyof UserTask]])) as Partial<UserTask>));
+      return saved;
+    },
+    [saveTask]
+  );
 
   useEffect(() => {
     if (!taskId || isGuest) {
@@ -162,7 +180,7 @@ export default function TaskDetailsScreen() {
       setLoadingTask(false);
       return;
     }
-    if (tasks.some((t) => t.id === taskId)) {
+    if (listedTask) {
       setFetchedTask(null);
       setLoadingTask(false);
       return;
@@ -177,7 +195,7 @@ export default function TaskDetailsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [taskId, isGuest, tasks, tasksInvalidateVersion]);
+  }, [taskId, isGuest, listedTask, tasksInvalidateVersion]);
 
   const canEditDetails = !!task && canEditUserTaskDetails(task, currentUserId);
 
@@ -436,17 +454,48 @@ export default function TaskDetailsScreen() {
     void applyReminderTimingFromPicker(remindTimingPickerDraft);
   }, [remindTimingPickerDraft, applyReminderTimingFromPicker]);
 
+  // Повтор выполнен, и задача уже перенесена на следующую дату: пока карточка закрывается,
+  // переключатель остаётся «выполнено», а не отскакивает назад.
+  const [occurrenceCompleted, setOccurrenceCompleted] = useState(false);
+
   const handleCompleteSwitch = useCallback(async () => {
     const t = taskRef.current;
     if (!t || completeToggleBusyRef.current) return;
     completeToggleBusyRef.current = true;
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      await toggleComplete(t);
+      // Те же правила, что у toggleComplete списка, но через updateTask экрана — переключатель двигается сразу.
+      if (!(await confirmTaskToggle(t))) return;
+      const saved = await updateTask(t, { completed: !t.completed });
+      const nextAt = saved ? nextOccurrenceAfterCompletion(t, saved) : null;
+      if (nextAt) {
+        setOccurrenceCompleted(true);
+        showToast({ ...recurringCompletionNotice(nextAt), variant: 'success', duration: 4000 });
+        router.back();
+      }
     } finally {
       completeToggleBusyRef.current = false;
     }
-  }, [toggleComplete]);
+  }, [updateTask, showToast, router]);
+
+  const [deleting, setDeleting] = useState(false);
+  const deleteLockRef = useRef(false);
+  const handleDelete = useCallback(async () => {
+    const t = taskRef.current;
+    if (!t || !canEditDetailsRef.current || deleteLockRef.current) return;
+    deleteLockRef.current = true;
+    try {
+      if (!(await confirmTaskDelete(t.title))) return;
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      setDeleting(true);
+      // Закрываем карточку только после ответа сервера: при сбое сети задача остаётся открытой,
+      // а не исчезает так, будто удалена.
+      if (await removeTask(t)) router.back();
+    } finally {
+      deleteLockRef.current = false;
+      setDeleting(false);
+    }
+  }, [removeTask, router]);
 
   const handlePickMedia = useCallback(async () => {
     if (!task || !canEditDetails || attachmentsUploading) return;
@@ -1097,7 +1146,7 @@ export default function TaskDetailsScreen() {
             </View>
             <View style={styles.rowSwitchCell}>
               <Switch
-                value={task.completed}
+                value={task.completed || occurrenceCompleted}
                 onValueChange={() => void handleCompleteSwitch()}
                 disabled={completeBlockedReason != null}
                 {...detailSwitchProps}
@@ -1129,19 +1178,17 @@ export default function TaskDetailsScreen() {
           ) : null}
           <View style={[styles.divider, { backgroundColor: border }]} />
           <Pressable
-            disabled={!canEditDetails}
-            onPress={async () => {
-              if (!canEditDetails) return;
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              await removeTask(task);
-              router.back();
-            }}
+            disabled={!canEditDetails || deleting}
+            onPress={() => void handleDelete()}
             style={[styles.linkRow, !canEditDetails && { opacity: 0.45 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Удалить задачу"
           >
             <View style={styles.rowLeft}>
               <MaterialIcons name="delete-outline" size={20} color="#EF4444" />
               <ThemedText style={[styles.rowTitle, { color: '#EF4444' }]}>Удалить</ThemedText>
             </View>
+            {deleting ? <ActivityIndicator size="small" color="#EF4444" /> : null}
           </Pressable>
         </View>
         </TaskCommentsList>

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
 
-import { failureFromResponse } from '../api-errors';
+import { failureFromResponse, NETWORK_FAILURE_MESSAGE, networkFailure } from '../api-errors';
 
 /** How `request` chose the message before the machine-readable fields were added. */
 function legacyMessage(data: any): string {
@@ -68,5 +68,22 @@ describe('failure of an HTTP response', () => {
     assert.equal(failureFromResponse(429, {}, 'Wed, 21 Oct 2026 07:28:00 GMT').retryAfterSeconds, undefined);
     assert.equal(failureFromResponse(429, {}, '-1').retryAfterSeconds, undefined);
     assert.equal(failureFromResponse(500, {}, null).retryAfterSeconds, undefined);
+  });
+});
+
+describe('a request that got no response', () => {
+  it('shows a plain message and keeps the exception for the log only', () => {
+    const logged = mock.method(console, 'error', () => {});
+    try {
+      // Так выглядела ошибка удаления задачи на iPhone при обрыве сети.
+      const error = new Error(
+        'fetch failed: UnexpectedException: The network connection was lost. (at ExpoModulesCore/Promise.swift:56)'
+      );
+      assert.deepEqual(networkFailure('/user-tasks/7', error), { ok: false, error: NETWORK_FAILURE_MESSAGE });
+      assert.doesNotMatch(NETWORK_FAILURE_MESSAGE, /fetch|Exception|swift/i);
+      assert.deepEqual(logged.mock.calls[0].arguments, ['[API Error] /user-tasks/7:', error.message]);
+    } finally {
+      logged.mock.restore();
+    }
   });
 });
