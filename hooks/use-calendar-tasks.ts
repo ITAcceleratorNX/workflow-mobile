@@ -6,6 +6,7 @@ import { getUserTasksCalendar, updateUserTask, type CalendarTask } from '@/lib/u
 import { confirmTaskToggle } from '@/lib/group-task-completion';
 import { nextOccurrenceAfterCompletion, recurringCompletionNotice } from '@/lib/recurring-completion';
 import { useToast } from '@/context/toast-context';
+import { toastTaskCompleted, toastTaskError } from '@/components/tasks/task-toasts';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 
@@ -16,6 +17,7 @@ export function useCalendarTasks(startDate: Date, endDate: Date) {
   const token = useAuthStore((s) => s.token);
   const isGuest = useAuthStore((s) => s.isGuest);
   const version = useUserTasksInvalidateStore((s) => s.version);
+  const bump = useUserTasksInvalidateStore((s) => s.bump);
   const { show: showToast } = useToast();
   const tasksRef = useRef<CalendarTask[]>([]);
 
@@ -42,12 +44,7 @@ export function useCalendarTasks(startDate: Date, endDate: Date) {
   const toggleComplete = useCallback(
     async (task: CalendarTask) => {
       if (!token || isGuest) {
-        showToast({
-          title: 'Недоступно',
-          description: 'Нужно войти в аккаунт, чтобы менять задачи',
-          variant: 'destructive',
-          duration: 4000,
-        });
+        toastTaskError(showToast, 'Недоступно', 'Нужно войти в аккаунт, чтобы менять задачи');
         return;
       }
 
@@ -67,20 +64,18 @@ export function useCalendarTasks(startDate: Date, endDate: Date) {
             t.id === task.id ? { ...t, completed: res.data.completed, scheduled_at: res.data.scheduled_at ?? t.scheduled_at } : t
           )
         );
+        // Lists and tab badges follow the change made in the calendar.
+        bump();
         const nextAt = nextOccurrenceAfterCompletion(task, res.data);
         if (nextAt) showToast({ ...recurringCompletionNotice(nextAt), variant: 'success', duration: 4000 });
+        else if (res.data.completed) toastTaskCompleted(showToast);
         return;
       }
 
       setTasks(before);
-      showToast({
-        title: 'Не удалось обновить задачу',
-        description: res.error,
-        variant: 'destructive',
-        duration: 4000,
-      });
+      toastTaskError(showToast, 'Не удалось обновить задачу', res.error);
     },
-    [token, isGuest, showToast, setTasks]
+    [token, isGuest, showToast, setTasks, bump]
   );
 
   return {

@@ -1,1044 +1,254 @@
-import { useScopedState } from '@/hooks/use-scoped-state';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Dimensions,
-  KeyboardAvoidingView,
-  LayoutAnimation,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  SectionList,
-  StyleSheet,
-  UIManager,
-  View,
-} from 'react-native';
+import { useRouter } from 'expo-router';
+import { useCallback } from 'react';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { CalendarTab } from '@/components/tasks/CalendarTab';
-import { TaskAddSheet } from '@/components/tasks/TaskAddSheet';
-import { TaskSortControl } from '@/components/tasks/TaskSortControl';
+import { TaskCalendarView } from '@/components/tasks/TaskCalendarView';
+import { TaskComposer } from '@/components/tasks/TaskComposer';
+import { TaskDayStrip } from '@/components/tasks/TaskDayStrip';
+import { TaskListItem } from '@/components/tasks/TaskListItem';
+import { TaskMoreMenu } from '@/components/tasks/TaskMoreMenu';
+import { TaskSortPicker } from '@/components/tasks/TaskSortPicker';
 import { TeamsInboxPanel } from '@/components/tasks/TeamsInboxPanel';
-import { UserTaskRow } from '@/components/tasks/UserTaskRow';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { ScreenHeader } from '@/components/ui';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useTodoList, type UseTodoListQuery } from '@/hooks/use-todo-list';
-import { addCalendarDaysToDateKey, toAppDateKey, todayTaskDateKey } from '@/lib/dateTimeUtils';
-import {
-  type TaskMainView,
-  formatSectionDateLabel,
-  getCalendarTaskCreateDefaults,
-  getListTaskCreateDefaults,
-  getTodaySections,
-  getInboxTasks,
-} from '@/lib/task-views';
+import { Button } from '@/components/ui/button';
+import { ChipTabs } from '@/components/ui/chip-tabs';
+import { EmptyState } from '@/components/ui/empty-state';
+import { SectionCaption } from '@/components/ui/list-group';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { useProductUi } from '@/hooks/use-product-ui';
+import { useTasksScreen, type TaskLayoutMode } from '@/hooks/use-tasks-screen';
+import type { TaskMainView } from '@/lib/task-views';
 import type { UserTask } from '@/lib/user-tasks-api';
 import { useAuthStore } from '@/stores/auth-store';
 
-import { useCurrentTaskDay } from "@/hooks/use-current-task-day";
-import { taskSortQuery, type TaskSortValue } from "@/lib/task-list-sort";
-
-const VIEW_TABS: { value: TaskMainView; label: string }[] = [
-  { value: 'inbox', label: 'Входящие' },
-  { value: 'today', label: 'Сегодня' },
-  { value: 'upcoming', label: 'Предстоящие' },
-  { value: 'completed', label: 'Выполненные' },
+const FAB_SIZE = 56;
+const LAYOUT_OPTIONS = [
+  { value: 'list' as const, icon: 'format-list-bulleted' as const, accessibilityLabel: 'Список' },
+  { value: 'calendar' as const, icon: 'calendar-month' as const, accessibilityLabel: 'Календарь' },
 ];
+const EMPTY_ICONS: Record<TaskMainView, React.ComponentProps<typeof MaterialIcons>['name']> = {
+  inbox: 'inbox',
+  today: 'wb-sunny',
+  upcoming: 'event',
+  completed: 'check-circle-outline',
+};
 
-type TaskSectionRow = { title: string; data: UserTask[]; sectionId: string };
-type CalendarStripDay = { key: string; dayNumber: number; weekdayLabel: string };
-
-const WEEKDAY_SHORT_RU = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-const MONTH_SHORT_RU = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-
-/** Полоса «Предстоящие» — только будущие дни (с завтра), сегодня в «Сегодня». */
-const UPCOMING_CALENDAR_DAYS_FORWARD = 180;
-/**
- * Глубина полосы «Выполненные» (как горизонт у «Предстоящие»): дни слева направо
- * от (сегодня − N) до сегодня включительно.
- */
-const COMPLETED_CALENDAR_DAYS_HISTORY = UPCOMING_CALENDAR_DAYS_FORWARD;
-/** Шаг между левыми краями ячеек: ширина ячейки + gap в upcomingStripRow */
-const UPCOMING_DAY_ITEM_WIDTH = 50;
-const UPCOMING_DAY_CELL_WIDTH = 42;
-const UPCOMING_STRIP_PADDING_RIGHT = 16;
-/** Сумма paddingHorizontal у topBar — ширина области горизонтального ScrollView */
-const UPCOMING_STRIP_VIEWPORT_INSET = 32;
-const ADD_FAB_SIZE = 56;
-const ADD_FAB_GAP = 8;
-
-function upcomingStripScrollToSelectedX(idx: number, viewportWidth: number, daysCount: number): number {
-  const stride = UPCOMING_DAY_ITEM_WIDTH;
-  const contentWidth =
-    daysCount * stride - (stride - UPCOMING_DAY_CELL_WIDTH) + UPCOMING_STRIP_PADDING_RIGHT;
-  const centerInContent = idx * stride + UPCOMING_DAY_CELL_WIDTH / 2;
-  const target = centerInContent - viewportWidth / 2;
-  const maxScroll = Math.max(0, contentWidth - viewportWidth);
-  return Math.max(0, Math.min(maxScroll, target));
-}
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-function parseMainView(params: {
-  tab?: string | string[];
-  filter?: string | string[];
-  date?: string | string[];
-}): TaskMainView {
-  const t = Array.isArray(params.tab) ? params.tab[0] : params.tab;
-  if (t === 'inbox' || t === 'today' || t === 'upcoming' || t === 'completed') return t;
-  const filter = Array.isArray(params.filter) ? params.filter[0] : params.filter;
-  const date = Array.isArray(params.date) ? params.date[0] : params.date;
-  if (filter === 'today' || date === 'today') return 'today';
-  if (filter === 'overdue') return 'inbox';
-  if (filter === 'all') return 'inbox';
-  /** Без явного tab/filter — по умолчанию входящие (без даты у новой задачи). */
-  return 'inbox';
-}
-
-function weekdayShortRuForDateKey(dateKey: string): string {
-  const [y, m, d] = dateKey.split('-').map((x) => parseInt(x, 10));
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return '';
-  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  return WEEKDAY_SHORT_RU[wd];
-}
-
+/** Tasks screen (Figma «Задачи — Входящие / Сегодня / режим календаря»). */
 export default function TasksScreen() {
+  const ui = useProductUi();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
-  const params = useLocalSearchParams<{
-    tab?: string;
-    filter?: string;
-    date?: string;
-    view?: 'list' | 'calendar' | 'board';
-  }>();
-  const paramTab = params.tab;
-  const paramFilter = params.filter;
-  const paramDate = params.date;
-  const paramView = params.view;
+  const page = useTasksScreen();
+  const { todo, mainView, layoutMode } = page;
+  const { toggleComplete, loadMore } = todo;
+  const fabBottom = Math.max(insets.bottom, 16) + 8;
 
-  const background = useThemeColor({}, 'background');
-  const headerText = useThemeColor({}, 'text');
-  const headerSubtitle = useThemeColor({}, 'textMuted');
-  const primary = useThemeColor({}, 'primary');
-  const cardBg = useThemeColor({}, 'cardBackground');
-  const border = useThemeColor({}, 'border');
-
-  const [mainView, setMainView] = useScopedState<TaskMainView>(JSON.stringify([paramTab, paramFilter, paramDate]), () =>
-    parseMainView({ tab: paramTab, filter: paramFilter, date: paramDate })
-  );
-  const [viewMode, setViewMode] = useScopedState<'list' | 'calendar'>(paramView, () =>
-    paramView === 'calendar' ? 'calendar' : 'list'
-  );
-  const [calendarDate, setCalendarDate] = useState(() => new Date());
-  const [upcomingDate, setUpcomingDate] = useState<string | null>(null);
-  const [upcomingVisibleDateKey, setUpcomingVisibleDateKey] = useScopedState<string | null>(JSON.stringify([mainView, upcomingDate]), null);
-  const upcomingScrollRef = useRef<ScrollView | null>(null);
-
-  const [completedDateKey, setCompletedDateKey] = useState<string>(() => todayTaskDateKey());
-  const [completedVisibleDateKey, setCompletedVisibleDateKey] = useScopedState<string | null>(JSON.stringify([mainView, completedDateKey]), null);
-  const completedScrollRef = useRef<ScrollView | null>(null);
-
-  const [addSheetOpen, setAddSheetOpen] = useState(false);
-  const [teamsPanelOpen, setTeamsPanelOpen] = useState(false);
-  const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
-
-  useEffect(() => {
-    if (paramView === 'board') {
-      router.setParams({ view: 'list' });
-    }
-  }, [paramView, router]);
-
-  const todayKey = useCurrentTaskDay();
-  const [sortByView, setSortByView] = useState<Record<"inbox" | "today", TaskSortValue>>({ inbox: "default", today: "default" });
-  const taskSort = mainView === "inbox" || mainView === "today" ? sortByView[mainView] : "default";
-  const setTaskSort = useCallback((value: TaskSortValue) => {
-    if (mainView === "inbox" || mainView === "today") setSortByView((previous) => ({ ...previous, [mainView]: value }));
-  }, [mainView]);
-  const tomorrowKey = useMemo(() => addCalendarDaysToDateKey(todayKey, 1), [todayKey]);
-
-  const todoListQuery = useMemo((): UseTodoListQuery => {
-    if (viewMode === 'calendar') {
-      return { view: 'inbox', enabled: false };
-    }
-    switch (mainView) {
-      case 'inbox':
-        return { view: 'inbox', light: true, ...taskSortQuery(taskSort) };
-      case 'today':
-        return { view: 'list_today', today: todayKey, light: true, ...taskSortQuery(taskSort) };
-      case 'upcoming': {
-        const day = upcomingDate ?? tomorrowKey;
-        return {
-          view: 'list_upcoming',
-          today: todayKey,
-          fromDate: day,
-          toDate: day,
-          light: true,
-        };
-      }
-      case 'completed':
-        return { view: 'list_completed', completedOn: completedDateKey, light: true };
-      default:
-        return { view: 'inbox', light: true, ...taskSortQuery(taskSort) };
-    }
-  }, [mainView, todayKey, upcomingDate, tomorrowKey, completedDateKey, viewMode, taskSort]);
-
-  const {
-    tasks,
-    toggleComplete,
-    loading: loadingTasks,
-    error: tasksError,
-    refresh: retryTasks,
-    loadingMore,
-    hasMore,
-    loadMore,
-    addTask,
-  } = useTodoList(todoListQuery);
-
-  const upcomingStripDays = useMemo((): CalendarStripDay[] => {
-    return Array.from({ length: UPCOMING_CALENDAR_DAYS_FORWARD + 1 }, (_, idx) => {
-        const dayOffset = idx + 1;
-        const key = addCalendarDaysToDateKey(todayKey, dayOffset);
-        const dayPart = key.split('-')[2];
-        const dayNumber = dayPart ? parseInt(dayPart, 10) : 1;
-        return {
-          key,
-          dayNumber: Number.isFinite(dayNumber) ? dayNumber : 1,
-          weekdayLabel: weekdayShortRuForDateKey(key),
-        };
-      }
-    );
-  }, [todayKey]);
-
-  const completedStripDays = useMemo((): CalendarStripDay[] => {
-    const n = COMPLETED_CALENDAR_DAYS_HISTORY;
-    return Array.from({ length: n + 1 }, (_, idx) => {
-      const offset = idx - n;
-      const key = addCalendarDaysToDateKey(todayKey, offset);
-      const dayPart = key.split('-')[2];
-      const dayNumber = dayPart ? parseInt(dayPart, 10) : 1;
-      return {
-        key,
-        dayNumber: Number.isFinite(dayNumber) ? dayNumber : 1,
-        weekdayLabel: weekdayShortRuForDateKey(key),
-      };
-    });
-  }, [todayKey]);
-
-  const stripViewportWidth = useMemo(
-    () => Math.max(1, Dimensions.get('window').width - UPCOMING_STRIP_VIEWPORT_INSET),
-    []
-  );
-
-  useEffect(() => {
-    if (mainView !== 'upcoming') return;
-    const activeKey = upcomingDate ?? tomorrowKey;
-    const idx = upcomingStripDays.findIndex((d) => d.key === activeKey);
-    if (idx < 0) return;
-    const x = upcomingStripScrollToSelectedX(idx, stripViewportWidth, upcomingStripDays.length);
-    requestAnimationFrame(() => {
-      upcomingScrollRef.current?.scrollTo({ x, animated: true });
-    });
-  }, [mainView, upcomingDate, tomorrowKey, upcomingStripDays, stripViewportWidth]);
-
-  useEffect(() => {
-    if (mainView !== 'completed') return;
-    const idx = completedStripDays.findIndex((d) => d.key === completedDateKey);
-    if (idx < 0) return;
-    const x = upcomingStripScrollToSelectedX(idx, stripViewportWidth, completedStripDays.length);
-    requestAnimationFrame(() => {
-      completedScrollRef.current?.scrollTo({ x, animated: true });
-    });
-  }, [mainView, completedDateKey, completedStripDays, stripViewportWidth]);
-
-  const upcomingMonthLabel = useMemo(() => {
-    const selected = new Date(`${upcomingVisibleDateKey ?? upcomingDate ?? tomorrowKey}T12:00:00`);
-    return `${MONTH_SHORT_RU[selected.getMonth()]}. ${selected.getFullYear()}`;
-  }, [upcomingVisibleDateKey, upcomingDate, tomorrowKey]);
-
-  const completedMonthLabel = useMemo(() => {
-    const selected = new Date(`${completedVisibleDateKey ?? completedDateKey}T12:00:00`);
-    return `${MONTH_SHORT_RU[selected.getMonth()]}. ${selected.getFullYear()}`;
-  }, [completedVisibleDateKey, completedDateKey]);
-
-  const sections = useMemo((): TaskSectionRow[] => {
-    if (mainView === 'completed') {
-      if (tasks.length === 0) return [];
-      return [{ title: '', data: tasks, sectionId: 'completed' }];
-    }
-    if (mainView === 'inbox') {
-      const active = getInboxTasks(tasks);
-      return active.length ? [{ title: 'Входящие', data: active, sectionId: 'inbox' }] : [];
-    }
-    if (mainView === 'today') {
-      return getTodaySections(tasks, todayKey, taskSort !== "default").map((s) => ({
-        title: s.title,
-        data: s.tasks,
-        sectionId: s.id,
-      }));
-    }
-    const day = upcomingDate ?? tomorrowKey;
-    if (tasks.length === 0) return [];
-    return [
-      {
-        title: formatSectionDateLabel(day, todayKey),
-        data: tasks,
-        sectionId: `day-${day}`,
-      },
-    ];
-  }, [tasks, mainView, todayKey, upcomingDate, tomorrowKey, taskSort]);
-
-  const taskCreateDefaults = useMemo(
-    () =>
-      viewMode === 'calendar'
-        ? getCalendarTaskCreateDefaults(toAppDateKey(calendarDate), todayKey)
-        : getListTaskCreateDefaults(mainView, { todayKey, tomorrowKey, upcomingDateKey: upcomingDate }),
-    [viewMode, calendarDate, mainView, todayKey, tomorrowKey, upcomingDate]
-  );
-
-  const addFabBottom = Math.max(insets.bottom, 16) + ADD_FAB_GAP;
-  /** Запас снизу у прокручиваемого контента, чтобы последние задачи не уходили под FAB. */
-  const addFabContentInset = addFabBottom + ADD_FAB_SIZE + ADD_FAB_GAP;
-
-  const openAddSheet = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setAddSheetOpen(true);
-  }, []);
-
-  const openDisplayMenu = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDisplayMenuOpen(true);
-  }, []);
-
-  const closeDisplayMenu = useCallback(() => {
-    setDisplayMenuOpen(false);
-  }, []);
-
-  const applyLayout = useCallback(
-    (mode: 'list' | 'calendar') => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      setViewMode(mode);
-      router.setParams({ view: mode });
-      setDisplayMenuOpen(false);
+  const openTask = useCallback(
+    (task: UserTask) => {
+      if (task.id > 0) router.push({ pathname: '/client/tasks/details', params: { taskId: String(task.id) } });
     },
-    [router, setViewMode]
+    [router]
   );
+  const toggle = useCallback((task: UserTask) => void toggleComplete(task), [toggleComplete]);
 
-  const openTeamsFromDisplayMenu = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDisplayMenuOpen(false);
-    setTeamsPanelOpen(true);
-  }, []);
-
-  const openTaskStatsScreen = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDisplayMenuOpen(false);
-    router.push('/client/tasks/stats');
-  }, [router]);
-
-  const renderItem = useCallback(
-    ({ item, section }: { item: UserTask; section: TaskSectionRow }) => (
-      <UserTaskRow
-        item={item}
-        todayKey={todayKey}
-        sectionId={section.sectionId}
-        onToggle={() => toggleComplete(item)}
-        onPressRow={() => {
-          if (item?.id == null) return;
-          router.push({ pathname: '/client/tasks/details', params: { taskId: String(item.id) } });
-        }}
-        textColor={headerText}
-        textMuted={headerSubtitle}
-        primary={primary}
-        borderColor={border}
-        cardBackground={cardBg}
-        currentUserId={currentUserId}
+  const header = (
+    <View style={styles.listHeader}>
+      <Text accessibilityRole="header" style={[styles.title, { color: ui.fg() }]}>
+        Задачи
+      </Text>
+      <ChipTabs
+        accessibilityLabel="Списки задач"
+        value={mainView}
+        onChange={page.setMainView}
+        tabs={page.tabs.map((tab) => ({ ...tab, count: tab.value === 'completed' ? null : page.counts?.[tab.value] ?? null }))}
       />
-    ),
-    [toggleComplete, headerText, headerSubtitle, primary, border, cardBg, currentUserId, todayKey, router]
-  );
-
-  const emptyCopy = useMemo(() => {
-    if (mainView === 'completed') {
-      return {
-        title: 'Нет выполненных за этот день',
-        subtitle: 'Выберите другую дату в полосе календаря выше',
-        icon: 'check-circle-outline' as const,
-      };
-    }
-    if (mainView === 'inbox') {
-      return {
-        title: 'Входящие пусты',
-        subtitle: 'Здесь появятся все невыполненные задачи — с датой и без',
-        icon: 'inbox' as const,
-      };
-    }
-    if (mainView === 'today') {
-      return {
-        title: 'На сегодня всё сделано',
-        subtitle: 'Нет незавершённых задач со сроком на сегодня',
-        icon: 'inbox' as const,
-      };
-    }
-    return {
-      title: 'Нет предстоящих задач',
-      subtitle: 'Запланируйте задачу на будущие дни',
-      icon: 'inbox' as const,
-    };
-  }, [mainView]);
-
-  const ListEmpty = (
-    <View style={styles.empty}>
-      <MaterialIcons name={emptyCopy.icon} size={48} color={headerSubtitle} />
-      <ThemedText style={[styles.emptyTitle, { color: headerText }]}>{emptyCopy.title}</ThemedText>
-      <ThemedText style={[styles.emptySubtitle, { color: headerSubtitle }]}>{emptyCopy.subtitle}</ThemedText>
+      {page.taskSort ? (
+        <View style={styles.captionRow}>
+          <Text style={[styles.caption, { color: ui.fg(0.5) }]} numberOfLines={1} accessibilityLiveRegion="polite">
+            {page.listCaption ?? ''}
+          </Text>
+          <TaskSortPicker value={page.taskSort} onChange={page.setTaskSort} />
+        </View>
+      ) : null}
+      {mainView === 'upcoming' ? (
+        <TaskDayStrip
+          accessibilityLabel="День предстоящих задач"
+          days={page.upcomingStripDays}
+          selected={page.upcomingDate}
+          onSelect={page.setUpcomingDate}
+          onVisibleChange={page.setUpcomingVisibleDateKey}
+          monthLabel={page.upcomingMonthLabel}
+        />
+      ) : null}
+      {mainView === 'completed' ? (
+        <TaskDayStrip
+          accessibilityLabel="День выполненных задач"
+          days={page.completedStripDays}
+          selected={page.completedDateKey}
+          onSelect={page.setCompletedDateKey}
+          onVisibleChange={page.setCompletedVisibleDateKey}
+          monthLabel={page.completedMonthLabel}
+        />
+      ) : null}
+      {page.listTitle ? <SectionCaption>{page.listTitle}</SectionCaption> : null}
+      {todo.error && todo.tasks.length > 0 ? (
+        <View accessibilityRole="alert" style={[styles.errorBanner, { backgroundColor: ui.dangerSoft, borderColor: `${ui.danger}99` }]}>
+          <MaterialIcons name="error-outline" size={20} color={ui.danger} />
+          <Text style={[styles.errorBannerText, { color: ui.fg(0.8) }]}>
+            {todo.error}
+            {'\n'}
+            <Text style={{ color: ui.fg(0.6) }}>Показаны данные последней успешной загрузки.</Text>
+          </Text>
+          <Pressable onPress={page.retry} accessibilityRole="button" style={[styles.errorRetry, { backgroundColor: ui.fg(0.12) }]}>
+            <Text style={[styles.errorRetryLabel, { color: ui.fg() }]}>Повторить</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 
-  const headerRight = (
-    <Pressable
-      onPress={openDisplayMenu}
-      hitSlop={12}
-      accessibilityRole="button"
-      accessibilityLabel="Вид, календарь и команды"
-      style={({ pressed }) => [styles.moreMenuBtn, pressed && { opacity: 0.65 }]}
-    >
-      <MaterialIcons name="more-horiz" size={26} color={primary} />
-    </Pressable>
+  const empty = todo.loading ? (
+    <View style={styles.skeletons} accessibilityLabel="Загружаем задачи">
+      {[0, 1, 2, 3].map((index) => (
+        <View key={index} style={[styles.skeleton, { backgroundColor: ui.surface }]} />
+      ))}
+    </View>
+  ) : todo.error ? (
+    <EmptyState
+      style={styles.empty}
+      icon="error-outline"
+      title="Не удалось загрузить задачи"
+      description={todo.error}
+      action={<Button title="Повторить" onPress={page.retry} variant="accent-outline" size="compact" />}
+    />
+  ) : (
+    <EmptyState
+      style={styles.empty}
+      icon={EMPTY_ICONS[mainView]}
+      title={page.emptyCopy.title}
+      description={page.emptyCopy.subtitle}
+      action={
+        mainView === 'today' ? <Button title="Открыть входящие" onPress={() => page.setMainView('inbox')} variant="accent-outline" size="compact" /> : undefined
+      }
+    />
   );
 
   return (
-    <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: background }]}>
-      <ScreenHeader title="Задачи" rightSlot={headerRight} />
-
-      {viewMode === 'list' && (
-        <View style={styles.topBar}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterPillsScroll}
-            contentContainerStyle={styles.filterPillsContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {VIEW_TABS.map((opt) => (
-              <Pressable
-                key={opt.value}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setMainView(opt.value);
-                  router.setParams({ tab: opt.value });
-                }}
-                style={[
-                  styles.pill,
-                  {
-                    borderColor: border,
-                    backgroundColor: opt.value === mainView ? `${primary}25` : 'transparent',
-                  },
-                ]}
-              >
-                <ThemedText
-                  style={{
-                    color: opt.value === mainView ? primary : headerSubtitle,
-                    fontSize: 13,
-                    fontWeight: '600',
-                  }}
-                >
-                  {opt.label}
-                </ThemedText>
-              </Pressable>
-            ))}
-          </ScrollView>
-          {(mainView === 'inbox' || mainView === 'today') && (
-            <TaskSortControl value={taskSort} onChange={setTaskSort} />
-          )}
-          {mainView === 'upcoming' && (
-            <View style={styles.upcomingCalendarInline}>
-              <View style={styles.upcomingCalendarHeader}>
-                <ThemedText style={[styles.upcomingMonthTitle, { color: headerText }]}>
-                  {upcomingMonthLabel}
-                </ThemedText>
-              </View>
-              <ScrollView
-                ref={upcomingScrollRef}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.upcomingStripRow}
-                keyboardShouldPersistTaps="handled"
-                onScroll={(e) => {
-                  const x = e.nativeEvent.contentOffset.x;
-                  const idx = Math.max(
-                    0,
-                    Math.min(
-                      upcomingStripDays.length - 1,
-                      Math.round((x + stripViewportWidth / 2) / UPCOMING_DAY_ITEM_WIDTH)
-                    )
-                  );
-                  const visibleKey = upcomingStripDays[idx]?.key ?? null;
-                  if (visibleKey && visibleKey !== upcomingVisibleDateKey) {
-                    setUpcomingVisibleDateKey(visibleKey);
-                  }
-                }}
-                scrollEventThrottle={16}
-              >
-                {upcomingStripDays.map((d) => {
-                  const isSelected = d.key === upcomingDate;
-                  return (
-                    <Pressable
-                      key={d.key}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        LayoutAnimation.configureNext(
-                          LayoutAnimation.create(
-                            165,
-                            LayoutAnimation.Types.easeInEaseOut,
-                            LayoutAnimation.Properties.opacity
-                          )
-                        );
-                        setUpcomingDate(d.key);
-                      }}
-                      style={styles.upcomingDayCell}
-                    >
-                      <ThemedText style={[styles.upcomingWeekday, { color: isSelected ? primary : headerSubtitle }]}>
-                        {d.weekdayLabel}
-                      </ThemedText>
-                      <View
-                        style={[
-                          styles.upcomingDayCircle,
-                          isSelected && { backgroundColor: primary },
-                        ]}
-                      >
-                        <ThemedText
-                          style={{
-                            color: isSelected ? '#fff' : headerText,
-                            fontWeight: '600',
-                          }}
-                        >
-                          {d.dayNumber}
-                        </ThemedText>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
-          {mainView === 'completed' && (
-            <View style={styles.upcomingCalendarInline}>
-              <View style={styles.upcomingCalendarHeader}>
-                <ThemedText style={[styles.upcomingMonthTitle, { color: headerText }]}>
-                  {completedMonthLabel}
-                </ThemedText>
-              </View>
-              <ScrollView
-                ref={completedScrollRef}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.upcomingStripRow}
-                keyboardShouldPersistTaps="handled"
-                onScroll={(e) => {
-                  const x = e.nativeEvent.contentOffset.x;
-                  const idx = Math.max(
-                    0,
-                    Math.min(
-                      completedStripDays.length - 1,
-                      Math.round((x + stripViewportWidth / 2) / UPCOMING_DAY_ITEM_WIDTH)
-                    )
-                  );
-                  const visibleKey = completedStripDays[idx]?.key ?? null;
-                  if (visibleKey && visibleKey !== completedVisibleDateKey) {
-                    setCompletedVisibleDateKey(visibleKey);
-                  }
-                }}
-                scrollEventThrottle={16}
-              >
-                {completedStripDays.map((d) => {
-                  const isSelected = d.key === completedDateKey;
-                  return (
-                    <Pressable
-                      key={d.key}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        LayoutAnimation.configureNext(
-                          LayoutAnimation.create(
-                            165,
-                            LayoutAnimation.Types.easeInEaseOut,
-                            LayoutAnimation.Properties.opacity
-                          )
-                        );
-                        setCompletedDateKey(d.key);
-                      }}
-                      style={styles.upcomingDayCell}
-                    >
-                      <ThemedText style={[styles.upcomingWeekday, { color: isSelected ? primary : headerSubtitle }]}>
-                        {d.weekdayLabel}
-                      </ThemedText>
-                      <View
-                        style={[
-                          styles.upcomingDayCircle,
-                          isSelected && { backgroundColor: primary },
-                        ]}
-                      >
-                        <ThemedText
-                          style={{
-                            color: isSelected ? '#fff' : headerText,
-                            fontWeight: '600',
-                          }}
-                        >
-                          {d.dayNumber}
-                        </ThemedText>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
-        </View>
-      )}
-
-      {viewMode === 'calendar' ? (
-        <View style={styles.calendarWrap}>
-          <CalendarTab
-            selectedDate={calendarDate}
-            onSelectedDateChange={setCalendarDate}
-            contentBottomInset={addFabContentInset}
+    <View style={[styles.screen, { backgroundColor: ui.canvas, paddingTop: insets.top + 12 }]}>
+      <View style={styles.topBar}>
+        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Назад" style={styles.back}>
+          <MaterialIcons name="chevron-left" size={28} color={ui.accent} />
+          <Text style={[styles.backLabel, { color: ui.accent }]}>Назад</Text>
+        </Pressable>
+        <View style={styles.topActions}>
+          <SegmentedControl<TaskLayoutMode>
+            accessibilityLabel="Вид задач"
+            value={layoutMode}
+            onChange={page.setLayoutMode}
+            options={LAYOUT_OPTIONS}
+            optionStyle={styles.layoutOption}
           />
+          <TaskMoreMenu open={page.menuOpen} onOpenChange={page.setMenuOpen} onOpenStats={page.openTaskStats} onOpenTeams={page.openTeams} />
         </View>
-      ) : loadingTasks ? (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color={primary} />
-        </View>
+      </View>
+
+      {layoutMode === 'calendar' ? (
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: fabBottom + FAB_SIZE + 16 }]}>
+          <TaskCalendarView
+            month={page.calendarMonth}
+            onMonthChange={page.setCalendarMonth}
+            day={page.calendarDay}
+            onDayChange={page.setCalendarDay}
+            todayKey={page.todayKey}
+            onOpenTask={openTask}
+          />
+        </ScrollView>
       ) : (
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        >
-          <SectionList<UserTask, TaskSectionRow>
-            sections={sections}
-            keyExtractor={(item) => {
-              if (item?.id != null) return String(item.id);
-              const created = (item as any)?.created_at ?? '';
-              const title = (item as any)?.title ?? '';
-              return `tmp-${created}-${title}`;
-            }}
-            renderItem={renderItem}
-            renderSectionHeader={({ section: { title } }) =>
-              title ? (
-                <ThemedText style={[styles.sectionHeader, { color: headerSubtitle }]}>{title}</ThemedText>
-              ) : null
-            }
-            stickySectionHeadersEnabled={false}
-            contentContainerStyle={[styles.listContent, { paddingBottom: addFabContentInset }]}
-            ListEmptyComponent={tasksError ? null : ListEmpty}
-            ListHeaderComponent={tasksError ? (
-              <View accessibilityRole="alert" style={{ paddingVertical: 12, gap: 8 }}>
-                <ThemedText style={{ color: headerText }}>{tasksError}</ThemedText>
-                {sections.length > 0 && <ThemedText style={{ color: headerSubtitle }}>Показаны данные последней успешной загрузки.</ThemedText>}
-                <Pressable accessibilityRole="button" onPress={() => void retryTasks()} style={{ minHeight: 48, justifyContent: 'center' }}>
-                  <ThemedText style={{ color: primary }}>Повторить загрузку</ThemedText>
-                </Pressable>
-              </View>
-            ) : null}
-            ListFooterComponent={
-              loadingMore ? (
-                <View style={styles.loaderFooter}>
-                  <ActivityIndicator size="small" color={primary} />
-                </View>
-              ) : null
-            }
-            onEndReached={() => {
-              if (hasMore && !loadingMore) void loadMore();
-            }}
-            onEndReachedThreshold={0.35}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          />
-        </KeyboardAvoidingView>
+        <FlatList
+          data={todo.tasks}
+          keyExtractor={(task) => String(task.id)}
+          renderItem={({ item }) => (
+            <TaskListItem task={item} todayKey={page.todayKey} currentUserId={currentUserId} onToggle={toggle} onOpen={openTask} />
+          )}
+          ItemSeparatorComponent={Separator}
+          ListHeaderComponent={header}
+          ListEmptyComponent={empty}
+          ListFooterComponent={todo.loadingMore ? <ActivityIndicator color={ui.accent} style={styles.footer} /> : null}
+          onEndReached={() => {
+            if (todo.hasMore && !todo.loadingMore) void loadMore();
+          }}
+          onEndReachedThreshold={0.35}
+          refreshControl={<RefreshControl refreshing={false} onRefresh={page.retry} tintColor={ui.accent} />}
+          contentContainerStyle={[styles.content, { paddingBottom: fabBottom + FAB_SIZE + 16 }]}
+          showsVerticalScrollIndicator={false}
+        />
       )}
 
       <Pressable
-        onPress={openAddSheet}
+        onPress={() => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          page.openComposer();
+        }}
         accessibilityRole="button"
-        accessibilityLabel="Добавить задачу"
-        style={({ pressed }) => [
-          styles.addFab,
-          { backgroundColor: primary, bottom: addFabBottom },
-          pressed && styles.addFabPressed,
-        ]}
+        accessibilityLabel="Новая задача"
+        style={({ pressed }) => [styles.fab, { backgroundColor: ui.accent, bottom: fabBottom }, pressed && styles.fabPressed]}
       >
-        <MaterialIcons name="add" size={28} color="#fff" />
+        <MaterialIcons name="add" size={30} color={ui.onAccent} />
       </Pressable>
 
-      <Modal
-        visible={displayMenuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={closeDisplayMenu}
-      >
-        <View style={styles.displayModalRoot}>
-          <Pressable style={styles.displayModalBackdrop} onPress={closeDisplayMenu} />
-          <View
-            style={[
-              styles.displaySheet,
-              {
-                backgroundColor: background,
-                paddingBottom: Math.max(insets.bottom, 20),
-              },
-            ]}
-          >
-            <View style={[styles.displaySheetHeader, { borderBottomColor: border }]}>
-              <View style={[styles.displayHeaderSide, { justifyContent: 'flex-start' }]}>
-                <Pressable
-                  onPress={closeDisplayMenu}
-                  hitSlop={12}
-                  style={[styles.displayHeaderIconBtn, { backgroundColor: cardBg }]}
-                  accessibilityLabel="Закрыть"
-                >
-                  <MaterialIcons name="close" size={22} color={headerText} />
-                </Pressable>
-              </View>
-              <ThemedText style={[styles.displaySheetTitle, { color: headerText }]}>Вид и команды</ThemedText>
-              <View style={[styles.displayHeaderSide, { justifyContent: 'flex-end' }]}>
-                <Pressable
-                  onPress={closeDisplayMenu}
-                  hitSlop={12}
-                  style={[styles.displayHeaderIconBtn, { backgroundColor: primary }]}
-                  accessibilityLabel="Готово"
-                >
-                  <MaterialIcons name="check" size={22} color="#fff" />
-                </Pressable>
-              </View>
-            </View>
-
-            <ThemedText style={[styles.displaySectionLabel, { color: headerSubtitle }]}>Раскладка</ThemedText>
-            <View style={[styles.layoutRow, styles.layoutRowTwo, { backgroundColor: cardBg, borderColor: border }]}>
-              <Pressable
-                onPress={() => applyLayout('list')}
-                style={styles.layoutCell}
-              >
-                <View
-                  style={[
-                    styles.layoutIconFrame,
-                    { borderColor: viewMode === 'list' ? primary : border },
-                  ]}
-                >
-                  <MaterialIcons
-                    name="format-list-bulleted"
-                    size={26}
-                    color={viewMode === 'list' ? primary : headerSubtitle}
-                  />
-                </View>
-                <View
-                  style={[
-                    styles.layoutLabelPill,
-                    viewMode === 'list' && { backgroundColor: primary },
-                  ]}
-                >
-                  <ThemedText
-                    style={[
-                      styles.layoutLabelText,
-                      { color: viewMode === 'list' ? '#fff' : headerSubtitle },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    Список
-                  </ThemedText>
-                </View>
-              </Pressable>
-
-              <Pressable onPress={() => applyLayout('calendar')} style={styles.layoutCell}>
-                <View
-                  style={[
-                    styles.layoutIconFrame,
-                    { borderColor: viewMode === 'calendar' ? primary : border },
-                  ]}
-                >
-                  <MaterialIcons
-                    name="calendar-month"
-                    size={26}
-                    color={viewMode === 'calendar' ? primary : headerSubtitle}
-                  />
-                </View>
-                <View
-                  style={[
-                    styles.layoutLabelPill,
-                    viewMode === 'calendar' && { backgroundColor: primary },
-                  ]}
-                >
-                  <ThemedText
-                    style={[
-                      styles.layoutLabelText,
-                      { color: viewMode === 'calendar' ? '#fff' : headerSubtitle },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    Календарь
-                  </ThemedText>
-                </View>
-              </Pressable>
-            </View>
-
-            <ThemedText style={[styles.displaySectionLabel, { color: headerSubtitle, marginTop: 20 }]}>
-              Статистика
-            </ThemedText>
-            <Pressable
-              onPress={openTaskStatsScreen}
-              style={({ pressed }) => [
-                styles.teamsMenuRow,
-                { borderColor: border, backgroundColor: cardBg },
-                pressed && { opacity: 0.85 },
-              ]}
-            >
-              <MaterialIcons name="bar-chart" size={24} color={primary} />
-              <ThemedText style={[styles.teamsMenuRowLabel, { color: headerText }]}>Статистика</ThemedText>
-              <MaterialIcons name="chevron-right" size={24} color={headerSubtitle} />
-            </Pressable>
-
-            <ThemedText style={[styles.displaySectionLabel, { color: headerSubtitle, marginTop: 20 }]}>
-              Команды
-            </ThemedText>
-            <Pressable
-              onPress={openTeamsFromDisplayMenu}
-              style={({ pressed }) => [
-                styles.teamsMenuRow,
-                { borderColor: border, backgroundColor: cardBg },
-                pressed && { opacity: 0.85 },
-              ]}
-            >
-              <MaterialIcons name="groups" size={24} color={primary} />
-              <ThemedText style={[styles.teamsMenuRowLabel, { color: headerText }]}>Команды</ThemedText>
-              <MaterialIcons name="chevron-right" size={24} color={headerSubtitle} />
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-      <TaskAddSheet
-        visible={addSheetOpen}
-        onClose={() => setAddSheetOpen(false)}
-        defaults={taskCreateDefaults}
-        todayKey={todayKey}
-        tomorrowKey={tomorrowKey}
-        addTask={addTask}
+      <TaskComposer
+        visible={page.composer.open}
+        onClose={page.closeComposer}
+        dateKey={page.composer.dateKey}
+        todayKey={page.todayKey}
+        onCreate={todo.addTask}
       />
-      {teamsPanelOpen ? (
-        <TeamsInboxPanel onClose={() => setTeamsPanelOpen(false)} />
-      ) : null}
-    </ThemedView>
+      {page.teamsOpen ? <TeamsInboxPanel onClose={() => page.setTeamsOpen(false)} /> : null}
+    </View>
   );
 }
 
+function Separator() {
+  return <View style={styles.separator} />;
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  topBar: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
-  filterPillsScroll: {
-    width: '100%',
-  },
-  filterPillsContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 2,
-    paddingRight: 8,
-  },
-  upcomingCalendarInline: {
-    marginTop: 10,
-  },
-  upcomingCalendarHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  upcomingMonthTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  upcomingStripRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingRight: 16,
-  },
-  upcomingDayCell: {
-    width: UPCOMING_DAY_CELL_WIDTH,
-    alignItems: 'center',
-    gap: 6,
-  },
-  upcomingWeekday: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  upcomingDayCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pill: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  moreMenuBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  displayModalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  displayModalBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  displaySheet: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  displaySheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: 14,
-    marginBottom: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  displayHeaderSide: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  displayHeaderIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  displaySheetTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    flex: 2,
-    textAlign: 'center',
-  },
-  displaySectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-    marginTop: 4,
-  },
-  layoutRow: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    justifyContent: 'space-between',
-  },
-  layoutRowTwo: {
-    justifyContent: 'space-around',
-    gap: 16,
-  },
-  layoutCell: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 4,
-  },
-  layoutIconFrame: {
-    width: 52,
-    height: 52,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  layoutLabelPill: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    maxWidth: '100%',
-  },
-  layoutLabelText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  teamsMenuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    gap: 12,
-  },
-  teamsMenuRowLabel: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  addFab: {
+  screen: { flex: 1 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 10, paddingRight: 12, minHeight: 44 },
+  back: { flexDirection: 'row', alignItems: 'center' },
+  backLabel: { fontSize: 18 },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  layoutOption: { width: 38, paddingHorizontal: 0 },
+  content: { paddingHorizontal: 16, paddingTop: 14, flexGrow: 1 },
+  listHeader: { gap: 14, paddingBottom: 14 },
+  title: { fontSize: 26, lineHeight: 31, fontWeight: '700' },
+  captionRow: { minHeight: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  caption: { flex: 1, fontSize: 13 },
+  separator: { height: 8 },
+  skeletons: { gap: 8 },
+  skeleton: { height: 64, borderRadius: 16, opacity: 0.6 },
+  empty: { paddingTop: 76 },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 14 },
+  errorBannerText: { flex: 1, fontSize: 13 },
+  errorRetry: { borderRadius: 10, paddingVertical: 7, paddingHorizontal: 12 },
+  errorRetryLabel: { fontSize: 14, fontWeight: '600' },
+  footer: { paddingVertical: 16 },
+  fab: {
     position: 'absolute',
     right: 16,
-    width: ADD_FAB_SIZE,
-    height: ADD_FAB_SIZE,
-    borderRadius: ADD_FAB_SIZE / 2,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
-  addFabPressed: { opacity: 0.9 },
-  listContent: { paddingHorizontal: 16, paddingTop: 12, flexGrow: 1 },
-  sectionHeader: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: 8,
-    marginBottom: 6,
-  },
-  calendarWrap: {
-    flex: 1,
-    paddingTop: 8,
-  },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  loaderFooter: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: 48,
-  },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginTop: 16 },
-  emptySubtitle: { fontSize: 14, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 },
+  fabPressed: { transform: [{ scale: 0.95 }] },
 });

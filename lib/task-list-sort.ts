@@ -1,18 +1,36 @@
-export type TaskSortField = "created_at" | "deadline" | "priority";
-export type TaskSortDirection = "asc" | "desc";
-export type TaskSortValue = "default" | "created_at_desc" | "created_at_asc" | "deadline_asc" | "deadline_desc" | "priority_desc" | "priority_asc";
+/** Order of the «Входящие» and «Сегодня» lists: a field and a direction, sorted by the server. */
 
-export const TASK_SORT_OPTIONS: { value: TaskSortValue; label: string; field?: TaskSortField; direction?: TaskSortDirection }[] = [
-  { value: "default", label: "Обычный порядок" },
-  { value: "created_at_desc", label: "Дата создания: сначала новые", field: "created_at", direction: "desc" },
-  { value: "created_at_asc", label: "Дата создания: сначала старые", field: "created_at", direction: "asc" },
-  { value: "deadline_asc", label: "Срок: сначала ранние", field: "deadline", direction: "asc" },
-  { value: "deadline_desc", label: "Срок: сначала поздние", field: "deadline", direction: "desc" },
-  { value: "priority_desc", label: "Приоритет: сначала высокий", field: "priority", direction: "desc" },
-  { value: "priority_asc", label: "Приоритет: сначала низкий", field: "priority", direction: "asc" },
+export type TaskSortField = 'deadline' | 'created_at' | 'priority';
+export type TaskSortDirection = 'asc' | 'desc';
+export type TaskSort = { field: TaskSortField; direction: TaskSortDirection };
+
+export const DEFAULT_TASK_SORT: TaskSort = { field: 'deadline', direction: 'asc' };
+
+export const TASK_SORT_FIELDS: readonly { value: TaskSortField; label: string; short: string }[] = [
+  { value: 'deadline', label: 'Сроку выполнения', short: 'По сроку' },
+  { value: 'created_at', label: 'Дате создания', short: 'По дате' },
+  { value: 'priority', label: 'Приоритету', short: 'По приоритету' },
 ];
 
-export function taskSortQuery(value: TaskSortValue): { sortBy?: TaskSortField; sortDirection?: TaskSortDirection } {
-  const option = TASK_SORT_OPTIONS.find((item) => item.value === value);
-  return option?.field ? { sortBy: option.field, sortDirection: option.direction } : {};
+export const TASK_SORT_DIRECTIONS: readonly { value: TaskSortDirection; label: string }[] = [
+  { value: 'asc', label: 'По возрастанию' },
+  { value: 'desc', label: 'По убыванию' },
+];
+
+/** Query parameters of GET /user-tasks. */
+export function taskSortQuery(sort: TaskSort): { sortBy: TaskSortField; sortDirection: TaskSortDirection } {
+  return { sortBy: sort.field, sortDirection: sort.direction };
+}
+
+/** «По сроку» — the caption of the sort button. */
+export function taskSortLabel(sort: TaskSort): string {
+  return TASK_SORT_FIELDS.find((item) => item.value === sort.field)?.short ?? TASK_SORT_FIELDS[0].short;
+}
+
+/** A stored sort, or the default when the value is missing or from another version. */
+export function parseTaskSort(raw: unknown): TaskSort {
+  const value = raw as Partial<TaskSort> | null;
+  const field = TASK_SORT_FIELDS.find((item) => item.value === value?.field)?.value;
+  const direction = TASK_SORT_DIRECTIONS.find((item) => item.value === value?.direction)?.value;
+  return field && direction ? { field, direction } : DEFAULT_TASK_SORT;
 }

@@ -3,13 +3,25 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { FullWindowOverlay } from 'react-native-screens';
 
+import { ProductUi } from '@/constants/theme';
+
+type ToastIcon = React.ComponentProps<typeof MaterialIcons>['name'];
+
 interface Toast {
   id: string;
   title: string;
   description?: string;
-  variant?: 'default' | 'destructive' | 'success';
+  /** `error` — the dark product UI error with an optional action («Повторить»). */
+  variant?: 'default' | 'destructive' | 'success' | 'error';
   duration?: number;
+  /** Icon instead of the variant's own (e.g. `wifi-off` for a lost connection). */
+  icon?: ToastIcon;
+  /** A button in the toast; pressing it also closes the toast. */
+  action?: { label: string; onPress: () => void };
 }
+
+/** Errors of the product UI are always dark: they sit over any screen. */
+const ERROR_TOAST = ProductUi.dark;
 
 interface ToastContextType {
   show: (toast: Omit<Toast, 'id'>) => void;
@@ -63,20 +75,23 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       case 'destructive':
         return '#B8400E';
       case 'success':
-        return '#10B981';
+        return ERROR_TOAST.success;
+      case 'error':
+        return ERROR_TOAST.dangerSoft;
       default:
         return '#114A65';
     }
   };
 
-  const getToastIcon = (variant?: string) => {
+  const getToastIcon = (variant?: string): ToastIcon => {
     switch (variant) {
       case 'destructive':
-        return 'error' as const;
+      case 'error':
+        return 'error';
       case 'success':
-        return 'check-circle' as const;
+        return 'check-circle';
       default:
-        return 'info' as const;
+        return 'info';
     }
   };
 
@@ -89,13 +104,19 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             {toasts.map((toast) => {
               const anim = toast.animation;
               const backgroundColor = getToastColor(toast.variant);
-              const icon = getToastIcon(toast.variant);
+              const icon = toast.icon ?? getToastIcon(toast.variant);
+              const isError = toast.variant === 'error';
+              const isSuccess = toast.variant === 'success';
 
               return (
                 <Animated.View
                   key={toast.id}
+                  accessibilityRole="alert"
+                  accessibilityLiveRegion="polite"
                   style={[
                     styles.toast,
+                    isError && styles.errorToast,
+                    isSuccess && styles.successToast,
                     {
                       backgroundColor,
                       opacity: anim ?? 1,
@@ -115,24 +136,39 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   <View style={styles.toastContent}>
                     <MaterialIcons
                       name={icon}
-                      size={24}
-                      color="#FFFFFF"
+                      size={isError ? 22 : 24}
+                      color={isError ? ERROR_TOAST.danger : '#FFFFFF'}
                       style={styles.icon}
                     />
                     <View style={styles.textContainer}>
-                      <Text style={styles.title}>{toast.title}</Text>
+                      <Text style={[styles.title, isSuccess && styles.successTitle]}>{toast.title}</Text>
                       {toast.description && (
-                        <Text style={styles.description}>{toast.description}</Text>
+                        <Text style={[styles.description, isError && styles.errorDescription]}>{toast.description}</Text>
                       )}
                     </View>
                   </View>
-                  <Pressable
-                    onPress={() => hide(toast.id)}
-                    style={styles.closeButton}
-                    hitSlop={8}
-                  >
-                    <MaterialIcons name="close" size={20} color="#FFFFFF" />
-                  </Pressable>
+                  {toast.action ? (
+                    <Pressable
+                      onPress={() => {
+                        hide(toast.id);
+                        toast.action?.onPress();
+                      }}
+                      accessibilityRole="button"
+                      style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.8 }]}
+                    >
+                      <Text style={styles.actionLabel}>{toast.action.label}</Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable
+                      onPress={() => hide(toast.id)}
+                      style={styles.closeButton}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Закрыть уведомление"
+                    >
+                      <MaterialIcons name="close" size={20} color="#FFFFFF" />
+                    </Pressable>
+                  )}
                 </Animated.View>
               );
             })}
@@ -198,5 +234,38 @@ const styles = StyleSheet.create({
   closeButton: {
     marginLeft: 12,
     padding: 4,
+  },
+  successToast: {
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  successTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  errorToast: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: `${ERROR_TOAST.danger}99`,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  errorDescription: {
+    fontSize: 13,
+    color: `rgba(${ERROR_TOAST.fgRgb}, 0.75)`,
+    opacity: 1,
+  },
+  actionButton: {
+    marginLeft: 12,
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    backgroundColor: `rgba(${ERROR_TOAST.fgRgb}, 0.12)`,
+  },
+  actionLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

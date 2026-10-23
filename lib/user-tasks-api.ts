@@ -49,6 +49,10 @@ export interface TaskPermissions {
   /** Уже учитывает, что выполненную задачу сначала возвращают в работу. */
   can_transfer: boolean;
   can_view_history: boolean;
+  /** Название, описание, срок, приоритет, напоминания, вложения. Нет у старого backend. */
+  can_edit?: boolean;
+  /** Удаление — только автор. Нет у старого backend. */
+  can_delete?: boolean;
   read_only: boolean;
 }
 
@@ -80,6 +84,8 @@ export interface UserTask extends GroupTaskFields {
   /** Автор с должностью; у старого backend поля нет. */
   creator?: TaskExecutorRef | null;
   title: string;
+  /** «Описание»; у старого backend поля нет. */
+  description?: string | null;
   completed: boolean;
   completed_at: string | null;
   scheduled_at: string | null;
@@ -131,6 +137,7 @@ function normalizeUserTaskRow(t: UserTask): UserTask {
 
 /** Создатель или руководитель команды (для задач с team_id). */
 export function canEditUserTaskDetails(task: UserTask, userId: number | null | undefined): boolean {
+  if (typeof task?.task_permissions?.can_edit === 'boolean') return task.task_permissions.can_edit;
   if (!task || userId == null) return false;
   if (task.creator_id === userId) return true;
   if (task.team_id == null) return false;
@@ -151,17 +158,14 @@ export interface UserTaskAttachment {
   created_at: string;
 }
 
-export interface CalendarTask extends GroupTaskFields {
-  id: number;
-  title: string;
-  scheduled_at: string;
-  completed: boolean;
-  creator_id?: number;
-  assignee_ids?: number[];
-  team_id?: number | null;
-  executor_id?: number | null;
-  team?: TaskTeamRef | null;
-  executor?: TaskExecutorRef | null;
+/** A task of GET /user-tasks/calendar: the full task; the date of a legacy deadline fills scheduled_at. */
+export type CalendarTask = UserTask & { scheduled_at: string };
+
+/** Счётчики вкладок: GET /user-tasks/counts. */
+export interface TaskCounts {
+  inbox: number;
+  today: number;
+  upcoming: number;
 }
 
 export interface TodayStats {
@@ -236,6 +240,14 @@ export async function getUserTasksCalendar(
     params: { start_date: startDate, end_date: endDate },
   });
   if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: { tasks: result.data.tasks.map((task) => normalizeUserTaskRow(task) as CalendarTask) } };
+}
+
+export async function getTaskCounts(
+  today: string
+): Promise<{ ok: true; data: TaskCounts } | { ok: false; error: string }> {
+  const result = await request<TaskCounts>('/user-tasks/counts', { params: { today } });
+  if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, data: result.data };
 }
 
@@ -257,6 +269,7 @@ export async function getUserTask(
 
 export async function createUserTask(body: {
   title: string;
+  description?: string | null;
   priority?: TaskPriority;
   scheduled_at?: string | null;
   deadline_from?: string | null;
@@ -287,6 +300,7 @@ export async function updateUserTask(
   id: number,
   body: Partial<{
     title: string;
+    description: string | null;
     priority: TaskPriority;
     completed: boolean;
     scheduled_at: string | null;
@@ -330,11 +344,12 @@ export async function transferUserTask(
   return { ok: true, data: result.data?.task ? unwrapTaskPayload(result.data) : null };
 }
 
+/** network: the request did not reach the server, so the task is untouched and a retry is safe. */
 export async function deleteUserTask(
   id: number
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; network: boolean }> {
   const result = await request<undefined>(`/user-tasks/${id}`, { method: 'DELETE' });
-  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.ok) return { ok: false, error: result.error, network: result.status == null && !result.aborted };
   return { ok: true };
 }
 
@@ -410,4 +425,10 @@ export async function deleteUserTaskAttachment(
   const result = await request<unknown>(`/user-tasks/${taskId}/attachments/${attachmentId}`, { method: 'DELETE' });
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true };
+}
+
+/** Only the author deletes a task; older servers do not send `can_delete`. */
+export function canDeleteUserTask(task: UserTask, userId: number | null | undefined): boolean {
+  if (typeof task?.task_permissions?.can_delete === 'boolean') return task.task_permissions.can_delete;
+  return userId != null && task?.creator_id === userId;
 }

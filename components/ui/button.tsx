@@ -10,14 +10,32 @@ import {
 
 import { ThemedText } from '@/components/themed-text';
 import { FontSizes, LineHeights, Radius, Spacing } from '@/constants/theme';
+import { useProductUi, type ProductUiTheme } from '@/hooks/use-product-ui';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger';
+/**
+ * `accent`, `raised`, `destructive` and `accent-outline` — the product UI of the task screens
+ * (Figma «workflow»); the others keep the app's earlier look.
+ */
+type Variant =
+  | 'primary'
+  | 'secondary'
+  | 'ghost'
+  | 'outline'
+  | 'danger'
+  | 'accent'
+  | 'raised'
+  | 'destructive'
+  | 'accent-outline';
+
+/** `block` — the 50 pt full-width action of a screen or sheet; `compact` — 40 pt, e.g. under an empty state. */
+type Size = 'default' | 'block' | 'compact';
 
 export interface ButtonProps {
   title: string;
   onPress: () => void;
   variant?: Variant;
+  size?: Size;
   disabled?: boolean;
   /**
    * Показывает спиннер слева от текста и блокирует повторные нажатия.
@@ -45,6 +63,7 @@ export function Button({
   title,
   onPress,
   variant = 'primary',
+  size = 'default',
   disabled = false,
   loading = false,
   style,
@@ -62,6 +81,7 @@ export function Button({
   const danger = useThemeColor({}, 'danger');
   const textMuted = useThemeColor({}, 'textMuted');
   const text = useThemeColor({}, 'text');
+  const ui = useProductUi();
 
   const isDisabled = disabled || loading;
 
@@ -74,7 +94,7 @@ export function Button({
       danger,
       textMuted,
       text,
-    });
+    }, ui);
 
   const fg = labelColor ?? foreground;
 
@@ -88,6 +108,8 @@ export function Button({
       testID={testID}
       style={({ pressed }) => [
         styles.base,
+        size === 'block' && styles.block,
+        size === 'compact' && styles.compact,
         { backgroundColor, borderColor, borderWidth },
         style,
         containerStyle,
@@ -104,7 +126,7 @@ export function Button({
         ) : null}
         {labelColor != null ? (
           <Text
-            style={[styles.label, styles.labelStrong, { color: fg }]}
+            style={[styles.label, styles.labelStrong, size === 'block' && styles.blockLabel, size === 'compact' && styles.compactLabel, { color: fg }]}
             numberOfLines={2}
             allowFontScaling
           >
@@ -115,6 +137,8 @@ export function Button({
             style={[
               styles.label,
               variant !== 'ghost' && styles.labelStrong,
+              size === 'block' && styles.blockLabel,
+              size === 'compact' && styles.compactLabel,
               { color: fg },
             ]}
             numberOfLines={2}
@@ -141,9 +165,18 @@ function resolveVariant(
     danger: string;
     textMuted: string;
     text: string;
-  }
+  },
+  ui: ProductUiTheme
 ) {
   switch (variant) {
+    case 'accent':
+      return { backgroundColor: ui.accent, foreground: ui.onAccent, borderColor: 'transparent', borderWidth: 0 };
+    case 'raised':
+      return { backgroundColor: ui.raised, foreground: ui.fg(), borderColor: 'transparent', borderWidth: 0 };
+    case 'destructive':
+      return { backgroundColor: ui.danger, foreground: ui.onAccent, borderColor: 'transparent', borderWidth: 0 };
+    case 'accent-outline':
+      return { backgroundColor: 'transparent', foreground: ui.accent, borderColor: ui.accent, borderWidth: 1 };
     case 'primary':
       return {
         backgroundColor: c.primary,
@@ -205,6 +238,27 @@ const styles = StyleSheet.create({
   },
   labelStrong: {
     fontWeight: '600',
+  },
+  block: {
+    minHeight: 50,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: Spacing.lg,
+  },
+  blockLabel: {
+    fontSize: 17,
+    lineHeight: 20,
+  },
+  compact: {
+    minHeight: 40,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    alignSelf: 'center',
+  },
+  compactLabel: {
+    fontSize: 15,
+    lineHeight: 18,
   },
   iconLeft: {
     marginRight: Spacing.sm,

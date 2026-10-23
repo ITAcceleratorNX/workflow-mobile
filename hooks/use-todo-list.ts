@@ -18,14 +18,19 @@ import { toAssignmentInput, type RecipientSelection } from '@/lib/task-recipient
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useToast } from '@/context/toast-context';
+import { toastTaskCompleted, toastTaskDeleteFailed, toastTaskError } from '@/components/tasks/task-toasts';
 
-import type { TaskSortField, TaskSortDirection } from "@/lib/task-list-sort";
+import type { TaskSortField, TaskSortDirection } from '@/lib/task-list-sort';
 
 const DEFAULT_PAGE_SIZE = 50;
+/** A task completed in a list of active tasks stays there, crossed out, for this long. */
+const COMPLETED_LINGER_MS = 4000;
+const VIEWS_WITHOUT_COMPLETED: readonly (TaskListView | undefined)[] = ['inbox', 'list_today', 'list_upcoming'];
 
 /** Поля, которые реально принимает PATCH /user-tasks/:id (остальное только для оптимистичного UI). */
 const USER_TASK_API_PATCH_KEYS = [
   'title',
+  'description',
   'priority',
   'completed',
   'scheduled_at',
@@ -53,6 +58,20 @@ function pickUserTaskApiPatch(updates: Partial<UserTask>): Parameters<typeof upd
   }
   return out as Parameters<typeof updateUserTask>[1];
 }
+
+/** A new task from «Новая задача». */
+export type NewTaskInput = {
+  title: string;
+  description?: string | null;
+  scheduledAt?: string | null;
+  remindersDisabled?: boolean;
+  remindBeforeMinutes?: number | null;
+  /** «Исполнитель»: null — the author's own task. */
+  recipient?: RecipientSelection | null;
+  priority?: TaskPriority;
+  recurrence?: TaskRecurrencePayload;
+  inbox?: boolean;
+};
 
 export type UseTodoListQuery = {
   filter?: TaskFilter;
@@ -145,6 +164,32 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
   useEffect(() => { tasksRef.current = tasks; }, [tasks]);
   const hasMore = page < totalPages;
 
+  // Tasks just completed in a list of active tasks: kept in place, crossed out, for a moment, so the
+  // check mark is seen and can be undone; a refresh in between keeps them too.
+  const lingering = useRef(new Map<number, { task: UserTask; index: number; timer: ReturnType<typeof setTimeout> }>());
+  const hidesCompleted = VIEWS_WITHOUT_COMPLETED.includes(query.view);
+  useEffect(() => {
+    const entries = lingering.current;
+    return () => {
+      entries.forEach((entry) => clearTimeout(entry.timer));
+      entries.clear();
+    };
+  }, [scopeKey]);
+  const withLingering = useCallback((rows: UserTask[]) => {
+    if (lingering.current.size === 0) return rows;
+    const out = rows.filter((row) => !lingering.current.has(row.id));
+    [...lingering.current.values()]
+      .sort((a, b) => a.index - b.index)
+      .forEach((entry) => out.splice(Math.min(entry.index, out.length), 0, entry.task));
+    return out;
+  }, []);
+  const stopLingering = useCallback((id: number) => {
+    const entry = lingering.current.get(id);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    lingering.current.delete(id);
+  }, []);
+
   const fetchPage = useCallback(async (pageNum: number, append: boolean) => {
     if (!requestScope.current.active || requestScope.current.key !== scopeKey || !token || isGuest || !enabled) return null;
     const generation = append ? requestScope.current.generation : ++requestScope.current.generation;
@@ -159,13 +204,13 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
       setPage(res.data.page);
       setTotalPages(res.data.totalPages);
       setTasks((prev) => {
-        if (!append) return res.data.tasks;
+        if (!append) return withLingering(res.data.tasks);
         const seen = new Set(prev.map((task) => task.id));
         return [...prev, ...res.data.tasks.filter((task) => !seen.has(task.id))];
       });
     }
     return res;
-  }, [scopeKey, token, isGuest, enabled, query, setLoadingMore, setTotal, setPage, setTotalPages, setTasks]);
+  }, [scopeKey, token, isGuest, enabled, query, setLoadingMore, setTotal, setPage, setTotalPages, setTasks, withLingering]);
 
   const refresh = useCallback(async (reset = false) => {
     if (reset) {
@@ -219,9 +264,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
     if (!res) return;
     requestScope.current.loadingMore = false;
     setLoadingMore(false);
-    if (!res.ok) {
-      showToast({ title: "Не удалось загрузить задачи", description: res.error, variant: "destructive", duration: 4000 });
-    }
+    if (!res.ok) toastTaskError(showToast, 'Не удалось загрузить задачи', res.error);
   }, [enabled, token, isGuest, loading, scopeKey, hasMore, setLoadingMore, fetchPage, page, showToast]);
 
   useEffect(() => { void silentRefresh(); }, [silentRefresh]);
@@ -239,36 +282,24 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
     return tempIdSeedRef.current;
   }, []);
 
-  const nowIso = useMemo(() => () => new Date().toISOString(), []);
-
   const addTask = useCallback(
-    async (
-      title: string,
-      scheduledAt?: string | null,
-      remindersDisabled?: boolean,
-      remindBeforeMinutes?: number | null,
-      assignment?: {
-        team_id?: number | null;
-        executor_id?: number | null;
-        executor?: { id: number; full_name: string } | null;
-        /** Получатель из поля «Исполнитель» (компания / отдел / сотрудники). */
-        recipient?: RecipientSelection | null;
-      },
-      priority: TaskPriority = 'medium',
-      recurrence?: TaskRecurrencePayload,
-      options?: { inbox?: boolean }
-    ) => {
+    async (input: NewTaskInput) => {
       if (!token || isGuest) {
-        showToast({
-          title: 'Недоступно',
-          description: 'Нужно войти в аккаунт, чтобы создавать задачи',
-          variant: 'destructive',
-          duration: 4000,
-        });
+        toastTaskError(showToast, 'Недоступно', 'Нужно войти в аккаунт, чтобы создавать задачи');
         return null;
       }
+      const {
+        title,
+        description = null,
+        scheduledAt = null,
+        remindersDisabled = false,
+        remindBeforeMinutes = null,
+        recipient = null,
+        priority = 'medium',
+        recurrence,
+        inbox = false,
+      } = input;
       const optimisticId = nextTempId();
-      const recipient = assignment?.recipient ?? null;
       const groupInput = recipient ? toAssignmentInput(recipient) : null;
       const singleUser =
         recipient?.type === 'legacy_user'
@@ -276,37 +307,39 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
           : recipient?.type === 'users' && recipient.users.length === 1
             ? recipient.users[0]
             : null;
-      const executor = singleUser ?? assignment?.executor ?? null;
-      const executorId = singleUser?.id ?? assignment?.executor_id ?? assignment?.executor?.id ?? null;
+      const team = recipient?.type === 'team' ? recipient.team : null;
+      const executorId = singleUser?.id ?? null;
       const groupType = groupInput && !singleUser ? groupInput.type : null;
       const rec = recurrence ?? defaultRecurrenceNone();
-      const inboxFlag = options?.inbox === true;
+      const now = new Date().toISOString();
       const optimistic: UserTask = {
         id: optimisticId,
         creator_id: 0,
         title,
+        description,
         completed: false,
         completed_at: null,
-        scheduled_at: scheduledAt ?? null,
-        inbox: inboxFlag,
+        scheduled_at: scheduledAt,
+        inbox,
         deadline_from: null,
         deadline_to: null,
         deadline_time: null,
         remind_at: null,
         priority,
-        reminders_disabled: remindersDisabled ?? false,
-        remind_before_minutes: remindBeforeMinutes ?? null,
+        reminders_disabled: remindersDisabled,
+        remind_before_minutes: remindBeforeMinutes,
         recurrence_type: rec.recurrence_type,
         recurrence_interval: rec.recurrence_interval,
         recurrence_custom_unit: rec.recurrence_custom_unit,
         recurrence_weekdays: rec.recurrence_weekdays,
-        created_at: nowIso(),
-        updated_at: nowIso(),
+        created_at: now,
+        updated_at: now,
         assignee_ids: executorId != null ? [executorId] : [],
-        assignees: executor ? [executor] : [],
-        team_id: assignment?.team_id ?? null,
+        assignees: singleUser ? [singleUser] : [],
+        team_id: team?.id ?? null,
+        team: team ? { id: team.id, name: team.name, leader_id: 0 } : null,
         executor_id: executorId,
-        executor: executor ?? undefined,
+        executor: singleUser ?? undefined,
         assignment_type: groupType,
         targetCompany: groupType === 'company' && recipient?.type === 'company' ? recipient.company : null,
         targetDepartment:
@@ -321,84 +354,85 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
 
       const res = await createUserTask({
         title,
-        scheduled_at: scheduledAt ?? null,
-        inbox: inboxFlag,
+        description,
+        scheduled_at: scheduledAt,
+        inbox,
         deadline_from: null,
         deadline_to: null,
         deadline_time: null,
         priority,
         reminders_disabled: remindersDisabled,
-        remind_before_minutes: remindBeforeMinutes ?? null,
+        remind_before_minutes: remindBeforeMinutes,
         // Получатель из оргструктуры сервер проверяет заново; team/executor при этом не передаём.
-        ...(groupInput
+        ...(groupInput && !singleUser
           ? { assignment: groupInput }
-          : { team_id: assignment?.team_id ?? null, executor_id: executorId }),
+          : { team_id: team?.id ?? null, executor_id: executorId }),
         recurrence_type: rec.recurrence_type,
         recurrence_interval: rec.recurrence_interval,
         recurrence_custom_unit: rec.recurrence_custom_unit,
         recurrence_weekdays: rec.recurrence_weekdays,
       });
       if (res.ok) {
-        const merged: UserTask = {
-          ...res.data,
-          title: res.data.title ?? title,
-          priority: res.data.priority ?? priority,
-        };
-        setTasks((prev) => prev.map((t) => (t.id === optimisticId ? merged : t)));
+        setTasks((prev) => prev.map((t) => (t.id === optimisticId ? res.data : t)));
         bump();
         return res.data;
       }
       if (requestScope.current.active && requestScope.current.key === scopeKey) setTasks(before);
-      showToast({ title: 'Не удалось создать задачу', description: res.error, variant: 'destructive', duration: 4000 });
+      toastTaskError(showToast, 'Не удалось создать задачу', res.error);
       return null;
     },
-    [token, isGuest, nextTempId, nowIso, setTasks, scopeKey, showToast, bump]
+    [token, isGuest, nextTempId, setTasks, scopeKey, showToast, bump]
   );
 
   const toggleComplete = useCallback(
     async (task: UserTask) => {
       if (!token || isGuest) {
-        showToast({
-          title: 'Недоступно',
-          description: 'Нужно войти в аккаунт, чтобы менять задачи',
-          variant: 'destructive',
-          duration: 4000,
-        });
+        toastTaskError(showToast, 'Недоступно', 'Нужно войти в аккаунт, чтобы менять задачи');
         return;
       }
       if (!(await confirmTaskToggle(task))) return;
       const before = tasksRef.current;
       const nextCompleted = !task.completed;
+      stopLingering(task.id);
       setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, completed: nextCompleted } : t)));
 
       const res = await updateUserTask(task.id, { completed: nextCompleted });
       if (res.ok) {
-        setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...res.data } : t)));
+        const saved = { ...task, ...res.data };
+        if (saved.completed && hidesCompleted && requestScope.current.key === scopeKey) {
+          const index = Math.max(0, tasksRef.current.findIndex((t) => t.id === task.id));
+          const timer = setTimeout(() => {
+            lingering.current.delete(task.id);
+            setTasks((prev) => prev.filter((t) => !(t.id === task.id && t.completed)));
+          }, COMPLETED_LINGER_MS);
+          lingering.current.set(task.id, { task: saved, index, timer });
+        }
+        setTasks((prev) => prev.map((t) => (t.id === task.id ? saved : t)));
         bump();
         // Повтор выполнен, задача перенесена: без пояснения галочка, вернувшаяся назад, выглядит как сбой.
         const nextAt = nextOccurrenceAfterCompletion(task, res.data);
         if (nextAt) showToast({ ...recurringCompletionNotice(nextAt), variant: 'success', duration: 4000 });
+        else if (saved.completed) toastTaskCompleted(showToast);
         return;
       }
       if (requestScope.current.active && requestScope.current.key === scopeKey) setTasks(before);
-      showToast({ title: 'Не удалось обновить задачу', description: res.error, variant: 'destructive', duration: 4000 });
+      toastTaskError(showToast, 'Не удалось обновить задачу', res.error);
     },
-    [token, isGuest, setTasks, scopeKey, showToast, bump]
+    [token, isGuest, setTasks, scopeKey, showToast, bump, hidesCompleted, stopLingering]
   );
 
-  /** true — сервер подтвердил удаление; false — задача осталась, пользователь увидел причину. */
+  /**
+   * true — сервер подтвердил удаление; false — задача осталась, тост предлагает «Повторить».
+   * `onDeleted` runs after a deletion made by that retry, e.g. to close the task card.
+   */
   const removeTask = useCallback(
-    async (task: UserTask): Promise<boolean> => {
+    async function remove(task: UserTask, onDeleted?: () => void): Promise<boolean> {
       if (!token || isGuest) {
-        showToast({
-          title: 'Недоступно',
-          description: 'Нужно войти в аккаунт, чтобы удалять задачи',
-          variant: 'destructive',
-          duration: 4000,
-        });
+        toastTaskError(showToast, 'Недоступно', 'Нужно войти в аккаунт, чтобы удалять задачи');
         return false;
       }
       const before = tasksRef.current;
+      stopLingering(task.id);
       setTasks((prev) => prev.filter((t) => t.id !== task.id));
 
       const res = await deleteUserTask(task.id);
@@ -407,21 +441,20 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         return true;
       }
       if (requestScope.current.active && requestScope.current.key === scopeKey) setTasks(before);
-      showToast({ title: 'Не удалось удалить задачу', description: res.error, variant: 'destructive', duration: 4000 });
+      toastTaskDeleteFailed(showToast, res, () => {
+        void remove(task, onDeleted).then((deleted) => {
+          if (deleted) onDeleted?.();
+        });
+      });
       return false;
     },
-    [token, isGuest, setTasks, scopeKey, showToast, bump]
+    [token, isGuest, setTasks, scopeKey, showToast, bump, stopLingering]
   );
 
   const updateTask = useCallback(
     async (task: UserTask, updates: Partial<UserTask>) => {
       if (!token || isGuest) {
-        showToast({
-          title: 'Недоступно',
-          description: 'Нужно войти в аккаунт, чтобы редактировать задачи',
-          variant: 'destructive',
-          duration: 4000,
-        });
+        toastTaskError(showToast, 'Недоступно', 'Нужно войти в аккаунт, чтобы редактировать задачи');
         return null;
       }
       const before = tasksRef.current;
@@ -454,7 +487,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         return res.data;
       }
       if (requestScope.current.active && requestScope.current.key === scopeKey) setTasks(before);
-      showToast({ title: 'Не удалось сохранить изменения', description: res.error, variant: 'destructive', duration: 4000 });
+      toastTaskError(showToast, 'Не удалось сохранить изменения', res.error);
       return null;
     },
     [token, isGuest, setTasks, scopeKey, showToast, bump]

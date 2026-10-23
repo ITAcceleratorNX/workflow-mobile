@@ -133,6 +133,76 @@ export const Colors = {
   },
 } as const;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Product UI (Figma «workflow»: экраны задач). Тёмная палитра — по макету, светлая —
+// та же иерархия для светлой темы приложения. Текст и линии — основной цвет с
+// прозрачностью: `ui.fg(0.6)` из `useProductUi()`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ProductUiPalette = {
+  /** Фон экрана. */
+  canvas: string;
+  /** Строки, карточки, поля. */
+  surface: string;
+  /** Выбранный сегмент, вторичная кнопка, группа строк внутри листа. */
+  raised: string;
+  /** Основной цвет текста и иконок — RGB для прозрачности. */
+  fgRgb: string;
+  accent: string;
+  /** Выбранный фильтр, вид. */
+  accentSoft: string;
+  /** Текст и иконки на accentSoft. */
+  accentOnSoft: string;
+  /** Текст на заливке accent / danger / success. */
+  onAccent: string;
+  /** Просрочено, удаление. */
+  danger: string;
+  dangerSoft: string;
+  /** «Задача выполнена». */
+  success: string;
+  /** Отметка выполненной задачи. */
+  done: string;
+  /** Затемнение под листами. */
+  scrim: string;
+  /** Утопленное поле внутри группы (значение времени). */
+  well: string;
+};
+
+export const ProductUi: Record<'light' | 'dark', ProductUiPalette> = {
+  dark: {
+    canvas: '#000000',
+    surface: '#1C1C1E',
+    raised: '#2C2C2E',
+    fgRgb: '255, 255, 255',
+    accent: primaryAccent,
+    accentSoft: '#3A1A0D',
+    accentOnSoft: '#FF8A5C',
+    onAccent: '#FFFFFF',
+    danger: '#FF5A4F',
+    dangerSoft: '#3A1210',
+    success: '#10B981',
+    done: '#34C759',
+    scrim: 'rgba(0, 0, 0, 0.6)',
+    well: 'rgba(0, 0, 0, 0.4)',
+  },
+  light: {
+    canvas: '#F2F2F7',
+    surface: '#FFFFFF',
+    raised: '#E5E5EA',
+    fgRgb: '17, 24, 28',
+    accent: primaryAccent,
+    accentSoft: '#FCE9DF',
+    accentOnSoft: '#B8400E',
+    onAccent: '#FFFFFF',
+    danger: '#D92D20',
+    dangerSoft: '#FDECEA',
+    success: '#0E9F6E',
+    done: '#34C759',
+    scrim: 'rgba(0, 0, 0, 0.4)',
+    well: 'rgba(17, 24, 28, 0.06)',
+  },
+};
+
 /**
  * Семантический ключ темы. Все ключи ОБЯЗАНЫ присутствовать и в `light`,
  * и в `dark` — это проверяется типом ниже.
