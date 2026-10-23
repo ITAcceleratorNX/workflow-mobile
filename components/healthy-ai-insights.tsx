@@ -411,8 +411,8 @@ function StatusHero({ result }: { result: HealthyInsightResult }) {
 }
 
 function DynamicsCard({ result }: { result: HealthyInsightResult }) {
-  if (!result.dynamicsLabel || !result.dynamicsSummary?.trim()) return null;
   const c = useInsightTheme();
+  if (!result.dynamicsLabel || !result.dynamicsSummary?.trim()) return null;
   const cfg = dynamicsVisual(result.dynamicsLabel, {
     textSecondary: c.textSecondary,
     trackBg: c.trackBg,

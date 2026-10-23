@@ -1,5 +1,6 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -11,10 +12,7 @@ import {
 import { Button } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import {
-  fetchRequestLogs,
-  type RequestLog,
-} from '@/lib/profile-api';
+import { fetchRequestLogs } from '@/lib/profile-api';
 
 const ACTION_LABELS: Record<string, string> = {
   created: 'Создано',
@@ -43,36 +41,19 @@ function formatLogDate(dateString: string): string {
 }
 
 export function LogsViewer({ userRole }: LogsViewerProps) {
-  const [logs, setLogs] = useState<RequestLog[]>([]);
-  const [loading, setLoading] = useState(true);
+
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const [total, setTotal] = useState(0);
-  const [error, setError] = useState<string | null>(null);
 
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
   const border = useThemeColor({}, 'border');
 
-  const loadLogs = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const fetchLogs = useCallback(async () => {
     const result = await fetchRequestLogs(userRole, page, 20);
-    setLoading(false);
-
-    if (!result.ok) {
-      setError(result.error);
-      setLogs([]);
-      return;
-    }
-    setLogs(result.data.logs);
-    setTotal(result.data.total);
-    setTotalPages(result.data.totalPages);
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
   }, [userRole, page]);
-
-  useEffect(() => {
-    loadLogs();
-  }, [loadLogs]);
+  const { data: { logs, total, totalPages }, loading, error, refresh: loadLogs } = useAsyncResource(fetchLogs, { logs: [], total: 0, totalPages: 0, page: 1, pageSize: 20 });
 
   return (
     <View style={[styles.card, { borderColor: border }]}>

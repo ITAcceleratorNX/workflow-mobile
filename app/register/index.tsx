@@ -1,3 +1,4 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import {
   getOffices,
   getOfficeCompanies,
@@ -47,14 +48,12 @@ export default function RegisterScreen() {
 
   const [formData, setFormData] = useState(INITIAL_REGISTRATION_FORM);
   const [offices, setOffices] = useState<Office[]>([]);
-  const [categories, setCategories] = useState<ServiceCategory[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
+
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [formErrors, setFormErrors] = useState<string | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [isSendingCode, setIsSendingCode] = useState(false);
-  const [codeSent, setCodeSent] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [successVisible, setSuccessVisible] = useState(false);
 
@@ -62,18 +61,13 @@ export default function RegisterScreen() {
     getOffices().then(setOffices);
   }, []);
 
-  useEffect(() => {
-    const officeId = parseInt(formData.office_id, 10);
-    if (!officeId) {
-      setCategories([]);
-      setCompanies([]);
-      return;
-    }
-    getServiceCategoriesPublic(officeId).then(setCategories);
-    getOfficeCompanies(officeId).then((res) => {
-      setCompanies(res.ok ? res.data : []);
-    });
+  const loadOfficeOptions = useCallback(async () => {
+    const officeId = Number(formData.office_id);
+    if (!Number.isInteger(officeId) || officeId <= 0) return { categories: [], companies: [] };
+    const [categories, response] = await Promise.all([getServiceCategoriesPublic(officeId), getOfficeCompanies(officeId)]);
+    return { categories, companies: response.ok ? response.data : [] };
   }, [formData.office_id]);
+  const { data: { categories, companies } } = useAsyncResource<{ categories: ServiceCategory[]; companies: Company[] }>(loadOfficeOptions, { categories: [], companies: [] });
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -85,7 +79,6 @@ export default function RegisterScreen() {
     const formatted = formatPhone(text);
     setFormData((prev) => ({ ...prev, phone: formatted }));
     setFormErrors(null);
-    setCodeSent(false);
     setVerificationCode('');
   }, []);
 
@@ -103,7 +96,6 @@ export default function RegisterScreen() {
     const result = await sendVerificationCode(formData.phone, 'registration');
     setIsSendingCode(false);
     if (result.success) {
-      setCodeSent(true);
       setCountdown(60);
       setStep(2);
     } else {
@@ -133,6 +125,10 @@ export default function RegisterScreen() {
   }, [formData.phone, isSendingCode, countdown]);
 
   const handleSubmit = useCallback(async () => {
+    if (formData.role !== 'client' && formData.role !== 'executor') {
+      setFormErrors('Выберите роль');
+      return;
+    }
     if (formData.password !== formData.confirm_password) {
       setFormErrors('Пароли не совпадают');
       return;
@@ -143,11 +139,11 @@ export default function RegisterScreen() {
     }
     setFormErrors(null);
     setLoading(true);
-    const body: Record<string, unknown> = {
+    const body: CreateRegistrationRequestBody = {
       phone: formData.phone,
       full_name: formData.full_name,
       office_id: parseInt(formData.office_id, 10),
-      role: formData.role as 'client' | 'executor',
+      role: formData.role,
       password: formData.password,
     };
     if (formData.role === 'executor' && formData.service_category_id) {
@@ -166,16 +162,13 @@ export default function RegisterScreen() {
         }
       }
     }
-    const result = await createRegistrationRequest(
-      body as CreateRegistrationRequestBody,
-    );
+    const result = await createRegistrationRequest(body);
     setLoading(false);
     if (result.ok) {
       setFormData(INITIAL_REGISTRATION_FORM);
       setStep(1);
       setVerificationCode('');
-      setCodeSent(false);
-      setCountdown(0);
+        setCountdown(0);
       setSuccessVisible(true);
     } else {
       setFormErrors(result.error);

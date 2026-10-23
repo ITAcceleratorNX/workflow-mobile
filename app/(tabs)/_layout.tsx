@@ -3,6 +3,11 @@ import React, { useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomNav, BOTTOM_NAV_ROW_HEIGHT, bottomNavBottomInset } from '@/components/bottom-nav';
+import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
+import { usePedometer } from '@/hooks/use-pedometer';
+import { useSleepNotifications } from '@/hooks/use-sleep-notifications';
+import { useStepsSync } from '@/hooks/use-steps-sync';
+import { useDeepLinkStore } from '@/stores/deep-link-store';
 
 /** Совпадает с последним стопом градиента на `(tabs)/booking` — закрашивает запас под absolute BottomNav. */
 const BOOKING_TAB_SCENE_UNDERLAY = '#281504';
@@ -17,11 +22,6 @@ function getNestedRouteName(route: { name: string; state?: unknown }): string {
   const index = nested.index ?? nested.routes.length - 1;
   return nested.routes[index]?.name ?? route.name;
 }
-import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
-import { usePedometer } from '@/hooks/use-pedometer';
-import { useSleepNotifications } from '@/hooks/use-sleep-notifications';
-import { useStepsSync } from '@/hooks/use-steps-sync';
-import { useDeepLinkStore } from '@/stores/deep-link-store';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();

@@ -108,7 +108,7 @@ export default function ClientSmartHomeScreen() {
         if (result.ok) {
           const subs = result.data.subscriptions || [];
           setSubscriptions(subs);
-          if (subs.length > 0 && !selectedRoomId) setSelectedRoomId(subs[0].meeting_room_id);
+          if (subs.length > 0) setSelectedRoomId((previous) => previous ?? subs[0].meeting_room_id);
         } else {
           showToast({ title: 'Ошибка загрузки', description: result.error, variant: 'destructive', duration: 4000 });
         }

@@ -1,3 +1,4 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
@@ -79,17 +80,16 @@ export function AdminAcceptRequestModal({
   const cardBackground = useThemeColor({}, 'cardBackground');
   const dangerColor = useThemeColor({}, 'danger');
 
-  const [requestType, setRequestType] = useState('normal');
-  const [locationDetail, setLocationDetail] = useState('');
-  const [officeId, setOfficeId] = useState('');
-  const [subSettings, setSubSettings] = useState<
-    Record<number, { sla: string; complexity: string }>
-  >({});
+  const formKey = JSON.stringify([visible, request]);
+  const [requestType, setRequestType] = useScopedState(formKey, request?.request_type ?? 'normal');
+  const [locationDetail, setLocationDetail] = useScopedState(formKey, request?.location_detail ?? '');
+  const [officeId, setOfficeId] = useScopedState(formKey, String(request?.office_id ?? ''));
+  const [subSettings, setSubSettings] = useScopedState<Record<number, { sla: string; complexity: string }>>(formKey, {});
   /** category_id подзаявки в выбранном офисе (строка — значение Select). */
-  const [subCategoryIds, setSubCategoryIds] = useState<Record<number, string>>({});
-  const [localError, setLocalError] = useState<string | null>(null);
+
+  const [localError, setLocalError] = useScopedState<string | null>(formKey, null);
   /** Исполнитель подзаявки при прямом назначении; HAND_TO_DEPARTMENT_HEAD — передать Офис-менеджеру. */
-  const [subExecutorIds, setSubExecutorIds] = useState<Record<number, string>>({});
+  const [subExecutorIds, setSubExecutorIds] = useScopedState<Record<number, string>>(formKey, {});
   /** Исполнители, которым открыт офис, по ключу `${officeId}:${categoryId}`; нет ключа — загружаются. */
   const [executorsByKey, setExecutorsByKey] = useState<Record<string, ExecutorInCategory[]>>({});
   const requestedExecutorKeys = useRef(new Set<string>());
@@ -142,17 +142,6 @@ export function AdminAcceptRequestModal({
     [availableCategories]
   );
 
-  useEffect(() => {
-    if (!visible || !request) return;
-    setRequestType(request.request_type ?? 'normal');
-    setLocationDetail(request.location_detail ?? '');
-    setOfficeId(String(request.office_id ?? ''));
-    setSubSettings({});
-    setSubCategoryIds({});
-    setSubExecutorIds({});
-    setLocalError(null);
-  }, [visible, request]);
-
   /** Родитель грузит категории выбранного офиса: они нужны для подзаявок. */
   useEffect(() => {
     if (!visible) return;
@@ -164,22 +153,13 @@ export function AdminAcceptRequestModal({
    * Категории принадлежат офису, поэтому при смене офиса подбираем категорию
    * нового офиса по направлению заявки; своя категория офиса остаётся как есть.
    */
-  useEffect(() => {
-    if (!visible || categoriesLoading) return;
-    setSubCategoryIds(() => {
-      const next: Record<number, string> = {};
-      subRequests.forEach((sr) => {
-        const currentId = getSubRequestCategoryId(sr);
-        const keepsCurrent =
-          currentId != null && availableCategories.some((c) => c.id === currentId);
-        const matchedId = keepsCurrent
-          ? currentId
-          : matchServiceCategoryInOffice(sr.category?.name, availableCategories);
-        next[sr.id] = matchedId != null ? String(matchedId) : '';
-      });
-      return next;
-    });
-  }, [visible, availableCategories, categoriesLoading, subRequests]);
+  const categoryScope = JSON.stringify([formKey, officeId, availableCategories, categoriesLoading]);
+  const [subCategoryIds, setSubCategoryIds] = useScopedState<Record<number, string>>(categoryScope, () => Object.fromEntries(subRequests.map((sr) => {
+    const currentId = getSubRequestCategoryId(sr);
+    const keepsCurrent = currentId != null && availableCategories.some((category) => category.id === currentId);
+    const matchedId = keepsCurrent ? currentId : matchServiceCategoryInOffice(sr.category?.name, availableCategories);
+    return [sr.id, matchedId != null ? String(matchedId) : ''];
+  })));
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -197,7 +177,7 @@ export function AdminAcceptRequestModal({
   const setSubCategory = useCallback((subRequestId: number, value: string) => {
     setSubCategoryIds((prev) => ({ ...prev, [subRequestId]: value }));
     setSubExecutorIds((prev) => ({ ...prev, [subRequestId]: HAND_TO_DEPARTMENT_HEAD }));
-  }, []);
+  }, [setSubCategoryIds, setSubExecutorIds]);
 
   const officeNumericForExecutors = Number(officeId);
   const executorKeyFor = useCallback(
@@ -236,7 +216,7 @@ export function AdminAcceptRequestModal({
   const selectOffice = useCallback((value: string) => {
     setOfficeId(value);
     setSubExecutorIds({});
-  }, []);
+  }, [setOfficeId, setSubExecutorIds]);
 
   const directAssignCount = subRequests.filter((sr) => {
     const picked = subExecutorIds[sr.id];
@@ -546,8 +526,8 @@ export function AdminRejectRequestModal({
   const cardBackground = useThemeColor({}, 'cardBackground');
   const dangerColor = useThemeColor({}, 'danger');
 
-  const [reason, setReason] = useState('');
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [reason, setReason] = useScopedState(visible, '');
+  const [localError, setLocalError] = useScopedState<string | null>(visible, null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const {
@@ -562,12 +542,6 @@ export function AdminRejectRequestModal({
     onClose,
     dismissAllowed: !loading,
   });
-
-  useEffect(() => {
-    if (!visible) return;
-    setReason('');
-    setLocalError(null);
-  }, [visible]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';

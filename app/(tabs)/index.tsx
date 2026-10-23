@@ -21,7 +21,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { TasksSection } from '@/components/tasks/TasksSection';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
-import { useToast } from '@/context/toast-context';
+
 import { NEWS_ITEMS } from '@/constants/news';
 import { getNewsMain } from '@/lib/news-api';
 import type { NewsDisplayItem } from '@/lib/news-api';
@@ -33,8 +33,6 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
 
 const CARD_ORANGE = '#D94F15';
-const CARD_GREEN = '#1A9A8A';
-const TRACKER_ACTIVE_TEAL = '#1CC7A5';
 
 type AdminCardKey =
   | 'categories'
@@ -508,11 +506,10 @@ function ExecutorCabinetScreen({ hasNotifications }: { hasNotifications: boolean
 }
 
 export default function ClientDashboardScreen() {
-  const insets = useSafeAreaInsets();
+
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
-  const { show: showToast } = useToast();
 
   const [hasNotifications, setHasNotifications] = useState(false);
 

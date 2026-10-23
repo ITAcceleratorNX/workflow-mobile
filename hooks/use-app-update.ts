@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useCallback, useEffect, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import * as Updates from 'expo-updates';
 
-type UpdateState = 'idle' | 'checking' | 'available' | 'downloading' | 'applying';
+type UpdateState = 'idle' | 'downloading' | 'applying';
 
 /**
  * Проверяет наличие OTA-обновления (EAS Update) при запуске и при возврате
@@ -11,25 +12,13 @@ type UpdateState = 'idle' | 'checking' | 'available' | 'downloading' | 'applying
  */
 export function useAppUpdate() {
   const [state, setState] = useState<UpdateState>('idle');
-  const checkingRef = useRef(false);
-
-  const checkForUpdate = useCallback(async () => {
-    if (!Updates.isEnabled || checkingRef.current) return;
-    checkingRef.current = true;
-    setState('checking');
-    try {
-      const result = await Updates.checkForUpdateAsync();
-      setState(result.isAvailable ? 'available' : 'idle');
-    } catch {
-      setState('idle');
-    } finally {
-      checkingRef.current = false;
-    }
+  const fetchAvailableUpdate = useCallback(async () => {
+    try { return (await Updates.checkForUpdateAsync()).isAvailable; }
+    catch { return false; }
   }, []);
+  const { data: available, refresh: checkForUpdate } = useAsyncResource(fetchAvailableUpdate, false, Updates.isEnabled);
 
   useEffect(() => {
-    checkForUpdate();
-
     const subscription = AppState.addEventListener(
       'change',
       (next: AppStateStatus) => {
@@ -41,19 +30,19 @@ export function useAppUpdate() {
   }, [checkForUpdate]);
 
   const applyUpdate = useCallback(async () => {
-    if (state !== 'available') return;
+    if (!available || state !== 'idle') return;
     setState('downloading');
     try {
       await Updates.fetchUpdateAsync();
       setState('applying');
       await Updates.reloadAsync();
     } catch {
-      setState('available');
+      setState('idle');
     }
-  }, [state]);
+  }, [state, available]);
 
   return {
-    isAvailable: state === 'available',
+    isAvailable: available && state === 'idle',
     isApplying: state === 'downloading' || state === 'applying',
     applyUpdate,
   };

@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { formatServiceCategoryDisplayName } from '@/constants/requests';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import type { ServiceCategory } from '@/lib/api';
-import type { SubRequest } from '@/lib/api';
+import type { ServiceCategory , SubRequest } from '@/lib/api';
 
 interface RedirectModalProps {
   visible: boolean;

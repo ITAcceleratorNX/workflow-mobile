@@ -1,3 +1,4 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -386,7 +387,7 @@ export default function RequestsListScreen() {
   const [offices, setOffices] = useState<Office[]>([]);
   const tabsConfig = role ? TABS_BY_ROLE[role] ?? null : null;
   const firstTabKey = tabsConfig?.[0]?.key ?? 'all';
-  const [activeTab, setActiveTab] = useState(firstTabKey);
+  const [activeTab, setActiveTab] = useScopedState(role, firstTabKey);
   const isRejectedTab = activeTab === REJECTED_TAB;
   const isDeletionAuditTab = role === 'manager' && activeTab === DELETION_AUDIT_TAB;
   /** Pull-to-refresh на вкладке журнала перечитывает журнал. */
@@ -489,10 +490,6 @@ export default function RequestsListScreen() {
     },
     [token, role, filterStatus, filterPriority, filterOffice, filterPeriod, isGuest, guestRequests]
   );
-
-  useEffect(() => {
-    setActiveTab(tabsConfig?.[0]?.key ?? 'all');
-  }, [role]);
 
   useEffect(() => {
     if (role === 'manager' || role === 'admin-worker') {
@@ -708,24 +705,25 @@ export default function RequestsListScreen() {
       </View>
     ),
     [
-      role,
-      mutedColor,
-      borderColor,
-      primaryColor,
-      onPrimary,
-      accentSoft,
-      openCreate,
       tabsConfig,
-      activeTab,
-      filterStatus,
-      filterPriority,
-      filterOffice,
-      filterPeriod,
-      showStatusFilter,
-      statusOptions,
-      officeOptions,
-      isRejectedTab,
+      borderColor,
       isDeletionAuditTab,
+      showStatusFilter,
+      isRejectedTab,
+      filterStatus,
+      statusOptions,
+      filterPriority,
+      role,
+      filterOffice,
+      officeOptions,
+      filterPeriod,
+      openCreate,
+      onPrimary,
+      activeTab,
+      accentSoft,
+      primaryColor,
+      mutedColor,
+      setActiveTab,
     ]
   );
 

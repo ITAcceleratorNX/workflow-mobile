@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Gesture } from 'react-native-gesture-handler';
 import {
   runOnJS,
@@ -25,19 +25,15 @@ const CLOSE_VY = 520;
 export function useSheetPanDismiss({ visible, onClose, dismissAllowed = true }: Options) {
   const translateY = useSharedValue(0);
   const allowed = useSharedValue(1);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
 
-  const flushClose = useCallback(() => {
-    onCloseRef.current();
-  }, []);
+  const flushClose = useCallback(() => onClose(), [onClose]);
 
   useEffect(() => {
-    if (visible) translateY.value = 0;
+    if (visible) translateY.set(0);
   }, [visible, translateY]);
 
   useEffect(() => {
-    allowed.value = dismissAllowed ? 1 : 0;
+    allowed.set(dismissAllowed ? 1 : 0);
   }, [dismissAllowed, allowed]);
 
   const panGesture = useMemo(
@@ -46,32 +42,30 @@ export function useSheetPanDismiss({ visible, onClose, dismissAllowed = true }: 
         .activeOffsetY(10)
         .failOffsetX([-24, 24])
         .onUpdate((e) => {
-          if (allowed.value === 0) return;
+          if (allowed.get() === 0) return;
           const t = e.translationY;
-          translateY.value = t > 0 ? t : t * 0.2;
+          translateY.set(t > 0 ? t : t * 0.2);
         })
         .onEnd((e) => {
-          if (allowed.value === 0) {
-            translateY.value = withSpring(0, { damping: 26, stiffness: 260 });
+          if (allowed.get() === 0) {
+            translateY.set(withSpring(0, { damping: 26, stiffness: 260 }));
             return;
           }
-          const y = translateY.value;
+          const y = translateY.get();
           const shouldClose = y > CLOSE_Y || e.velocityY > CLOSE_VY;
           if (shouldClose) {
-            translateY.value = withTiming(OFF_SCREEN, { duration: 260 }, (finished) => {
+            translateY.set(withTiming(OFF_SCREEN, { duration: 260 }, (finished) => {
               if (finished) runOnJS(flushClose)();
-            });
+            }));
           } else {
-            translateY.value = withSpring(0, { damping: 26, stiffness: 260 });
+            translateY.set(withSpring(0, { damping: 26, stiffness: 260 }));
           }
         }),
-    // allowed / translateY — shared values, стабильны; gesture создаём один раз
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
-    [flushClose]
+    [allowed, translateY, flushClose]
   );
 
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
+    transform: [{ translateY: translateY.get() }],
   }));
 
   return { panGesture, sheetAnimatedStyle };

@@ -571,7 +571,7 @@ export interface ExecutorInCategory {
   specialty: string;
   department_id?: number;
   user?: { id: number; full_name: string; phone?: string; role?: string; office_id?: number };
-  serviceCategories?: Array<{ id: number; name: string }>;
+  serviceCategories?: { id: number; name: string }[];
   /** Офисы, на заявки которых Исполнителя можно назначить. */
   office_access?: ExecutorOfficeAccess | null;
 }
@@ -778,9 +778,9 @@ export interface SubRequest {
   sla?: string;
   created_date: string;
   executor?: { user: { id: number; full_name: string; phone?: string }; RequestExecutor?: { role: string } };
-  executors?: Array<{ user: { id: number; full_name: string; phone?: string }; RequestExecutor?: { role: string } }>;
+  executors?: { user: { id: number; full_name: string; phone?: string }; RequestExecutor?: { role: string } }[];
   is_long_term?: boolean;
-  ratings?: Array<{ rating: number; comment?: string; comments?: string[] }>;
+  ratings?: { rating: number; comment?: string; comments?: string[] }[];
   comment?: string;
   rating?: number;
   photos?: RequestPhoto[];
@@ -826,7 +826,7 @@ export interface RequestGroup {
   photos?: RequestPhoto[];
   requests: SubRequest[];
   is_long_term?: boolean;
-  clientRatings?: Array<{ id: number; rating: number; comment?: string; created_at: string }>;
+  clientRatings?: { id: number; rating: number; comment?: string; created_at: string }[];
 }
 
 /** Формы ответа бэкенда по ролям (getAllRequestGroups вызывает разные методы). */
@@ -1454,7 +1454,7 @@ export async function deleteExecutor(
 /** Назначить исполнителей на подзаявку (department-head) */
 export async function assignExecutorsToRequest(
   subRequestId: number,
-  executors: Array<{ id: number; role: 'executor' | 'leader' }>
+  executors: { id: number; role: 'executor' | 'leader' }[]
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const url = `${apiBaseUrl}/request-executors/${subRequestId}/assign`;
   const token = useAuthStore.getState().token;
@@ -1490,7 +1490,7 @@ export async function assignExecutorsToRequest(
 /** Изменить исполнителей на подзаявку (department-head) */
 export async function changeExecutorsToRequest(
     subRequestId: number,
-    executors: Array<{ id: number; role: 'executor' | 'leader' }>
+    executors: { id: number; role: 'executor' | 'leader' }[]
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await request<unknown>(
       `/request-executors/${subRequestId}/change`,
@@ -2146,13 +2146,13 @@ export interface YandexDevice {
   id: string;
   name: string;
   type: string;
-  capabilities?: Array<{
+  capabilities?: {
     type: string;
     state?: {
       instance: string;
       value: boolean;
     };
-  }>;
+  }[];
 }
 
 export interface ControlDeviceRequest {

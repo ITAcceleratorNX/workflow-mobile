@@ -1,3 +1,5 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,7 +43,6 @@ import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 import { useGuestDemoStore } from '@/stores/guest-demo-store';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 
 const ORANGE_GRADIENT = ['#F35713', '#281504'] as const;
 /** Нижний стоп градиента — тот же цвет, что `BOOKING_TAB_SCENE_UNDERLAY` в `app/(tabs)/_layout.tsx` (зона под навбаром). */
@@ -95,17 +96,15 @@ export default function BookingScreen() {
   const [selectedOffice, setSelectedOffice] = useState<any>(null);
   const [selectedRoom, setSelectedRoom] = useState<MeetingRoom | null>(null);
 
-  const [offices, setOffices] = useState<Office[]>([]);
-  const [rooms, setRooms] = useState<MeetingRoom[]>([]);
-  const [myBookings, setMyBookings] = useState<MeetingRoomBooking[]>([]);
+  const { data: offices, loading: loadingOffices, refresh: loadOffices } = useAsyncResource<Office[]>(getOffices, []);
+
+  const [serverBookings, setMyBookings] = useState<MeetingRoomBooking[]>([]);
   const [myBookingsPage, setMyBookingsPage] = useState(1);
   const [myBookingsHasMore, setMyBookingsHasMore] = useState(false);
   const [loadingMoreBookings, setLoadingMoreBookings] = useState(false);
   const [myBookingsFilter, setMyBookingsFilter] = useState<MyBookingsFilter>('active');
 
-  const [loadingOffices, setLoadingOffices] = useState(false);
-  const [loadingRooms, setLoadingRooms] = useState(false);
-  const [loadingBookings, setLoadingBookings] = useState(false);
+  const [loadingBookings, setLoadingBookings] = useState(activeTab === 'my-bookings');
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [detailsBooking, setDetailsBooking] = useState<MeetingRoomBooking | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -124,7 +123,11 @@ export default function BookingScreen() {
     removeBooking: removeGuestBooking,
   } = useGuestDemoStore();
 
-  const [roomImageFailedIds, setRoomImageFailedIds] = useState<Set<number>>(new Set());
+  const myBookings = useMemo(() => isGuest
+    ? [...guestBookings].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()) as MeetingRoomBooking[]
+    : serverBookings, [isGuest, guestBookings, serverBookings]);
+
+  const [roomImageFailedIds, setRoomImageFailedIds] = useScopedState<Set<number>>(selectedOffice?.id, () => new Set());
 
   const setHideBottomNavForBookingForm = useBookingTabUiStore(
     (s) => s.setHideBottomNavForBookingForm
@@ -138,13 +141,6 @@ export default function BookingScreen() {
       };
     }, [step, detailsBooking, setHideBottomNavForBookingForm])
   );
-
-  const loadOffices = useCallback(async () => {
-    setLoadingOffices(true);
-    const list = await getOffices();
-    setOffices(list);
-    setLoadingOffices(false);
-  }, []);
 
   const handleDetectNearestOffice = useCallback(async () => {
     if (!offices.length) return;
@@ -207,11 +203,11 @@ export default function BookingScreen() {
     }
   }, [offices, showToast]);
 
-  const loadRooms = useCallback(async (officeId: number) => {
-    setLoadingRooms(true);
-    setRoomImageFailedIds(new Set());
+  const selectedOfficeId = selectedOffice?.id as number | undefined;
+  const fetchRooms = useCallback(async () => {
+    if (selectedOfficeId == null) return [];
+    const officeId = selectedOfficeId;
     const res = await getMeetingRooms(officeId);
-    setLoadingRooms(false);
     if (res.ok) {
       const list = res.data.map((r: MeetingRoom & { photos?: string[] | string | { url?: string; src?: string }[] }) => {
         let photos: string[] = [];
@@ -235,9 +231,11 @@ export default function BookingScreen() {
         }
         return { ...r, photos };
       });
-      setRooms(list);
-    } else setRooms([]);
-  }, []);
+      return list;
+    }
+    return [];
+  }, [selectedOfficeId]);
+  const { data: rooms, loading: loadingRooms, refresh: loadRooms } = useAsyncResource<MeetingRoom[]>(fetchRooms, [], selectedOfficeId != null);
 
   const PAGE_SIZE = 20;
 
@@ -314,7 +312,7 @@ export default function BookingScreen() {
 
       // activeTab === 'book'
       if (selectedOffice?.id) {
-        await loadRooms(selectedOffice.id);
+        await loadRooms();
       } else {
         await loadOffices();
       }
@@ -330,23 +328,34 @@ export default function BookingScreen() {
     loadOffices,
   ]);
 
+  const bookingsScope = JSON.stringify([activeTab, myBookingsFilter, isGuest, guestBookings]);
+  const [previousBookingsScope, setPreviousBookingsScope] = useState(bookingsScope);
+  if (previousBookingsScope !== bookingsScope) {
+    setPreviousBookingsScope(bookingsScope);
+    setLoadingBookings(activeTab === 'my-bookings' && !isGuest);
+    setLoadingMoreBookings(false); setMyBookings([]); setMyBookingsPage(1); setMyBookingsHasMore(false);
+  }
   useEffect(() => {
-    loadOffices();
-  }, [loadOffices]);
-
-  useEffect(() => {
-    if (activeTab === 'my-bookings') loadMyBookings(myBookingsFilter, 1, false);
-  }, [activeTab, myBookingsFilter, loadMyBookings]);
+    const sequence = ++myBookingsLoadSeqRef.current;
+    if (activeTab !== 'my-bookings' || isGuest) return;
+    let cancelled = false;
+    void getMyBookings({ status: myBookingsFilter, page: 1, pageSize: PAGE_SIZE }).then((res) => {
+      if (cancelled || sequence !== myBookingsLoadSeqRef.current) return;
+      setLoadingBookings(false);
+      if (res.ok) {
+        setMyBookings(res.data); setMyBookingsPage(res.page); setMyBookingsHasMore(res.hasMore);
+      } else {
+        showToast({ title: 'Не удалось загрузить бронирования', description: res.error, variant: 'destructive', duration: 4500 });
+      }
+    });
+    return () => { cancelled = true; myBookingsLoadSeqRef.current += 1; };
+  }, [activeTab, myBookingsFilter, isGuest, showToast]);
 
   useEffect(() => {
     if (highlightBookingId == null) return;
     const timer = setTimeout(() => setHighlightBookingId(null), 3200);
     return () => clearTimeout(timer);
   }, [highlightBookingId]);
-
-  useEffect(() => {
-    if (selectedOffice) loadRooms(selectedOffice.id);
-  }, [selectedOffice?.id, loadRooms]);
 
   const goBack = useCallback(() => {
     if (step === 'form') {

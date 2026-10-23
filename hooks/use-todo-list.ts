@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import { useScopedState } from '@/hooks/use-scoped-state';
+import { useMemo, useRef, useEffect, useCallback } from 'react';
 
 import {
   getUserTasks,
@@ -116,23 +117,24 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
   const query = useMemo(() => JSON.parse(signature) as UseTodoListQuery, [signature]);
   const enabled = query.enabled !== false;
 
-  const [tasks, setTasks] = useState<UserTask[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const token = useAuthStore((s) => s.token);
   const isGuest = useAuthStore((s) => s.isGuest);
+  const scopeKey = JSON.stringify([signature, token, isGuest]);
+
+  const [tasks, setTasks] = useScopedState<UserTask[]>(scopeKey, []);
+  const [total, setTotal] = useScopedState(scopeKey, 0);
+  const [page, setPage] = useScopedState(scopeKey, 1);
+  const [totalPages, setTotalPages] = useScopedState(scopeKey, 0);
+  const [loading, setLoading] = useScopedState(scopeKey, enabled && !!token && !isGuest);
+  const [loadingMore, setLoadingMore] = useScopedState(scopeKey, false);
+  const [error, setError] = useScopedState<string | null>(scopeKey, null);
+
   const version = useUserTasksInvalidateStore((s) => s.version);
   const bump = useUserTasksInvalidateStore((s) => s.bump);
   const { show: showToast } = useToast();
 
   // Each query/auth change owns its responses. A replacement refresh also invalidates
   // pending pagination so an older page cannot be appended to a newly sorted list.
-  const scopeKey = JSON.stringify([signature, token, isGuest]);
   const requestScope = useRef({ key: scopeKey, active: true, generation: 0, loadingMore: false });
   useEffect(() => {
     requestScope.current = { key: scopeKey, active: true, generation: requestScope.current.generation + 1, loadingMore: false };
@@ -148,10 +150,10 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
     const generation = append ? requestScope.current.generation : ++requestScope.current.generation;
     if (!append) {
       requestScope.current.loadingMore = false;
-      setLoadingMore(false);
     }
     const res = await getUserTasks(toApiParams(query, pageNum));
     if (!requestScope.current.active || requestScope.current.key !== scopeKey || requestScope.current.generation !== generation) return null;
+    if (!append) setLoadingMore(false);
     if (res.ok) {
       setTotal(res.data.total);
       setPage(res.data.page);
@@ -163,7 +165,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
       });
     }
     return res;
-  }, [token, isGuest, enabled, query, scopeKey]);
+  }, [scopeKey, token, isGuest, enabled, query, setLoadingMore, setTotal, setPage, setTotalPages, setTasks]);
 
   const refresh = useCallback(async (reset = false) => {
     if (reset) {
@@ -188,14 +190,26 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
     if (!res) return;
     setLoading(false);
     if (!res.ok) setError(res.error);
-  }, [token, isGuest, enabled, fetchPage]);
+  }, [
+    enabled,
+    token,
+    isGuest,
+    setLoading,
+    setError,
+    fetchPage,
+    setTasks,
+    setTotal,
+    setPage,
+    setTotalPages,
+    setLoadingMore,
+  ]);
 
   const silentRefresh = useCallback(async () => {
     const res = await fetchPage(1, false);
     if (!res) return;
     setLoading(false);
     setError(res.ok ? null : res.error);
-  }, [fetchPage]);
+  }, [fetchPage, setError, setLoading]);
 
   const loadMore = useCallback(async () => {
     if (!enabled || !token || isGuest || loading || requestScope.current.key !== scopeKey || requestScope.current.loadingMore || !hasMore) return;
@@ -208,9 +222,9 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
     if (!res.ok) {
       showToast({ title: "Не удалось загрузить задачи", description: res.error, variant: "destructive", duration: 4000 });
     }
-  }, [enabled, token, isGuest, loading, hasMore, fetchPage, page, scopeKey, showToast]);
+  }, [enabled, token, isGuest, loading, scopeKey, hasMore, setLoadingMore, fetchPage, page, showToast]);
 
-  useEffect(() => { void refresh(true); }, [refresh]);
+  useEffect(() => { void silentRefresh(); }, [silentRefresh]);
 
   const previousVersion = useRef(version);
   useEffect(() => {
@@ -338,7 +352,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
       showToast({ title: 'Не удалось создать задачу', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
     },
-    [token, isGuest, bump, nextTempId, showToast, nowIso, scopeKey]
+    [token, isGuest, nextTempId, nowIso, setTasks, scopeKey, showToast, bump]
   );
 
   const toggleComplete = useCallback(
@@ -369,7 +383,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
       if (requestScope.current.active && requestScope.current.key === scopeKey) setTasks(before);
       showToast({ title: 'Не удалось обновить задачу', description: res.error, variant: 'destructive', duration: 4000 });
     },
-    [token, isGuest, bump, showToast, scopeKey]
+    [token, isGuest, setTasks, scopeKey, showToast, bump]
   );
 
   /** true — сервер подтвердил удаление; false — задача осталась, пользователь увидел причину. */
@@ -396,7 +410,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
       showToast({ title: 'Не удалось удалить задачу', description: res.error, variant: 'destructive', duration: 4000 });
       return false;
     },
-    [token, isGuest, bump, showToast, scopeKey]
+    [token, isGuest, setTasks, scopeKey, showToast, bump]
   );
 
   const updateTask = useCallback(
@@ -443,7 +457,7 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
       showToast({ title: 'Не удалось сохранить изменения', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
     },
-    [token, isGuest, bump, showToast, scopeKey]
+    [token, isGuest, setTasks, scopeKey, showToast, bump]
   );
 
   return {

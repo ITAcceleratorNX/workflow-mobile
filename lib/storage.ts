@@ -44,17 +44,6 @@ const webStorage = {
   },
 };
 
-const memoryStorage = {
-  getItem: async (name: string): Promise<string | null> =>
-    memoryStore[name] ?? null,
-  setItem: async (name: string, value: string): Promise<void> => {
-    memoryStore[name] = value;
-  },
-  removeItem: async (name: string): Promise<void> => {
-    delete memoryStore[name];
-  },
-};
-
 async function safeAsyncStorageGet(name: string): Promise<string | null> {
   try {
     return await AsyncStorage.getItem(name);

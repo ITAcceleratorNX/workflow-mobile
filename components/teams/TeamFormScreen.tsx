@@ -1,3 +1,4 @@
+import { useUserSearch } from '@/hooks/use-user-search';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -20,7 +21,7 @@ import { AssignUserSearchFilters } from '@/components/tasks/assign-user-search-f
 import { ScreenHeader } from '@/components/ui';
 import { useAssignUserSearchScope } from '@/hooks/use-assign-user-search-scope';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { normalizeUserSearchItem, searchUsersForAssign, type UserSearchItem } from '@/lib/api';
+import { normalizeUserSearchItem, type UserSearchItem } from '@/lib/api';
 import { formatUserSearchLabel } from '@/lib/user-search-display';
 import { bumpTeamsCache, createTeam, deleteTeam, getTeam, updateTeam } from '@/lib/teams-api';
 import { useAuthStore } from '@/stores/auth-store';
@@ -55,12 +56,8 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
   const [members, setMembers] = useState<Person[]>([]);
 
   const [leaderSearch, setLeaderSearch] = useState('');
-  const [leaderResults, setLeaderResults] = useState<UserSearchItem[]>([]);
-  const [leaderSearching, setLeaderSearching] = useState(false);
 
   const [memberSearch, setMemberSearch] = useState('');
-  const [memberResults, setMemberResults] = useState<UserSearchItem[]>([]);
-  const [memberSearching, setMemberSearching] = useState(false);
 
   const assignSearch = useAssignUserSearchScope();
 
@@ -95,35 +92,9 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
     };
   }, [isEdit, teamId, router, show]);
 
-  useEffect(() => {
-    const q = leaderSearch.trim();
-    if (q.length < 2) {
-      setLeaderResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      setLeaderSearching(true);
-      const res = await searchUsersForAssign(q, assignSearch.searchOptions);
-      setLeaderSearching(false);
-      if (res.ok) setLeaderResults(res.data);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [leaderSearch, assignSearch.searchOptions]);
+  const { results: leaderResults, searching: leaderSearching } = useUserSearch(leaderSearch, assignSearch.searchOptions);
 
-  useEffect(() => {
-    const q = memberSearch.trim();
-    if (q.length < 2) {
-      setMemberResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      setMemberSearching(true);
-      const res = await searchUsersForAssign(q, assignSearch.searchOptions);
-      setMemberSearching(false);
-      if (res.ok) setMemberResults(res.data);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [memberSearch, assignSearch.searchOptions]);
+  const { results: memberResults, searching: memberSearching } = useUserSearch(memberSearch, assignSearch.searchOptions);
 
   const memberIdsForSubmit = useMemo(() => {
     const ids = new Set<number>();
@@ -151,7 +122,6 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
     setLeader({ id: n.id, full_name: n.full_name });
     setMembers((prev) => prev.filter((p) => p.id !== n.id));
     setLeaderSearch('');
-    setLeaderResults([]);
   }, []);
 
   const addMember = useCallback(
@@ -162,7 +132,6 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setMembers((prev) => [...prev, { id: n.id, full_name: n.full_name }]);
       setMemberSearch('');
-      setMemberResults([]);
     },
     [leader, members]
   );

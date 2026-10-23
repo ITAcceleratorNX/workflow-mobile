@@ -370,7 +370,7 @@ export async function getUserTaskAttachments(
 
 export async function uploadUserTaskAttachments(
   taskId: number,
-  files: Array<{ uri: string; name: string; type?: string }>
+  files: { uri: string; name: string; type?: string }[]
 ): Promise<{ ok: true; data: UserTaskAttachment[] } | { ok: false; error: string }> {
   const formData = new FormData();
   files.forEach((f) => {

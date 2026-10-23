@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -9,9 +10,9 @@ import { NewsReactionsRow } from '@/components/news/news-reactions-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { getNewsById, recordNewsView } from '@/lib/news-api';
-import type { NewsReactionCounts, NewsReactionKind } from '@/lib/news-reactions';
-import { emptyReactionCounts, normalizeReactionCounts } from '@/lib/news-reactions';
+import { getNewsById, recordNewsView, type NewsDisplayItem } from '@/lib/news-api';
+
+import { normalizeReactionCounts } from '@/lib/news-reactions';
 import { useAuthStore } from '@/stores/auth-store';
 
 export default function NewsDetailScreen() {
@@ -25,50 +26,22 @@ export default function NewsDetailScreen() {
   const primary = useThemeColor({}, 'primary');
   const cardBg = useThemeColor({}, 'cardBackground');
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [title, setTitle] = useState('');
-  const [tag, setTag] = useState('');
-  const [desc, setDesc] = useState('');
-  const [image, setImage] = useState<string | null>(null);
-  const [dateLabel, setDateLabel] = useState<string | null>(null);
-  const [reactionCounts, setReactionCounts] = useState<NewsReactionCounts>(() => emptyReactionCounts());
-  const [myReaction, setMyReaction] = useState<NewsReactionKind | null>(null);
   const numericNewsId = id && Number.isFinite(Number(id)) ? Number(id) : null;
 
   const token = useAuthStore((s) => s.token);
   const canReact = typeof token === 'string' && token.length > 0 && token !== 'guest-demo';
 
   const load = useCallback(async () => {
-    if (!id) return;
-    const numericId = Number(id);
-    if (!Number.isFinite(numericId)) {
-      setError('Новость не найдена');
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    const result = await getNewsById(numericId);
-    if (!result.ok) {
-      setError(result.error);
-      setLoading(false);
-      return;
-    }
-    const item = result.data;
-    setTitle(item.title);
-    setTag(item.tag);
-    setDesc(item.desc);
-    setImage(item.image || null);
-    setDateLabel(item.date ?? null);
-    setReactionCounts(normalizeReactionCounts(item.reaction_counts));
-    setMyReaction(item.my_reaction ?? null);
-    setLoading(false);
-  }, [id]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+    if (numericNewsId == null) throw new Error('Новость не найдена');
+    const result = await getNewsById(numericNewsId);
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+  }, [numericNewsId]);
+  const { data: item, setData: setItem, loading, error } = useAsyncResource<NewsDisplayItem | null>(load, null);
+  const title = item?.title ?? '', tag = item?.tag ?? '', desc = item?.desc ?? '';
+  const image = item?.image ?? null, dateLabel = item?.date ?? null;
+  const reactionCounts = normalizeReactionCounts(item?.reaction_counts);
+  const myReaction = item?.my_reaction ?? null;
 
   useEffect(() => {
     if (numericNewsId == null || !canReact) return;
@@ -135,8 +108,7 @@ export default function NewsDetailScreen() {
                 canInteract={canReact}
                 centered
                 onUpdated={(p) => {
-                  setReactionCounts(p.reaction_counts);
-                  setMyReaction(p.my_reaction);
+                  setItem((previous) => previous ? { ...previous, ...p } : previous);
                 }}
               />
             ) : null}

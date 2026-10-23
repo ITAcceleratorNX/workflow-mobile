@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,25 +22,18 @@ export default function AdminWorkerStatisticsScreen() {
   const danger = useThemeColor({}, 'danger');
   const warning = useThemeColor({}, 'warning');
 
-  const [stats, setStats] = useState<AdminWorkerStats | null>(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
+  const fetchStats = useCallback(async () => {
+    const result = await getAdminWorkerStats();
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+  }, []);
+  const { data: stats, loading, error, refresh } = useAsyncResource<AdminWorkerStats | null>(fetchStats, null);
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    const result = await getAdminWorkerStats();
-    if (result.ok) setStats(result.data);
-    else setError(result.error);
-    setLoading(false);
-    setRefreshing(false);
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+    try { await refresh(); } finally { setRefreshing(false); }
+  }, [refresh]);
 
   const onRefresh = useCallback(() => {
     load(true);

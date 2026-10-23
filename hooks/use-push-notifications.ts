@@ -283,7 +283,7 @@ export function usePushNotifications(): void {
       void navigateFromPushDataNonTask(data);
     });
     return () => sub.remove();
-  }, [handleTaskReminderResponse, navigateFromPushDataNonTask]);
+  }, [handleFcmNotificationOpen, handleTaskReminderResponse, navigateFromPushDataNonTask]);
 
   /**
    * FCM с блоком «notification»: на Android тап часто приходит через RN Firebase, а не через Expo —

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { FullWindowOverlay } from 'react-native-screens';
@@ -19,42 +19,43 @@ interface ToastContextType {
 const ToastContext = createContext<ToastContextType | null>(null);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  const [animations] = useState<Map<string, Animated.Value>>(new Map());
-
-  const show = useCallback((toast: Omit<Toast, 'id'>) => {
-    const id = Math.random().toString(36).substring(7);
-    const newToast: Toast = { id, duration: 3000, ...toast };
-
-    animations.set(id, new Animated.Value(0));
-
-    setToasts((prev) => [...prev, newToast]);
-
-    Animated.timing(animations.get(id)!, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-
-    if (newToast.duration && newToast.duration > 0) {
-      setTimeout(() => {
-        hide(id);
-      }, newToast.duration);
-    }
-  }, []);
+  const [toasts, setToasts] = useState<(Toast & { animation: Animated.Value })[]>([]);
+  const animations = useRef(new Map<string, Animated.Value>());
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const nextId = useRef(0);
 
   const hide = useCallback((id: string) => {
-    const anim = animations.get(id);
-    if (anim) {
-      Animated.timing(anim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-        animations.delete(id);
-      });
-    }
+    const timer = timers.current.get(id);
+    if (timer) clearTimeout(timer);
+    timers.current.delete(id);
+    const animation = animations.current.get(id);
+    if (!animation) return;
+    Animated.timing(animation, { toValue: 0, duration: 300, useNativeDriver: true }).start(({ finished }) => {
+      if (!finished) return;
+      animations.current.delete(id);
+      setToasts((previous) => previous.filter((toast) => toast.id !== id));
+    });
+  }, []);
+
+  const show = useCallback((toast: Omit<Toast, 'id'>) => {
+    const id = String(++nextId.current);
+    const animation = new Animated.Value(0);
+    const entry = { ...toast, id, duration: toast.duration ?? 3000, animation };
+    animations.current.set(id, animation);
+    setToasts((previous) => [...previous, entry]);
+    Animated.timing(animation, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    if (entry.duration > 0) timers.current.set(id, setTimeout(() => hide(id), entry.duration));
+  }, [hide]);
+
+  useEffect(() => {
+    const activeTimers = timers.current;
+    const activeAnimations = animations.current;
+    return () => {
+      activeTimers.forEach(clearTimeout);
+      activeTimers.clear();
+      activeAnimations.forEach((animation) => animation.stopAnimation());
+      activeAnimations.clear();
+    };
   }, []);
 
   const getToastColor = (variant?: string) => {
@@ -86,7 +87,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         <FullWindowOverlay>
           <View style={styles.modalRoot} pointerEvents="box-none">
             {toasts.map((toast) => {
-              const anim = animations.get(toast.id);
+              const anim = toast.animation;
               const backgroundColor = getToastColor(toast.variant);
               const icon = getToastIcon(toast.variant);
 

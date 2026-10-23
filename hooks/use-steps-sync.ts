@@ -38,5 +38,14 @@ export function useStepsSync() {
     sync();
 
     return () => clearInterval(intervalId);
-  }, [token, stepsToday, lastStepsDate, todayKey, settings.goalSteps, settings.noActivityIntervalHours, settings.stepsNotificationsEnabled]);
+  }, [
+    token,
+    stepsToday,
+    lastStepsDate,
+    todayKey,
+    settings.goalSteps,
+    settings.noActivityIntervalHours,
+    settings.stepsNotificationsEnabled,
+    isGuest,
+  ]);
 }

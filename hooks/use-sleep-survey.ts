@@ -33,13 +33,6 @@ export function useSleepSurvey() {
   }, []);
 
   useEffect(() => {
-    if (forceShowSurvey) {
-      setVisible(true);
-      clearForceShowSurvey();
-    }
-  }, [forceShowSurvey, clearForceShowSurvey]);
-
-  useEffect(() => {
     const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
       if (state === 'active') checkAndShow();
     });
@@ -52,7 +45,7 @@ export function useSleepSurvey() {
   }, [checkAndShow]);
 
   const show = useCallback(() => setVisible(true), []);
-  const hide = useCallback(() => setVisible(false), []);
+  const hide = useCallback(() => { setVisible(false); clearForceShowSurvey(); }, [clearForceShowSurvey]);
 
-  return { visible, show, hide };
+  return { visible: visible || forceShowSurvey, show, hide };
 }

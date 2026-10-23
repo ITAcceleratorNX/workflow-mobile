@@ -152,7 +152,7 @@ export function formatRecurrenceSummaryRu(
       return 'Каждый будний день (Пн - Пт)';
     case 'monthly': {
       if (anchor) {
-        const [_, __, dS] = anchor.split('-');
+        const [, , dS] = anchor.split('-');
         const d = parseInt(dS ?? '1', 10) || 1;
         return `Каждый месяц ${d} числа`;
       }

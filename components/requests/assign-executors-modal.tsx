@@ -1,5 +1,6 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+
 import {
   Modal,
   Pressable,
@@ -39,7 +40,7 @@ interface SelectedExecutor {
 interface AssignExecutorsModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (executors: Array<{ id: number; role: 'executor' | 'leader' }>) => Promise<void>;
+  onSubmit: (executors: { id: number; role: 'executor' | 'leader' }[]) => Promise<void>;
   subRequest: SubRequest | null;
   executors: ExecutorInCategory[];
   executorsLoading?: boolean;
@@ -59,8 +60,8 @@ export function AssignExecutorsModal({
 }: AssignExecutorsModalProps) {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
-  const [selected, setSelected] = useState<SelectedExecutor[]>([]);
-  const [newExecutorId, setNewExecutorId] = useState('');
+  const [selected, setSelected] = useScopedState<SelectedExecutor[]>(JSON.stringify([visible, subRequest?.id]), []);
+  const [newExecutorId, setNewExecutorId] = useScopedState(JSON.stringify([visible, subRequest?.id]), '');
 
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -68,13 +69,6 @@ export function AssignExecutorsModal({
   const cardBackground = useThemeColor({}, 'cardBackground');
   const surfaceMuted = useThemeColor({}, 'surfaceMuted');
   const primary = useThemeColor({}, 'primary');
-
-  useEffect(() => {
-    if (!visible) {
-      setSelected([]);
-      setNewExecutorId('');
-    }
-  }, [visible]);
 
   const availableExecutors = executors.filter(
     (e) => !selected.some((s) => s.id === e.id)

@@ -111,7 +111,6 @@ export function getRequestActions(params: GetActionsParams): ActionItem[] {
     request,
     subRequest,
     userRole,
-    userServiceCategoryId,
     userId,
     isExecutorLeader,
     onShare,

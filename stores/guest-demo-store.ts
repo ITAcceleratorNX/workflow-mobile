@@ -1,14 +1,13 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import type { MeetingRoomBooking, RequestGroup, SubRequest } from '@/lib/api';
+import type { MeetingRoomBooking, RequestGroup } from '@/lib/api';
 import { persistStorage } from '@/lib/storage';
 
-export interface GuestDemoBooking
-  extends Pick<
+export type GuestDemoBooking = Pick<
     MeetingRoomBooking,
     'id' | 'meeting_room_id' | 'start_time' | 'end_time' | 'status' | 'company_name' | 'meetingRoom'
-  > {}
+  >;
 
 export interface GuestDemoRequest
   extends Pick<

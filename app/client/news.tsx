@@ -59,7 +59,6 @@ export default function NewsScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     getNewsAll().then((res) => {
       if (cancelled) return;
       if (res.ok) setNewsList(res.data);

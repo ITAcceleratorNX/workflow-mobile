@@ -1,3 +1,4 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -53,7 +54,7 @@ export default function ProfileScreen() {
   const success = useThemeColor({}, 'success');
   const { show: showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<ProfileTab>('profile');
+  const [activeTab, setActiveTab] = useScopedState<ProfileTab>(role, 'profile');
 
   // Profile tab state
   const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
@@ -86,15 +87,6 @@ export default function ProfileScreen() {
     setShownSavedEmail(user?.email);
     setEmail(user?.email ?? '');
   }
-
-  useEffect(() => {
-    if (
-      activeTab === 'logs' &&
-      (!role || !['admin-worker', 'department-head', 'manager'].includes(role))
-    ) {
-      setActiveTab('profile');
-    }
-  }, [activeTab, role]);
 
   useEffect(() => {
     if (!user) {

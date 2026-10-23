@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -77,7 +77,7 @@ export default function AdminWorkerNewsEditorScreen() {
   const editingIsScheduled = mode === 'edit' && editingId != null && params.status === 'scheduled';
   const showPublishSchedule = mode === 'create' || editingIsScheduled;
 
-  const initialScheduledAt = useMemo(() => {
+  const [initialScheduledAt] = useState(() => {
     let d: Date;
     if (typeof params.publishedAt === 'string' && params.publishedAt.length > 0) {
       const parsed = new Date(params.publishedAt);
@@ -86,7 +86,7 @@ export default function AdminWorkerNewsEditorScreen() {
       d = new Date(Date.now() + 60 * 60 * 1000);
     }
     return clampNewsScheduleDate(d);
-  }, [params.publishedAt]);
+  });
 
   const [form, setForm] = useState<FormState>(() => ({
     title: typeof params.title === 'string' ? params.title : '',
@@ -101,12 +101,6 @@ export default function AdminWorkerNewsEditorScreen() {
   const [androidPickerVisible, setAndroidPickerVisible] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (publishMode === 'schedule') {
-      setScheduledAt((prev) => clampNewsScheduleDate(prev));
-    }
-  }, [publishMode]);
 
   const headerTitle = useMemo(() => (mode === 'edit' ? 'Редактировать новость' : 'Новая новость'), [mode]);
 
@@ -291,7 +285,10 @@ export default function AdminWorkerNewsEditorScreen() {
                     { backgroundColor: surfaceMuted, borderColor: border },
                     publishMode === 'schedule' && { backgroundColor: primary, borderColor: primary },
                   ]}
-                  onPress={() => setPublishMode('schedule')}
+                  onPress={() => {
+                    setScheduledAt((previous) => clampNewsScheduleDate(previous));
+                    setPublishMode('schedule');
+                  }}
                 >
                   <ThemedText
                     style={styles.radioLabel}

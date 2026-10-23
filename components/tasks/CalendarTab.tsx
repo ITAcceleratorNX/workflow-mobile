@@ -56,6 +56,57 @@ interface CalendarTabProps {
   contentBottomInset?: number;
 }
 
+function CalendarTaskToggle({ task, isToggling, textMuted, toggleComplete }: {
+  task: CalendarTask; isToggling: boolean; textMuted: string; toggleComplete: (task: CalendarTask) => Promise<void>;
+}) {
+  const [scale] = useState(() => new Animated.Value(1));
+  const animateToggleCheck = () => {
+      scale.setValue(0.86);
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.12,
+          duration: 120,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.spring(scale, {
+          toValue: 1,
+          speed: 20,
+          bounciness: 10,
+          useNativeDriver: true,
+        }),
+      ]).start();
+  };
+      return (
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation();
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            if (!task.completed) animateToggleCheck();
+            void toggleComplete(task);
+          }}
+          disabled={isToggling}
+          hitSlop={8}
+          style={styles.taskToggleBtn}
+        >
+          <Animated.View style={{ transform: [{ scale }] }}>
+            <View
+              style={[
+                styles.taskToggleCircle,
+                {
+                  borderColor: task.completed ? CHECK_ORANGE : textMuted,
+                  backgroundColor: task.completed ? CHECK_ORANGE : 'transparent',
+                  opacity: isToggling ? 0.7 : 1,
+                },
+              ]}
+            >
+              {task.completed ? <MaterialIcons name="check" size={14} color="#FFFFFF" /> : null}
+            </View>
+          </Animated.View>
+        </Pressable>
+      );
+}
+
 export function CalendarTab({
   selectedDate,
   onSelectedDateChange,
@@ -144,76 +195,10 @@ export function CalendarTab({
 
   const dayScrollRef = useRef<ScrollView>(null);
   const hourRowYRef = useRef<number[]>([]);
-  const toggleScaleMapRef = useRef<Record<number, Animated.Value>>({});
 
   const onHourRowLayout = useCallback((hour: number, e: LayoutChangeEvent) => {
     hourRowYRef.current[hour] = e.nativeEvent.layout.y;
   }, []);
-
-  const getToggleScale = useCallback((taskId: number) => {
-    if (!toggleScaleMapRef.current[taskId]) {
-      toggleScaleMapRef.current[taskId] = new Animated.Value(1);
-    }
-    return toggleScaleMapRef.current[taskId];
-  }, []);
-
-  const animateToggleCheck = useCallback(
-    (taskId: number) => {
-      const scale = getToggleScale(taskId);
-      scale.setValue(0.86);
-      Animated.sequence([
-        Animated.timing(scale, {
-          toValue: 1.12,
-          duration: 120,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.spring(scale, {
-          toValue: 1,
-          speed: 20,
-          bounciness: 10,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    },
-    [getToggleScale]
-  );
-
-  const renderTaskToggle = useCallback(
-    (task: CalendarTask) => {
-      const isToggling = togglingTaskIds.includes(task.id);
-      const scale = getToggleScale(task.id);
-      return (
-        <Pressable
-          onPress={(event) => {
-            event.stopPropagation();
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            if (!task.completed) animateToggleCheck(task.id);
-            void toggleComplete(task);
-          }}
-          disabled={isToggling}
-          hitSlop={8}
-          style={styles.taskToggleBtn}
-        >
-          <Animated.View style={{ transform: [{ scale }] }}>
-            <View
-              style={[
-                styles.taskToggleCircle,
-                {
-                  borderColor: task.completed ? CHECK_ORANGE : textMuted,
-                  backgroundColor: task.completed ? CHECK_ORANGE : 'transparent',
-                  opacity: isToggling ? 0.7 : 1,
-                },
-              ]}
-            >
-              {task.completed ? <MaterialIcons name="check" size={14} color="#FFFFFF" /> : null}
-            </View>
-          </Animated.View>
-        </Pressable>
-      );
-    },
-    [animateToggleCheck, getToggleScale, toggleComplete, togglingTaskIds, textMuted]
-  );
 
   // Прокрутка к первому часу с задачами. `tasks` намеренно не в зависимостях:
   // иначе отметка или создание задачи сбрасывали бы прокрутку пользователя.
@@ -306,7 +291,7 @@ export function CalendarTab({
                       >
                         {task.title}
                       </ThemedText>
-                      {renderTaskToggle(task)}
+                      <CalendarTaskToggle task={task} isToggling={togglingTaskIds.includes(task.id)} textMuted={textMuted} toggleComplete={toggleComplete} />
                     </View>
                     <View style={styles.taskChipMeta}>
                       <ThemedText style={[styles.taskChipTime, { color: task.completed ? '#CBD5E1' : textMuted }]}>
@@ -349,7 +334,7 @@ export function CalendarTab({
                 >
                   {task.title}
                 </ThemedText>
-                {renderTaskToggle(task)}
+                <CalendarTaskToggle task={task} isToggling={togglingTaskIds.includes(task.id)} textMuted={textMuted} toggleComplete={toggleComplete} />
               </View>
               <ThemedText style={[styles.weekTaskTime, { color: textMuted }]}>
                 {formatTaskTime(task.scheduled_at)} • {toAppDateKey(task.scheduled_at)}

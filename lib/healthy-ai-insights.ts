@@ -151,13 +151,6 @@ function energyScore(e: EnergyLevel | string): number {
   return 1;
 }
 
-function ratingToScore(r: SleepRating | undefined | null): number | null {
-  if (!r) return null;
-  if (r === 'good') return 2;
-  if (r === 'ok') return 1;
-  return 0;
-}
-
 function sleepMinutesScore(minutes: number | null, goal: number): number | null {
   if (minutes == null || goal <= 0) return null;
   const ratio = minutes / goal;
@@ -664,7 +657,6 @@ function buildMonth(input: HealthyInsightInput, seed: number): HealthyInsightRes
   const stepsVals7 = keysLastNDays(7).map((k) => stepsByDate.get(k) ?? 0);
   const stepsActiveDays = stepsVals7.filter((s) => s > 500).length;
 
-  const dataPoints = moodMonth.length + ratingsMonth.length + (input.avgSleep7DaysMinutes != null ? 2 : 0);
   const lowData = moodMonth.length < 5 && ratingsMonth.length < 4;
 
   const missing: string[] = [];

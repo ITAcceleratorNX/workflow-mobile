@@ -160,6 +160,7 @@ export function useStepsReminders() {
     markAlmostGoalSent,
     markNoActivitySent,
     canSendNoActivity,
+    isGuest,
   ]);
 
   return null;

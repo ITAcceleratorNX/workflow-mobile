@@ -18,5 +18,6 @@ export function useSleepNotifications() {
     settings.wakeHour,
     settings.wakeMinute,
     settings.notificationsEnabled,
+    settings,
   ]);
 }

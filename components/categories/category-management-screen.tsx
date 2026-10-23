@@ -1,3 +1,4 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -46,28 +47,14 @@ function subcategoryCountLabel(count: number): string {
 }
 
 function useCategories(officeId: number | null) {
-  const [list, setList] = useState<ServiceCategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetch = useCallback(async () => {
-    if (officeId == null) {
-      setList([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
+  const fetchCategories = useCallback(async () => {
+    if (officeId == null) return [];
     const result = await getServiceCategories(officeId);
-    if (result.ok) setList(result.data);
-    else setError(result.error);
-    setLoading(false);
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
   }, [officeId]);
-
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
+  const { data: list, loading, error, refresh: fetch } = useAsyncResource(fetchCategories, [], officeId != null);
 
   return { categories: list, loading, error, refetch: fetch };
 }

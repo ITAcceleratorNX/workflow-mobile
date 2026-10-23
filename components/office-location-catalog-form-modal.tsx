@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useScopedState } from '@/hooks/use-scoped-state';
+import { useRef } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -46,24 +47,16 @@ export function OfficeLocationCatalogFormModal({
   const primary = useThemeColor({}, 'primary');
   const onPrimary = useThemeColor({}, 'onPrimary');
 
-  const [block, setBlock] = useState('');
-  const [floorZone, setFloorZone] = useState('');
-  const [room, setRoom] = useState('');
-  const [sortOrder, setSortOrder] = useState('0');
-  const [localError, setLocalError] = useState<string | null>(null);
+  const formKey = JSON.stringify([visible, defaultBlock, defaultFloorZone, defaultRoom, defaultSortOrder]);
+  const [block, setBlock] = useScopedState(formKey, defaultBlock);
+  const [floorZone, setFloorZone] = useScopedState(formKey, defaultFloorZone);
+  const [room, setRoom] = useScopedState(formKey, defaultRoom);
+  const [sortOrder, setSortOrder] = useScopedState(formKey, String(defaultSortOrder));
+  const [localError, setLocalError] = useScopedState<string | null>(formKey, null);
 
   const floorRef = useRef<TextInput>(null);
   const roomRef = useRef<TextInput>(null);
   const sortRef = useRef<TextInput>(null);
-
-  useEffect(() => {
-    if (!visible) return;
-    setBlock(defaultBlock);
-    setFloorZone(defaultFloorZone);
-    setRoom(defaultRoom);
-    setSortOrder(String(defaultSortOrder ?? 0));
-    setLocalError(null);
-  }, [visible, defaultBlock, defaultFloorZone, defaultRoom, defaultSortOrder]);
 
   const title = mode === 'create' ? 'Новый шаблон' : 'Редактирование';
 

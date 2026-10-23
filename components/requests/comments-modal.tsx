@@ -1,5 +1,7 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -70,32 +72,17 @@ export function CommentsModal({
   const primary = useThemeColor({}, 'primary');
   const onPrimary = useThemeColor({}, 'onPrimary');
 
-  const [comments, setComments] = useState<RequestComment[]>([]);
-  const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
-  const [draft, setDraft] = useState('');
-  const [editCommentId, setEditCommentId] = useState<number | null>(null);
+  const [draft, setDraft] = useScopedState(JSON.stringify([visible, requestId]), '');
+  const [editCommentId, setEditCommentId] = useScopedState<number | null>(JSON.stringify([visible, requestId]), null);
 
-  const loadComments = useCallback(async () => {
-    if (!requestId) return;
-    setLoading(true);
+  const fetchComments = useCallback(async () => {
+    if (!requestId) return [];
     const res = await getRequestComments(requestId);
-    if (res.ok) setComments(res.data);
-    setLoading(false);
+    if (!res.ok) throw new Error(res.error);
+    return res.data;
   }, [requestId]);
-
-  useEffect(() => {
-    if (visible && requestId) {
-      void loadComments();
-    }
-  }, [visible, requestId, loadComments]);
-
-  useEffect(() => {
-    if (!visible) {
-      setDraft('');
-      setEditCommentId(null);
-    }
-  }, [visible]);
+  const { data: comments, setData: setComments, loading } = useAsyncResource<RequestComment[]>(fetchComments, [], visible && !!requestId);
 
   const handleSend = async () => {
     if (!requestId || !draft.trim() || sending) return;

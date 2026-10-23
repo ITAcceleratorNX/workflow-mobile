@@ -458,73 +458,6 @@ function TodayAiSummary({ onPressMore }: { onPressMore: () => void }) {
 
 // ===== Today: Mini Cards =====
 
-function MiniCard({
-  iconName,
-  iconColor,
-  iconBg,
-  title,
-  primaryLine,
-  subtitle,
-  onPress,
-  emptyHint,
-}: {
-  iconName: React.ComponentProps<typeof MaterialIcons>['name'];
-  iconColor: string;
-  iconBg: string;
-  title: string;
-  primaryLine?: string;
-  subtitle?: string;
-  onPress?: () => void;
-  emptyHint?: string;
-}) {
-  const colors = useHealthColors();
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.miniCard,
-        { backgroundColor: colors.cardBg },
-        pressed && styles.cardPressed,
-      ]}
-      onPress={onPress}
-      accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={title}
-    >
-      <View style={[styles.miniCardIcon, { backgroundColor: iconBg }]}>
-        <MaterialIcons name={iconName} size={22} color={iconColor} />
-      </View>
-      <View style={styles.miniCardBody}>
-        <ThemedText style={[styles.miniCardTitle, { color: colors.textPrimary }]}>
-          {title}
-        </ThemedText>
-        {primaryLine ? (
-          <ThemedText
-            style={[styles.miniCardPrimary, { color: colors.textPrimary }]}
-            numberOfLines={1}
-          >
-            {primaryLine}
-          </ThemedText>
-        ) : (
-          <ThemedText
-            style={[styles.miniCardEmpty, { color: colors.textSecondary }]}
-            numberOfLines={1}
-          >
-            {emptyHint ?? 'Нет данных'}
-          </ThemedText>
-        )}
-        {subtitle ? (
-          <ThemedText
-            style={[styles.miniCardSub, { color: colors.textSecondary }]}
-            numberOfLines={1}
-          >
-            {subtitle}
-          </ThemedText>
-        ) : null}
-      </View>
-      <MaterialIcons name="chevron-right" size={22} color={colors.textMuted} />
-    </Pressable>
-  );
-}
-
 /**
  * Карточка с иллюстрацией справа (как на дизайне для Сон / Вода / Шаги).
  * Слева — заголовок с маленькой иконкой, крупное значение и подпись.
@@ -806,7 +739,7 @@ function WaterNormaModal({ visible, onClose }: { visible: boolean; onClose: () =
     setManualGoal(null);
     setDraft('');
     onClose();
-  }, [setManualGoal, onClose]);
+  }, [setManualGoal, onClose, setDraft]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -57,25 +58,14 @@ export default function AdminWorkerNewsScreen() {
   const border = useThemeColor({}, 'border');
   const cardBg = useThemeColor({}, 'cardBackground');
 
-  const [items, setItems] = useState<NewsDisplayItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'active' | 'hidden' | 'archived' | 'scheduled' | ''>('');
   const [actionId, setActionId] = useState<string | null>(null);
 
-  const loadList = useCallback(async () => {
-    setLoading(true);
-    const status = statusFilter || undefined;
-    const res = await getNewsAdminList(
-      status as 'active' | 'hidden' | 'archived' | 'scheduled' | undefined
-    );
-    if (res.ok) setItems(res.data);
-    else setItems([]);
-    setLoading(false);
+  const fetchNews = useCallback(async () => {
+    const res = await getNewsAdminList(statusFilter || undefined);
+    return res.ok ? res.data : [];
   }, [statusFilter]);
-
-  useEffect(() => {
-    loadList();
-  }, [loadList]);
+  const { data: items, loading, refresh: loadList } = useAsyncResource<NewsDisplayItem[]>(fetchNews, []);
 
   useFocusEffect(
     useCallback(() => {

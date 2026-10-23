@@ -1,6 +1,7 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { Pressable, Share, ScrollView, StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,57 +29,20 @@ export default function BookingQrScreen() {
 
   const guestBookings = useGuestDemoStore((s) => s.bookings);
 
-  const [booking, setBooking] = useState<MeetingRoomBooking | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const numId = id ? parseInt(id, 10) : NaN;
-    if (!id || Number.isNaN(numId)) {
-      setError('Неверный id бронирования');
-      setLoading(false);
-      return;
-    }
-
+  const loadBooking = useCallback(async (): Promise<MeetingRoomBooking> => {
+    const numId = id ? Number(id) : NaN;
+    if (!Number.isInteger(numId) || numId === 0) throw new Error('Неверный id бронирования');
     if (numId < 0) {
-      const guest = guestBookings.find((b) => b.id === numId);
-      if (!guest) {
-        setError('Бронирование не найдено (демо)');
-      } else {
-        const room = guest.meetingRoom;
-        setBooking({
-          id: guest.id,
-          meeting_room_id: guest.meeting_room_id,
-          start_time: guest.start_time,
-          end_time: guest.end_time,
-          status: guest.status,
-          company_name: guest.company_name ?? null,
-          meetingRoom: room,
-          meeting_room: room,
-          office: room?.office,
-        } as MeetingRoomBooking);
-      }
-      setLoading(false);
-      return;
+      const guest = guestBookings.find((booking) => booking.id === numId);
+      if (!guest) throw new Error('Бронирование не найдено (демо)');
+      const room = guest.meetingRoom;
+      return { ...guest, company_name: guest.company_name ?? null, meetingRoom: room, meeting_room: room, office: room?.office } as MeetingRoomBooking;
     }
-
-    const load = async () => {
-      try {
-        const res = await getPublicBooking(numId);
-        if (res.ok) {
-          setBooking(res.data);
-        } else {
-          setError(res.error || 'Не удалось загрузить бронирование');
-        }
-      } catch (e) {
-        console.error('[BookingQR] load error', e);
-        setError('Ошибка загрузки бронирования');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    const response = await getPublicBooking(numId);
+    if (!response.ok) throw new Error(response.error || 'Не удалось загрузить бронирование');
+    return response.data;
   }, [id, guestBookings]);
+  const { data: booking, loading, error } = useAsyncResource<MeetingRoomBooking | null>(loadBooking, null);
 
   if (loading) {
     return (

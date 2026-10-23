@@ -1,3 +1,4 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -111,8 +112,6 @@ export function OfficeLocationCatalogManagementScreen({
     [offices]
   );
 
-  const [rows, setRows] = useState<OfficeLocationCatalogRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [visibilityFilter, setVisibilityFilter] = useState<LocationVisibilityFilter>('all');
@@ -136,6 +135,19 @@ export function OfficeLocationCatalogManagementScreen({
   const [draftFloorKey, setDraftFloorKey] = useState<string | null>(null);
   const [draftSortBy, setDraftSortBy] = useState<LocationCatalogSort>('order');
   const autoOpenedCreateRef = useRef(false);
+
+  const fetchData = useCallback(async () => {
+    if (manageOfficeId == null) return [];
+    const res = await getOfficeLocationCatalog(manageOfficeId, { includeInactive: true });
+    if (!res.ok) { showToast({ title: res.error, variant: 'destructive' }); return []; }
+    return res.data;
+  }, [manageOfficeId, showToast]);
+  const allowed = role === variant;
+  const { data: rows, loading, refresh } = useAsyncResource<OfficeLocationCatalogRow[]>(fetchData, [], allowed && manageOfficeId != null);
+  const load = useCallback(async (opts?: { fromPull?: boolean }) => {
+    if (opts?.fromPull) setRefreshing(true);
+    try { await refresh(); } finally { setRefreshing(false); }
+  }, [refresh]);
 
   const stats = useMemo(() => countLocationCatalogStats(rows), [rows]);
 
@@ -208,30 +220,6 @@ export function OfficeLocationCatalogManagementScreen({
     [sections]
   );
 
-  const load = useCallback(
-    async (opts?: { fromPull?: boolean }) => {
-      if (manageOfficeId == null) {
-        setRows([]);
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-      if (!opts?.fromPull) {
-        setLoading(true);
-      }
-      const res = await getOfficeLocationCatalog(manageOfficeId, { includeInactive: true });
-      if (res.ok) {
-        setRows(res.data);
-      } else {
-        setRows([]);
-        showToast({ title: res.error, variant: 'destructive' });
-      }
-      setLoading(false);
-      setRefreshing(false);
-    },
-    [manageOfficeId, showToast]
-  );
-
   useEffect(() => {
     if (role == null) return;
     const allowed =
@@ -241,7 +229,6 @@ export function OfficeLocationCatalogManagementScreen({
       router.back();
       return;
     }
-    load();
   }, [role, variant, load, router]);
 
   useEffect(() => {

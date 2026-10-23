@@ -18,12 +18,7 @@ import { SmartDeskCalculator } from '@/components/smart-office/smart-desk-calcul
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useStepsReminders } from '@/hooks/use-steps-reminders';
 import { formatDateRelative } from '@/lib/dateTimeUtils';
-import {
-  calculateStepGoal,
-  stepLengthMetersFromHeight,
-  stepsToKm,
-  toDateKey,
-} from '@/lib/steps-utils';
+import { stepLengthMetersFromHeight, stepsToKm, toDateKey } from '@/lib/steps-utils';
 import { useStepsStore } from '@/stores/steps-store';
 
 type StepsTab = 'today' | 'history' | 'settings';

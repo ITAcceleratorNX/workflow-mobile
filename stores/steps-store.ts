@@ -1,8 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { createJSONStorage } from 'zustand/middleware';
+import { persist , createJSONStorage } from 'zustand/middleware';
 
-import { formatDateForApi } from '@/lib/dateTimeUtils';
 import { persistStorage } from '@/lib/storage';
 import { calculateStepGoal } from '@/lib/steps-utils';
 
@@ -64,8 +62,6 @@ interface StepsState {
   canSendNoActivity: () => boolean;
 }
 
-const todayKey = (): string => formatDateForApi(new Date());
-
 const initialFlags: StepsNotificationFlags = {
   fiftyPercentSentToday: false,
   almostGoalSentToday: false,
@@ -95,7 +91,7 @@ export const useStepsStore = create<StepsState>()(
       notificationFlags: initialFlags,
 
       resetNotificationFlagsForNewDay: (dateKey: string) => {
-        const current = get().notificationFlags;
+
         const lastDate = get().lastStepsDate;
         if (lastDate && lastDate !== dateKey) {
           set({

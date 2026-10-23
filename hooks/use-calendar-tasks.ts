@@ -1,3 +1,4 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 import { addDaysToDateKey, toAppDateKey } from '@/lib/dateTimeUtils';
@@ -9,9 +10,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 
 export function useCalendarTasks(startDate: Date, endDate: Date) {
-  const [tasks, setTasks] = useState<CalendarTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
   const [togglingTaskIds, setTogglingTaskIds] = useState<number[]>([]);
 
   const token = useAuthStore((s) => s.token);
@@ -20,55 +19,25 @@ export function useCalendarTasks(startDate: Date, endDate: Date) {
   const { show: showToast } = useToast();
   const tasksRef = useRef<CalendarTask[]>([]);
 
-  useEffect(() => {
-    tasksRef.current = tasks;
-  }, [tasks]);
-
   const fetchRange = useCallback(async () => {
     const startKey = toAppDateKey(startDate);
     const endKey = toAppDateKey(endDate);
     const startStr = addDaysToDateKey(startKey, -1);
     const endStr = addDaysToDateKey(endKey, 1);
-    return getUserTasksCalendar(startStr, endStr);
+    const response = await getUserTasksCalendar(startStr, endStr);
+    if (!response.ok) throw new Error(response.error);
+    return response.data.tasks;
   }, [startDate, endDate]);
 
-  const refresh = useCallback(async () => {
-    if (!token || isGuest) {
-      setTasks([]);
-      setLoading(false);
-      return;
-    }
+  const { data: tasks, setData: setTasks, loading, error, refresh } = useAsyncResource<CalendarTask[]>(fetchRange, [], !!token && !isGuest, token);
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
-    setLoading(true);
-    setError(null);
-
-    const res = await fetchRange();
-
-    setLoading(false);
-
-    if (res.ok) setTasks(res.data.tasks);
-    else setError(res.error);
-  }, [token, isGuest, fetchRange]);
-
-  const silentRefresh = useCallback(async () => {
-    if (!token || isGuest) return;
-    const res = await fetchRange();
-    if (res.ok) setTasks(res.data.tasks);
-  }, [token, isGuest, fetchRange]);
-
+  const previousVersion = useRef(version);
   useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  const skipVersionSyncRef = useRef(true);
-  useEffect(() => {
-    if (skipVersionSyncRef.current) {
-      skipVersionSyncRef.current = false;
-      return;
-    }
-    if (version === 0) return;
-    silentRefresh();
-  }, [version, silentRefresh]);
+    if (previousVersion.current === version) return;
+    previousVersion.current = version;
+    void refresh();
+  }, [version, refresh]);
 
   const toggleComplete = useCallback(
     async (task: CalendarTask) => {
@@ -111,7 +80,7 @@ export function useCalendarTasks(startDate: Date, endDate: Date) {
         duration: 4000,
       });
     },
-    [token, isGuest, showToast]
+    [token, isGuest, showToast, setTasks]
   );
 
   return {

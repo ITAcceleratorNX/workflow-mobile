@@ -8,6 +8,10 @@ const compiled = ts.transpileModule(readFileSync(new URL('../hooks/use-todo-list
   compilerOptions: { module: ts.ModuleKind.CommonJS },
 }).outputText;
 
+const compiledScopedState = ts.transpileModule(readFileSync(new URL('../hooks/use-scoped-state.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText;
+
 // Controlled lifecycle and deferred requests: no sleeps or network timing assumptions.
 function harness(initialQuery) {
   const slots = [], requests = [];
@@ -48,6 +52,9 @@ function harness(initialQuery) {
     '@/stores/user-tasks-invalidate-store': { useUserTasksInvalidateStore: (select) => select(invalidation) },
     '@/context/toast-context': { useToast: () => ({ show: toast }) },
   };
+  const scopedState = { exports: {} };
+  vm.runInNewContext(compiledScopedState, { module: scopedState, exports: scopedState.exports, require: (id) => dependencies[id] });
+  dependencies['@/hooks/use-scoped-state'] = scopedState.exports;
   const loaded = { exports: {} };
   vm.runInNewContext(compiled, { module: loaded, exports: loaded.exports, require: (id) => dependencies[id] });
   function render() {

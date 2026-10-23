@@ -58,7 +58,7 @@ const MOOD_SEMANTIC = {
   stressOverload: COLORS_DARK.stressOverload,
 } as const;
 
-type MoodCheckInColors = typeof COLORS_DARK;
+type MoodCheckInColors = { readonly [Key in keyof typeof COLORS_DARK]: string };
 
 function useMoodCheckInColors(): MoodCheckInColors {
   const scheme = useColorScheme();

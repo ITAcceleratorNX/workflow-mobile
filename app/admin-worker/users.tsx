@@ -1,15 +1,8 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AdminUserManagementTab } from '@/components/admin-worker/user-management-tab';
@@ -58,7 +51,7 @@ const REGISTRATION_STATUS_LABELS: Record<string, string> = {
 
 export default function AdminWorkerUsersScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const { show: showToast } = useToast();
   const text = useThemeColor({}, 'text');
@@ -80,8 +73,7 @@ export default function AdminWorkerUsersScreen() {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
 
   // ——— Запросы на регистрацию ———
-  const [requests, setRequests] = useState<RegistrationRequestItem[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(true);
+
   const [filters, setFilters] = useState({
     status: '',
     date_from: '',
@@ -94,19 +86,12 @@ export default function AdminWorkerUsersScreen() {
   const [offices, setOffices] = useState<Office[]>([]);
   const [filterOfficeId, setFilterOfficeId] = useState('');
   const [requestPage, setRequestPage] = useState(1);
-  const [requestMeta, setRequestMeta] = useState({
-    total: 0,
-    page: 1,
-    pageSize: 20,
-    totalPages: 1,
-  });
 
   useEffect(() => {
     getOffices().then(setOffices);
   }, []);
 
-  const loadRequests = useCallback(async () => {
-    setRequestsLoading(true);
+  const fetchRequests = useCallback(async () => {
     const params: {
       status?: string;
       date_from?: string;
@@ -123,19 +108,10 @@ export default function AdminWorkerUsersScreen() {
     if (filters.date_to) params.date_to = filters.date_to;
     if (filterOfficeId) params.office_id = filterOfficeId;
     const result = await getRegistrationRequests(params);
-    if (result.ok) {
-      setRequests(result.data);
-      setRequestMeta(result.meta);
-    } else {
-      setRequests([]);
-      setRequestMeta({ total: 0, page: 1, pageSize: 20, totalPages: 1 });
-    }
-    setRequestsLoading(false);
+    return result.ok ? { requests: result.data, meta: result.meta } : { requests: [], meta: { total: 0, page: 1, pageSize: 20, totalPages: 1 } };
   }, [filters.status, filters.date_from, filters.date_to, filterOfficeId, requestPage]);
 
-  useEffect(() => {
-    loadRequests();
-  }, [loadRequests]);
+  const { data: { requests, meta: requestMeta }, loading: requestsLoading, refresh: loadRequests } = useAsyncResource(fetchRequests, { requests: [], meta: { total: 0, page: 1, pageSize: 20, totalPages: 1 } });
 
   // Офисы Исполнителя, выбранные до подтверждения: по умолчанию — офис из регистрации.
   const [officeAccessByRequestId, setOfficeAccessByRequestId] = useState<

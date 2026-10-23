@@ -50,14 +50,14 @@ function ReactionIconButton({
 }) {
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.get() }],
   }));
 
   const handlePress = useCallback(() => {
-    scale.value = withSequence(
+    scale.set(withSequence(
       withSpring(1.28, { damping: 9, stiffness: 320 }),
       withSpring(1, { damping: 12, stiffness: 260 })
-    );
+    ));
     onPress();
   }, [onPress, scale]);
 

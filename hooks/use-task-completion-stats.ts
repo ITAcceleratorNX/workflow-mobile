@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { addDaysToDateKey, toAppDateKey } from '@/lib/dateTimeUtils';
 import { getTodayStats, getUserTasksCalendar, type CalendarTask } from '@/lib/user-tasks-api';
@@ -41,79 +42,39 @@ function aggregateRange(tasks: CalendarTask[], startKey: string, endKey: string)
  * Сегодня — /user-tasks/today-stats; неделя/месяц — календарь + фильтр по дню в Asia/Almaty.
  */
 export function useTaskCompletionStats(enabled: boolean) {
-  const [todayCompleted, setTodayCompleted] = useState(0);
-  const [todayTotal, setTodayTotal] = useState(0);
-  const [weekCompleted, setWeekCompleted] = useState(0);
-  const [weekTotal, setWeekTotal] = useState(0);
-  const [monthCompleted, setMonthCompleted] = useState(0);
-  const [monthTotal, setMonthTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
 
   const token = useAuthStore((s) => s.token);
   const isGuest = useAuthStore((s) => s.isGuest);
   const version = useUserTasksInvalidateStore((s) => s.version);
 
   const load = useCallback(async () => {
-    if (!token || isGuest) {
-      setTodayCompleted(0);
-      setTodayTotal(0);
-      setWeekCompleted(0);
-      setWeekTotal(0);
-      setMonthCompleted(0);
-      setMonthTotal(0);
-      return;
-    }
+    const now = new Date();
+    const wr = getWeekRange(now), mr = getMonthRange(now);
+    const wStart = toAppDateKey(wr.start), wEnd = toAppDateKey(wr.end);
+    const mStart = toAppDateKey(mr.start), mEnd = toAppDateKey(mr.end);
+    const [statsRes, weekRes, monthRes] = await Promise.all([
+      getTodayStats(), getUserTasksCalendar(addDaysToDateKey(wStart, -1), addDaysToDateKey(wEnd, 1)),
+      getUserTasksCalendar(addDaysToDateKey(mStart, -1), addDaysToDateKey(mEnd, 1)),
+    ]);
+    if (!statsRes.ok) throw new Error(statsRes.error);
+    if (!weekRes.ok) throw new Error(weekRes.error);
+    if (!monthRes.ok) throw new Error(monthRes.error);
+    const week = aggregateRange(weekRes.data.tasks, wStart, wEnd), month = aggregateRange(monthRes.data.tasks, mStart, mEnd);
+    return { todayCompleted: statsRes.data.todayCompleted, todayTotal: statsRes.data.todayTotal,
+      weekCompleted: week.completed, weekTotal: week.total, monthCompleted: month.completed, monthTotal: month.total };
+  }, []);
+  const { data, loading, refresh } = useAsyncResource(load, { todayCompleted: 0, todayTotal: 0, weekCompleted: 0, weekTotal: 0, monthCompleted: 0, monthTotal: 0 }, enabled && !!token && !isGuest, token);
 
-    setLoading(true);
-    try {
-      const now = new Date();
-      const wr = getWeekRange(now);
-      const mr = getMonthRange(now);
-      const wStart = toAppDateKey(wr.start);
-      const wEnd = toAppDateKey(wr.end);
-      const mStart = toAppDateKey(mr.start);
-      const mEnd = toAppDateKey(mr.end);
-
-      const [statsRes, weekCalRes, monthCalRes] = await Promise.all([
-        getTodayStats(),
-        getUserTasksCalendar(addDaysToDateKey(wStart, -1), addDaysToDateKey(wEnd, 1)),
-        getUserTasksCalendar(addDaysToDateKey(mStart, -1), addDaysToDateKey(mEnd, 1)),
-      ]);
-
-      if (statsRes.ok) {
-        setTodayCompleted(statsRes.data.todayCompleted);
-        setTodayTotal(statsRes.data.todayTotal);
-      }
-
-      if (weekCalRes.ok) {
-        const w = aggregateRange(weekCalRes.data.tasks, wStart, wEnd);
-        setWeekCompleted(w.completed);
-        setWeekTotal(w.total);
-      }
-
-      if (monthCalRes.ok) {
-        const m = aggregateRange(monthCalRes.data.tasks, mStart, mEnd);
-        setMonthCompleted(m.completed);
-        setMonthTotal(m.total);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [token, isGuest]);
-
+  const previousVersion = useRef(version);
   useEffect(() => {
-    if (!enabled) return;
-    load();
-  }, [enabled, version, load]);
+    if (previousVersion.current === version) return;
+    previousVersion.current = version;
+    void refresh();
+  }, [version, refresh]);
 
   return {
-    todayCompleted,
-    todayTotal,
-    weekCompleted,
-    weekTotal,
-    monthCompleted,
-    monthTotal,
+    ...data,
     loading,
-    refresh: load,
+    refresh,
   };
 }

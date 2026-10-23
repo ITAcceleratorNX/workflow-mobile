@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useCallback, useMemo, useState } from 'react';
 
 import {
   getOfficeCompanies,
@@ -27,45 +28,20 @@ export function useAssignUserSearchScope() {
   );
   const [officeFilterId, setOfficeFilterId] = useState<number | null>(null);
   const [companyFilterId, setCompanyFilterId] = useState<number | null>(null);
-  const [offices, setOffices] = useState<Office[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const { data: offices } = useAsyncResource<Office[]>(getOffices, [], role === 'admin-worker');
+  const companiesOfficeId = role === 'department-head' ? actorOfficeId : role === 'admin-worker' ? officeFilterId : null;
+  const loadCompanies = useCallback(async () => {
+    if (companiesOfficeId == null) return [];
+    const res = await getOfficeCompanies(companiesOfficeId);
+    return res.ok ? res.data : [];
+  }, [companiesOfficeId]);
+  const { data: companies } = useAsyncResource<Company[]>(loadCompanies, [], companiesOfficeId != null);
 
   const canToggleScope = role === 'client' && hasClientCompany(actorCompanyId);
   const showCompanyPills = role === 'department-head';
   const showOfficePills = role === 'admin-worker';
   const showAdminCompanyPills =
     role === 'admin-worker' && officeFilterId != null && companies.length > 0;
-
-  const loadOffices = useCallback(async () => {
-    if (role !== 'admin-worker') return;
-    const list = await getOffices();
-    setOffices(list);
-  }, [role]);
-
-  const loadCompaniesForOffice = useCallback(async (officeId: number) => {
-    const res = await getOfficeCompanies(officeId);
-    setCompanies(res.ok ? res.data : []);
-  }, []);
-
-  useEffect(() => {
-    if (role === 'admin-worker') {
-      void loadOffices();
-    }
-  }, [role, loadOffices]);
-
-  useEffect(() => {
-    if (role === 'department-head' && actorOfficeId != null) {
-      void loadCompaniesForOffice(actorOfficeId);
-      return;
-    }
-    if (role === 'admin-worker' && officeFilterId != null) {
-      void loadCompaniesForOffice(officeFilterId);
-      return;
-    }
-    if (role === 'admin-worker') {
-      setCompanies([]);
-    }
-  }, [role, actorOfficeId, officeFilterId, loadCompaniesForOffice]);
 
   const selectOfficeFilter = useCallback((officeId: number | null) => {
     setOfficeFilterId(officeId);

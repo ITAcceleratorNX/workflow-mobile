@@ -1,3 +1,4 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
@@ -29,7 +30,7 @@ import { TaskRecipientPickerOverlay } from '@/components/tasks/TaskRecipientPick
 import { TaskScheduleSheetContent } from '@/components/tasks/TaskScheduleSheet';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTeams } from '@/hooks/use-teams';
-import { formatDateForApi, formatTaskTime, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
+import { formatTaskTime, toUtcIsoFromAppDateTime } from '@/lib/dateTimeUtils';
 import { defaultRecurrenceNone, type TaskRecurrencePayload } from '@/lib/task-recurrence';
 import { parseTaskScheduleFromText } from '@/lib/parseTaskScheduleFromText';
 import type { TaskCreateDefaults } from '@/lib/task-views';
@@ -86,7 +87,11 @@ export interface TaskAddSheetProps {
   ) => Promise<unknown>;
 }
 
-export function TaskAddSheet({
+export function TaskAddSheet(props: TaskAddSheetProps) {
+  return props.visible ? <TaskAddSheetForm {...props} /> : null;
+}
+
+function TaskAddSheetForm({
   visible,
   onClose,
   defaults,
@@ -109,17 +114,19 @@ export function TaskAddSheet({
 
   const [title, setTitle] = useState('');
   const titleInputRef = useRef<RNTextInput>(null);
-  /** Чтобы не сбрасывать форму при смене todayKey/tomorrowKey пока шит открыт. */
-  const addSheetResetDoneForOpenRef = useRef(false);
-  const [scheduledDate, setScheduledDate] = useState<string | null>(null);
-  const [scheduledTime, setScheduledTime] = useState('09:00');
+  /** Значения по умолчанию применяются один раз на каждое открытие формы. */
+  const [scheduledDate, setScheduledDate] = useState<string | null>(defaultDateKey);
+  const [scheduledTime, setScheduledTime] = useState(() => formatTaskTime(new Date(Date.now() + 15 * 60 * 1000)));
   const [recurrenceDraft, setRecurrenceDraft] = useState<TaskRecurrencePayload>(() => defaultRecurrenceNone());
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [remindersDisabled, setRemindersDisabled] = useState(false);
   const [remindBeforeMinutes, setRemindBeforeMinutes] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [subModal, setSubModal] = useState<SubModalId>(null);
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [calendarMonth, setCalendarMonth] = useScopedState(JSON.stringify([subModal, scheduledDate, todayKey]), () => {
+    const base = new Date((scheduledDate ?? todayKey) + 'T12:00:00');
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const [teamId, setTeamId] = useState<number | null>(null);
@@ -133,14 +140,14 @@ export function TaskAddSheet({
   const [allowEmptyTitleFromNlp, setAllowEmptyTitleFromNlp] = useState(false);
   const scheduleChipScale = useSharedValue(1);
   const scheduleChipScaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scheduleChipScale.value }],
+    transform: [{ scale: scheduleChipScale.get() }],
   }));
 
   const pulseScheduleChip = useCallback(() => {
-    scheduleChipScale.value = withSequence(
+    scheduleChipScale.set(withSequence(
       withTiming(1.08, { duration: 150 }),
       withSpring(1, { damping: 16, stiffness: 280 })
-    );
+    ));
   }, [scheduleChipScale]);
 
   const showNlpScheduleHint = useCallback((tail: string | null) => {
@@ -209,63 +216,19 @@ export function TaskAddSheet({
     };
   }, []);
 
-  useEffect(() => {
-    if (subModal !== 'schedule') return;
-    const base = scheduledDate ? new Date(scheduledDate + 'T12:00:00') : new Date(todayKey + 'T12:00:00');
-    setCalendarMonth(new Date(base.getFullYear(), base.getMonth(), 1));
-  }, [subModal, scheduledDate, todayKey]);
-
-  useEffect(() => {
-    if (!visible) {
-      addSheetResetDoneForOpenRef.current = false;
-      if (nlpHintTimerRef.current) {
-        clearTimeout(nlpHintTimerRef.current);
-        nlpHintTimerRef.current = null;
-      }
-      return;
-    }
-    if (addSheetResetDoneForOpenRef.current) {
-      return;
-    }
-    addSheetResetDoneForOpenRef.current = true;
-
-    setSubModal(null);
-    setTitle('');
-    const nowPlus15 = new Date(Date.now() + 15 * 60 * 1000);
-    setScheduledTime(formatTaskTime(nowPlus15));
-    setPriority('medium');
-    setRemindersDisabled(false);
-    setRemindBeforeMinutes(null);
-    setScheduledDate(defaultDateKey);
-    setTeamId(null);
-    setRecipient(null);
-    nlpHintLatestRef.current = null;
-    if (nlpHintTimerRef.current) {
-      clearTimeout(nlpHintTimerRef.current);
-      nlpHintTimerRef.current = null;
-    }
-    setNlpScheduleHint(null);
-    setAllowEmptyTitleFromNlp(false);
-    setRecurrenceDraft(defaultRecurrenceNone());
-  }, [visible, defaultDateKey]);
-
-  useEffect(() => {
+  const [hasSchedule, setHasSchedule] = useState(scheduledDate != null);
+  if (hasSchedule !== (scheduledDate != null)) {
+    setHasSchedule(scheduledDate != null);
     if (scheduledDate == null) setRecurrenceDraft(defaultRecurrenceNone());
-  }, [scheduledDate]);
+  }
 
   useEffect(() => {
-    if (!visible) setSubModal(null);
-  }, [visible]);
-
-  useEffect(() => {
-    if (!visible) {
-      Keyboard.dismiss();
-      setKeyboardHeight(0);
-      return;
-    }
     const id = setTimeout(() => titleInputRef.current?.focus(), 250);
-    return () => clearTimeout(id);
-  }, [visible]);
+    return () => {
+      clearTimeout(id);
+      Keyboard.dismiss();
+    };
+  }, []);
 
   const openScheduleModal = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -319,28 +282,19 @@ export function TaskAddSheet({
     setSubModal(null);
   }, []);
 
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  const closeSubRef = useRef(closeSub);
-  closeSubRef.current = closeSub;
-
-  const flushCloseMain = useCallback(() => {
-    onCloseRef.current();
-  }, []);
-  const flushCloseSub = useCallback(() => {
-    closeSubRef.current();
-  }, []);
+  const flushCloseMain = useCallback(() => onClose(), [onClose]);
+  const flushCloseSub = closeSub;
 
   const mainSheetTranslateY = useSharedValue(0);
   const scheduleSheetTranslateY = useSharedValue(0);
 
   useEffect(() => {
-    if (visible) mainSheetTranslateY.value = 0;
-  }, [visible]);
+    if (visible) mainSheetTranslateY.set(0);
+  }, [visible, mainSheetTranslateY]);
 
   useEffect(() => {
-    if (subModal === 'schedule') scheduleSheetTranslateY.value = 0;
-  }, [subModal]);
+    if (subModal === 'schedule') scheduleSheetTranslateY.set(0);
+  }, [subModal, scheduleSheetTranslateY]);
 
   const mainSheetPanGesture = useMemo(
     () =>
@@ -349,20 +303,20 @@ export function TaskAddSheet({
         .failOffsetX([-24, 24])
         .onUpdate((e) => {
           const t = e.translationY;
-          mainSheetTranslateY.value = t > 0 ? t : t * 0.2;
+          mainSheetTranslateY.set(t > 0 ? t : t * 0.2);
         })
         .onEnd((e) => {
-          const y = mainSheetTranslateY.value;
+          const y = mainSheetTranslateY.get();
           const shouldClose = y > 96 || e.velocityY > 520;
           if (shouldClose) {
-            mainSheetTranslateY.value = withTiming(900, { duration: 260 }, (finished) => {
+            mainSheetTranslateY.set(withTiming(900, { duration: 260 }, (finished) => {
               if (finished) runOnJS(flushCloseMain)();
-            });
+            }));
           } else {
-            mainSheetTranslateY.value = withSpring(0, { damping: 26, stiffness: 260 });
+            mainSheetTranslateY.set(withSpring(0, { damping: 26, stiffness: 260 }));
           }
         }),
-    [flushCloseMain]
+    [flushCloseMain, mainSheetTranslateY]
   );
 
   const scheduleSheetPanGesture = useMemo(
@@ -372,28 +326,28 @@ export function TaskAddSheet({
         .failOffsetX([-24, 24])
         .onUpdate((e) => {
           const t = e.translationY;
-          scheduleSheetTranslateY.value = t > 0 ? t : t * 0.2;
+          scheduleSheetTranslateY.set(t > 0 ? t : t * 0.2);
         })
         .onEnd((e) => {
-          const y = scheduleSheetTranslateY.value;
+          const y = scheduleSheetTranslateY.get();
           const shouldClose = y > 88 || e.velocityY > 520;
           if (shouldClose) {
-            scheduleSheetTranslateY.value = withTiming(900, { duration: 240 }, (finished) => {
+            scheduleSheetTranslateY.set(withTiming(900, { duration: 240 }, (finished) => {
               if (finished) runOnJS(flushCloseSub)();
-            });
+            }));
           } else {
-            scheduleSheetTranslateY.value = withSpring(0, { damping: 26, stiffness: 260 });
+            scheduleSheetTranslateY.set(withSpring(0, { damping: 26, stiffness: 260 }));
           }
         }),
-    [flushCloseSub]
+    [flushCloseSub, scheduleSheetTranslateY]
   );
 
   const mainSheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: mainSheetTranslateY.value }],
+    transform: [{ translateY: mainSheetTranslateY.get() }],
   }));
 
   const scheduleSheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: scheduleSheetTranslateY.value }],
+    transform: [{ translateY: scheduleSheetTranslateY.get() }],
   }));
 
   /** Краткая подпись чипа даты в Quick Add (обновляется при смене дня в модалке «Срок») */

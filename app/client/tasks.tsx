@@ -1,3 +1,4 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -131,19 +132,19 @@ export default function TasksScreen() {
   const cardBg = useThemeColor({}, 'cardBackground');
   const border = useThemeColor({}, 'border');
 
-  const [mainView, setMainView] = useState<TaskMainView>(() =>
+  const [mainView, setMainView] = useScopedState<TaskMainView>(JSON.stringify([paramTab, paramFilter, paramDate]), () =>
     parseMainView({ tab: paramTab, filter: paramFilter, date: paramDate })
   );
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>(() =>
+  const [viewMode, setViewMode] = useScopedState<'list' | 'calendar'>(paramView, () =>
     paramView === 'calendar' ? 'calendar' : 'list'
   );
   const [calendarDate, setCalendarDate] = useState(() => new Date());
   const [upcomingDate, setUpcomingDate] = useState<string | null>(null);
-  const [upcomingVisibleDateKey, setUpcomingVisibleDateKey] = useState<string | null>(null);
+  const [upcomingVisibleDateKey, setUpcomingVisibleDateKey] = useScopedState<string | null>(JSON.stringify([mainView, upcomingDate]), null);
   const upcomingScrollRef = useRef<ScrollView | null>(null);
 
   const [completedDateKey, setCompletedDateKey] = useState<string>(() => todayTaskDateKey());
-  const [completedVisibleDateKey, setCompletedVisibleDateKey] = useState<string | null>(null);
+  const [completedVisibleDateKey, setCompletedVisibleDateKey] = useScopedState<string | null>(JSON.stringify([mainView, completedDateKey]), null);
   const completedScrollRef = useRef<ScrollView | null>(null);
 
   const [addSheetOpen, setAddSheetOpen] = useState(false);
@@ -151,12 +152,6 @@ export default function TasksScreen() {
   const [displayMenuOpen, setDisplayMenuOpen] = useState(false);
 
   useEffect(() => {
-    setMainView(parseMainView({ tab: paramTab, filter: paramFilter, date: paramDate }));
-  }, [paramTab, paramFilter, paramDate]);
-
-  useEffect(() => {
-    if (paramView === 'calendar') setViewMode('calendar');
-    else setViewMode('list');
     if (paramView === 'board') {
       router.setParams({ view: 'list' });
     }
@@ -208,16 +203,6 @@ export default function TasksScreen() {
     addTask,
   } = useTodoList(todoListQuery);
 
-  useEffect(() => {
-    if (upcomingDate) return;
-    setUpcomingDate(tomorrowKey);
-  }, [upcomingDate, tomorrowKey]);
-
-  useEffect(() => {
-    if (upcomingVisibleDateKey) return;
-    setUpcomingVisibleDateKey(upcomingDate ?? tomorrowKey);
-  }, [upcomingVisibleDateKey, upcomingDate, tomorrowKey]);
-
   const upcomingStripDays = useMemo((): CalendarStripDay[] => {
     return Array.from({ length: UPCOMING_CALENDAR_DAYS_FORWARD + 1 }, (_, idx) => {
         const dayOffset = idx + 1;
@@ -262,7 +247,6 @@ export default function TasksScreen() {
     requestAnimationFrame(() => {
       upcomingScrollRef.current?.scrollTo({ x, animated: true });
     });
-    setUpcomingVisibleDateKey(activeKey);
   }, [mainView, upcomingDate, tomorrowKey, upcomingStripDays, stripViewportWidth]);
 
   useEffect(() => {
@@ -273,7 +257,6 @@ export default function TasksScreen() {
     requestAnimationFrame(() => {
       completedScrollRef.current?.scrollTo({ x, animated: true });
     });
-    setCompletedVisibleDateKey(completedDateKey);
   }, [mainView, completedDateKey, completedStripDays, stripViewportWidth]);
 
   const upcomingMonthLabel = useMemo(() => {
@@ -330,11 +313,6 @@ export default function TasksScreen() {
     setAddSheetOpen(true);
   }, []);
 
-  const openTeamsPanel = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setTeamsPanelOpen(true);
-  }, []);
-
   const openDisplayMenu = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDisplayMenuOpen(true);
@@ -351,7 +329,7 @@ export default function TasksScreen() {
       router.setParams({ view: mode });
       setDisplayMenuOpen(false);
     },
-    [router]
+    [router, setViewMode]
   );
 
   const openTeamsFromDisplayMenu = useCallback(() => {

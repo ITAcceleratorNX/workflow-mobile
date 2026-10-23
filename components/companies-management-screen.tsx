@@ -1,3 +1,4 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -69,8 +70,7 @@ export function CompaniesManagementScreen({
   const [selectedOfficeId, setSelectedOfficeId] = useState<string>(
     isAdmin ? '' : String(user?.office_id ?? ''),
   );
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
+
   const [refreshing, setRefreshing] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -101,29 +101,18 @@ export function CompaniesManagementScreen({
     [offices],
   );
 
-  const load = useCallback(
-    async (opts?: { fromPull?: boolean }) => {
-      if (manageOfficeId == null) {
-        setCompanies([]);
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-      if (!opts?.fromPull) {
-        setLoading(true);
-      }
-      const res = await getOfficeCompanies(manageOfficeId);
-      if (res.ok) {
-        setCompanies(res.data);
-      } else {
-        setCompanies([]);
-        showToast({ title: res.error, variant: 'destructive' });
-      }
-      setLoading(false);
-      setRefreshing(false);
-    },
-    [manageOfficeId, showToast],
-  );
+  const fetchData = useCallback(async () => {
+    if (manageOfficeId == null) return [];
+    const res = await getOfficeCompanies(manageOfficeId);
+    if (!res.ok) { showToast({ title: res.error, variant: 'destructive' }); return []; }
+    return res.data;
+  }, [manageOfficeId, showToast]);
+  const allowed = role === variant;
+  const { data: companies, loading, refresh } = useAsyncResource<Company[]>(fetchData, [], allowed && manageOfficeId != null);
+  const load = useCallback(async (opts?: { fromPull?: boolean }) => {
+    if (opts?.fromPull) setRefreshing(true);
+    try { await refresh(); } finally { setRefreshing(false); }
+  }, [refresh]);
 
   useEffect(() => {
     if (role == null) return;
@@ -134,7 +123,6 @@ export function CompaniesManagementScreen({
       router.back();
       return;
     }
-    void load();
   }, [role, variant, load, router]);
 
   const onRefresh = useCallback(() => {
@@ -304,7 +292,7 @@ export function CompaniesManagementScreen({
             Чтобы увидеть и редактировать компании, выберите офис из списка выше.
           </ThemedText>
         </View>
-      ) : loading ? (
+      ) : loading && !refreshing ? (
         <View style={styles.emptyWrap}>
           <ActivityIndicator color={primary} />
         </View>

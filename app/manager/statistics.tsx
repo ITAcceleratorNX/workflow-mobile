@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -69,54 +70,29 @@ function aggregateManagerStats(raw: ManagerStatsRaw) {
 
 export default function ManagerStatisticsScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+
   const token = useAuthStore((s) => s.token);
   const styles = useManagerStatsStyles();
   const [activeTab, setActiveTab] = useState<StatsTab>('stats');
-  const [rawStats, setRawStats] = useState<ManagerStatsRaw | null>(null);
-  const [analyticsData, setAnalyticsData] = useState<{
-    sla: Record<string, unknown> | null;
-    ratings: Record<string, unknown> | null;
-    detailed: Record<string, unknown> | null;
-  }>({ sla: null, ratings: null, detailed: null });
-  const [loading, setLoading] = useState(true);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchStats = useCallback(async () => {
+    const result = await getManagerStats();
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+  }, []);
+  const { data: rawStats, loading, error, refresh } = useAsyncResource<ManagerStatsRaw | null>(fetchStats, null);
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    const result = await getManagerStats();
-    if (result.ok) setRawStats(result.data);
-    else setError(result.error);
-    setLoading(false);
-    setRefreshing(false);
+    try { await refresh(); } finally { setRefreshing(false); }
+  }, [refresh]);
+
+  const fetchAnalytics = useCallback(async () => {
+    const [sla, ratings, detailed] = await Promise.all([getManagerSLAStats(), getManagerRatingStats(), getManagerDetailedStats()]);
+    return { sla: sla.ok ? sla.data : null, ratings: ratings.ok ? ratings.data : null, detailed: detailed.ok ? detailed.data : null };
   }, []);
-
-  const loadAnalytics = useCallback(async () => {
-    setAnalyticsLoading(true);
-    const [slaRes, ratingRes, detailedRes] = await Promise.all([
-      getManagerSLAStats(),
-      getManagerRatingStats(),
-      getManagerDetailedStats(),
-    ]);
-    setAnalyticsData({
-      sla: slaRes.ok ? slaRes.data : null,
-      ratings: ratingRes.ok ? ratingRes.data : null,
-      detailed: detailedRes.ok ? detailedRes.data : null,
-    });
-    setAnalyticsLoading(false);
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (activeTab === 'analytics') loadAnalytics();
-  }, [activeTab, loadAnalytics]);
+  const { data: analyticsData, loading: analyticsLoading, refresh: loadAnalytics } = useAsyncResource(fetchAnalytics, { sla: null, ratings: null, detailed: null }, activeTab === 'analytics');
 
   const onRefresh = useCallback(() => {
     if (activeTab === 'stats') load(true);
@@ -147,8 +123,8 @@ export default function ManagerStatisticsScreen() {
 
         let Sharing: typeof import('expo-sharing') | null = null;
         try {
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
-          Sharing = require('expo-sharing');
+
+          Sharing = await import('expo-sharing');
         } catch {
           Sharing = null;
         }

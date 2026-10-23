@@ -133,7 +133,7 @@ export function usePedometer() {
           }
         });
         subscriptionRef.current = sub;
-      } catch (e) {
+      } catch {
         if (!cancelled) {
           setIsAvailable(false);
           useStepsStore.getState().setPedometerStatus(false, false);

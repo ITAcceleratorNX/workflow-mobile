@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -38,7 +38,7 @@ export function TeamsInboxPanel({ onClose }: TeamsInboxPanelProps) {
   const { height: screenH } = useWindowDimensions();
   const slideDistance = Math.min(screenH * 0.92, 720);
   const listMaxHeight = Math.min(screenH * 0.52, 520);
-  const translateY = useRef(new Animated.Value(slideDistance)).current;
+  const [translateY] = useState(() => new Animated.Value(slideDistance));
 
   const background = useThemeColor({}, 'background');
   const text = useThemeColor({}, 'text');

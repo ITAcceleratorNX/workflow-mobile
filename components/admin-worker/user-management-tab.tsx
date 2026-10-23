@@ -1,3 +1,5 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -131,15 +133,12 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
   const accentSoft = useThemeColor({}, 'accentSoft');
   const onPrimary = useThemeColor({}, 'onPrimary');
 
-  const [officeUsers, setOfficeUsers] = useState<OfficeUser[]>([]);
-  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [officeFilterId, setOfficeFilterId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('name-asc');
 
-  const [executorByUserId, setExecutorByUserId] = useState<Record<number, ExecutorInCategory>>({});
   const [editUser, setEditUser] = useState<OfficeUser | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -157,47 +156,26 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
   const [roleError, setRoleError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   /** Фильтр клиентов по компании на списке (только для admin-worker, когда role=client). */
-  const [companyFilterId, setCompanyFilterId] = useState<string>('');
+  const [companyFilterId, setCompanyFilterId] = useScopedState<string>(JSON.stringify([roleFilter, officeFilterId]), '');
   /** Кэш компаний по office_id — чтобы не перезагружать при выборе пользователя. */
   const [companiesByOfficeId, setCompaniesByOfficeId] = useState<Record<number, Company[]>>({});
   const [draftCompanyId, setDraftCompanyId] = useState<string>('');
 
-
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    const officeIdNum = officeFilterId
-      ? Number(officeFilterId)
-      : authOfficeId
-        ? Number(authOfficeId)
-        : undefined;
-    const useCompanyFilter = roleFilter === 'client' && companyFilterId !== '';
+  const fetchUsers = useCallback(async () => {
+    const officeIdNum = officeFilterId ? Number(officeFilterId) : authOfficeId ? Number(authOfficeId) : undefined;
     const [usersRes, execRes] = await Promise.all([
-      getUsersForManagement({
-        officeId: officeFilterId || undefined,
-        companyId: useCompanyFilter ? companyFilterId : undefined,
-      }),
+      getUsersForManagement({ officeId: officeFilterId || undefined, companyId: roleFilter === 'client' && companyFilterId !== '' ? companyFilterId : undefined }),
       getExecutors(undefined, officeIdNum),
     ]);
-
-    if (execRes.ok) {
-      const map: Record<number, ExecutorInCategory> = {};
-      for (const exec of execRes.data) {
-        const uid = exec.user?.id;
-        if (uid) map[uid] = exec;
-      }
-      setExecutorByUserId(map);
-    } else {
-      setExecutorByUserId({});
-    }
-
-    if (usersRes.ok) setOfficeUsers(usersRes.data);
-    else {
-      setOfficeUsers([]);
-      showToast({ title: 'Ошибка', description: usersRes.error, variant: 'destructive', duration: 4000 });
-    }
-    setLoading(false);
-    setRefreshing(false);
+    const executors: Record<number, ExecutorInCategory> = {};
+    if (execRes.ok) for (const executor of execRes.data) { if (executor.user?.id) executors[executor.user.id] = executor; }
+    if (!usersRes.ok) showToast({ title: 'Ошибка', description: usersRes.error, variant: 'destructive', duration: 4000 });
+    return { users: usersRes.ok ? usersRes.data : [], executors };
   }, [officeFilterId, authOfficeId, roleFilter, companyFilterId, showToast]);
+  const { data: { users: officeUsers, executors: executorByUserId }, setData, loading, refresh } = useAsyncResource<{ users: OfficeUser[]; executors: Record<number, ExecutorInCategory> }>(fetchUsers, { users: [], executors: {} }, isActive);
+  const setOfficeUsers = useCallback((update: (previous: OfficeUser[]) => OfficeUser[]) => setData((previous) => ({ ...previous, users: update(previous.users) })), [setData]);
+  const setExecutorByUserId = useCallback((update: (previous: Record<number, ExecutorInCategory>) => Record<number, ExecutorInCategory>) => setData((previous) => ({ ...previous, executors: update(previous.executors) })), [setData]);
+  const loadUsers = useCallback(async () => { try { await refresh(); } finally { setRefreshing(false); } }, [refresh]);
 
   const loadCompaniesForOffice = useCallback(
     async (officeIdNum: number) => {
@@ -220,35 +198,25 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
         ? Number(authOfficeId)
         : NaN;
     if (Number.isFinite(officeIdNum) && officeIdNum > 0) {
-      void loadCompaniesForOffice(officeIdNum);
+      if (companiesByOfficeId[officeIdNum]) return;
+      let cancelled = false;
+      void getOfficeCompanies(officeIdNum).then((res) => {
+        if (!cancelled) setCompaniesByOfficeId((previous) => ({ ...previous, [officeIdNum]: res.ok ? res.data : [] }));
+      });
+      return () => { cancelled = true; };
     }
-  }, [roleFilter, officeFilterId, authOfficeId, loadCompaniesForOffice]);
+  }, [roleFilter, officeFilterId, authOfficeId, companiesByOfficeId]);
 
   // Сброс фильтра по компании при изменении роли/офиса
-  useEffect(() => {
-    if (roleFilter !== 'client') {
-      setCompanyFilterId('');
-    }
-  }, [roleFilter]);
-  useEffect(() => {
-    setCompanyFilterId('');
-  }, [officeFilterId]);
 
   useEffect(() => {
     if (!editUser || newRole !== 'executor') return;
 
     const cached = executorByUserId[editUser.id];
-    if (cached) {
-      applyExecutorToForm(cached, { setSpecialty, setSelectedCategoryIds, setFullName, setPhone });
-      return;
-    }
+    if (cached) return;
 
     // Клиент ещё не исполнитель в БД — не запрашиваем /executors/:id/user (вернёт 404)
-    if (editUser.role !== 'executor') {
-      setSpecialty('');
-      setSelectedCategoryIds([]);
-      return;
-    }
+    if (editUser.role !== 'executor') return;
 
     let cancelled = false;
     void getExecutorByUserId(editUser.id).then((res) => {
@@ -260,12 +228,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     return () => {
       cancelled = true;
     };
-  }, [editUser?.id, editUser?.role, newRole]);
-
-  useEffect(() => {
-    if (!isActive) return;
-    loadUsers();
-  }, [isActive, loadUsers]);
+  }, [editUser, newRole, executorByUserId, setExecutorByUserId]);
 
   const stats = useMemo(() => {
     const byRole: Record<string, number> = {};

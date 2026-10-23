@@ -1,11 +1,17 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
+import { addDaysToDateKey ,
+  formatRequestDate,
+  formatTaskTime,
+  toAppDateKey,
+  toUtcIsoFromAppDateTime,
+} from '@/lib/dateTimeUtils';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import { useNavigation } from 'expo-router';
+import { useNavigation , Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -34,12 +40,6 @@ import { useToast } from '@/context/toast-context';
 import { useTeams } from '@/hooks/use-teams';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { useTodoList } from '@/hooks/use-todo-list';
-import {
-  formatRequestDate,
-  formatTaskTime,
-  toAppDateKey,
-  toUtcIsoFromAppDateTime,
-} from '@/lib/dateTimeUtils';
 import {
   defaultRecurrenceNone,
   formatRecurrenceSummaryCompactRu,
@@ -151,8 +151,9 @@ export default function TaskDetailsScreen() {
   const tasksInvalidateVersion = useUserTasksInvalidateStore((s) => s.version);
   const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
 
-  const [fetchedTask, setFetchedTask] = useState<UserTask | null>(null);
-  const [loadingTask, setLoadingTask] = useState(false);
+  const taskScope = JSON.stringify([taskId, isGuest, currentUserId]);
+  const [fetchedTask, setFetchedTask] = useScopedState<UserTask | null>(taskScope, null);
+  const [loadingTask, setLoadingTask] = useScopedState(taskScope, !!taskId && !isGuest);
 
   // Сама задача, а не массив: каждое изменение пересоздаёт пустой список хука, и с массивом
   // в зависимостях карточка перечитывала задачу посреди сохранения и откатывала переключатель.
@@ -171,22 +172,17 @@ export default function TaskDetailsScreen() {
       patch(saved ?? (Object.fromEntries(Object.keys(updates).map((key) => [key, t[key as keyof UserTask]])) as Partial<UserTask>));
       return saved;
     },
-    [saveTask]
+    [saveTask, setFetchedTask]
   );
 
   useEffect(() => {
     if (!taskId || isGuest) {
-      setFetchedTask(null);
-      setLoadingTask(false);
       return;
     }
     if (listedTask) {
-      setFetchedTask(null);
-      setLoadingTask(false);
       return;
     }
     let cancelled = false;
-    setLoadingTask(true);
     void getUserTask(taskId).then((res) => {
       if (cancelled) return;
       if (res.ok) setFetchedTask(res.data);
@@ -195,7 +191,7 @@ export default function TaskDetailsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [taskId, isGuest, listedTask, tasksInvalidateVersion]);
+  }, [taskId, isGuest, listedTask, tasksInvalidateVersion, setFetchedTask, setLoadingTask]);
 
   const canEditDetails = !!task && canEditUserTaskDetails(task, currentUserId);
 
@@ -209,15 +205,17 @@ export default function TaskDetailsScreen() {
   }, [showToast]);
 
   const scheduledEnabled = !!task?.scheduled_at;
-  const [titleDraft, setTitleDraft] = useState('');
+  const [titleDraft, setTitleDraft] = useScopedState(JSON.stringify([task?.id, task?.title]), task?.title ?? '');
 
   const taskRef = useRef(task);
   const canEditDetailsRef = useRef(canEditDetails);
   const titleDraftRef = useRef(titleDraft);
   const completeToggleBusyRef = useRef(false);
-  taskRef.current = task;
-  canEditDetailsRef.current = canEditDetails;
-  titleDraftRef.current = titleDraft;
+  useEffect(() => {
+    taskRef.current = task;
+    canEditDetailsRef.current = canEditDetails;
+    titleDraftRef.current = titleDraft;
+  }, [task, canEditDetails, titleDraft]);
 
   const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -242,10 +240,6 @@ export default function TaskDetailsScreen() {
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
 
   /** Заголовок: только id/title — не цепляем remind/priority, чтобы не было гонок с PATCH при быстром UI. */
-  useEffect(() => {
-    if (!task) return;
-    setTitleDraft(task.title ?? '');
-  }, [task?.id, task?.title]);
 
   useEffect(() => {
     let cancelled = false;
@@ -286,7 +280,7 @@ export default function TaskDetailsScreen() {
     }
     if (next === t.title) return;
     await updateTask(t, { title: next });
-  }, [updateTask]);
+  }, [setTitleDraft, updateTask]);
 
   const scheduleTitleSave = useCallback(() => {
     if (!canEditDetailsRef.current) return;
@@ -518,7 +512,7 @@ export default function TaskDetailsScreen() {
     });
 
     if (result.canceled) return;
-    const assets = (result as any).assets as Array<{ uri: string; mimeType?: string; fileName?: string }>;
+    const assets = (result as any).assets as { uri: string; mimeType?: string; fileName?: string }[];
     if (!Array.isArray(assets) || assets.length === 0) return;
 
     const extFromUri = (uri: string) => {
@@ -556,7 +550,7 @@ export default function TaskDetailsScreen() {
     // expo-document-picker (SDK 49+) uses { canceled, assets }.
     if ((result as { canceled?: boolean }).canceled) return;
 
-    const assets = (result as { assets?: Array<{ uri: string; mimeType?: string; name?: string }> }).assets ?? [];
+    const assets = (result as { assets?: { uri: string; mimeType?: string; name?: string }[] }).assets ?? [];
 
     if (!Array.isArray(assets) || assets.length === 0) return;
 
@@ -665,7 +659,7 @@ export default function TaskDetailsScreen() {
         router.back();
       }
     },
-    [bumpTasks, router, showToast]
+    [bumpTasks, router, setFetchedTask, showToast]
   );
 
   /** Исполнитель меняется только передачей: с подтверждением и записью в историю. */
@@ -728,7 +722,7 @@ export default function TaskDetailsScreen() {
   }
 
   const todayKey = toAppDateKey(new Date());
-  const tomorrowKey = toAppDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const tomorrowKey = addDaysToDateKey(todayKey, 1);
 
   const scheduledDateLabel = task.scheduled_at ? toAppDateKey(task.scheduled_at) : 'Без срока';
   const scheduledTimeLabel = task.scheduled_at ? formatTaskTime(task.scheduled_at) : '';

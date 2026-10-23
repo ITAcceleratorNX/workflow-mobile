@@ -150,7 +150,7 @@ export default function CreateRequestScreen() {
 
   const [requestType, setRequestType] = useState('normal');
   const [plannedDate, setPlannedDate] = useState('');
-  const [isRecurringTask, setIsRecurringTask] = useState(false);
+  const isRecurringTask = requestType === 'recurring';
   const [recurrenceType, setRecurrenceType] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('weekly');
   const [recurrenceInterval, setRecurrenceInterval] = useState(1);
   const [recurrenceStartDate, setRecurrenceStartDate] = useState(new Date());
@@ -161,7 +161,7 @@ export default function CreateRequestScreen() {
   const [complexity, setComplexity] = useState('');
   const [sla, setSla] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
-  const [selectedExecutors, setSelectedExecutors] = useState<Array<{ id: number; role: 'executor' | 'leader' }>>([]);
+  const [selectedExecutors, setSelectedExecutors] = useState<{ id: number; role: 'executor' | 'leader' }[]>([]);
 
   const [createMode, setCreateMode] = useState<'create' | 'createAndComplete'>('create');
   const [completionComment, setCompletionComment] = useState('');
@@ -268,26 +268,25 @@ export default function CreateRequestScreen() {
       setLoading(false);
     };
     load();
-  }, [role, user?.id]);
+  }, [role, user?.id, isGuest]);
+
+  const categoryScope = JSON.stringify([isGuest, effectiveOfficeId]);
+  const [previousCategoryScope, setPreviousCategoryScope] = useState(categoryScope);
+  if (categoryScope !== previousCategoryScope) {
+    setPreviousCategoryScope(categoryScope);
+    if (!isGuest) {
+      setCategories([]); setCategoriesLoading(!!effectiveOfficeId);
+      setCategoryId(0); setSubcategoryId(0); setTitle(''); setSelectedExecutors([]);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
     if (isGuest || !effectiveOfficeId) {
-      if (!isGuest) {
-        setCategories([]);
-        setCategoriesLoading(false);
-      }
       return () => {
         cancelled = true;
       };
     }
-
-    setCategoriesLoading(true);
-    setCategories([]);
-    setCategoryId(0);
-    setSubcategoryId(0);
-    setTitle('');
-    setSelectedExecutors([]);
 
     void (async () => {
       const catRes = await getServiceCategories(effectiveOfficeId);
@@ -306,12 +305,13 @@ export default function CreateRequestScreen() {
     };
   }, [isGuest, effectiveOfficeId, showToast]);
 
+  const executorScope = JSON.stringify([role, categoryId]);
+  const [previousExecutorScope, setPreviousExecutorScope] = useState(executorScope);
+  if (executorScope !== previousExecutorScope) {
+    setPreviousExecutorScope(executorScope); setExecutors([]); setSelectedExecutors([]);
+  }
   useEffect(() => {
-    if (role !== 'department-head' || categoryId <= 0) {
-      setExecutors([]);
-      setSelectedExecutors([]);
-      return;
-    }
+    if (role !== 'department-head' || categoryId <= 0) return;
     let cancelled = false;
     getExecutors(categoryId).then((res) => {
       if (cancelled) return;
@@ -327,17 +327,19 @@ export default function CreateRequestScreen() {
     };
   }, [role, categoryId]);
 
+  const locationScope = JSON.stringify([isGuest, locationSource, selectedOfficeId]);
+  const [previousLocationScope, setPreviousLocationScope] = useState(locationScope);
+  if (locationScope !== previousLocationScope) {
+    setPreviousLocationScope(locationScope); setLocationCatalogRows([]);
+    setLocationCatalogLoading(!isGuest && locationSource === 'office' && !!selectedOfficeId);
+  }
   useEffect(() => {
     let cancelled = false;
     if (isGuest || locationSource !== 'office' || !selectedOfficeId) {
-      setLocationCatalogRows([]);
-      setLocationCatalogLoading(false);
       return () => {
         cancelled = true;
       };
     }
-    setLocationCatalogLoading(true);
-    setLocationCatalogRows([]);
     (async () => {
       const res = await getOfficeLocationCatalog(selectedOfficeId);
       if (cancelled) return;
@@ -353,32 +355,23 @@ export default function CreateRequestScreen() {
     };
   }, [isGuest, locationSource, selectedOfficeId]);
 
-  useEffect(() => {
-    setSelectedBlock('');
-    setSelectedLocation('');
-    setSelectedRoom('');
-    setCustomLocation('');
-    setCustomRoom('');
-  }, [selectedOfficeId, locationSource]);
+  const officeLocationKey = JSON.stringify([selectedOfficeId, locationSource]);
+  const [previousOfficeLocation, setPreviousOfficeLocation] = useState(officeLocationKey);
+  if (previousOfficeLocation !== officeLocationKey) {
+    setPreviousOfficeLocation(officeLocationKey); setSelectedBlock(''); setSelectedLocation(''); setSelectedRoom(''); setCustomLocation(''); setCustomRoom('');
+  }
 
-  useEffect(() => {
-    setSelectedLocation('');
-    setSelectedRoom('');
-    setCustomLocation('');
-    setCustomRoom('');
-  }, [selectedBlock]);
+  const blockKey = selectedBlock;
+  const [previousBlock, setPreviousBlock] = useState(blockKey);
+  if (previousBlock !== blockKey) {
+    setPreviousBlock(blockKey); setSelectedLocation(''); setSelectedRoom(''); setCustomLocation(''); setCustomRoom('');
+  }
 
-  useEffect(() => {
-    setSelectedRoom('');
-    setCustomRoom('');
-  }, [selectedLocation]);
-
-  useEffect(() => {
-    if (requestType !== 'planned' && requestType !== 'recurring') {
-      setPlannedDate('');
-    }
-    setIsRecurringTask(requestType === 'recurring');
-  }, [requestType]);
+  const locationKey = selectedLocation;
+  const [previousLocation, setPreviousLocation] = useState(locationKey);
+  if (previousLocation !== locationKey) {
+    setPreviousLocation(locationKey); setSelectedRoom(''); setCustomRoom('');
+  }
 
   const buildLocationDetail = useCallback((): string => {
     if (locationSource === 'cabinet' && selectedCabinetRoom) {
@@ -692,13 +685,15 @@ export default function CreateRequestScreen() {
     locationSource,
     selectedCabinetRoom,
     selectedOfficeId,
-    selectedOffice,
-    offices,
     canSubmit,
     role,
     createMode,
     selectedExecutors,
+    isRecurringTask,
     requestType,
+    selectedOffice,
+    offices,
+    buildLocationDetail,
     plannedDate,
     title,
     description,
@@ -707,16 +702,18 @@ export default function CreateRequestScreen() {
     complexity,
     sla,
     photos,
-    afterPhotos,
-    completionComment,
-    completionDate,
-    buildLocationDetail,
-    isRecurringTask,
+    isGuest,
     recurrenceType,
     recurrenceInterval,
     recurrenceStartDate,
-    router,
+    completionComment,
+    completionDate,
+    user,
+    selectedCategory,
+    addGuestRequest,
     showToast,
+    router,
+    afterPhotos,
   ]);
 
   const goBack = useCallback(() => {
@@ -1110,7 +1107,7 @@ export default function CreateRequestScreen() {
                     key={t.value}
                     onPress={() => {
                       setRequestType(t.value);
-                      setIsRecurringTask(t.value === 'recurring');
+                      if (t.value !== 'planned' && t.value !== 'recurring') setPlannedDate('');
                     }}
                     style={[styles.chip, { borderColor }, requestType === t.value && themeStyles.chipActive]}
                   >

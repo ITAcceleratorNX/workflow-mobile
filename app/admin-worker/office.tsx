@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -90,10 +91,8 @@ export default function AdminWorkerOfficeScreen() {
   const accentSoft = useThemeColor({}, 'accentSoft');
   const textSecondary = useThemeColor({}, 'textSecondary');
 
-  const [offices, setOffices] = useState<Office[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [rooms, setRooms] = useState<MeetingRoom[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
@@ -137,19 +136,11 @@ export default function AdminWorkerOfficeScreen() {
   const [savingRoomId, setSavingRoomId] = useState<number | null>(null);
   const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null);
 
+  const { data: offices, setData: setOffices, loading, error, refresh } = useAsyncResource(getOffices, []);
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    const list = await getOffices();
-    setOffices(list);
-    setLoading(false);
-    setRefreshing(false);
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+    try { await refresh(); } finally { setRefreshing(false); }
+  }, [refresh]);
 
   const loadRooms = useCallback(async (officeId: number) => {
     setRoomsLoading(true);
@@ -396,7 +387,7 @@ export default function AdminWorkerOfficeScreen() {
       }
       setSavingDataId(null);
     },
-    [editName, editAddress, editCity, editBlock, editFloor, editCoordinates, editOfficePhoto, showToast]
+    [editName, editFloor, editCoordinates, editBlock, editOfficePhoto, showToast, editAddress, editCity, setOffices]
   );
 
   const handleCreateOffice = useCallback(async () => {
@@ -521,7 +512,7 @@ export default function AdminWorkerOfficeScreen() {
       }
       setSavingId(null);
     },
-    [startInput, endInput, autoTrack, showToast]
+    [startInput, endInput, autoTrack, showToast, setOffices]
   );
 
   const onRefresh = useCallback(() => load(true), [load]);

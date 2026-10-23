@@ -1,8 +1,9 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { MaterialIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -85,9 +86,9 @@ export function TaskScheduleSheetContent({
   onRecurrenceChange,
 }: TaskScheduleSheetContentProps) {
   const colorScheme = useColorScheme();
-  const [showScheduleTimePicker, setShowScheduleTimePicker] = useState(false);
-  const [repeatMenuOpen, setRepeatMenuOpen] = useState(false);
-  const [customRepeatOpen, setCustomRepeatOpen] = useState(false);
+  const [showScheduleTimePicker, setShowScheduleTimePicker] = useScopedState(active, false);
+  const [repeatMenuOpen, setRepeatMenuOpen] = useScopedState(active, false);
+  const [customRepeatOpen, setCustomRepeatOpen] = useScopedState(active, false);
   const [customInterval, setCustomInterval] = useState(1);
   const [customUnit, setCustomUnit] = useState<RecurrenceCustomUnit>('day');
   const [customWeekdays, setCustomWeekdays] = useState<number[]>([1]);
@@ -109,14 +110,6 @@ export function TaskScheduleSheetContent({
     [customInterval, customUnit]
   );
 
-  useEffect(() => {
-    if (!active) {
-      setShowScheduleTimePicker(false);
-      setRepeatMenuOpen(false);
-      setCustomRepeatOpen(false);
-    }
-  }, [active]);
-
   const openCustomEditor = useCallback(() => {
     if (recurrence.recurrence_type === 'custom') {
       const n = Math.min(365, Math.max(1, recurrence.recurrence_interval ?? 1));
@@ -132,7 +125,14 @@ export function TaskScheduleSheetContent({
     }
     setRepeatMenuOpen(false);
     setCustomRepeatOpen(true);
-  }, [recurrence]);
+  }, [
+    recurrence.recurrence_custom_unit,
+    recurrence.recurrence_interval,
+    recurrence.recurrence_type,
+    recurrence.recurrence_weekdays,
+    setCustomRepeatOpen,
+    setRepeatMenuOpen,
+  ]);
 
   const applyCustomRepeat = useCallback(() => {
     const n = Math.min(365, Math.max(1, customInterval));
@@ -141,12 +141,12 @@ export function TaskScheduleSheetContent({
     onRecurrenceChange(customPayload(n, customUnit, wds));
     setCustomRepeatOpen(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [customInterval, customUnit, customWeekdays, onRecurrenceChange]);
+  }, [customInterval, customUnit, customWeekdays, onRecurrenceChange, setCustomRepeatOpen]);
 
   const closeCustomRepeat = useCallback(() => {
     setCustomRepeatOpen(false);
     setRepeatMenuOpen(true);
-  }, []);
+  }, [setCustomRepeatOpen, setRepeatMenuOpen]);
 
   const toggleWeekday = useCallback((wd: number) => {
     setCustomWeekdays((prev) => {

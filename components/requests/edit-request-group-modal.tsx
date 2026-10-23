@@ -1,3 +1,4 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Keyboard,
@@ -59,9 +60,12 @@ export function EditRequestGroupModal({
   const backgroundColor = useThemeColor({}, 'background');
   const cardBackground = useThemeColor({}, 'cardBackground');
 
-  const [requestType, setRequestType] = useState('normal');
-  const [locationDetail, setLocationDetail] = useState('');
-  const [subRequests, setSubRequests] = useState<Record<number, EditableSubRequestState>>({});
+  const formKey = JSON.stringify([visible, request]);
+  const [requestType, setRequestType] = useScopedState(formKey, request?.request_type ?? 'normal');
+  const [locationDetail, setLocationDetail] = useScopedState(formKey, request?.location_detail ?? '');
+  const [subRequests, setSubRequests] = useScopedState<Record<number, EditableSubRequestState>>(formKey, () => Object.fromEntries((request?.requests ?? []).map((sr) => [sr.id, {
+    title: sr.title ?? '', description: sr.description ?? '', complexity: sr.complexity ?? '', sla: sr.sla ?? '', category_id: sr.category_id ?? undefined,
+  }])));
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const {
@@ -76,23 +80,6 @@ export function EditRequestGroupModal({
     onClose,
     dismissAllowed: !loading,
   });
-
-  useEffect(() => {
-    if (!visible || !request) return;
-    setRequestType(request.request_type ?? 'normal');
-    setLocationDetail(request.location_detail ?? '');
-    const next: Record<number, EditableSubRequestState> = {};
-    (request.requests ?? []).forEach((sr) => {
-      next[sr.id] = {
-        title: sr.title ?? '',
-        description: sr.description ?? '',
-        complexity: sr.complexity ?? '',
-        sla: sr.sla ?? '',
-        category_id: sr.category_id ?? undefined,
-      };
-    });
-    setSubRequests(next);
-  }, [visible, request]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';

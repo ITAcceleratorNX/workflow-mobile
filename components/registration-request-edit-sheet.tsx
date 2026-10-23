@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useScopedState } from '@/hooks/use-scoped-state';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, TextInput } from 'react-native';
 
 import { Select } from '@/components/ui';
@@ -45,53 +47,23 @@ export function RegistrationRequestEditSheet({
   const backgroundColor = useThemeColor({}, 'background');
   const dangerColor = useThemeColor({}, 'danger');
 
-  const [officeId, setOfficeId] = useState<string>('');
-  const [companyId, setCompanyId] = useState<string>('');
-  const [companyOtherName, setCompanyOtherName] = useState<string>('');
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [companiesLoading, setCompaniesLoading] = useState(false);
+  const formKey = JSON.stringify([visible, request]);
+  const [officeId, setOfficeId] = useScopedState(formKey, request?.office_id != null ? String(request.office_id) : '');
+  const [companyId, setCompanyId] = useScopedState(formKey, request?.role !== 'client' ? '' : request.company_id != null ? String(request.company_id) : request.company_other_name ? COMPANY_OTHER_VALUE : NONE_VALUE);
+  const [companyOtherName, setCompanyOtherName] = useScopedState(formKey, request?.role === 'client' && request.company_id == null ? request.company_other_name ?? '' : '');
+
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useScopedState<string | null>(formKey, null);
 
   const isClient = request?.role === 'client';
 
-  useEffect(() => {
-    if (!request) return;
-    setOfficeId(request.office_id != null ? String(request.office_id) : '');
-    if (!isClient) {
-      setCompanyId('');
-      setCompanyOtherName('');
-      return;
-    }
-    if (request.company_id != null) {
-      setCompanyId(String(request.company_id));
-      setCompanyOtherName('');
-    } else if (request.company_other_name) {
-      setCompanyId(COMPANY_OTHER_VALUE);
-      setCompanyOtherName(request.company_other_name);
-    } else {
-      setCompanyId(NONE_VALUE);
-      setCompanyOtherName('');
-    }
-    setError(null);
-  }, [request, isClient]);
-
-  useEffect(() => {
-    if (!visible || !isClient) {
-      setCompanies([]);
-      return;
-    }
+  const fetchCompanies = useCallback(async () => {
     const oid = Number(officeId);
-    if (!Number.isFinite(oid) || oid <= 0) {
-      setCompanies([]);
-      return;
-    }
-    setCompaniesLoading(true);
-    getOfficeCompanies(oid).then((res) => {
-      setCompanies(res.ok ? res.data : []);
-      setCompaniesLoading(false);
-    });
-  }, [visible, isClient, officeId]);
+    if (!Number.isInteger(oid) || oid <= 0) return [];
+    const res = await getOfficeCompanies(oid);
+    return res.ok ? res.data : [];
+  }, [officeId]);
+  const { data: companies, loading: companiesLoading } = useAsyncResource<Company[]>(fetchCompanies, [], visible && isClient && Number(officeId) > 0);
 
   const officeOptions = useMemo(
     () => offices.map((o) => ({ value: String(o.id), label: o.name })),

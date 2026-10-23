@@ -1,11 +1,11 @@
 import { MaterialIcons } from '@expo/vector-icons';
+import type { ReactNode } from 'react';
 import {
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
-  type ReactNode,
   type ViewStyle,
 } from 'react-native';
 
@@ -161,7 +161,7 @@ export function RequestLocationCard({
   locationDetail?: string;
 }) {
   const parsed = parseLocationDetail(locationDetail);
-  const rows: Array<{ label: string; value: string }> = [];
+  const rows: { label: string; value: string }[] = [];
 
   if (officeName?.trim()) rows.push({ label: 'Офис', value: officeName.trim() });
   if (officeAddress?.trim()) rows.push({ label: 'Адрес', value: officeAddress.trim() });
@@ -203,7 +203,7 @@ export function RequestMetaCard({
   responsibleName?: string;
   completionComment?: string;
 }) {
-  const rows: Array<{ label: string; value: string }> = [];
+  const rows: { label: string; value: string }[] = [];
 
   if (categoryName?.trim()) {
     rows.push({
@@ -270,7 +270,7 @@ export function RequestPhotoStrip({
   photos,
   onPress,
 }: {
-  photos: Array<{ photo_url: string }>;
+  photos: { photo_url: string }[];
   onPress: (url: string) => void;
 }) {
   const surfaceMuted = useThemeColor({}, 'surfaceMuted');

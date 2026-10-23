@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Modal,
   Pressable,
@@ -42,51 +42,44 @@ export function NotificationsList() {
   const border = useThemeColor({}, 'border');
   const primary = useThemeColor({}, 'primary');
 
-  const loadNotifications = useCallback(
-    async (pageNum: number, append: boolean) => {
-      if (append) {
-        setLoadingMore(true);
-      } else {
-        setLoading(true);
-      }
-      setError(null);
-
-      const result = await fetchNotifications(pageNum, PAGE_SIZE);
-
-      if (append) {
-        setLoadingMore(false);
-      } else {
-        setLoading(false);
-      }
-
-      if (!result.ok) {
-        if (result.unauthorized) return;
-        setError(result.error);
-        if (!append) setNotifications([]);
-        return;
-      }
-
-      const list = result.data.notifications ?? [];
-      const total = result.data.totalPages ?? (list.length >= PAGE_SIZE ? 2 : 1);
-
-      if (append) {
-        setNotifications((prev) => {
-          const ids = new Set(prev.map((n) => n.id));
-          const newOnes = list.filter((n) => !ids.has(n.id));
-          return [...prev, ...newOnes];
-        });
-      } else {
-        setNotifications(list);
-      }
-      setPage(pageNum);
-      setTotalPages(total);
-    },
-    []
-  );
+  const applyNotificationsPage = useCallback((result: Awaited<ReturnType<typeof fetchNotifications>>, pageNum: number, append: boolean) => {
+    setLoading(false); setLoadingMore(false);
+    if (!result.ok) {
+      if (!result.unauthorized) setError(result.error);
+      if (!append) setNotifications([]);
+      return;
+    }
+    const list = result.data.notifications ?? [];
+    setNotifications((previous) => {
+      if (!append) return list;
+      const ids = new Set(previous.map((notification) => notification.id));
+      return [...previous, ...list.filter((notification) => !ids.has(notification.id))];
+    });
+    setPage(pageNum);
+    setTotalPages(result.data.totalPages ?? (list.length >= PAGE_SIZE ? pageNum + 1 : pageNum));
+  }, []);
+  const requestGeneration = useRef(0);
+  const paginationBusy = useRef(false);
+  const loadNotifications = useCallback(async (pageNum: number, append: boolean) => {
+    if (append && paginationBusy.current) return;
+    const generation = append ? requestGeneration.current : ++requestGeneration.current;
+    paginationBusy.current = append;
+    if (append) setLoadingMore(true); else { setLoading(true); setLoadingMore(false); }
+    setError(null);
+    const result = await fetchNotifications(pageNum, PAGE_SIZE);
+    if (generation !== requestGeneration.current) return;
+    paginationBusy.current = false;
+    applyNotificationsPage(result, pageNum, append);
+  }, [applyNotificationsPage]);
 
   useEffect(() => {
-    loadNotifications(1, false);
-  }, [loadNotifications]);
+    const generation = ++requestGeneration.current;
+    let cancelled = false;
+    void fetchNotifications(1, PAGE_SIZE).then((result) => {
+      if (!cancelled && generation === requestGeneration.current) applyNotificationsPage(result, 1, false);
+    });
+    return () => { cancelled = true; requestGeneration.current += 1; };
+  }, [applyNotificationsPage]);
 
   const handleNotificationPress = useCallback(
     async (notification: Notification) => {
@@ -110,9 +103,9 @@ export function NotificationsList() {
   );
 
   const handleLoadMore = useCallback(() => {
-    if (loadingMore || page >= totalPages) return;
+    if (loading || loadingMore || page >= totalPages) return;
     loadNotifications(page + 1, true);
-  }, [loadingMore, page, totalPages, loadNotifications]);
+  }, [loading, loadingMore, page, totalPages, loadNotifications]);
 
   const handleOpenRequest = useCallback(
     (requestGroupId: number) => {

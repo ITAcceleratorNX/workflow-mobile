@@ -1,3 +1,4 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -112,9 +113,6 @@ export default function RequestDetailScreen() {
   const primaryColor = useThemeColor({}, 'primary');
   const borderColor = useThemeColor({}, 'border');
 
-  const [request, setRequest] = useState<RequestGroup | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null);
 
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -140,10 +138,6 @@ export default function RequestDetailScreen() {
   const [subForRedirect, setSubForRedirect] = useState<SubRequest | null>(null);
   const [subForAssign, setSubForAssign] = useState<SubRequest | null>(null);
 
-  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
-  const [executors, setExecutors] = useState<ExecutorInCategory[]>([]);
-  const [executorsLoading, setExecutorsLoading] = useState(false);
-
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectError, setRejectError] = useState<string | null>(null);
   const [redirectError, setRedirectError] = useState<string | null>(null);
@@ -152,80 +146,33 @@ export default function RequestDetailScreen() {
   const [offices, setOffices] = useState<Office[]>([]);
   /** Офис, выбранный в модалке принятия: категории грузятся под него. */
   const [acceptOfficeId, setAcceptOfficeId] = useState<number | null>(null);
-  const [acceptCategories, setAcceptCategories] = useState<{ id: number; name: string }[]>([]);
-  const [acceptCategoriesLoading, setAcceptCategoriesLoading] = useState(false);
+
   const [adminAcceptError, setAdminAcceptError] = useState<string | null>(null);
   const [adminRejectError, setAdminRejectError] = useState<string | null>(null);
   const [showCommentsModal, setShowCommentsModal] = useState(false);
 
   const numId = id ? parseInt(id, 10) : NaN;
 
-  const refetch = useCallback(async () => {
-    if (!id || Number.isNaN(numId)) return;
+  const fetchRequest = useCallback(async () => {
+    if (!id || !Number.isInteger(numId) || numId === 0) throw new Error('Неверный id заявки');
     if (isGuest && numId < 0) {
-      const found = guestRequests.find((r) => r.id === numId);
-      if (found) setRequest(found as RequestGroup);
-      return;
+      const found = guestRequests.find((request) => request.id === numId);
+      if (!found) throw new Error('Заявка не найдена (демо)');
+      return found as RequestGroup;
     }
     const res = await getRequestGroupById(numId);
-    if (res.ok) setRequest(res.data);
+    if (!res.ok) throw new Error(res.error);
+    return res.data;
   }, [id, numId, isGuest, guestRequests]);
+  const { data: request, setData: setRequest, loading, error, refresh: refetch } = useAsyncResource<RequestGroup | null>(fetchRequest, null, true, user?.id);
 
-  useEffect(() => {
-    if (!id || Number.isNaN(numId)) {
-      setError('Неверный id заявки');
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    const load = async () => {
-      if (isGuest && numId < 0) {
-        const found = guestRequests.find((r) => r.id === numId);
-        if (!cancelled) {
-          if (found) setRequest(found as RequestGroup);
-          else setError('Заявка не найдена (демо)');
-          setLoading(false);
-        }
-        return;
-      }
-      const res = await getRequestGroupById(numId);
-      if (!cancelled) {
-        if (res.ok) setRequest(res.data);
-        else setError(res.error);
-        setLoading(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, numId, isGuest, guestRequests]);
-
-  useEffect(() => {
-    if (!showEditModal || !request) {
-      if (!showEditModal) setCategories([]);
-      return;
-    }
-    const officeId = request.office_id ?? request.office?.id;
-    if (!officeId) {
-      setCategories([]);
-      return;
-    }
-    let cancelled = false;
-    void getServiceCategories(officeId).then((res) => {
-      if (cancelled) return;
-      if (res.ok && res.data) {
-        setCategories(res.data.map((c) => ({ id: c.id, name: c.name })));
-      } else {
-        setCategories([]);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [showEditModal, request]);
+  const editOfficeId = request?.office_id ?? request?.office?.id;
+  const loadEditCategories = useCallback(async () => {
+    if (!editOfficeId) return [];
+    const res = await getServiceCategories(editOfficeId);
+    return res.ok ? res.data : [];
+  }, [editOfficeId]);
+  const { data: categories } = useAsyncResource(loadEditCategories, [], showEditModal && !!editOfficeId);
 
   useEffect(() => {
     if (role === 'admin-worker') {
@@ -234,62 +181,20 @@ export default function RequestDetailScreen() {
   }, [role]);
 
   /** Категории привязаны к офису: перезагружаем их при смене офиса в модалке принятия. */
-  useEffect(() => {
-    if (!showAcceptGroupModal || acceptOfficeId == null) {
-      if (!showAcceptGroupModal) {
-        setAcceptCategories([]);
-        setAcceptCategoriesLoading(false);
-      }
-      return;
-    }
-    let cancelled = false;
-    setAcceptCategoriesLoading(true);
-    void getServiceCategories(acceptOfficeId).then((res) => {
-      if (cancelled) return;
-      setAcceptCategories(res.ok && res.data ? res.data.map((c) => ({ id: c.id, name: c.name })) : []);
-      setAcceptCategoriesLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [showAcceptGroupModal, acceptOfficeId]);
+  const loadAcceptCategories = useCallback(async () => {
+    if (acceptOfficeId == null) return [];
+    const res = await getServiceCategories(acceptOfficeId);
+    return res.ok ? res.data : [];
+  }, [acceptOfficeId]);
+  const { data: acceptCategories, loading: acceptCategoriesLoading } = useAsyncResource(loadAcceptCategories, [], showAcceptGroupModal && acceptOfficeId != null);
 
-  useEffect(() => {
-    if (role !== 'department-head' || !showAssignModal || !subForAssign) {
-      if (!showAssignModal) {
-        setExecutors([]);
-        setExecutorsLoading(false);
-      }
-      return;
-    }
-
-    let cancelled = false;
-    setExecutorsLoading(true);
-    const officeId = request?.office_id ?? request?.office?.id;
-    const categoryId = getSubRequestCategoryId(subForAssign);
-
-    if (!categoryId) {
-      setExecutors([]);
-      setExecutorsLoading(false);
-      return;
-    }
-
-    void getExecutors(categoryId, officeId).then((res) => {
-      if (cancelled) return;
-      setExecutors(res.ok && res.data ? res.data : []);
-      setExecutorsLoading(false);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    role,
-    showAssignModal,
-    subForAssign,
-    request?.office_id,
-    request?.office?.id,
-  ]);
+  const assignCategoryId = subForAssign ? getSubRequestCategoryId(subForAssign) : null;
+  const loadExecutors = useCallback(async () => {
+    if (!assignCategoryId) return [];
+    const res = await getExecutors(assignCategoryId, editOfficeId);
+    return res.ok ? res.data : [];
+  }, [assignCategoryId, editOfficeId]);
+  const { data: executors, loading: executorsLoading } = useAsyncResource<ExecutorInCategory[]>(loadExecutors, [], role === 'department-head' && showAssignModal && !!assignCategoryId);
 
   /** Как системный свайп «назад»: pop стека. Без истории (deep link и т.п.) — на список заявок. */
   const goBack = useCallback(() => {
@@ -465,7 +370,7 @@ export default function RequestDetailScreen() {
         showToast({ title: res.error, variant: 'destructive' });
       }
     },
-    [subForRate, refetch, showToast, isGuest, request]
+    [subForRate, isGuest, request, setRequest, showToast, refetch]
   );
 
   const handleRateClient = useCallback(
@@ -506,7 +411,7 @@ export default function RequestDetailScreen() {
   );
 
   const handleAssign = useCallback(
-    async (execs: Array<{ id: number; role: 'executor' | 'leader' }>) => {
+    async (execs: { id: number; role: 'executor' | 'leader' }[]) => {
       if (!subForAssign) return;
       setActionLoading(true);
       setAssignError(null);

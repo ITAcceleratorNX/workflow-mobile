@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useScopedState } from '@/hooks/use-scoped-state';
+
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,11 +25,7 @@ export function useBottomSheetScrollMetrics({
 }: Params) {
   const { height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [innerContentHeight, setInnerContentHeight] = useState(0);
-
-  useEffect(() => {
-    if (!visible) setInnerContentHeight(0);
-  }, [visible]);
+  const [innerContentHeight, setInnerContentHeight] = useScopedState(visible, 0);
 
   const keyboardReserve = keyboardHeight > 0 ? keyboardHeight : keyboardVisible ? 44 : 0;
   /** paddingTop + ручка + заголовок + футер кнопок + paddingBottom шита (без области ScrollView) */

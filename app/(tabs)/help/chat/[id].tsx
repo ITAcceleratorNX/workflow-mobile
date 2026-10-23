@@ -1,3 +1,4 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, {
   useCallback,
@@ -55,12 +56,14 @@ export default function SupportChatScreen() {
   const background = useThemeColor({}, 'background');
   const cardBackground = useThemeColor({}, 'cardBackground');
 
-  const [activeSupportTicket, setActiveSupportTicket] = useState<SupportTicket | null>(null);
-  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
+  const ticketId = id ? Number(id) : NaN;
+  const validTicketId = Number.isInteger(ticketId) && ticketId > 0;
+  const [activeSupportTicket, setActiveSupportTicket] = useScopedState<SupportTicket | null>(id, null);
+  const [supportMessages, setSupportMessages] = useScopedState<SupportMessage[]>(id, []);
   const [supportInputValue, setSupportInputValue] = useState('');
   const [supportSending, setSupportSending] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [supportError, setSupportError] = useState<string | null>(null);
+  const [loading, setLoading] = useScopedState(id, validTicketId);
+  const [supportError, setSupportError] = useScopedState<string | null>(id, validTicketId ? null : 'Неверный идентификатор обращения');
 
   const supportScrollRef = useRef<ScrollView>(null);
 
@@ -69,18 +72,10 @@ export default function SupportChatScreen() {
   const inputBarBottomPadding = insets.bottom + inputBarPaddingBase;
   const keyboardVerticalOffset = 0;
 
-  const ticketId = id ? parseInt(id, 10) : NaN;
-
   useEffect(() => {
-    if (!id || Number.isNaN(ticketId)) {
-      setSupportError('Неверный идентификатор обращения');
-      setLoading(false);
-      return;
-    }
+    if (!validTicketId) return;
 
     let cancelled = false;
-    setLoading(true);
-    setSupportError(null);
 
     const load = async () => {
       const [ticketsRes, messagesRes] = await Promise.all([
@@ -111,7 +106,7 @@ export default function SupportChatScreen() {
     return () => {
       cancelled = true;
     };
-  }, [id, ticketId]);
+  }, [ticketId, validTicketId, setActiveSupportTicket, setSupportMessages, setSupportError, setLoading]);
 
   useEffect(() => {
     setTimeout(() => {
@@ -156,7 +151,7 @@ export default function SupportChatScreen() {
     }
 
     setSupportSending(false);
-  }, [supportInputValue, supportSending, ticketId, isAdminMessages]);
+  }, [supportInputValue, ticketId, supportSending, isAdminMessages, setSupportMessages, setSupportError]);
 
   if (loading) {
     return (

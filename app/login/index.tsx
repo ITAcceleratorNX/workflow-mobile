@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button, TextInput } from '@/components/ui';
-import { FontSizes, LineHeights, Radius, Spacing } from '@/constants/theme';
+import { FontSizes, LineHeights, Spacing } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { formatPhone, PHONE_REGEX } from '@/lib';
 import { getCurrentUser, loginWithPhone } from '@/lib/auth';

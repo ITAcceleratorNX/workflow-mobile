@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { createJSONStorage } from 'zustand/middleware';
+import { persist , createJSONStorage } from 'zustand/middleware';
 
 import { formatDateForApi } from '@/lib/dateTimeUtils';
 import { persistStorage } from '@/lib/storage';

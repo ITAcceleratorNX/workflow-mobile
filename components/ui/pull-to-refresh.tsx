@@ -42,6 +42,10 @@ function scrollableProps(el: React.ReactElement): ScrollableChildProps {
   return el.props as ScrollableChildProps;
 }
 
+function RefreshableChild({ child, ...props }: ScrollableChildProps & { child: React.ReactElement }) {
+  return cloneElement(child as React.ReactElement<ScrollableChildProps>, props);
+}
+
 export interface PullToRefreshProps {
   refreshing: boolean;
   onRefresh: () => void;
@@ -75,8 +79,8 @@ export function PullToRefresh({
   refreshZoneHeight = 70,
   style,
 }: PullToRefreshProps) {
-  const [pullProgress, setPullProgress] = useState(0);
-  const [isVisible, setIsVisible] = useState(false);
+  const [pullProgress, setPullProgress] = useState(refreshing ? 1 : 0);
+  const [isVisible, setIsVisible] = useState(refreshing);
   const refreshStartedAt = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hapticBucketRef = useRef(0);
@@ -88,33 +92,37 @@ export function PullToRefresh({
   const pulseShared = useSharedValue(1);
   const opacityShared = useSharedValue(0.12);
 
+  const [previousRefreshing, setPreviousRefreshing] = useState(refreshing);
+  if (refreshing !== previousRefreshing) {
+    setPreviousRefreshing(refreshing);
+    if (refreshing) { setIsVisible(true); setPullProgress(1); }
+  }
+
   useEffect(() => {
     if (refreshing) {
       isInCooldownRef.current = false;
       refreshStartedAt.current = Date.now();
-      setIsVisible(true);
-      setPullProgress(1);
       hasReachedFullPullRef.current = true;
       hapticBucketRef.current = 100;
-      opacityShared.value = withTiming(1);
-      scaleShared.value = withSequence(
+      opacityShared.set(withTiming(1));
+      scaleShared.set(withSequence(
         withSpring(1.15, { damping: 8, stiffness: 300 }),
         withSpring(1, { damping: 15, stiffness: 200 })
-      );
-      pulseShared.value = withRepeat(
+      ));
+      pulseShared.set(withRepeat(
         withSequence(
           withTiming(1.08, { duration: 600, easing: Easing.bezier(0.42, 0, 0.58, 1) }),
           withTiming(1, { duration: 600, easing: Easing.bezier(0.42, 0, 0.58, 1) })
         ),
         -1,
         true
-      );
+      ));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       return;
     }
 
     isInCooldownRef.current = true;
-    pulseShared.value = withTiming(1);
+    pulseShared.set(withTiming(1));
     const startedAt = refreshStartedAt.current;
     const elapsed = startedAt ? Date.now() - startedAt : minVisibleMs;
     const wait = Math.max(minVisibleMs - elapsed, 0);
@@ -129,8 +137,8 @@ export function PullToRefresh({
       hapticBucketRef.current = 0;
       refreshStartedAt.current = null;
       hasReachedFullPullRef.current = false;
-      scaleShared.value = withTiming(0.3);
-      opacityShared.value = withTiming(0.12);
+      scaleShared.set(withTiming(0.3));
+      opacityShared.set(withTiming(0.12));
     }, wait);
 
     return () => {
@@ -138,14 +146,14 @@ export function PullToRefresh({
         clearTimeout(hideTimerRef.current);
       }
     };
-  }, [refreshing, minVisibleMs]);
+  }, [refreshing, minVisibleMs, opacityShared, scaleShared, pulseShared]);
 
   useEffect(() => {
     if (refreshing) return;
     const scaleTarget = 0.3 + pullProgress * 0.7;
-    scaleShared.value = withSpring(scaleTarget, { damping: 12, stiffness: 180 });
-    opacityShared.value = withTiming(Math.max(pullProgress, 0.12));
-  }, [pullProgress, refreshing]);
+    scaleShared.set(withSpring(scaleTarget, { damping: 12, stiffness: 180 }));
+    opacityShared.set(withTiming(Math.max(pullProgress, 0.12)));
+  }, [pullProgress, refreshing, opacityShared, scaleShared]);
 
   const triggerProgressHaptic = useCallback((bucket: number) => {
     if (bucket >= 100) {
@@ -250,36 +258,28 @@ export function PullToRefresh({
     return [...base, { paddingTop: topOffset + refreshZoneHeight }];
   }, [existingContentStyle, showRefreshZone, refreshZoneHeight, topOffset]);
 
-  const child = isValidElement(children)
-    ? (() => {
-        const prev = scrollableProps(children);
-        return cloneElement(
-          children as React.ReactElement<ScrollableChildProps>,
-          {
-            refreshControl,
-            ...(contentContainerStyle != null && { contentContainerStyle }),
-            scrollEventThrottle: 16,
-            onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-              if (typeof prev.onScroll === 'function') {
-                prev.onScroll(event);
-              }
-              onChildScroll(event);
-            },
-            onScrollBeginDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-              if (typeof prev.onScrollBeginDrag === 'function') {
-                prev.onScrollBeginDrag(event);
-              }
-              onScrollBeginDrag();
-            },
-            onScrollEndDrag,
-          } satisfies Partial<ScrollableChildProps>
-        );
-      })()
-    : children;
+  const prev = scrollableProps(children);
+  const child = isValidElement(children) ? (
+    <RefreshableChild
+      child={children}
+      refreshControl={refreshControl}
+      {...(contentContainerStyle != null && { contentContainerStyle })}
+      scrollEventThrottle={16}
+      onScroll={(event) => {
+        prev.onScroll?.(event);
+        onChildScroll(event);
+      }}
+      onScrollBeginDrag={(event) => {
+        prev.onScrollBeginDrag?.(event);
+        onScrollBeginDrag();
+      }}
+      onScrollEndDrag={onScrollEndDrag}
+    />
+  ) : children;
 
   const indicatorAnimatedStyle = useAnimatedStyle(() => ({
-    opacity: opacityShared.value,
-    transform: [{ scale: scaleShared.value * pulseShared.value }],
+    opacity: opacityShared.get(),
+    transform: [{ scale: scaleShared.get() * pulseShared.get() }],
   }));
 
   return (

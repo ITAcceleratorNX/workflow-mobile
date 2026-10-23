@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { useScopedState } from '@/hooks/use-scoped-state';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -35,7 +37,6 @@ import {
   createClientRoomSubscription,
   deleteClientRoomSubscription,
 } from '@/lib/api';
-
 
 function formatExpiresAt(iso: string | null): string {
   if (!iso) return '—';
@@ -330,23 +331,15 @@ export default function AdminWorkerSmartHomeScreen() {
   );
 
   // ——— Токены ———
-  const [tokensMeta, setTokensMeta] = useState<{ id: number; expires_at: string | null } | null>(null);
-  const [tokensLoading, setTokensLoading] = useState(true);
-  const [tokensError, setTokensError] = useState<string | null>(null);
+
   const [tokenAction, setTokenAction] = useState<'refresh' | 'delete' | null>(null);
 
-  const loadTokens = useCallback(async () => {
-    setTokensLoading(true);
-    setTokensError(null);
+  const fetchtokensMeta = useCallback(async () => {
     const result = await getYandexTokens();
-    if (result.ok) setTokensMeta(result.data ?? null);
-    else setTokensError(result.error);
-    setTokensLoading(false);
+    if (!result.ok) throw new Error(result.error);
+    return result.data ?? null;
   }, []);
-
-  useEffect(() => {
-    loadTokens();
-  }, [loadTokens]);
+  const { data: tokensMeta, setData: setTokensMeta, loading: tokensLoading, refresh: loadTokens, error: tokensError } = useAsyncResource<{ id: number; expires_at: string | null } | null>(fetchtokensMeta, null);
 
   const handleRefreshTokens = useCallback(async () => {
     setTokenAction('refresh');
@@ -370,43 +363,27 @@ export default function AdminWorkerSmartHomeScreen() {
       showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
     }
     setTokenAction(null);
-  }, [showToast]);
+  }, [setTokensMeta, showToast]);
 
   // ——— Офис (шаг 1, как в браузере) ———
-  const [offices, setOffices] = useState<Office[]>([]);
-  const [officesLoading, setOfficesLoading] = useState(true);
+  const { data: offices, loading: officesLoading } = useAsyncResource<Office[]>(getOffices, []);
+
   const [selectedOfficeId, setSelectedOfficeId] = useState<number | null>(null);
   const [showOfficeDropdown, setShowOfficeDropdown] = useState(false);
 
-  useEffect(() => {
-    setOfficesLoading(true);
-    getOffices().then((list) => {
-      setOffices(list ?? []);
-      setOfficesLoading(false);
-    });
-  }, []);
-
   // ——— Комнаты выбранного офиса ———
-  const [rooms, setRooms] = useState<MeetingRoom[]>([]);
-  const [roomsLoading, setRoomsLoading] = useState(false);
 
-  useEffect(() => {
-    if (selectedOfficeId == null) {
-      setRooms([]);
-      return;
-    }
-    setRoomsLoading(true);
-    getMeetingRooms(selectedOfficeId).then((res) => {
-      if (res.ok) setRooms(res.data);
-      else setRooms([]);
-      setRoomsLoading(false);
-    });
+  const fetchRooms = useCallback(async () => {
+    if (selectedOfficeId == null) return [];
+    const res = await getMeetingRooms(selectedOfficeId);
+    return res.ok ? res.data : [];
   }, [selectedOfficeId]);
+  const { data: rooms, loading: roomsLoading } = useAsyncResource<MeetingRoom[]>(fetchRooms, [], selectedOfficeId != null);
 
   // ——— Комнаты и устройства ———
-  const [roomDevices, setRoomDevices] = useState<RoomDeviceLink[]>([]);
+
   const [yandexDevices, setYandexDevices] = useState<YandexDevice[]>([]);
-  const [linksLoading, setLinksLoading] = useState(true);
+
   const [devicesListLoading, setDevicesListLoading] = useState(false);
   const [showRoomDropdown, setShowRoomDropdown] = useState(false);
   const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
@@ -416,17 +393,12 @@ export default function AdminWorkerSmartHomeScreen() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
 
-  const loadRoomDevices = useCallback(async () => {
-    setLinksLoading(true);
+  const fetchroomDevices = useCallback(async () => {
     const result = await getAllRoomDevices();
-    if (result.ok) setRoomDevices(result.data);
-    else setRoomDevices([]);
-    setLinksLoading(false);
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
   }, []);
-
-  useEffect(() => {
-    loadRoomDevices();
-  }, [loadRoomDevices]);
+  const { data: roomDevices, loading: linksLoading, refresh: loadRoomDevices } = useAsyncResource<RoomDeviceLink[]>(fetchroomDevices, []);
 
   const loadYandexDevices = useCallback(async () => {
     setDevicesListLoading(true);
@@ -518,52 +490,28 @@ export default function AdminWorkerSmartHomeScreen() {
   );
 
   // ——— Привязка клиента/сотрудника к комнате (доступ к умному офису) ———
-  const [subscriptions, setSubscriptions] = useState<ClientRoomSubscription[]>([]);
-  const [subscriptionsLoading, setSubscriptionsLoading] = useState(true);
-  const [officeUsers, setOfficeUsers] = useState<OfficeUser[]>([]);
-  const [officeUsersLoading, setOfficeUsersLoading] = useState(false);
-  const [selectedRoomIdForSub, setSelectedRoomIdForSub] = useState<number | null>(null);
-  const [selectedUserIdForSub, setSelectedUserIdForSub] = useState<number | null>(null);
-  const [showRoomSubDropdown, setShowRoomSubDropdown] = useState(false);
-  const [showUserSubDropdown, setShowUserSubDropdown] = useState(false);
+
+  const [selectedRoomIdForSub, setSelectedRoomIdForSub] = useScopedState<number | null>(selectedOfficeId, null);
+  const [selectedUserIdForSub, setSelectedUserIdForSub] = useScopedState<number | null>(selectedOfficeId, null);
+  const [showRoomSubDropdown, setShowRoomSubDropdown] = useScopedState<boolean>(selectedOfficeId, false);
+  const [showUserSubDropdown, setShowUserSubDropdown] = useScopedState<boolean>(selectedOfficeId, false);
   const [isCreatingSub, setIsCreatingSub] = useState(false);
-  const [subError, setSubError] = useState<string | null>(null);
+  const [subError, setSubError] = useScopedState<string | null>(selectedOfficeId, null);
   const [deletingSubId, setDeletingSubId] = useState<number | null>(null);
 
-  const loadSubscriptions = useCallback(async () => {
-    setSubscriptionsLoading(true);
+  const fetchsubscriptions = useCallback(async () => {
     const result = await getAllClientRoomSubscriptions();
-    if (result.ok) setSubscriptions(result.data);
-    else setSubscriptions([]);
-    setSubscriptionsLoading(false);
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
   }, []);
+  const { data: subscriptions, loading: subscriptionsLoading, refresh: loadSubscriptions } = useAsyncResource<ClientRoomSubscription[]>(fetchsubscriptions, []);
 
-  useEffect(() => {
-    loadSubscriptions();
-  }, [loadSubscriptions]);
-
-  useEffect(() => {
-    if (selectedOfficeId == null) {
-      setOfficeUsers([]);
-      setSelectedRoomIdForSub(null);
-      setSelectedUserIdForSub(null);
-      setShowRoomSubDropdown(false);
-      setShowUserSubDropdown(false);
-      setSubError(null);
-      return;
-    }
-    setOfficeUsersLoading(true);
-    setSelectedRoomIdForSub(null);
-    setSelectedUserIdForSub(null);
-    setShowRoomSubDropdown(false);
-    setShowUserSubDropdown(false);
-    setSubError(null);
-    getOfficeUsers(selectedOfficeId).then((res) => {
-      if (res.ok) setOfficeUsers(res.data);
-      else setOfficeUsers([]);
-      setOfficeUsersLoading(false);
-    });
+  const fetchOfficeUsers = useCallback(async () => {
+    if (selectedOfficeId == null) return [];
+    const res = await getOfficeUsers(selectedOfficeId);
+    return res.ok ? res.data : [];
   }, [selectedOfficeId]);
+  const { data: officeUsers, loading: officeUsersLoading } = useAsyncResource<OfficeUser[]>(fetchOfficeUsers, [], selectedOfficeId != null);
 
   const subscriptionsForOffice = useMemo(() => {
     if (selectedOfficeId == null) return [];
@@ -605,7 +553,17 @@ export default function AdminWorkerSmartHomeScreen() {
       setSubError(result.error);
     }
     setIsCreatingSub(false);
-  }, [selectedRoomIdForSub, selectedUserIdForSub, showToast, loadSubscriptions]);
+  }, [
+    selectedRoomIdForSub,
+    selectedUserIdForSub,
+    setSubError,
+    showToast,
+    setSelectedRoomIdForSub,
+    setSelectedUserIdForSub,
+    setShowRoomSubDropdown,
+    setShowUserSubDropdown,
+    loadSubscriptions,
+  ]);
 
   const handleDeleteSubscription = useCallback(
     async (id: number) => {

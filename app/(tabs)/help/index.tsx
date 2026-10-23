@@ -1,3 +1,4 @@
+import { useAsyncResource } from '@/hooks/use-async-resource';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, {
   useCallback,
@@ -189,8 +190,11 @@ export default function HelpScreen() {
   const [supportFormValue, setSupportFormValue] = useState('');
   const [supportFormSubmitting, setSupportFormSubmitting] = useState(false);
   const [supportError, setSupportError] = useState<string | null>(null);
-  const [myTickets, setMyTickets] = useState<SupportTicket[]>([]);
-  const [loadingTickets, setLoadingTickets] = useState(false);
+  const fetchTickets = useCallback(async () => {
+    const res = await getMySupportTickets();
+    return res.ok ? res.data.tickets ?? [] : [];
+  }, []);
+  const { data: myTickets, setData: setMyTickets, loading: loadingTickets } = useAsyncResource<SupportTicket[]>(fetchTickets, [], !!token && (isAdminMessages || innerChatTab === 'support'), token);
 
   const scrollRef = useRef<ScrollView>(null);
   const supportFormScrollRef = useRef<ScrollView>(null);
@@ -321,7 +325,7 @@ export default function HelpScreen() {
       }
       setSupportFormSubmitting(false);
     },
-    [router]
+    [router, setMyTickets]
   );
 
   const handleSupportFormSubmit = useCallback(
@@ -340,24 +344,6 @@ export default function HelpScreen() {
     },
     [router]
   );
-
-  useEffect(() => {
-    if (!token) return;
-    if (isAdminMessages) {
-      setLoadingTickets(true);
-      getMySupportTickets()
-        .then((res) => (res.ok ? setMyTickets(res.data.tickets ?? []) : setMyTickets([])))
-        .catch(() => setMyTickets([]))
-        .finally(() => setLoadingTickets(false));
-      return;
-    }
-    if (innerChatTab !== 'support') return;
-    setLoadingTickets(true);
-    getMySupportTickets()
-      .then((res) => (res.ok ? setMyTickets(res.data.tickets ?? []) : setMyTickets([])))
-      .catch(() => setMyTickets([]))
-      .finally(() => setLoadingTickets(false));
-  }, [innerChatTab, token, isAdminMessages]);
 
   const scrollPaddingBottom = getAdaptivePadding(windowHeight, 16, 32);
   const inputBarPaddingBase = getAdaptivePadding(windowHeight, 8, 16);

@@ -1,6 +1,8 @@
+import { useScopedState } from '@/hooks/use-scoped-state';
+import { useUserSearch } from '@/hooks/use-user-search';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useMemo, type Dispatch, type SetStateAction } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -17,7 +19,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useAssignUserSearchScope } from '@/hooks/use-assign-user-search-scope';
 import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { searchUsersForAssign, type UserSearchItem } from '@/lib/api';
+
 import { formatUserSearchLabel } from '@/lib/user-search-display';
 import type { Team } from '@/lib/teams-api';
 
@@ -184,9 +186,8 @@ export function TaskExecutorPickerOverlay({
   const border = useThemeColor({}, 'border');
   const cardBg = useThemeColor({}, 'cardBackground');
 
-  const [search, setSearch] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<UserSearchItem[]>([]);
+  const [search, setSearch] = useScopedState(visible, '');
+
   const assignSearch = useAssignUserSearchScope();
 
   const teamMode = teamScope && team != null;
@@ -194,30 +195,7 @@ export function TaskExecutorPickerOverlay({
   const teamMissing = teamScope && team == null && !teamLoading;
   const memberOptions = collectTeamMemberOptions(team ?? undefined);
 
-  useEffect(() => {
-    if (!visible) {
-      setSearch('');
-      setResults([]);
-      setSearching(false);
-    }
-  }, [visible]);
-
-  useEffect(() => {
-    if (!visible || teamMode) return;
-    const q = search.trim();
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      setSearching(true);
-      const res = await searchUsersForAssign(q, assignSearch.searchOptions);
-      setSearching(false);
-      if (res.ok) setResults(res.data);
-      else setResults([]);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search, visible, teamMode, assignSearch.searchOptions]);
+  const { results, searching } = useUserSearch(search, assignSearch.searchOptions, visible && !teamMode);
 
   const pick = useCallback(
     (executor: { id: number; full_name: string } | null) => {
@@ -390,9 +368,8 @@ export function TaskAssigneesPickerOverlay({
   const border = useThemeColor({}, 'border');
   const cardBg = useThemeColor({}, 'cardBackground');
 
-  const [search, setSearch] = useState('');
-  const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<UserSearchItem[]>([]);
+  const [search, setSearch] = useScopedState(visible, '');
+
   const assignSearch = useAssignUserSearchScope();
 
   const teamMode = teamScope && team != null;
@@ -407,34 +384,7 @@ export function TaskAssigneesPickerOverlay({
     [selectedAssignees]
   );
 
-  useEffect(() => {
-    if (!visible) {
-      setSearch('');
-      setResults([]);
-      setSearching(false);
-    }
-  }, [visible]);
-
-  useEffect(() => {
-    if (!visible || teamMode) return;
-    const q = search.trim();
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      setSearching(true);
-      const res = await searchUsersForAssign(q, assignSearch.searchOptions);
-      setSearching(false);
-      if (res.ok) {
-        const list = currentUserId ? res.data.filter((u) => u.id !== currentUserId) : res.data;
-        setResults(list);
-      } else {
-        setResults([]);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search, visible, teamMode, currentUserId, assignSearch.searchOptions]);
+  const { results, searching } = useUserSearch(search, assignSearch.searchOptions, visible && !teamMode, currentUserId);
 
   const toggle = useCallback(
     (u: { id: number; full_name: string }) => {
