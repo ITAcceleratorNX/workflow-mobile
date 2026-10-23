@@ -18,6 +18,8 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 import { useToast } from '@/context/toast-context';
 
+import type { TaskSortField, TaskSortDirection } from "@/lib/task-list-sort";
+
 const DEFAULT_PAGE_SIZE = 50;
 
 /** Поля, которые реально принимает PATCH /user-tasks/:id (остальное только для оптимистичного UI). */
@@ -55,6 +57,8 @@ export type UseTodoListQuery = {
   filter?: TaskFilter;
   view?: TaskListView;
   today?: string;
+  sortBy?: TaskSortField;
+  sortDirection?: TaskSortDirection;
   fromDate?: string;
   toDate?: string;
   completedOn?: string;
@@ -71,12 +75,14 @@ function normalizeQuery(input: UseTodoListQuery | TaskFilter): UseTodoListQuery 
 
 function querySignature(q: UseTodoListQuery): string {
   return JSON.stringify({
-    filter: q.filter ?? null,
-    view: q.view ?? null,
-    today: q.today ?? null,
-    fromDate: q.fromDate ?? null,
-    toDate: q.toDate ?? null,
-    completedOn: q.completedOn ?? null,
+    filter: q.filter,
+    view: q.view,
+    today: q.today,
+    sortBy: q.sortBy,
+    sortDirection: q.sortDirection,
+    fromDate: q.fromDate,
+    toDate: q.toDate,
+    completedOn: q.completedOn,
     light: q.light ?? false,
     pageSize: q.pageSize ?? DEFAULT_PAGE_SIZE,
     enabled: q.enabled !== false,
@@ -93,6 +99,8 @@ function toApiParams(q: UseTodoListQuery, page: number) {
   if (q.view) {
     params.view = q.view;
     if (q.today) params.today = q.today;
+    if (q.sortBy) params.sort_by = q.sortBy;
+    if (q.sortDirection) params.sort_direction = q.sortDirection;
     if (q.fromDate) params.from_date = q.fromDate;
     if (q.toDate) params.to_date = q.toDate;
     if (q.completedOn) params.completed_on = q.completedOn;
@@ -103,8 +111,9 @@ function toApiParams(q: UseTodoListQuery, page: number) {
 }
 
 export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter: 'all' }) {
-  const query = useMemo(() => normalizeQuery(queryInput), [queryInput]);
-  const signature = useMemo(() => querySignature(query), [query]);
+  const signature = querySignature(normalizeQuery(queryInput));
+  // Stable across renders even when callers pass an inline query object.
+  const query = useMemo(() => JSON.parse(signature) as UseTodoListQuery, [signature]);
   const enabled = query.enabled !== false;
 
   const [tasks, setTasks] = useState<UserTask[]>([]);
@@ -121,88 +130,93 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
   const bump = useUserTasksInvalidateStore((s) => s.bump);
   const { show: showToast } = useToast();
 
-  const tasksRef = useRef<UserTask[]>([]);
+  // Each query/auth change owns its responses. A replacement refresh also invalidates
+  // pending pagination so an older page cannot be appended to a newly sorted list.
+  const scopeKey = JSON.stringify([signature, token, isGuest]);
+  const requestScope = useRef({ key: scopeKey, active: true, generation: 0, loadingMore: false });
   useEffect(() => {
-    tasksRef.current = tasks;
-  }, [tasks]);
+    requestScope.current = { key: scopeKey, active: true, generation: requestScope.current.generation + 1, loadingMore: false };
+    return () => { requestScope.current.active = false; requestScope.current.generation += 1; };
+  }, [scopeKey]);
 
+  const tasksRef = useRef<UserTask[]>([]);
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
   const hasMore = page < totalPages;
 
-  const fetchPage = useCallback(
-    async (pageNum: number, append: boolean) => {
-      if (!token || isGuest || !enabled) {
-        setTasks([]);
-        setTotal(0);
-        setPage(1);
-        setTotalPages(0);
-        return { ok: true as const };
-      }
-
-      const res = await getUserTasks(toApiParams(query, pageNum));
-      if (!res.ok) return res;
-
+  const fetchPage = useCallback(async (pageNum: number, append: boolean) => {
+    if (!requestScope.current.active || requestScope.current.key !== scopeKey || !token || isGuest || !enabled) return null;
+    const generation = append ? requestScope.current.generation : ++requestScope.current.generation;
+    if (!append) {
+      requestScope.current.loadingMore = false;
+      setLoadingMore(false);
+    }
+    const res = await getUserTasks(toApiParams(query, pageNum));
+    if (!requestScope.current.active || requestScope.current.key !== scopeKey || requestScope.current.generation !== generation) return null;
+    if (res.ok) {
       setTotal(res.data.total);
       setPage(res.data.page);
       setTotalPages(res.data.totalPages);
-      setTasks((prev) => (append ? [...prev, ...res.data.tasks] : res.data.tasks));
-      return res;
-    },
-    [token, isGuest, enabled, query]
-  );
-
-  const refresh = useCallback(async () => {
-    if (!enabled) {
-      setLoading(false);
-      return;
+      setTasks((prev) => {
+        if (!append) return res.data.tasks;
+        const seen = new Set(prev.map((task) => task.id));
+        return [...prev, ...res.data.tasks.filter((task) => !seen.has(task.id))];
+      });
     }
-    if (!token || isGuest) {
+    return res;
+  }, [token, isGuest, enabled, query, scopeKey]);
+
+  const refresh = useCallback(async (reset = false) => {
+    if (reset) {
+      setTasks([]);
+      setTotal(0);
+      setPage(1);
+      setTotalPages(0);
+    }
+    if (!enabled || !token || isGuest) {
       setTasks([]);
       setTotal(0);
       setPage(1);
       setTotalPages(0);
       setLoading(false);
+      setLoadingMore(false);
+      setError(null);
       return;
     }
-
     setLoading(true);
     setError(null);
     const res = await fetchPage(1, false);
+    if (!res) return;
     setLoading(false);
     if (!res.ok) setError(res.error);
   }, [token, isGuest, enabled, fetchPage]);
 
   const silentRefresh = useCallback(async () => {
-    if (!enabled || !token || isGuest) return;
-    await fetchPage(1, false);
-  }, [enabled, token, isGuest, fetchPage]);
+    const res = await fetchPage(1, false);
+    if (!res) return;
+    setLoading(false);
+    setError(res.ok ? null : res.error);
+  }, [fetchPage]);
 
   const loadMore = useCallback(async () => {
-    if (!enabled || !token || isGuest || loading || loadingMore || !hasMore) return;
+    if (!enabled || !token || isGuest || loading || requestScope.current.key !== scopeKey || requestScope.current.loadingMore || !hasMore) return;
+    requestScope.current.loadingMore = true;
     setLoadingMore(true);
     const res = await fetchPage(page + 1, true);
+    if (!res) return;
+    requestScope.current.loadingMore = false;
     setLoadingMore(false);
     if (!res.ok) {
-      showToast({
-        title: 'Не удалось загрузить задачи',
-        description: res.error,
-        variant: 'destructive',
-        duration: 4000,
-      });
+      showToast({ title: "Не удалось загрузить задачи", description: res.error, variant: "destructive", duration: 4000 });
     }
-  }, [enabled, token, isGuest, loading, loadingMore, hasMore, fetchPage, page, showToast]);
+  }, [enabled, token, isGuest, loading, hasMore, fetchPage, page, scopeKey, showToast]);
 
-  useEffect(() => {
-    refresh();
-  }, [signature, refresh]);
+  useEffect(() => { void refresh(true); }, [refresh]);
 
-  const skipVersionSyncRef = useRef(true);
+  const previousVersion = useRef(version);
   useEffect(() => {
-    if (skipVersionSyncRef.current) {
-      skipVersionSyncRef.current = false;
-      return;
-    }
-    if (version === 0) return;
-    silentRefresh();
+    if (previousVersion.current === version) return;
+    previousVersion.current = version;
+    void silentRefresh();
   }, [version, silentRefresh]);
 
   const tempIdSeedRef = useRef(-1);
@@ -320,11 +334,11 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         bump();
         return res.data;
       }
-      setTasks(before);
+      if (requestScope.current.active && requestScope.current.key === scopeKey) setTasks(before);
       showToast({ title: 'Не удалось создать задачу', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
     },
-    [token, isGuest, bump, nextTempId, showToast, nowIso]
+    [token, isGuest, bump, nextTempId, showToast, nowIso, scopeKey]
   );
 
   const toggleComplete = useCallback(
@@ -352,10 +366,10 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         if (nextAt) showToast({ ...recurringCompletionNotice(nextAt), variant: 'success', duration: 4000 });
         return;
       }
-      setTasks(before);
+      if (requestScope.current.active && requestScope.current.key === scopeKey) setTasks(before);
       showToast({ title: 'Не удалось обновить задачу', description: res.error, variant: 'destructive', duration: 4000 });
     },
-    [token, isGuest, bump, showToast]
+    [token, isGuest, bump, showToast, scopeKey]
   );
 
   /** true — сервер подтвердил удаление; false — задача осталась, пользователь увидел причину. */
@@ -378,11 +392,11 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         bump();
         return true;
       }
-      setTasks(before);
+      if (requestScope.current.active && requestScope.current.key === scopeKey) setTasks(before);
       showToast({ title: 'Не удалось удалить задачу', description: res.error, variant: 'destructive', duration: 4000 });
       return false;
     },
-    [token, isGuest, bump, showToast]
+    [token, isGuest, bump, showToast, scopeKey]
   );
 
   const updateTask = useCallback(
@@ -425,11 +439,11 @@ export function useTodoList(queryInput: UseTodoListQuery | TaskFilter = { filter
         bump();
         return res.data;
       }
-      setTasks(before);
+      if (requestScope.current.active && requestScope.current.key === scopeKey) setTasks(before);
       showToast({ title: 'Не удалось сохранить изменения', description: res.error, variant: 'destructive', duration: 4000 });
       return null;
     },
-    [token, isGuest, bump, showToast]
+    [token, isGuest, bump, showToast, scopeKey]
   );
 
   return {

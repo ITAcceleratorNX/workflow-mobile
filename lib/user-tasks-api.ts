@@ -1,3 +1,4 @@
+import type { TaskSortField, TaskSortDirection } from "@/lib/task-list-sort";
 import { request } from './api';
 
 import { config } from '@/lib/config';
@@ -187,6 +188,8 @@ export async function getUserTasks(params: {
   view?: TaskListView;
   date?: string;
   today?: string;
+  sort_by?: TaskSortField;
+  sort_direction?: TaskSortDirection;
   from_date?: string;
   to_date?: string;
   completed_on?: string;
@@ -201,6 +204,8 @@ export async function getUserTasks(params: {
   if (params.view) searchParams.view = params.view;
   if (params.date) searchParams.date = params.date;
   if (params.today) searchParams.today = params.today;
+  if (params.sort_by) searchParams.sort_by = params.sort_by;
+  if (params.sort_direction) searchParams.sort_direction = params.sort_direction;
   if (params.from_date) searchParams.from_date = params.from_date;
   if (params.to_date) searchParams.to_date = params.to_date;
   if (params.completed_on) searchParams.completed_on = params.completed_on;
