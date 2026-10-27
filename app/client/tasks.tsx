@@ -113,11 +113,13 @@ export default function TasksScreen() {
     filter?: string;
     date?: string;
     view?: 'list' | 'calendar' | 'board';
+    compose?: string;
   }>();
   const paramTab = params.tab;
   const paramFilter = params.filter;
   const paramDate = params.date;
   const paramView = params.view;
+  const paramCompose = Array.isArray(params.compose) ? params.compose[0] : params.compose;
 
   const background = useThemeColor({}, 'background');
   const headerText = useThemeColor({}, 'text');
@@ -148,6 +150,13 @@ export default function TasksScreen() {
   useEffect(() => {
     setMainView(parseMainView({ tab: paramTab, filter: paramFilter, date: paramDate }));
   }, [paramTab, paramFilter, paramDate]);
+
+  useEffect(() => {
+    if (paramCompose !== '1') return;
+    setMainView('today');
+    setAddSheetOpen(true);
+    router.setParams({ compose: '' });
+  }, [paramCompose, router]);
 
   useEffect(() => {
     if (paramView === 'calendar') setViewMode('calendar');

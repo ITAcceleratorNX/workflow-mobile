@@ -2,7 +2,7 @@
   "expo": {
     "name": "Workflow",
     "slug": "workflow-mobile",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "workflowmobile",
@@ -11,8 +11,8 @@
       "policy": "appVersion"
     },
     "ios": {
-      "version": "1.0.8",
-      "buildNumber": "24",
+      "version": "1.0.9",
+      "buildNumber": "25",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -61,7 +61,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 16,
+      "versionCode": 17,
       "package": "com.workflow.kz"
     },
     "web": {
@@ -70,6 +70,39 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.workflow.kz.widgets",
+          "groupIdentifier": "group.com.workflow.kz",
+          "widgets": [
+            {
+              "name": "NearestTaskWidget",
+              "displayName": "Ближайшая задача",
+              "description": "Ближайшая незавершённая задача на сегодня",
+              "ios": {
+                "supportedFamilies": ["accessoryRectangular", "accessoryInline"]
+              }
+            },
+            {
+              "name": "CreateTaskWidget",
+              "displayName": "Создать задачу",
+              "description": "Открыть форму новой задачи",
+              "ios": {
+                "supportedFamilies": ["accessoryCircular", "accessoryRectangular"]
+              }
+            },
+            {
+              "name": "CreateRequestWidget",
+              "displayName": "Создать заявку",
+              "description": "Открыть форму сервисной заявки",
+              "ios": {
+                "supportedFamilies": ["accessoryCircular", "accessoryRectangular"]
+              }
+            }
+          ]
+        }
+      ],
       [
         "expo-location",
         {

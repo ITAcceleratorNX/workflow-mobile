@@ -1,0 +1,6 @@
+{
+  "name": "workflow-widgets",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Android home screen widgets for Workflow tasks and service requests."
+}

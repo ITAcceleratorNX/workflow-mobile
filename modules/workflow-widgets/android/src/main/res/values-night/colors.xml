@@ -1,0 +1,6 @@
+<resources>
+  <color name="workflow_widget_card">#1C1C1E</color>
+  <color name="workflow_widget_title">#FFFFFF</color>
+  <color name="workflow_widget_muted">#A1A1A6</color>
+  <color name="workflow_widget_accent">#E25B21</color>
+</resources>
