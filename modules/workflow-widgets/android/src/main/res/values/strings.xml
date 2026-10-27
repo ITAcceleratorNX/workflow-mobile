@@ -1,0 +1,9 @@
+<resources>
+  <string name="workflow_widget_nearest_label">Ближайшая задача</string>
+  <string name="workflow_widget_nearest_description">Ближайшая незавершённая задача на сегодня</string>
+  <string name="workflow_widget_create_task_label">Создать задачу</string>
+  <string name="workflow_widget_create_task_description">Открыть форму новой задачи в Workflow</string>
+  <string name="workflow_widget_create_request_label">Создать заявку</string>
+  <string name="workflow_widget_create_request_description">Открыть форму сервисной заявки</string>
+  <string name="workflow_widget_brand">Workflow</string>
+</resources>

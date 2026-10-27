@@ -19,6 +19,7 @@
     "export:production": "expo export --platform ios --platform android --max-workers 2"
   },
   "dependencies": {
+    "@expo/ui": "~57.0.26",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
@@ -52,6 +53,7 @@
     "expo-task-manager": "~57.0.19",
     "expo-updates": "~57.0.23",
     "expo-web-browser": "~57.0.3",
+    "expo-widgets": "~57.0.27",
     "nativewind": "^4.2.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -78,6 +80,11 @@
     "typescript": "~6.0.3"
   },
   "private": true,
+  "expo": {
+    "autolinking": {
+      "nativeModulesDir": "./modules"
+    }
+  },
   "engines": {
     "node": ">=22",
     "npm": "11.4.2"

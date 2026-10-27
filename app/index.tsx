@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
 import { useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
-import type { Href } from 'expo-router';
 import { Redirect, useRouter } from 'expo-router';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { parseRequestDeepLinkUrl } from '@/lib/shareRequest';
+import { canOpenWidgetDestination, isWidgetAppHref } from '@/lib/widgets/model';
+import { openAppHref, rememberWidgetUrl } from '@/lib/widgets/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
 
@@ -14,6 +15,7 @@ const LOGO_SIZE = 300;
 
 export default function IndexScreen() {
   const token = useAuthStore((state) => state.token);
+  const isGuest = useAuthStore((state) => state.isGuest);
   const role = useAuthStore((state) => state.role);
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
@@ -22,6 +24,7 @@ export default function IndexScreen() {
   const pendingPostAuthHref = useDeepLinkStore((s) => s.pendingPostAuthHref);
   const setPendingPostAuthHref = useDeepLinkStore((s) => s.setPendingPostAuthHref);
   const [isReady, setIsReady] = useState(false);
+  const [initialUrlChecked, setInitialUrlChecked] = useState(false);
   const [initialRequestId, setInitialRequestId] = useState<number | null>(null);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -31,12 +34,20 @@ export default function IndexScreen() {
 
   // Читаем начальный URL при холодном старте (как для брони): getInitialURL может прийти позже, чем редирект
   useEffect(() => {
-    Linking.getInitialURL().then((url) => {
-      if (url) {
+    let active = true;
+    Linking.getInitialURL()
+      .then((url) => {
+        if (!active || !url) return;
+        if (rememberWidgetUrl(url)) return;
         const parsed = parseRequestDeepLinkUrl(url);
         if (parsed) setInitialRequestId(parsed.requestId);
-      }
-    });
+      })
+      .finally(() => {
+        if (active) setInitialUrlChecked(true);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -63,31 +74,30 @@ export default function IndexScreen() {
   }, [pendingRequestId, hasToken, effectiveRole, setPendingRequestId]);
 
   // Холодный старт по пушу: не открывать табы, пока не отработает отложенный маршрут (см. use-push-notifications).
+  const widgetNeedsLogin =
+    !!pendingPostAuthHref &&
+    isWidgetAppHref(pendingPostAuthHref) &&
+    !canOpenWidgetDestination({ token, isGuest });
+
   useEffect(() => {
-    if (!isReady || !hasToken || !effectiveRole || !pendingPostAuthHref) return;
+    if (!isReady || !initialUrlChecked || !hasToken || !effectiveRole || !pendingPostAuthHref) return;
+    if (widgetNeedsLogin) return;
 
     const hrefStr = pendingPostAuthHref.trim();
     setPendingPostAuthHref(null);
+    openAppHref(router, hrefStr);
+  }, [
+    effectiveRole,
+    hasToken,
+    initialUrlChecked,
+    isReady,
+    pendingPostAuthHref,
+    router,
+    setPendingPostAuthHref,
+    widgetNeedsLogin,
+  ]);
 
-    const splitIdx = hrefStr.indexOf('?');
-    const path = splitIdx >= 0 ? hrefStr.slice(0, splitIdx) : hrefStr;
-    const query = splitIdx >= 0 ? hrefStr.slice(splitIdx + 1) : '';
-
-    if (path === '/client/tasks/details') {
-      const taskId = new URLSearchParams(query).get('taskId');
-      if (taskId) {
-        router.replace({
-          pathname: '/client/tasks/details',
-          params: { taskId: decodeURIComponent(taskId) },
-        });
-        return;
-      }
-    }
-
-    router.replace(hrefStr as Href);
-  }, [effectiveRole, hasToken, isReady, pendingPostAuthHref, router, setPendingPostAuthHref]);
-
-  if (!isReady) {
+  if (!isReady || !initialUrlChecked) {
     return (
       <View style={[styles.loaderContainer, isDark ? styles.bgDark : styles.bgLight]}>
         <Image
@@ -102,6 +112,10 @@ export default function IndexScreen() {
 
   if (__DEV__) {
     console.log('[Index] Redirect decision:', { hasToken, effectiveRole });
+  }
+
+  if (widgetNeedsLogin) {
+    return <Redirect href="/login" />;
   }
 
   if (hasToken && effectiveRole) {

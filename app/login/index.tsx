@@ -17,7 +17,9 @@ import { FontSizes, LineHeights, Spacing } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { formatPhone, PHONE_REGEX } from '@/lib';
 import { getCurrentUser, loginWithPhone } from '@/lib/auth';
+import { consumePostAuthHref, openAppHref } from '@/lib/widgets/navigation';
 import { useAuthStore } from '@/stores/auth-store';
+import { useDeepLinkStore } from '@/stores/deep-link-store';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -67,7 +69,9 @@ export default function LoginScreen() {
       const role = authData.role ?? 'client';
 
       setAuth(authData.token, role, user);
-      router.replace('/(tabs)');
+      const next = consumePostAuthHref('/(tabs)');
+      if (next === '/(tabs)') router.replace('/(tabs)');
+      else openAppHref(router, String(next));
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : 'Произошла ошибка при входе. Попробуйте позже.'
@@ -89,6 +93,7 @@ export default function LoginScreen() {
 
   const handleDemoLogin = useCallback(() => {
     setGuestAuth();
+    useDeepLinkStore.getState().setPendingPostAuthHref(null);
     router.replace('/(tabs)');
   }, [router, setGuestAuth]);
 

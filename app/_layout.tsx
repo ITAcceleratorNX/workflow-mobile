@@ -16,6 +16,9 @@ import { registerBackgroundHealthyTask } from '@/lib/background-healthy-sync';
 import { ToastProvider } from '@/context/toast-context';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
 import { parseRequestDeepLinkUrl } from '@/lib/shareRequest';
+import { WorkflowWidgetsHost } from '@/components/workflow-widgets-host';
+import { registerWorkflowWidgetsTask } from '@/lib/widgets/background';
+import { openWidgetUrl, rememberWidgetUrl } from '@/lib/widgets/navigation';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -25,6 +28,7 @@ export default function RootLayout() {
   useEffect(() => {
     registerBackgroundStepsTask();
     registerBackgroundHealthyTask();
+    void registerWorkflowWidgetsTask();
   }, []);
 
   useEffect(() => {
@@ -34,14 +38,20 @@ export default function RootLayout() {
       router.replace(`/(tabs)/requests/${parsed.requestId}`);
     };
 
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        const parsed = parseRequestDeepLinkUrl(url);
-        if (parsed) setPendingRequestId(parsed.requestId);
-      }
+    const initialUrlPromise = Linking.getInitialURL();
+    void initialUrlPromise.then((url) => {
+      if (!url || rememberWidgetUrl(url)) return;
+      const parsed = parseRequestDeepLinkUrl(url);
+      if (parsed) setPendingRequestId(parsed.requestId);
     });
 
-    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      void initialUrlPromise.then((initialUrl) => {
+        if (url === initialUrl) return;
+        if (openWidgetUrl(url)) return;
+        handleUrl(url);
+      });
+    });
     return () => sub.remove();
   }, [router, setPendingRequestId]);
 
@@ -51,6 +61,7 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <ToastProvider>
             <PushNotificationsHost />
+            <WorkflowWidgetsHost />
             <SleepSurveyGate />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />

@@ -71,6 +71,39 @@
     "plugins": [
       "expo-router",
       [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.workflow.kz.widgets",
+          "groupIdentifier": "group.com.workflow.kz",
+          "widgets": [
+            {
+              "name": "NearestTaskWidget",
+              "displayName": "Ближайшая задача",
+              "description": "Ближайшая незавершённая задача на сегодня",
+              "ios": {
+                "supportedFamilies": ["accessoryRectangular", "accessoryInline"]
+              }
+            },
+            {
+              "name": "CreateTaskWidget",
+              "displayName": "Создать задачу",
+              "description": "Открыть форму новой задачи",
+              "ios": {
+                "supportedFamilies": ["accessoryCircular", "accessoryRectangular"]
+              }
+            },
+            {
+              "name": "CreateRequestWidget",
+              "displayName": "Создать заявку",
+              "description": "Открыть форму сервисной заявки",
+              "ios": {
+                "supportedFamilies": ["accessoryCircular", "accessoryRectangular"]
+              }
+            }
+          ]
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Доступ к геолокации нужен, чтобы привязывать заявки к вашему текущему адресу и находить ближайший офис обслуживания.",

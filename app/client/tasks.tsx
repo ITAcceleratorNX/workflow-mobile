@@ -1,7 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -42,9 +42,18 @@ export default function TasksScreen() {
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const page = useTasksScreen();
-  const { todo, mainView, layoutMode } = page;
+  const { todo, mainView, layoutMode, openComposer, setMainView } = page;
   const { toggleComplete, loadMore } = todo;
+  const params = useLocalSearchParams<{ compose?: string }>();
+  const paramCompose = Array.isArray(params.compose) ? params.compose[0] : params.compose;
   const fabBottom = Math.max(insets.bottom, 16) + 8;
+
+  useEffect(() => {
+    if (paramCompose !== '1') return;
+    setMainView('today');
+    openComposer();
+    router.setParams({ compose: '' });
+  }, [openComposer, paramCompose, router, setMainView]);
 
   const openTask = useCallback(
     (task: UserTask) => {

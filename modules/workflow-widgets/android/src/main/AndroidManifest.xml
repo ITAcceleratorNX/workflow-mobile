@@ -1,0 +1,46 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <application>
+    <receiver
+      android:name="expo.modules.workflowwidgets.WidgetBootReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+      </intent-filter>
+    </receiver>
+    <receiver
+      android:name="expo.modules.workflowwidgets.NearestTaskWidgetProvider"
+      android:exported="true"
+      android:label="@string/workflow_widget_nearest_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        <action android:name="expo.modules.workflowwidgets.REFRESH" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/workflow_widget_nearest_info" />
+    </receiver>
+    <receiver
+      android:name="expo.modules.workflowwidgets.CreateTaskWidgetProvider"
+      android:exported="true"
+      android:label="@string/workflow_widget_create_task_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/workflow_widget_create_task_info" />
+    </receiver>
+    <receiver
+      android:name="expo.modules.workflowwidgets.CreateRequestWidgetProvider"
+      android:exported="true"
+      android:label="@string/workflow_widget_create_request_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/workflow_widget_create_request_info" />
+    </receiver>
+  </application>
+</manifest>

@@ -1,0 +1,59 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/workflow_widget_root"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@drawable/workflow_widget_background"
+  android:orientation="vertical"
+  android:padding="14dp">
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <TextView
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:text="@string/workflow_widget_brand"
+      android:textAllCaps="true"
+      android:textColor="@color/workflow_widget_accent"
+      android:textSize="11sp"
+      android:textStyle="bold" />
+
+    <TextView
+      android:id="@+id/workflow_widget_eyebrow"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:ellipsize="end"
+      android:gravity="end"
+      android:maxLines="1"
+      android:text="Сегодня"
+      android:textColor="@color/workflow_widget_muted"
+      android:textSize="12sp" />
+  </LinearLayout>
+
+  <TextView
+    android:id="@+id/workflow_widget_title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="6dp"
+    android:ellipsize="end"
+    android:maxLines="2"
+    android:text="Ближайшая задача"
+    android:textColor="@color/workflow_widget_title"
+    android:textSize="16sp"
+    android:textStyle="bold" />
+
+  <TextView
+    android:id="@+id/workflow_widget_subtitle"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="4dp"
+    android:ellipsize="end"
+    android:maxLines="2"
+    android:text="Откройте Workflow"
+    android:textColor="@color/workflow_widget_muted"
+    android:textSize="12sp" />
+</LinearLayout>
