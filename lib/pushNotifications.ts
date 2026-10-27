@@ -164,8 +164,8 @@ export async function getDevicePushToken(): Promise<string | null> {
               pushLog('Setting APNs token for Firebase Messaging (debug)', {
                 tokenPreview: apnsToken.slice(0, 12),
               });
-              // На debug билдах обычно sandbox.
-              await m.setAPNSToken(apnsToken, 'sandbox');
+              // Без типа Firebase берёт sandbox/production из профиля сборки: жёсткий 'sandbox' ломал релиз.
+              await m.setAPNSToken(apnsToken);
             } else {
               pushLog('No APNs token available from Expo Notifications');
             }
@@ -226,7 +226,11 @@ export async function registerPushTokenWithBackend(): Promise<boolean> {
     pushLog('No push token available; skipping backend registration');
     return false;
   }
+  return savePushToken(token);
+}
 
+/** Токен — на сервер; запоминается, чтобы удалить его при выходе. */
+async function savePushToken(token: string): Promise<boolean> {
   const platform = getPlatform();
   const deviceId = Constants.sessionId ?? undefined;
   pushLog('Registering push token with backend', {
@@ -250,6 +254,50 @@ export async function registerPushTokenWithBackend(): Promise<boolean> {
   console.warn('[Push] saveFcmToken failed:', result.error);
   pushLog('Backend token registration failed', { error: result.error });
   return false;
+}
+
+/** RN Firebase есть только в собранном приложении: в Expo Go и на вебе его нет. */
+async function loadMessaging() {
+  if (Platform.OS === 'web' || Constants.appOwnership === 'expo') return null;
+  try {
+    return (await import('@react-native-firebase/messaging')).default;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * FCM сменил токен (восстановление из резервной копии, очистка данных, ротация): без повторной
+ * регистрации сервер слал бы push на старый. Возвращает отписку.
+ */
+export async function watchPushTokenRefresh(): Promise<() => void> {
+  const messaging = await loadMessaging();
+  if (!messaging) return () => {};
+  return messaging().onTokenRefresh((token) => {
+    pushLog('FCM token refreshed', { tokenPreview: token.slice(0, 12) });
+    void savePushToken(token);
+  });
+}
+
+/**
+ * Android не показывает push, пришедший в открытое приложение: RN Firebase отдаёт его в `onMessage`.
+ * Показываем его локальным уведомлением с теми же заголовком, текстом и data — нажатие на него
+ * обрабатывается как нажатие на push. На iOS открытое приложение показывает push само
+ * (`setNotificationHandler`): второй баннер не нужен. Возвращает отписку.
+ */
+export async function showForegroundPushesOnAndroid(): Promise<() => void> {
+  if (Platform.OS !== 'android') return () => {};
+  const messaging = await loadMessaging();
+  if (!messaging) return () => {};
+  return messaging().onMessage((message) => {
+    const { title, body, android } = message.notification ?? {};
+    // Только data, без текста — не для показа.
+    if (!title && !body) return;
+    void Notifications.scheduleNotificationAsync({
+      content: { title: title ?? null, body: body ?? null, data: message.data ?? {} },
+      trigger: { channelId: android?.channelId ?? DEFAULT_CHANNEL_ID },
+    }).catch((e: unknown) => console.warn('[Push] foreground notification failed:', e));
+  });
 }
 
 /**

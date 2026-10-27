@@ -33,6 +33,8 @@ const PRIORITY_CHOICES = (['low', 'medium', 'high'] as const).map((value) => ({ 
 
 type TaskDetailViewProps = {
   taskId: number;
+  /** Комментарий из уведомления: лента прокручивается к нему. */
+  commentId?: string | null;
   todayKey: string;
   /** Back to the list. */
   onClose: () => void;
@@ -45,16 +47,20 @@ type TaskDetailViewProps = {
  * «Исполнитель / Срок / Приоритет / Напоминание», «Описание», handing over, deletion, attachments,
  * the history and comments. What the user may change comes from the server.
  */
-export function TaskDetailView({ taskId, todayKey, onClose, onGone }: TaskDetailViewProps) {
+export function TaskDetailView({ taskId, commentId = null, todayKey, onClose, onGone }: TaskDetailViewProps) {
   const ui = useProductUi();
   const detail = useTaskDetail(taskId, { onGone });
 
   if (detail.state.status === 'ready' && detail.task) {
-    return <TaskCard detail={detail} task={detail.task} todayKey={todayKey} onClose={onClose} onGone={onGone} />;
+    return (
+      <TaskCard detail={detail} task={detail.task} commentId={commentId} todayKey={todayKey} onClose={onClose} onGone={onGone} />
+    );
   }
   return (
     <Frame onClose={onClose}>
-      {detail.state.status === 'error' ? (
+      {detail.state.status === 'gone' ? (
+        <EmptyState style={styles.state} icon="visibility-off" title="Задача удалена или недоступна" />
+      ) : detail.state.status === 'error' ? (
         <EmptyState
           style={styles.state}
           icon="visibility-off"
@@ -86,7 +92,16 @@ function Frame({ onClose, children }: { onClose: () => void; children: ReactNode
 type Detail = ReturnType<typeof useTaskDetail>;
 type Editor = 'due' | 'priority' | 'reminder' | 'transfer' | 'delete' | null;
 
-function TaskCard({ detail, task, todayKey, onClose, onGone }: { detail: Detail; task: UserTask; todayKey: string; onClose: () => void; onGone: () => void }) {
+type TaskCardProps = {
+  detail: Detail;
+  task: UserTask;
+  commentId: string | null;
+  todayKey: string;
+  onClose: () => void;
+  onGone: () => void;
+};
+
+function TaskCard({ detail, task, commentId, todayKey, onClose, onGone }: TaskCardProps) {
   const ui = useProductUi();
   const insets = useSafeAreaInsets();
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -126,7 +141,12 @@ function TaskCard({ detail, task, todayKey, onClose, onGone }: { detail: Detail;
 
   return (
     <Frame onClose={onClose}>
-      <TaskCommentsList taskId={task.id} style={styles.list} contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
+      <TaskCommentsList
+        taskId={task.id}
+        focusCommentId={commentId}
+        style={styles.list}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+      >
         <View style={styles.body}>
           <View style={styles.titleBlock}>
             <InlineEditText

@@ -170,6 +170,13 @@ export interface Notification {
   content: string;
   is_read: boolean;
   created_at: string;
+  /** 'tasks' — событие задачника; null и нет поля — остальные уведомления и старый сервер. */
+  category?: 'tasks' | null;
+  /** Событие задачника (`TaskPushEvent`), например 'comment' или 'deleted'. */
+  event?: string | null;
+  task_id?: number | null;
+  /** BIGINT: сервер может прислать строкой. */
+  comment_id?: number | string | null;
 }
 
 export interface NotificationsResponse {

@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo, useEffect, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { FontSizes, LineHeights, Radius, Spacing } from '@/constants/theme';
@@ -36,14 +36,29 @@ interface CommentItemProps {
   changing?: 'edit' | 'delete' | null;
   /** Действия со своим комментарием — долгим нажатием; нет, если менять его нельзя. */
   onActions?: (comment: TaskComment) => void;
+  /** К комментарию перешли из уведомления: он ненадолго подсвечен. */
+  highlighted?: boolean;
 }
 
 /** Комментарий ленты задачи: автор, текст с упоминаниями, дата, время и метка «изменено». */
-export const CommentItem = memo(function CommentItem({ comment, own, palette, changing = null, onActions }: CommentItemProps) {
+export const CommentItem = memo(function CommentItem({
+  comment,
+  own,
+  palette,
+  changing = null,
+  onActions,
+  highlighted = false,
+}: CommentItemProps) {
   const moment = formatCommentMoment(comment.created_at);
   const { deleted } = commentState(comment);
   const meta = commentMeta(comment, moment, changing);
   const actionable = onActions !== undefined && changing === null;
+  const [glow] = useState(() => new Animated.Value(0));
+
+  // Подсветка появляется быстро и гаснет медленно.
+  useEffect(() => {
+    Animated.timing(glow, { toValue: highlighted ? 1 : 0, duration: highlighted ? 250 : 900, useNativeDriver: true }).start();
+  }, [glow, highlighted]);
 
   return (
     <Pressable
@@ -56,6 +71,12 @@ export const CommentItem = memo(function CommentItem({ comment, own, palette, ch
       accessibilityActions={actionable ? [{ name: 'longpress', label: 'Изменить или удалить' }] : undefined}
       onAccessibilityAction={actionable ? () => onActions?.(comment) : undefined}
     >
+      <Animated.View
+        style={[
+          styles.highlight,
+          { backgroundColor: palette.primary, opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0, 0.14] }) },
+        ]}
+      />
       <View style={[styles.avatar, { backgroundColor: palette.card }]}>
         <ThemedText style={[styles.avatarText, { color: palette.primary }]}>
           {authorInitial(comment.author.full_name)}
@@ -103,6 +124,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: Spacing.sm,
     marginBottom: Spacing.md,
+  },
+  highlight: {
+    position: 'absolute',
+    top: -Spacing.xs,
+    bottom: -Spacing.xs,
+    left: -Spacing.sm,
+    right: -Spacing.sm,
+    borderRadius: Radius.md,
+    pointerEvents: 'none',
   },
   avatar: {
     width: 32,

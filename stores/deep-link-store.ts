@@ -1,3 +1,4 @@
+import type { Href } from 'expo-router';
 import { create } from 'zustand';
 
 /** Хранит requestId из входящей deep link до момента редиректа после авторизации. */
@@ -5,11 +6,12 @@ interface DeepLinkState {
   pendingRequestId: number | null;
   setPendingRequestId: (id: number | null) => void;
   /**
-   * Холодный старт по пушу: index ~1.2s держит splash и делает Redirect на табы,
-   * из‑за чего ранний router.push из обработчика затирается. Промежуточный href обрабатывается в index.
+   * Экран из нажатого push, который откроется на вкладках: после входа, если пользователь не вошёл,
+   * и после splash холодного старта — ранний router.push затёр бы Redirect из `app/index.tsx`.
+   * Открывает `app/(tabs)/_layout.tsx`.
    */
-  pendingPostAuthHref: string | null;
-  setPendingPostAuthHref: (href: string | null) => void;
+  pendingPostAuthHref: Href | null;
+  setPendingPostAuthHref: (href: Href | null) => void;
 }
 
 export const useDeepLinkStore = create<DeepLinkState>((set) => ({

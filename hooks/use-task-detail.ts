@@ -31,7 +31,10 @@ export type TaskPatch = Partial<
   >
 >;
 
-type LoadState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready' };
+/** gone — задачу удалили или она больше не видна пользователю: повтор не поможет. */
+type LoadState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'gone' } | { status: 'ready' };
+
+const isGone = (status: number | undefined) => status === 403 || status === 404;
 
 /**
  * One task for its card. Changes show at once and roll back if the server refuses; every saved
@@ -66,6 +69,10 @@ export function useTaskDetail(taskId: number, { onGone }: { onGone: () => void }
       if (res.ok) {
         setTask(res.data);
         setState({ status: 'ready' });
+      } else if (isGone(res.status)) {
+        // И при тихой перезагрузке: старая карточка показывала бы то, чего больше нет.
+        setTask(null);
+        setState({ status: 'gone' });
       } else if (!quiet || taskRef.current == null) {
         setState({ status: 'error', message: res.error });
       }
