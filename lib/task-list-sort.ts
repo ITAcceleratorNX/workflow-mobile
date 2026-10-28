@@ -1,10 +1,20 @@
-/** Order of the «Входящие» and «Сегодня» lists: a field and a direction, sorted by the server. */
+/** Order of the «Входящие», «Сегодня» and «Предстоящие» lists: a field and a direction, sorted by the server. */
+
+import type { TaskMainView } from '@/lib/task-views';
 
 export type TaskSortField = 'deadline' | 'created_at' | 'priority';
 export type TaskSortDirection = 'asc' | 'desc';
 export type TaskSort = { field: TaskSortField; direction: TaskSortDirection };
 
 export const DEFAULT_TASK_SORT: TaskSort = { field: 'deadline', direction: 'asc' };
+
+/** Tabs with a chosen order; «Выполненные» keep the server's order. */
+export const SORTABLE_TASK_VIEWS = ['inbox', 'today', 'upcoming'] as const;
+export type SortableTaskView = (typeof SORTABLE_TASK_VIEWS)[number];
+
+export function sortableTaskView(view: TaskMainView): SortableTaskView | null {
+  return (SORTABLE_TASK_VIEWS as readonly TaskMainView[]).includes(view) ? (view as SortableTaskView) : null;
+}
 
 export const TASK_SORT_FIELDS: readonly { value: TaskSortField; label: string; short: string }[] = [
   { value: 'deadline', label: 'Сроку выполнения', short: 'По сроку' },
