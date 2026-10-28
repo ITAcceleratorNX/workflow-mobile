@@ -55,19 +55,16 @@ export async function setupTaskReminderCategory(): Promise<void> {
 }
 
 /**
- * Сбрасывает бейдж иконки приложения.
- * Вызывать при открытии раздела уведомлений или при нажатии на пуш.
+ * Сбрасывает бейдж иконки приложения при нажатии на пуш; точное число ставит setBadgeCount
+ * после следующей сводки уведомлений.
  */
 export async function clearBadge(): Promise<void> {
   await Notifications.setBadgeCountAsync(0);
 }
 
-/**
- * Уменьшает бейдж на 1 (когда пользователь отмечает уведомление прочитанным).
- */
-export async function decrementBadge(): Promise<void> {
-  const count = await Notifications.getBadgeCountAsync();
-  await Notifications.setBadgeCountAsync(Math.max(0, count - 1));
+/** Бейдж иконки = непрочитанные по сводке сервера, как счётчик колокольчика. */
+export async function setBadgeCount(count: number): Promise<void> {
+  await Notifications.setBadgeCountAsync(Math.max(0, count));
 }
 
 /**
