@@ -22,7 +22,7 @@ const DIRECTION_OPTIONS = TASK_SORT_DIRECTIONS.map((item) => ({
   icon: item.value === 'asc' ? ('arrow-upward' as const) : ('arrow-downward' as const),
 }));
 
-/** «По сроку ↑» — the order of «Входящие» and «Сегодня» (Figma «Сортировка»), applied with «Готово». */
+/** «По сроку ↑» — the order of «Входящие», «Сегодня» and «Предстоящие» (Figma «Сортировка»), applied with «Готово». */
 export function TaskSortPicker({ value, onChange }: { value: TaskSort; onChange: (sort: TaskSort) => void }) {
   const ui = useProductUi();
   const [open, setOpen] = useState(false);
