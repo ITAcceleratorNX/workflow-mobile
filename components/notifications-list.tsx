@@ -20,10 +20,18 @@ import {
   type Notification,
 } from '@/lib/profile-api';
 import { decrementBadge } from '@/lib/pushNotifications';
-import { getContentSegmentsWithRequestIds } from '@/lib/notificationUtils';
+import { getContentSegmentsWithRequestIds, type ContentSegment } from '@/lib/notificationUtils';
+import { taskDetailsHref, taskNotificationTarget, type TaskPushTarget } from '@/lib/push-notification-open';
 import { formatTimeAgo } from '@/lib/dateTimeUtils';
 
 const PAGE_SIZE = 10;
+
+/** «№ N» в тексте — ссылка на заявку; у уведомлений задачника это не заявка, а текст. */
+function contentSegments(notification: Notification): ContentSegment[] {
+  return notification.category === 'tasks'
+    ? [{ type: 'text', value: notification.content }]
+    : getContentSegmentsWithRequestIds(notification.content);
+}
 
 export function NotificationsList() {
   const router = useRouter();
@@ -114,6 +122,18 @@ export function NotificationsList() {
     },
     [router]
   );
+
+  const handleOpenTask = useCallback(
+    (target: TaskPushTarget) => {
+      setSelectedNotification(null);
+      router.push(taskDetailsHref(target));
+    },
+    [router]
+  );
+
+  // Удалённую задачу не открыть: у её уведомления кнопки нет.
+  const selectedTask = selectedNotification ? taskNotificationTarget(selectedNotification) : null;
+  const openableTask = selectedTask?.event === 'deleted' ? null : selectedTask;
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -239,9 +259,7 @@ export function NotificationsList() {
                 <ScrollView style={styles.modalBody}>
                   <View style={styles.modalBodyContent}>
                     {selectedNotification?.content != null
-                      ? getContentSegmentsWithRequestIds(
-                          selectedNotification.content
-                        ).map((seg, idx) =>
+                      ? contentSegments(selectedNotification).map((seg, idx) =>
                           seg.type === 'text' ? (
                             <ThemedText
                               key={idx}
@@ -279,6 +297,11 @@ export function NotificationsList() {
                       : ''}
                   </ThemedText>
                 </ScrollView>
+                {openableTask ? (
+                  <View style={[styles.modalFooter, { borderTopColor: border }]}>
+                    <Button title="Открыть задачу" onPress={() => handleOpenTask(openableTask)} variant="primary" />
+                  </View>
+                ) : null}
               </Pressable>
             </Pressable>
           </Modal>
@@ -415,5 +438,9 @@ const styles = StyleSheet.create({
   modalTime: {
     fontSize: 12,
     marginTop: 12,
+  },
+  modalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
   },
 });

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { dueSummary, dueToScheduledAt, defaultDue, formatDayHeading, formatDayTitle, formatDue, isTaskOverdue, pluralTasks, pluralUnfinished, quickDueOptions } from '../task-due';
-import { DEFAULT_TASK_SORT, parseTaskSort, taskSortLabel, taskSortQuery } from '../task-list-sort';
+import { DEFAULT_TASK_SORT, parseTaskSort, sortableTaskView, taskSortLabel, taskSortQuery } from '../task-list-sort';
 import { monthRange, monthTitle, monthWeeks, shiftMonth } from '../month-grid';
 import { DEFAULT_REMINDER, REMINDER_OPTIONS, reminderLabel, reminderOptionsFor, reminderValue } from '../task-reminders';
 import { hasOtherRecipient, taskRecipientLabel, taskRecipientSummary } from '../task-recipient-display';
@@ -65,6 +65,17 @@ test('sort: a field and a direction, sent to the API; stored values from another
   for (const raw of [null, 'deadline_asc', { field: 'title', direction: 'asc' }, { field: 'deadline' }]) {
     assert.deepEqual(parseTaskSort(raw), DEFAULT_TASK_SORT, JSON.stringify(raw));
   }
+});
+
+test('sort: «Входящие», «Сегодня» and «Предстоящие» are sorted by priority, deadline or creation date; «Выполненные» keep their order', () => {
+  assert.equal(sortableTaskView('inbox'), 'inbox');
+  assert.equal(sortableTaskView('today'), 'today');
+  assert.equal(sortableTaskView('upcoming'), 'upcoming');
+  assert.equal(sortableTaskView('completed'), null);
+  assert.deepEqual(taskSortQuery({ field: 'priority', direction: 'asc' }), { sortBy: 'priority', sortDirection: 'asc' });
+  assert.equal(taskSortLabel({ field: 'priority', direction: 'desc' }), 'По приоритету');
+  assert.equal(taskSortLabel({ field: 'created_at', direction: 'desc' }), 'По дате');
+  assert.deepEqual(parseTaskSort({ field: 'priority', direction: 'asc' }), { field: 'priority', direction: 'asc' });
 });
 
 test('month grid: Monday first, padded weeks, ranges and month steps across years', () => {

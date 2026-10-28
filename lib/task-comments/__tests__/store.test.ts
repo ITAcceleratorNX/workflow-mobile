@@ -177,6 +177,93 @@ describe('reading the feed', () => {
   });
 });
 
+describe('going to a comment from a notification', () => {
+  it('finds a comment of the latest page with one read', async () => {
+    const { server, comments } = setup();
+    comments.retain(1);
+    const revealing = comments.reveal(1, '99');
+    await server.next('listComments').answer(page(range(71, 100), { cursor: 'c71' }));
+
+    assert.equal(await revealing, true);
+    assert.equal(server.count('listComments'), 1);
+  });
+
+  it('re-reads first: a comment newer than the loaded feed is found without loading history', async () => {
+    const { server, comments, open } = setup();
+    await open(1, range(1, 3));
+    const revealing = comments.reveal(1, '4');
+    const call = server.next('listComments');
+    assert.deepEqual(call.args, [1, { limit: 30, before: null }]);
+    await call.answer(page(range(1, 4)));
+
+    assert.equal(await revealing, true);
+    assert.equal(server.waiting('listComments').length, 0);
+  });
+
+  it('loads older pages until the comment is there, and no further', async () => {
+    const { server, comments, feed } = setup();
+    comments.retain(1);
+    const revealing = comments.reveal(1, '15');
+    await server.next('listComments').answer(page(range(71, 100), { cursor: 'c71' }));
+    let call = server.next('listComments');
+    assert.deepEqual(call.args, [1, { limit: 30, before: 'c71' }]);
+    await call.answer(page(range(41, 70), { cursor: 'c41' }));
+    call = server.next('listComments');
+    assert.deepEqual(call.args, [1, { limit: 30, before: 'c41' }]);
+    await call.answer(page(range(11, 40), { cursor: 'c11' }));
+
+    assert.equal(await revealing, true);
+    assert.equal(server.waiting('listComments').length, 0);
+    assert.deepEqual(ids(feed().items), ids(range(11, 100)));
+    assert.equal(feed().hasOlder, true);
+  });
+
+  it('gives up at the memory limit and at the oldest comment: the card just opens', async () => {
+    const limited = setup({ limits: { pageSize: 2, maxLoaded: 4 } });
+    limited.comments.retain(1);
+    const pastLimit = limited.comments.reveal(1, '3');
+    await limited.server.next('listComments').answer(page(range(9, 10), { cursor: 'c9' }));
+    await limited.server.next('listComments').answer(page(range(7, 8), { cursor: 'c7' }));
+    assert.equal(await pastLimit, false);
+    assert.equal(limited.server.waiting('listComments').length, 0, 'no request past the limit');
+
+    const { server, comments } = setup();
+    comments.retain(1);
+    const missing = comments.reveal(1, '99');
+    await server.next('listComments').answer(page(range(1, 3)));
+    assert.equal(await missing, false);
+    assert.equal(server.count('listComments'), 1);
+  });
+
+  it('gives up when a history page fails to load or the card closes on the way', async () => {
+    const { server, comments, feed } = setup();
+    comments.retain(1);
+    const failing = comments.reveal(1, '5');
+    await server.next('listComments').answer(page(range(71, 100), { cursor: 'c71' }));
+    await server.next('listComments').answer({ ok: false, failure: offline() });
+    assert.equal(await failing, false);
+    assert.equal(feed().readError?.kind, 'offline');
+
+    const other = setup();
+    const release = other.comments.retain(2);
+    const closing = other.comments.reveal(2, '5');
+    await other.server.next('listComments').answer(page(range(71, 100), { cursor: 'c71' }));
+    const older = other.server.next('listComments');
+    release();
+    assert.equal(older.signal?.aborted, true);
+    assert.equal(await closing, false);
+    assert.equal(other.server.waiting('listComments').length, 0);
+  });
+
+  it('finds nothing without a signed-in user', async () => {
+    const { server, auth, comments } = setup();
+    auth.signIn(null);
+    comments.retain(1);
+    assert.equal(await comments.reveal(1, '1'), false);
+    assert.equal(server.calls.length, 0);
+  });
+});
+
 describe('memory limits', () => {
   it('stops loading history at the limit and, on refresh, keeps the newest comments without a gap', async () => {
     const { server, comments, feed, open } = setup({ limits: { pageSize: 2, maxLoaded: 4 } });

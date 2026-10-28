@@ -7,6 +7,8 @@ import { useBookingTabUiStore } from '@/stores/booking-tab-ui-store';
 import { usePedometer } from '@/hooks/use-pedometer';
 import { useSleepNotifications } from '@/hooks/use-sleep-notifications';
 import { useStepsSync } from '@/hooks/use-steps-sync';
+import { openAppHref } from '@/lib/widgets/navigation';
+import { useAuthStore } from '@/stores/auth-store';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
 
 /** Совпадает с последним стопом градиента на `(tabs)/booking` — закрашивает запас под absolute BottomNav. */
@@ -34,6 +36,9 @@ export default function TabLayout() {
   const focusedNestedRoute = (tab: string) => (segments[1] === tab ? segments[2] : undefined);
   const pendingRequestId = useDeepLinkStore((s) => s.pendingRequestId);
   const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
+  const pendingPostAuthHref = useDeepLinkStore((s) => s.pendingPostAuthHref);
+  const setPendingPostAuthHref = useDeepLinkStore((s) => s.setPendingPostAuthHref);
+  const isGuest = useAuthStore((s) => s.isGuest);
   const contentPaddingBottom = BOTTOM_NAV_ROW_HEIGHT + bottomNavBottomInset(insets.bottom);
 
   useEffect(() => {
@@ -42,6 +47,15 @@ export default function TabLayout() {
       router.replace(`/(tabs)/requests/${pendingRequestId}`);
     }
   }, [pendingRequestId, setPendingRequestId, router]);
+
+  // Экран из push или виджета, пришедший, пока приложение уже на вкладках (после splash и входа его
+  // открывают app/index.tsx и экран входа). Поверх вкладок: «Назад» ведёт на них. В демо-режиме
+  // переход ждёт входа: виджет сам отправляет на экран входа, а push в демо-режиме не откладывается.
+  useEffect(() => {
+    if (pendingPostAuthHref == null || isGuest) return;
+    setPendingPostAuthHref(null);
+    openAppHref(router, pendingPostAuthHref, 'push');
+  }, [pendingPostAuthHref, setPendingPostAuthHref, isGuest, router]);
 
   // Сбор данных шагомера (источник: iOS — Motion & Fitness / Core Motion, Android — счётчик шагов)
   usePedometer();

@@ -46,6 +46,7 @@ export function useTaskComments(taskId: number | null) {
     () => ({
       refresh: () => (id === null ? Promise.resolve() : taskComments.refresh(id)),
       loadOlder: () => (id === null ? Promise.resolve() : taskComments.loadOlder(id)),
+      reveal: (commentId: string) => (id === null ? Promise.resolve(false) : taskComments.reveal(id, commentId)),
       send: (draft: CommentDraft) => (id === null ? unavailable() : taskComments.send(id, draft)),
       retry: (localId: string) => (id === null ? unavailable() : taskComments.retry(id, localId)),
       discard: (localId: string) => (id === null ? null : taskComments.discard(id, localId)),
