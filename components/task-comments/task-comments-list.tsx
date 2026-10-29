@@ -1,5 +1,5 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -40,11 +40,18 @@ interface TaskCommentsListProps {
   taskId: number;
   /** Содержимое карточки над комментариями. */
   children: ReactNode;
+  /** Комментарий из уведомления: лента догружает историю до него, прокручивает к нему и подсвечивает. */
+  focusCommentId?: string | null;
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
 }
 
 const keyOf = (comment: TaskComment) => comment.id;
+
+/** Сколько подсвечен комментарий, к которому перешли из уведомления. */
+const HIGHLIGHT_MS = 2500;
+/** Комментарий из уведомления — на трети высоты ленты: видно и его, и то, что выше. */
+const FOCUS_VIEW_POSITION = 0.3;
 
 /**
  * Основной список карточки задачи: её содержимое сверху, под ним — блок «Комментарии».
@@ -55,7 +62,7 @@ const keyOf = (comment: TaskComment) => comment.id;
  * комментарии меняются и удаляются долгим нажатием. С открытой клавиатурой поле ввода стоит
  * прямо над ней, как лист новой задачи.
  */
-export function TaskCommentsList({ taskId, children, style, contentContainerStyle }: TaskCommentsListProps) {
+export function TaskCommentsList({ taskId, children, focusCommentId = null, style, contentContainerStyle }: TaskCommentsListProps) {
   const comments = useTaskComments(taskId);
   const currentUserId = useAuthStore((state) => state.user?.id ?? null);
   const currentUserName = useAuthStore((state) => state.user?.full_name ?? '');
@@ -93,6 +100,8 @@ export function TaskCommentsList({ taskId, children, style, contentContainerStyl
   const closeMenu = useCallback(() => setMenu(null), []);
   const stopEditing = useCallback(() => setEditing(null), []);
 
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
   const renderItem = useCallback<ListRenderItem<TaskComment>>(
     ({ item }) => (
       <CommentItem
@@ -101,10 +110,54 @@ export function TaskCommentsList({ taskId, children, style, contentContainerStyl
         palette={palette}
         changing={changing[item.id] ?? null}
         onActions={isActionable(item) ? openMenu : undefined}
+        highlighted={item.id === highlightedId}
       />
     ),
-    [currentUserId, palette, changing, isActionable, openMenu]
+    [currentUserId, palette, changing, isActionable, openMenu, highlightedId]
   );
+
+  // Переход из уведомления к комментарию: история догружается до него. Не нашёлся — удалён насовсем
+  // или старше предела ленты — остаётся просто карточка.
+  const { reveal, items } = comments;
+  /** Найденный комментарий, к которому прокрутить, как только список его отрисует. */
+  const scrollTarget = useRef<string | null>(null);
+  const scrollAttempts = useRef(0);
+  useEffect(() => {
+    if (focusCommentId === null) return undefined;
+    let active = true;
+    void reveal(focusCommentId).then((found) => {
+      if (!active || !found) return;
+      scrollTarget.current = focusCommentId;
+      setHighlightedId(focusCommentId);
+    });
+    return () => {
+      active = false;
+    };
+  }, [focusCommentId, reveal]);
+  useEffect(() => {
+    const index = scrollTarget.current === null ? -1 : items.findIndex((item) => item.id === scrollTarget.current);
+    if (index === -1) return;
+    scrollTarget.current = null;
+    scrollAttempts.current = 0;
+    requestAnimationFrame(() =>
+      listRef.current?.scrollToIndex({ index, viewPosition: FOCUS_VIEW_POSITION, animated: true })
+    );
+  }, [items, highlightedId]);
+  useEffect(() => {
+    if (highlightedId === null) return undefined;
+    const timer = setTimeout(() => setHighlightedId(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlightedId]);
+  // Высоты комментариев список не знает заранее: к неизмеренному — сначала до последнего измеренного.
+  const onScrollToIndexFailed = useCallback((info: { index: number; highestMeasuredFrameIndex: number }) => {
+    if (scrollAttempts.current >= 5) return;
+    scrollAttempts.current += 1;
+    listRef.current?.scrollToIndex({ index: Math.max(0, info.highestMeasuredFrameIndex), animated: false });
+    setTimeout(
+      () => listRef.current?.scrollToIndex({ index: info.index, viewPosition: FOCUS_VIEW_POSITION, animated: true }),
+      100
+    );
+  }, []);
 
   // Своё сообщение появляется внизу ленты: перейти к нему. Цель — настоящая высота содержимого:
   // высоты не отрисованных комментариев список лишь оценивает, и scrollToEnd до конца не доходит.
@@ -241,6 +294,7 @@ export function TaskCommentsList({ taskId, children, style, contentContainerStyl
         onScroll={onScroll}
         scrollEventThrottle={32}
         onScrollBeginDrag={stopFollowingEnd}
+        onScrollToIndexFailed={onScrollToIndexFailed}
       />
       {shown ? (
         <CommentComposer

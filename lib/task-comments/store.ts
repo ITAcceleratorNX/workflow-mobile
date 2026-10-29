@@ -99,6 +99,11 @@ export interface TaskComments {
   /** Загрузить ленту или перечитать загруженное: правки и удаления видны и в старых страницах. */
   refresh(taskId: number): Promise<void>;
   loadOlder(taskId: number): Promise<void>;
+  /**
+   * Перечитать ленту и догружать историю, пока в ней не появится комментарий — переход к нему из
+   * уведомления. false — комментария нет, история упёрлась в предел памяти или чтение не удалось.
+   */
+  reveal(taskId: number, commentId: string): Promise<boolean>;
   send(taskId: number, draft: CommentDraft): Promise<WriteOutcome>;
   /** Повторить неотправленное с тем же ключом. */
   retry(taskId: number, localId: string): Promise<WriteOutcome>;
@@ -347,6 +352,19 @@ export function createTaskComments({
     return startRead(taskId, 'older', (signal) => readOlder(taskId, signal));
   }
 
+  async function reveal(taskId: number, commentId: string): Promise<boolean> {
+    await refresh(taskId);
+    for (;;) {
+      const feed = feedOf(taskId);
+      if (feed.items.some((item) => item.id === commentId)) return true;
+      if (!feed.loaded || feed.readError || !feed.hasOlder || feed.historyLimited) return false;
+      await loadOlder(taskId);
+      // Ничего не прочитано — чтение прервано, например карточку закрыли: дальше не идти.
+      const after = feedOf(taskId);
+      if (after.items === feed.items && after.olderCursor === feed.olderCursor) return false;
+    }
+  }
+
   const refreshIfShown = (taskId: number) => {
     if (holders.has(taskId)) void refresh(taskId);
   };
@@ -559,5 +577,5 @@ export function createTaskComments({
     });
   }
 
-  return { store, retain, refresh, loadOlder, send, retry, discard, setDraft, edit, remove };
+  return { store, retain, refresh, loadOlder, reveal, send, retry, discard, setDraft, edit, remove };
 }

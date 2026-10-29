@@ -21,7 +21,10 @@ function claimWidgetUrl(url: string): boolean {
   return true;
 }
 
-/** Куда вести по ссылке виджета. Query у задач передаётся параметрами: строка целиком их теряет. */
+/**
+ * Куда вести по отложенному переходу виджета или push. Query у задач передаётся параметрами: строка
+ * целиком их теряет. У карточки задачи — все параметры (`taskId`, `commentId` из push комментария).
+ */
 export function openAppHref(navigation: AppRouter, href: string, mode: 'push' | 'replace' = 'replace'): void {
   const go = mode === 'push' ? navigation.push.bind(navigation) : navigation.replace.bind(navigation);
   const splitIdx = href.indexOf('?');
@@ -30,7 +33,7 @@ export function openAppHref(navigation: AppRouter, href: string, mode: 'push' | 
   const params = Object.fromEntries(new URLSearchParams(query));
 
   if (path === '/client/tasks/details' && params.taskId) {
-    go({ pathname: '/client/tasks/details', params: { taskId: decodeURIComponent(params.taskId) } });
+    go({ pathname: '/client/tasks/details', params });
     return;
   }
   if (path === '/client/tasks') {

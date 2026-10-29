@@ -8,7 +8,7 @@ import { useTodoList, type UseTodoListQuery } from '@/hooks/use-todo-list';
 import { addCalendarDaysToDateKey, todayTaskDateKey } from '@/lib/dateTimeUtils';
 import { monthOfKey, type MonthRef } from '@/lib/month-grid';
 import { formatDayHeading, formatDueDay, pluralTasks, pluralUnfinished } from '@/lib/task-due';
-import { taskSortQuery, type TaskSort } from '@/lib/task-list-sort';
+import { sortableTaskView, taskSortQuery, type TaskSort } from '@/lib/task-list-sort';
 import type { TaskMainView } from '@/lib/task-views';
 
 export type TaskLayoutMode = 'list' | 'calendar';
@@ -67,7 +67,7 @@ export function useTasksScreen() {
   const tomorrowKey = useMemo(() => addCalendarDaysToDateKey(todayKey, 1), [todayKey]);
   const { counts, reload: reloadCounts } = useTaskCounts(todayKey);
   const { sorts, setSort } = useTaskSortPreference();
-  const sortableView = mainView === 'inbox' || mainView === 'today' ? mainView : null;
+  const sortableView = sortableTaskView(mainView);
   const taskSort: TaskSort | null = sortableView ? sorts[sortableView] : null;
 
   const [upcomingDate, setUpcomingDate] = useState<string | null>(null);
@@ -87,7 +87,7 @@ export function useTasksScreen() {
         return { view: 'list_today', today: todayKey, light: true, ...taskSortQuery(sorts.today) };
       case 'upcoming': {
         const day = upcomingDate ?? tomorrowKey;
-        return { view: 'list_upcoming', today: todayKey, fromDate: day, toDate: day, light: true };
+        return { view: 'list_upcoming', today: todayKey, fromDate: day, toDate: day, light: true, ...taskSortQuery(sorts.upcoming) };
       }
       case 'completed':
         return { view: 'list_completed', completedOn: completedDateKey, light: true };

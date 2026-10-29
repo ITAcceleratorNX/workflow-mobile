@@ -259,11 +259,12 @@ export async function getTodayStats(): Promise<
   return { ok: true, data: result.data };
 }
 
+/** status — HTTP-статус ошибки: 403 и 404 значат, что задачу удалили или она больше не видна. */
 export async function getUserTask(
   id: number
-): Promise<{ ok: true; data: UserTask } | { ok: false; error: string }> {
+): Promise<{ ok: true; data: UserTask } | { ok: false; error: string; status?: number }> {
   const result = await request<{ task: UserTask }>(`/user-tasks/${id}`);
-  if (!result.ok) return { ok: false, error: result.error };
+  if (!result.ok) return { ok: false, error: result.error, status: result.status };
   return { ok: true, data: unwrapTaskPayload(result.data) };
 }
 
