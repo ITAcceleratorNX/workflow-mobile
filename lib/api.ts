@@ -2489,6 +2489,15 @@ export async function getPublicBooking(
   return { ok: false, error: result.error };
 }
 
+/** Карточка брони для вошедшего (переход из push): доступ по роли и офису проверяет сервер. */
+export async function getBooking(
+  bookingId: number
+): Promise<{ ok: true; data: MeetingRoomBooking } | { ok: false; error: string; status?: number }> {
+  const result = await request<MeetingRoomBooking>(`/meeting-room-bookings/${bookingId}`);
+  if (result.ok) return { ok: true, data: result.data };
+  return { ok: false, error: result.error, status: result.status };
+}
+
 /** Гостевая ссылка на заявку для «Поделиться ссылкой»: создаётся один раз и переиспользуется. */
 export async function createRequestShareLink(
   requestGroupId: number

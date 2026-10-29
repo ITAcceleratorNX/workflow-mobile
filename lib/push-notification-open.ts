@@ -162,3 +162,26 @@ export function taskPushHref(target: TaskPushTarget): string {
   if (target.commentId) query.set('commentId', target.commentId);
   return `/client/tasks/details?${query}`;
 }
+
+// ---------- Бронирования переговорных ----------
+
+/**
+ * `data.type` push персонала о брони (ТЗ «Push-уведомления о новых бронированиях переговорных»).
+ * Перенос и отмена приходят с тем же `bookingId` — нажатие на них тоже открывает карточку.
+ */
+const BOOKING_STAFF_PUSH_TYPES: readonly string[] = [
+  'meeting_room_booking_created_staff',
+  'meeting_room_booking_rescheduled_staff',
+  'meeting_room_booking_cancelled_staff',
+];
+
+/** ID брони из push персонала; null — push не о брони или без её ID. */
+export function parseBookingPush(data: Record<string, unknown> | null | undefined): number | null {
+  if (!data || !BOOKING_STAFF_PUSH_TYPES.includes(pushPayloadType(data) ?? '')) return null;
+  return positiveId(data.bookingId ?? data.booking_id);
+}
+
+/** Карточка брони с проверкой доступа на сервере — строкой, как `taskPushHref`. */
+export function bookingPushHref(bookingId: number): string {
+  return `/booking/details/${bookingId}`;
+}
