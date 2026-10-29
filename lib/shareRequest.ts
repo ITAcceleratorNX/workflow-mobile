@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { Share } from 'react-native';
 
 import {
@@ -6,9 +7,15 @@ import {
   getTypeLabel,
 } from '@/constants/requests';
 import { config } from '@/lib/config';
-import type { RequestGroup, SubRequest } from '@/lib/api';
-
-const MAX_SHARE_PHOTOS = 10;
+import {
+  createRequestShareLink,
+  getSharedRequestId,
+  type RequestGroup,
+  type SubRequest,
+} from '@/lib/api';
+import { guestRequestUrl, parseGuestRequestToken } from '@/lib/request-share-link';
+import { useAuthStore } from '@/stores/auth-store';
+import { useDeepLinkStore } from '@/stores/deep-link-store';
 
 export interface ShareRequestParams {
   requestId: number;
@@ -21,6 +28,8 @@ export interface ShareRequestParams {
   categoryName?: string;
   description?: string;
   createdDate?: string;
+  /** Гостевая ссылка `/r/{token}`: заявку видно без входа, но не изменить. */
+  shareUrl: string;
 }
 
 function formatShareCreatedDate(iso: string | undefined): string | undefined {
@@ -36,18 +45,10 @@ function formatShareCreatedDate(iso: string | undefined): string | undefined {
   });
 }
 
-/**
- * Собирает URL заявки для шаринга (как у бронирования: путь /requests/:id).
- * Открывается в приложении (Universal/App Links) или в браузере на app.tmk-workflow.kz.
- */
-export function getRequestShareUrl(params: ShareRequestParams): string {
-  const base = config.webAppBaseUrl.replace(/\/$/, '');
-  return `${base}/requests/${params.requestId}`;
-}
-
 export function buildShareRequestParams(
   request: RequestGroup,
-  subRequest?: SubRequest | null
+  subRequest: SubRequest | null | undefined,
+  shareUrl: string
 ): ShareRequestParams {
   const sub = subRequest ?? request.requests?.[0];
   return {
@@ -57,10 +58,12 @@ export function buildShareRequestParams(
     urgency: getTypeLabel(request.request_type ?? 'normal'),
     officeName: request.office?.name,
     officeAddress: request.office?.address,
-    location: request.location_detail?.trim() || request.location?.trim(),
+    // Только локация в офисе: в `location` лежат координаты устройства.
+    location: request.location_detail?.trim(),
     categoryName: formatServiceCategoryName(sub?.category?.name) || sub?.title?.trim(),
     description: sub?.description?.trim(),
     createdDate: formatShareCreatedDate(request.created_date || sub?.created_date),
+    shareUrl,
   };
 }
 
@@ -93,38 +96,11 @@ export function getRequestShareMessage(params: ShareRequestParams): string {
   addLine('Описание', params.description);
   addLine('Дата создания', params.createdDate);
 
-  parts.push(`Ссылка: ${getRequestShareUrl(params)}`);
+  parts.push(`Ссылка: ${params.shareUrl}`);
   parts.push('');
   parts.push('Заявка создана в приложении Workflow.');
 
   return parts.join('\n');
-}
-
-/**
- * URL для открытия WhatsApp с предзаполненным сообщением (как в kcell-service-front).
- */
-export function getWhatsAppShareUrl(params: ShareRequestParams): string {
-  const message = getRequestShareMessage(params);
-  return `https://wa.me/?text=${encodeURIComponent(message)}`;
-}
-
-/** URL фото заявки (группа before/after или фото подзаявки). */
-export function collectRequestPhotoUrls(
-  request: RequestGroup,
-  subRequest?: SubRequest | null
-): string[] {
-  const sub = subRequest ?? request.requests?.[0];
-  const before =
-    request.photos?.filter((p) => p.type === 'before').map((p) => p.photo_url) ?? [];
-  const after =
-    request.photos?.filter((p) => p.type === 'after').map((p) => p.photo_url) ?? [];
-  if (before.length || after.length) {
-    return [...before, ...after].filter(Boolean).slice(0, MAX_SHARE_PHOTOS);
-  }
-  const source = subRequest ?? sub;
-  return (source?.photos?.map((p) => p.photo_url) ?? [])
-    .filter(Boolean)
-    .slice(0, MAX_SHARE_PHOTOS);
 }
 
 function getShareTitle(params: ShareRequestParams): string {
@@ -135,30 +111,23 @@ function getShareTitle(params: ShareRequestParams): string {
   return `Заявка #${displayNum}`;
 }
 
-function appendPhotoLinksToMessage(message: string, photoUrls: string[]): string {
-  if (!photoUrls.length) return message;
-  const lines = photoUrls.map((url, i) => `${i + 1}. ${url}`).join('\n');
-  return `${message}\n\nФото:\n${lines}`;
-}
-
 /**
- * Системное «Поделиться»: текст заявки; фото — ссылками в тексте (iOS и Android).
+ * Системное «Поделиться» (WhatsApp, Telegram и другие приложения): номер заявки, её данные
+ * и гостевая ссылка. Фото получатель смотрит по ссылке. Адресата выбирает пользователь.
+ * Ссылка всегда на всю заявку (группу), даже если делятся из подзаявки.
  */
 export async function shareRequestWithContent(
   request: RequestGroup,
   subRequest?: SubRequest | null
 ): Promise<void> {
-  const params = buildShareRequestParams(request, subRequest);
-  const message = getRequestShareMessage(params);
-  const title = getShareTitle(params);
-  const photoUrls = collectRequestPhotoUrls(request, subRequest);
+  const link = await createRequestShareLink(request.id);
+  if (!link.ok) throw new Error(link.error);
+  const shareUrl = guestRequestUrl(config.webAppBaseUrl, link.data.token);
+  const params = buildShareRequestParams(request, subRequest, shareUrl);
 
   await Share.share({
-    title,
-    message:
-      photoUrls.length > 0
-        ? appendPhotoLinksToMessage(message, photoUrls)
-        : message,
+    title: getShareTitle(params),
+    message: getRequestShareMessage(params),
   });
 }
 
@@ -196,4 +165,33 @@ export function parseRequestDeepLinkUrl(url: string): { requestId: number } | nu
     }
     return null;
   }
+}
+
+/**
+ * Заявка по входящей ссылке: обычная (`?requestId=`, `/requests/:id`, схема приложения) или
+ * гостевая `/r/{token}` — её номер приходит с backend. Права в приложении — по роли, как всегда.
+ */
+export async function resolveRequestDeepLink(url: string): Promise<{ requestId: number } | null> {
+  const parsed = parseRequestDeepLinkUrl(url);
+  if (parsed) return parsed;
+  const token = parseGuestRequestToken(url);
+  if (!token) return null;
+  const shared = await getSharedRequestId(token);
+  return shared.ok ? { requestId: shared.data } : null;
+}
+
+/**
+ * Ссылка пришла, когда приложение уже открыто. Без входа (или в демо-режиме) сначала экран входа:
+ * заявка запоминается и открывается после входа (`consumePostAuthHref` на экране входа), как у виджетов.
+ */
+export function openRequestFromLink(requestId: number): void {
+  const href = `/(tabs)/requests/${requestId}`;
+  const hydrated = useAuthStore.persist.hasHydrated();
+  const { token, isGuest } = useAuthStore.getState();
+  if (!hydrated || !token || isGuest) {
+    useDeepLinkStore.getState().setPendingPostAuthHref(href);
+    if (hydrated) router.replace('/login');
+    return;
+  }
+  router.replace({ pathname: '/(tabs)/requests/[id]', params: { id: String(requestId) } });
 }
