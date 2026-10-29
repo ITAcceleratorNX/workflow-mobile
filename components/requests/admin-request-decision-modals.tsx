@@ -235,16 +235,6 @@ export function AdminAcceptRequestModal({
       setLocalError('Категории офиса ещё загружаются');
       return;
     }
-    if (requestType !== 'planned') {
-      const allHave = subRequests.every((sr) => {
-        const s = subSettings[sr.id];
-        return s?.sla && s?.complexity;
-      });
-      if (!allHave) {
-        setLocalError('Укажите время выполнения и сложность для всех подзаявок');
-        return;
-      }
-    }
     // Категория чужого офиса оставит заявку на исполнителях прежнего офиса.
     const allHaveCategory = subRequests.every((sr) => {
       const picked = Number(subCategoryIds[sr.id]);
@@ -259,8 +249,9 @@ export function AdminAcceptRequestModal({
       const s = subSettings[sr.id];
       return {
         id: sr.id,
-        sla: requestType === 'planned' ? null : s?.sla ?? null,
-        complexity: requestType === 'planned' ? null : s?.complexity ?? null,
+        // Время и сложность необязательны: пустое значение передаём как null.
+        sla: requestType === 'planned' ? null : s?.sla || null,
+        complexity: requestType === 'planned' ? null : s?.complexity || null,
         category_id: Number(subCategoryIds[sr.id]),
         ...(subExecutorIds[sr.id] && subExecutorIds[sr.id] !== HAND_TO_DEPARTMENT_HEAD
           ? { executors: [{ id: Number(subExecutorIds[sr.id]), role: 'leader' as const }] }
