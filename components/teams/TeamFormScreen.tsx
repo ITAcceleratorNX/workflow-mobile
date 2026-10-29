@@ -74,7 +74,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
       setLoadingTeam(false);
       if (cancelled) return;
       if (!res.ok) {
-        show({ title: 'Не удалось загрузить команду', description: res.error, variant: 'destructive' });
+        show({ title: 'Не удалось загрузить команду', description: res.error, variant: 'error' });
         router.back();
         return;
       }
@@ -148,16 +148,16 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
 
   const handleSave = useCallback(async () => {
     if (isGuest) {
-      show({ title: 'Недоступно', description: 'Войдите в аккаунт', variant: 'destructive' });
+      show({ title: 'Недоступно', description: 'Войдите в аккаунт', variant: 'error' });
       return;
     }
     const trimmed = name.trim();
     if (!trimmed) {
-      show({ title: 'Название', description: 'Введите название команды', variant: 'destructive' });
+      show({ title: 'Название', description: 'Введите название команды', variant: 'error' });
       return;
     }
     if (!leader) {
-      show({ title: 'Руководитель', description: 'Выберите руководителя команды', variant: 'destructive' });
+      show({ title: 'Руководитель', description: 'Выберите руководителя команды', variant: 'error' });
       return;
     }
     if (saving) return;
@@ -171,10 +171,10 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
       if (res.ok) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         bumpTeamsCache();
-        show({ title: 'Сохранено', variant: 'default', duration: 2000 });
+        show({ title: 'Сохранено', variant: 'success', duration: 2000 });
         router.back();
       } else {
-        show({ title: 'Ошибка', description: res.error, variant: 'destructive' });
+        show({ title: 'Ошибка', description: res.error, variant: 'error' });
       }
     } else {
       const res = await createTeam({
@@ -188,7 +188,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
         bumpTeamsCache();
         router.back();
       } else {
-        show({ title: 'Не удалось создать', description: res.error, variant: 'destructive' });
+        show({ title: 'Не удалось создать', description: res.error, variant: 'error' });
       }
     }
   }, [
@@ -216,7 +216,7 @@ export function TeamFormScreen({ teamId }: TeamFormScreenProps) {
       bumpTeamsCache();
       router.back();
     } else {
-      show({ title: 'Не удалось удалить', description: res.error, variant: 'destructive' });
+      show({ title: 'Не удалось удалить', description: res.error, variant: 'error' });
     }
   }, [teamId, isEdit, isGuest, canDeleteTeam, router, show]);
 

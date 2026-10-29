@@ -1,6 +1,6 @@
 import { useAsyncResource } from '@/hooks/use-async-resource';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { config } from '@/lib/config';
+import { useToast } from '@/context/toast-context';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   getManagerStats,
@@ -72,6 +73,7 @@ export default function ManagerStatisticsScreen() {
   const insets = useSafeAreaInsets();
 
   const token = useAuthStore((s) => s.token);
+  const { show: showToast } = useToast();
   const styles = useManagerStatsStyles();
   const [activeTab, setActiveTab] = useState<StatsTab>('stats');
 
@@ -103,7 +105,7 @@ export default function ManagerStatisticsScreen() {
     async (format: 'xlsx' | 'pbix') => {
       try {
         if (!token) {
-          Alert.alert('Ошибка', 'Не найден токен авторизации. Войдите в систему ещё раз.');
+          showToast({ title: 'Ошибка', description: 'Не найден токен авторизации. Войдите в систему ещё раз.', variant: 'error' });
           return;
         }
 
@@ -117,7 +119,7 @@ export default function ManagerStatisticsScreen() {
         });
 
         if (!result || !result.uri) {
-          Alert.alert('Ошибка', 'Не удалось скачать файл.');
+          showToast({ title: 'Ошибка', description: 'Не удалось скачать файл.', variant: 'error' });
           return;
         }
 
@@ -130,23 +132,23 @@ export default function ManagerStatisticsScreen() {
         }
 
         if (!Sharing) {
-          Alert.alert('Файл сохранён', `Файл сохранён по пути:\n${result.uri}`);
+          showToast({ title: 'Файл сохранён', description: result.uri, variant: 'success', duration: 6000 });
           return;
         }
 
         const canShare = await Sharing.isAvailableAsync();
         if (!canShare) {
-          Alert.alert('Файл сохранён', `Файл сохранён по пути:\n${result.uri}`);
+          showToast({ title: 'Файл сохранён', description: result.uri, variant: 'success', duration: 6000 });
           return;
         }
 
         await Sharing.shareAsync(result.uri);
       } catch (e) {
         console.error('Export analytics error', e);
-        Alert.alert('Ошибка', 'Не удалось экспортировать файл. Попробуйте ещё раз.');
+        showToast({ title: 'Ошибка', description: 'Не удалось экспортировать файл. Попробуйте ещё раз.', variant: 'error' });
       }
     },
-    [token]
+    [token, showToast]
   );
 
   const stats = useMemo(

@@ -116,7 +116,7 @@ export default function AdminWorkerNewsScreen() {
                 showToast({ title: 'Удалено', description: 'Новость удалена', variant: 'success' });
                 loadList();
               } else {
-                showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
+                showToast({ title: 'Ошибка', description: res.error, variant: 'error', duration: 4000 });
               }
             },
           },
@@ -138,7 +138,7 @@ export default function AdminWorkerNewsScreen() {
         showToast({ title: 'Скрыто', description: 'Новость скрыта с главной', variant: 'success' });
         loadList();
       } else {
-        showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: res.error, variant: 'error', duration: 4000 });
       }
     },
     [showToast, loadList]
@@ -156,7 +156,7 @@ export default function AdminWorkerNewsScreen() {
         showToast({ title: 'Архивировано', description: 'Новость архивирована', variant: 'success' });
         loadList();
       } else {
-        showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: res.error, variant: 'error', duration: 4000 });
       }
     },
     [showToast, loadList]
@@ -174,7 +174,7 @@ export default function AdminWorkerNewsScreen() {
         showToast({ title: 'Восстановлено', description: 'Новость снова активна', variant: 'success' });
         loadList();
       } else {
-        showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: res.error, variant: 'error', duration: 4000 });
       }
     },
     [showToast, loadList]

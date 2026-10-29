@@ -169,7 +169,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
     ]);
     const executors: Record<number, ExecutorInCategory> = {};
     if (execRes.ok) for (const executor of execRes.data) { if (executor.user?.id) executors[executor.user.id] = executor; }
-    if (!usersRes.ok) showToast({ title: 'Ошибка', description: usersRes.error, variant: 'destructive', duration: 4000 });
+    if (!usersRes.ok) showToast({ title: 'Ошибка', description: usersRes.error, variant: 'error', duration: 4000 });
     return { users: usersRes.ok ? usersRes.data : [], executors };
   }, [officeFilterId, authOfficeId, roleFilter, companyFilterId, showToast]);
   const { data: { users: officeUsers, executors: executorByUserId }, setData, loading, refresh } = useAsyncResource<{ users: OfficeUser[]; executors: Record<number, ExecutorInCategory> }>(fetchUsers, { users: [], executors: {} }, isActive);
@@ -411,7 +411,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       !draftOfficeId.trim() &&
       !['department-head', 'manager', 'admin-worker'].includes(editUser.role)
     ) {
-      showToast({ title: 'Выберите офис', variant: 'destructive' });
+      showToast({ title: 'Выберите офис', variant: 'error' });
       return;
     }
 
@@ -420,7 +420,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       phone !== formatPhone(editUser.phone ?? '');
 
     if (!fullName.trim()) {
-      showToast({ title: 'Укажите ФИО', variant: 'destructive' });
+      showToast({ title: 'Укажите ФИО', variant: 'error' });
       return;
     }
 
@@ -428,12 +428,12 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       if (!specialty.trim() || selectedCategoryIds.length === 0) {
         showToast({
           title: 'Укажите специальность и хотя бы одну категорию',
-          variant: 'destructive',
+          variant: 'error',
         });
         return;
       }
       if (!isExecutorOfficeAccessValid(draftOfficeAccess)) {
-        showToast({ title: 'Выберите хотя бы один офис или «Все офисы»', variant: 'destructive' });
+        showToast({ title: 'Выберите хотя бы один офис или «Все офисы»', variant: 'error' });
         return;
       }
     }
@@ -509,7 +509,7 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
       !companyChanged &&
       !officeAccessChanged
     ) {
-      showToast({ title: 'Нет изменений', variant: 'default' });
+      showToast({ title: 'Нет изменений', variant: 'info' });
       return;
     }
 

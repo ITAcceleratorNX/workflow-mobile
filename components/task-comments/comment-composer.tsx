@@ -164,6 +164,7 @@ export function CommentComposer({
           title: 'Комментарий уже удалён',
           description: 'Текст правки оставлен в поле ввода: его можно отправить новым сообщением.',
           duration: 4000,
+          variant: 'info',
         });
         onStopEditing();
         return;

@@ -94,7 +94,7 @@ export default function CalendarSettingsScreen() {
     showToast({
       title: notice.title,
       description: notice.description,
-      variant: notice.tone === 'success' ? 'success' : 'destructive',
+      variant: notice.tone === 'success' ? 'success' : 'error',
     });
   }, [showToast]);
 
@@ -106,7 +106,7 @@ export default function CalendarSettingsScreen() {
   }, [params.calendar, showResult, router]);
 
   const fail = (title: string, description?: string) =>
-    showToast({ title, description, variant: 'destructive' });
+    showToast({ title, description, variant: 'error' });
 
   const connectGoogle = async () => {
     setBusy('connect');

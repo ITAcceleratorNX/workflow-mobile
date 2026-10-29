@@ -49,7 +49,7 @@ export default function SettingsScreen() {
               showToast({
                 title: 'Демо режим',
                 description: 'Настройки уведомлений недоступны в демо-версии.',
-                variant: 'default',
+                variant: 'info',
               });
               return;
             }
@@ -80,7 +80,7 @@ export default function SettingsScreen() {
               showToast({
                 title: 'Демо режим',
                 description: 'Подключение календаря недоступно в демо-версии.',
-                variant: 'default',
+                variant: 'info',
               });
               return;
             }
@@ -111,7 +111,7 @@ export default function SettingsScreen() {
               showToast({
                 title: 'Демо режим',
                 description: 'Смена пароля недоступна в демо-версии.',
-                variant: 'default',
+                variant: 'info',
               });
               return;
             }

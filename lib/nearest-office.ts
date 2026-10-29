@@ -78,7 +78,7 @@ export function formatDistance(meters: number): string {
 export function nearestOfficeNotice(result: NearestOffice): {
   title: string;
   description: string;
-  variant: 'success' | 'default';
+  variant: 'success' | 'info';
 } {
   switch (result.kind) {
     case 'nearby':
@@ -91,13 +91,13 @@ export function nearestOfficeNotice(result: NearestOffice): {
       return {
         title: 'Рядом нет офиса',
         description: `Не нашли офис в радиусе ${formatDistance(NEARBY_OFFICE_RADIUS_M)} от вас. Выберите офис вручную.`,
-        variant: 'default',
+        variant: 'info',
       };
     case 'no_coordinates':
       return {
         title: 'Не удалось определить офис',
         description: 'У офисов не указано расположение на карте. Выберите офис вручную.',
-        variant: 'default',
+        variant: 'info',
       };
   }
 }

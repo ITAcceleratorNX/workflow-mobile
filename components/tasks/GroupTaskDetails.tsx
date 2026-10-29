@@ -121,7 +121,7 @@ export function GroupTaskDetails({ task, currentUserId, onChanged }: Props) {
             showToast({
               title: 'Не удалось изменить ответственного',
               description: res.error,
-              variant: 'destructive',
+              variant: 'error',
               duration: 4000,
             });
             return;

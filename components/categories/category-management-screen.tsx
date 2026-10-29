@@ -172,7 +172,7 @@ export function CategoryManagementScreen({
       setNewCategoryName('');
       refetch();
     } else {
-      showToast({ title: result.error, variant: 'destructive' });
+      showToast({ title: result.error, variant: 'error' });
     }
   }, [newCategoryName, manageOfficeId, showToast, refetch]);
 
@@ -195,7 +195,7 @@ export function CategoryManagementScreen({
                 if (selectedCategoryId === String(cat.id)) setSelectedCategoryId('');
                 refetch();
               } else {
-                showToast({ title: result.error, variant: 'destructive' });
+                showToast({ title: result.error, variant: 'error' });
               }
             },
           },
@@ -217,7 +217,7 @@ export function CategoryManagementScreen({
       setNewSubcategoryName('');
       refetch();
     } else {
-      showToast({ title: result.error, variant: 'destructive' });
+      showToast({ title: result.error, variant: 'error' });
     }
   }, [newSubcategoryName, selectedCategoryId, manageOfficeId, showToast, refetch]);
 
@@ -248,7 +248,7 @@ export function CategoryManagementScreen({
       cancelEdit();
       refetch();
     } else {
-      showToast({ title: result.error, variant: 'destructive' });
+      showToast({ title: result.error, variant: 'error' });
     }
   }, [editDraft, editingKey, originalName, manageOfficeId, showToast, refetch, cancelEdit]);
 
@@ -267,7 +267,7 @@ export function CategoryManagementScreen({
               showToast({ title: 'Подкатегория удалена', variant: 'success' });
               refetch();
             } else {
-              showToast({ title: result.error, variant: 'destructive' });
+              showToast({ title: result.error, variant: 'error' });
             }
           },
         },

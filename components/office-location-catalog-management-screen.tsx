@@ -139,7 +139,7 @@ export function OfficeLocationCatalogManagementScreen({
   const fetchData = useCallback(async () => {
     if (manageOfficeId == null) return [];
     const res = await getOfficeLocationCatalog(manageOfficeId, { includeInactive: true });
-    if (!res.ok) { showToast({ title: res.error, variant: 'destructive' }); return []; }
+    if (!res.ok) { showToast({ title: res.error, variant: 'error' }); return []; }
     return res.data;
   }, [manageOfficeId, showToast]);
   const allowed = role === variant;
@@ -319,7 +319,7 @@ export function OfficeLocationCatalogManagementScreen({
         onPress: async () => {
           const res = await deleteOfficeLocationCatalogRow(manageOfficeId, id);
           if (!res.ok) {
-            showToast({ title: res.error, variant: 'destructive' });
+            showToast({ title: res.error, variant: 'error' });
             return;
           }
           showToast({ title: 'Удалено', variant: 'success' });
@@ -335,7 +335,7 @@ export function OfficeLocationCatalogManagementScreen({
       is_active: !item.is_active,
     });
     if (!res.ok) {
-      showToast({ title: res.error, variant: 'destructive' });
+      showToast({ title: res.error, variant: 'error' });
       return;
     }
     await load();

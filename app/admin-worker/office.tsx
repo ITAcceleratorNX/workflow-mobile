@@ -239,13 +239,13 @@ export default function AdminWorkerOfficeScreen() {
     async (roomId: number, officeId: number) => {
       const name = editRoomName.trim();
       if (!name) {
-        showToast({ title: 'Введите название комнаты', variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Введите название комнаты', variant: 'error', duration: 4000 });
         return;
       }
       const floor = parseInt(editRoomFloor, 10);
       const capacity = parseInt(editRoomCapacity, 10);
       if (Number.isNaN(floor) || floor < 0 || Number.isNaN(capacity) || capacity < 1) {
-        showToast({ title: 'Этаж ≥ 0, вместимость ≥ 1', variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Этаж ≥ 0, вместимость ≥ 1', variant: 'error', duration: 4000 });
         return;
       }
       setSavingRoomId(roomId);
@@ -255,7 +255,7 @@ export default function AdminWorkerOfficeScreen() {
         setEditingRoomId(null);
         await loadRooms(officeId);
       } else {
-        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
       }
       setSavingRoomId(null);
     },
@@ -279,7 +279,7 @@ export default function AdminWorkerOfficeScreen() {
                 showToast({ title: 'Переговорная удалена', variant: 'success' });
                 await loadRooms(officeId);
               } else {
-                showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+                showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
               }
               setDeletingRoomId(null);
             },
@@ -293,7 +293,7 @@ export default function AdminWorkerOfficeScreen() {
   const pickPhotoForNew = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      showToast({ title: 'Нет доступа к галерее', variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Нет доступа к галерее', variant: 'error', duration: 4000 });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -307,7 +307,7 @@ export default function AdminWorkerOfficeScreen() {
   const pickPhotoForEdit = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      showToast({ title: 'Нет доступа к галерее', variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Нет доступа к галерее', variant: 'error', duration: 4000 });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -321,17 +321,17 @@ export default function AdminWorkerOfficeScreen() {
   const saveOfficeData = useCallback(
     async (officeId: number) => {
       if (!editName.trim()) {
-        showToast({ title: 'Введите название офиса', variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Введите название офиса', variant: 'error', duration: 4000 });
         return;
       }
       const floorParsed = parseFloorField(editFloor);
       if (!floorParsed.ok) {
-        showToast({ title: 'Этаж — целое число ≥ 0', variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Этаж — целое число ≥ 0', variant: 'error', duration: 4000 });
         return;
       }
       const coordinates = parseOfficeCoordinates(editCoordinates);
       if (!coordinates.ok) {
-        showToast({ title: coordinates.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: coordinates.error, variant: 'error', duration: 4000 });
         return;
       }
       const blockTrim = editBlock.trim();
@@ -383,7 +383,7 @@ export default function AdminWorkerOfficeScreen() {
           )
         );
       } else {
-        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
       }
       setSavingDataId(null);
     },
@@ -468,7 +468,7 @@ export default function AdminWorkerOfficeScreen() {
                 if (expandedId === office.id) setExpandedId(null);
                 load();
               } else {
-                showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+                showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
               }
               setDeletingId(null);
             },
@@ -484,7 +484,7 @@ export default function AdminWorkerOfficeScreen() {
       const start = toHHmmss(startInput);
       const end = toHHmmss(endInput);
       if (!start || !end) {
-        showToast({ title: 'Введите начало и конец рабочего дня', variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Введите начало и конец рабочего дня', variant: 'error', duration: 4000 });
         return;
       }
       setSavingId(officeId);
@@ -508,7 +508,7 @@ export default function AdminWorkerOfficeScreen() {
           )
         );
       } else {
-        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
       }
       setSavingId(null);
     },
