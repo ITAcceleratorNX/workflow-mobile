@@ -2489,6 +2489,29 @@ export async function getPublicBooking(
   return { ok: false, error: result.error };
 }
 
+/** Гостевая ссылка на заявку для «Поделиться ссылкой»: создаётся один раз и переиспользуется. */
+export async function createRequestShareLink(
+  requestGroupId: number
+): Promise<{ ok: true; data: { token: string; url: string } } | { ok: false; error: string }> {
+  const result = await request<{ token?: string; url?: string }>(
+    `/request-groups/${requestGroupId}/share-link`,
+    { method: 'POST' }
+  );
+  if (!result.ok) return { ok: false, error: result.error };
+  // Демо-режим отвечает пустым объектом: ссылки у демо-заявок нет.
+  if (!result.data?.token) return { ok: false, error: 'Ссылка недоступна' };
+  return { ok: true, data: { token: result.data.token, url: result.data.url ?? '' } };
+}
+
+/** Номер заявки по гостевой ссылке — если ссылку всё же открыли в приложении. */
+export async function getSharedRequestId(
+  token: string
+): Promise<{ ok: true; data: number } | { ok: false; error: string }> {
+  const result = await request<{ id: number }>(`/public/request-shares/${encodeURIComponent(token)}`);
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, data: result.data.id };
+}
+
 export async function getMeetingRooms(officeId?: number): Promise<
   | { ok: true; data: MeetingRoom[] }
   | { ok: false; error: string }

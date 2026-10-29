@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, ThemeProvider , Stack, useRouter } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider , Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Linking } from 'react-native';
@@ -15,14 +15,13 @@ import { registerBackgroundStepsTask } from '@/lib/background-steps-sync';
 import { registerBackgroundHealthyTask } from '@/lib/background-healthy-sync';
 import { ToastProvider } from '@/context/toast-context';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
-import { parseRequestDeepLinkUrl } from '@/lib/shareRequest';
+import { openRequestFromLink, resolveRequestDeepLink } from '@/lib/shareRequest';
 import { WorkflowWidgetsHost } from '@/components/workflow-widgets-host';
 import { registerWorkflowWidgetsTask } from '@/lib/widgets/background';
 import { openWidgetUrl, rememberWidgetUrl } from '@/lib/widgets/navigation';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const router = useRouter();
   const setPendingRequestId = useDeepLinkStore((s) => s.setPendingRequestId);
 
   useEffect(() => {
@@ -33,16 +32,17 @@ export default function RootLayout() {
 
   useEffect(() => {
     const handleUrl = (url: string) => {
-      const parsed = parseRequestDeepLinkUrl(url);
-      if (!parsed) return;
-      router.replace(`/(tabs)/requests/${parsed.requestId}`);
+      void resolveRequestDeepLink(url).then((parsed) => {
+        if (parsed) openRequestFromLink(parsed.requestId);
+      });
     };
 
     const initialUrlPromise = Linking.getInitialURL();
     void initialUrlPromise.then((url) => {
       if (!url || rememberWidgetUrl(url)) return;
-      const parsed = parseRequestDeepLinkUrl(url);
-      if (parsed) setPendingRequestId(parsed.requestId);
+      void resolveRequestDeepLink(url).then((parsed) => {
+        if (parsed) setPendingRequestId(parsed.requestId);
+      });
     });
 
     const sub = Linking.addEventListener('url', ({ url }) => {
@@ -53,7 +53,7 @@ export default function RootLayout() {
       });
     });
     return () => sub.remove();
-  }, [router, setPendingRequestId]);
+  }, [setPendingRequestId]);
 
   return (
     <ErrorBoundary>

@@ -37,7 +37,12 @@
             {
               "scheme": "https",
               "host": "app.tmk-workflow.kz",
-              "pathPrefix": "/"
+              "path": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "app.tmk-workflow.kz",
+              "pathPrefix": "/requests/"
             }
           ],
           "category": [

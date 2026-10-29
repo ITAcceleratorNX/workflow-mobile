@@ -759,6 +759,7 @@ export default function RequestDetailScreen() {
           isExecutorLeader: isExecutorLeader(sub),
           onShare: () => {
             void shareRequestWithContent(request, sub).catch((err) => {
+              showToast({ title: 'Не удалось создать ссылку', description: 'Проверьте соединение и попробуйте ещё раз.', variant: 'error' });
               if (__DEV__) console.warn('[RequestDetail] Share failed', err);
             });
           },

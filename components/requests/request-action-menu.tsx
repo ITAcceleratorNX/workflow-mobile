@@ -4,6 +4,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { useToast } from '@/context/toast-context';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import type { RequestGroup, SubRequest } from '@/lib/api';
 import { shareRequestWithContent } from '@/lib/shareRequest';
@@ -84,6 +85,7 @@ export function RequestActionMenu({
   const cardBackground = useThemeColor({}, 'cardBackground');
   const insets = useSafeAreaInsets();
 
+  const { show: showToast } = useToast();
   const isSub = !!subRequest;
 
   const handleShare = () => {
@@ -91,6 +93,7 @@ export function RequestActionMenu({
       .then(() => setVisible(false))
       .catch((err) => {
         setVisible(false);
+        showToast({ title: 'Не удалось создать ссылку', description: 'Проверьте соединение и попробуйте ещё раз.', variant: 'error' });
         if (__DEV__) console.warn('[RequestActionMenu] Share failed', err);
       });
   };

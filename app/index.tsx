@@ -4,7 +4,7 @@ import { Linking, StyleSheet, View } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { parseRequestDeepLinkUrl } from '@/lib/shareRequest';
+import { resolveRequestDeepLink } from '@/lib/shareRequest';
 import { canOpenWidgetDestination, isWidgetAppHref } from '@/lib/widgets/model';
 import { openAppHref, rememberWidgetUrl } from '@/lib/widgets/navigation';
 import { useAuthStore } from '@/stores/auth-store';
@@ -36,11 +36,11 @@ export default function IndexScreen() {
   useEffect(() => {
     let active = true;
     Linking.getInitialURL()
-      .then((url) => {
+      .then(async (url) => {
         if (!active || !url) return;
         if (rememberWidgetUrl(url)) return;
-        const parsed = parseRequestDeepLinkUrl(url);
-        if (parsed) setInitialRequestId(parsed.requestId);
+        const parsed = await resolveRequestDeepLink(url);
+        if (active && parsed) setInitialRequestId(parsed.requestId);
       })
       .finally(() => {
         if (active) setInitialUrlChecked(true);
