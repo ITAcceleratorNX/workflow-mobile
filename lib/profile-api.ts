@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 
 import { networkFailure } from '@/lib/api-errors';
+import type { CategoryNotification, CategorySummary, NotificationCategory } from '@/lib/notification-categories';
 import { config } from '@/lib/config';
 import { useAuthStore } from '@/stores/auth-store';
 
 const { apiBaseUrl } = config;
 
-type ProfileApiResult<T> =
+export type ProfileApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; unauthorized?: boolean };
 
@@ -23,6 +24,9 @@ async function authRequest<T>(
   const method = (options.method ?? 'GET').toUpperCase();
 
   if (token === 'guest-demo') {
+    if (basePath === '/notifications/me/summary') {
+      return { ok: true, data: { categories: [], unread_count: 0 } as T };
+    }
     if (basePath === '/notifications/me') {
       return {
         ok: true,
@@ -164,37 +168,31 @@ export interface LogsResponse {
 
 // ==================== Notifications ====================
 
-export interface Notification {
-  id: number;
-  title: string;
-  content: string;
-  is_read: boolean;
-  created_at: string;
-  /** 'tasks' — событие задачника; null и нет поля — остальные уведомления и старый сервер. */
-  category?: 'tasks' | null;
-  /** Событие задачника (`TaskPushEvent`), например 'comment' или 'deleted'. */
-  event?: string | null;
-  task_id?: number | null;
-  /** BIGINT: сервер может прислать строкой. */
-  comment_id?: number | string | null;
-}
+export const CATEGORY_HISTORY_PAGE_SIZE = 20;
 
-export interface NotificationsResponse {
-  notifications: Notification[];
+export interface CategoryHistoryPage {
+  /** Новые первыми, как отдаёт сервер; порядок для экрана — chronological(). */
+  notifications: CategoryNotification[];
   totalPages?: number;
   total?: number;
 }
 
-export async function fetchNotifications(
-  page: number,
-  pageSize: number
-): Promise<ProfileApiResult<NotificationsResponse>> {
-  const params = new URLSearchParams();
-  params.append('page', String(page));
-  params.append('pageSize', String(pageSize));
-  return authRequest<NotificationsResponse>(
-    `/notifications/me?${params.toString()}`
-  );
+/** Категории роли со счётчиками и последним уведомлением. */
+export async function fetchNotificationSummary(): Promise<ProfileApiResult<CategorySummary>> {
+  return authRequest<CategorySummary>('/notifications/me/summary');
+}
+
+/** Страница истории одной категории. */
+export async function fetchCategoryHistory(
+  category: NotificationCategory,
+  page: number
+): Promise<ProfileApiResult<CategoryHistoryPage>> {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(CATEGORY_HISTORY_PAGE_SIZE),
+    category,
+  });
+  return authRequest<CategoryHistoryPage>(`/notifications/me?${params.toString()}`);
 }
 
 export async function markNotificationRead(

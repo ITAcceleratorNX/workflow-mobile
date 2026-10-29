@@ -135,7 +135,7 @@ export default function AdminWorkerUsersScreen() {
       if (req.role === 'executor') {
         const chosen = officeAccessFor(req);
         if (!isExecutorOfficeAccessValid(chosen)) {
-          showToast({ title: 'Выберите хотя бы один офис или «Все офисы»', variant: 'destructive' });
+          showToast({ title: 'Выберите хотя бы один офис или «Все офисы»', variant: 'error' });
           return;
         }
         if (!sameExecutorOfficeAccess(chosen, defaultOfficeAccess(req))) officeAccess = chosen;
@@ -146,7 +146,7 @@ export default function AdminWorkerUsersScreen() {
         showToast({ title: 'Успешно', description: 'Запрос одобрен, пользователь создан', variant: 'success' });
         loadRequests();
       } else {
-        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
       }
       setActionRequestId(null);
     },
@@ -161,7 +161,7 @@ export default function AdminWorkerUsersScreen() {
         showToast({ title: 'Успешно', description: 'Запрос отклонён', variant: 'success' });
         loadRequests();
       } else {
-        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
       }
       setActionRequestId(null);
     },
@@ -176,7 +176,7 @@ export default function AdminWorkerUsersScreen() {
         showToast({ title: 'Удалено', description: 'Отклонённый запрос удалён из списка', variant: 'success' });
         loadRequests();
       } else {
-        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
       }
       setActionRequestId(null);
     },

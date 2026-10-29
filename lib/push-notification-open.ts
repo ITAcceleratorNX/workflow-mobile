@@ -3,8 +3,9 @@ import type { Href } from 'expo-router';
 /** Экран списка запросов на регистрацию (админ). */
 export const ROUTE_ADMIN_REGISTRATION_REQUESTS = '/admin-worker/users' as const;
 
-/** История уведомлений: туда ведёт push об удалённой задаче. */
+/** История уведомлений: туда, в «Задачник», ведёт push об удалённой задаче. */
 export const ROUTE_NOTIFICATIONS = '/notifications' as const;
+export const ROUTE_TASK_NOTIFICATIONS = `${ROUTE_NOTIFICATIONS}?category=tasks` as const;
 
 let lastDedupKey = '';
 let lastDedupAt = 0;
@@ -153,10 +154,10 @@ export function taskDetailsHref({ taskId, commentId }: TaskPushTarget): Href {
 
 /**
  * Куда ведёт нажатие на push — строкой, как переходы виджетов: она ждёт в `pendingPostAuthHref`,
- * пока её не откроет `openAppHref`. Удалённую задачу не открыть — тогда в историю уведомлений.
+ * пока её не откроет `openAppHref`. Удалённую задачу не открыть — тогда в историю «Задачника».
  */
 export function taskPushHref(target: TaskPushTarget): string {
-  if (target.event === 'deleted') return ROUTE_NOTIFICATIONS;
+  if (target.event === 'deleted') return ROUTE_TASK_NOTIFICATIONS;
   const query = new URLSearchParams({ taskId: String(target.taskId) });
   if (target.commentId) query.set('commentId', target.commentId);
   return `/client/tasks/details?${query}`;

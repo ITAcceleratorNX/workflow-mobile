@@ -348,7 +348,7 @@ export default function AdminWorkerSmartHomeScreen() {
       showToast({ title: 'Токены обновлены', variant: 'success' });
       loadTokens();
     } else {
-      showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
     }
     setTokenAction(null);
   }, [showToast, loadTokens]);
@@ -360,7 +360,7 @@ export default function AdminWorkerSmartHomeScreen() {
       showToast({ title: 'Токены удалены', variant: 'success' });
       setTokensMeta(null);
     } else {
-      showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
     }
     setTokenAction(null);
   }, [setTokensMeta, showToast]);
@@ -406,7 +406,7 @@ export default function AdminWorkerSmartHomeScreen() {
     if (result.ok) setYandexDevices(result.data);
     else {
       setYandexDevices([]);
-      showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
     }
     setDevicesListLoading(false);
   }, [showToast]);
@@ -442,7 +442,7 @@ export default function AdminWorkerSmartHomeScreen() {
         showToast({ title: 'Устройство отвязано', variant: 'success' });
         loadRoomDevices();
       } else {
-      showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
       }
       setDeletingId(null);
     },
@@ -573,7 +573,7 @@ export default function AdminWorkerSmartHomeScreen() {
         showToast({ title: 'Доступ удалён', variant: 'success' });
         loadSubscriptions();
       } else {
-        showToast({ title: 'Ошибка', description: result.error, variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
       }
       setDeletingSubId(null);
     },

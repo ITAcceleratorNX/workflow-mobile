@@ -212,7 +212,7 @@ export default function RequestDetailScreen() {
         showToast({ title: 'Задача начата', variant: 'success' });
         refetch();
       } else {
-        showToast({ title: res.error, variant: 'destructive' });
+        showToast({ title: res.error, variant: 'error' });
       }
     },
     [refetch, showToast]
@@ -231,7 +231,7 @@ export default function RequestDetailScreen() {
       try {
         if (completeMode === 'staff') {
           if (!staffCompleteTargets.length) {
-            showToast({ title: 'Нет подзаявок для завершения', variant: 'destructive' });
+            showToast({ title: 'Нет подзаявок для завершения', variant: 'error' });
             return;
           }
           const completionComment = comment.trim() || defaultStaffCompleteComment;
@@ -251,7 +251,7 @@ export default function RequestDetailScreen() {
               showToast({
                 title: 'Ошибка загрузки',
                 description: uploadRes.error,
-                variant: 'destructive',
+                variant: 'error',
                 duration: 4000,
               });
             }
@@ -277,7 +277,7 @@ export default function RequestDetailScreen() {
             showToast({
               title: 'Ошибка загрузки',
               description: uploadRes.error,
-              variant: 'destructive',
+              variant: 'error',
               duration: 4000,
             });
           }
@@ -288,11 +288,11 @@ export default function RequestDetailScreen() {
           setTaskForComplete(null);
           refetch();
         } else {
-          showToast({ title: res.error, variant: 'destructive' });
+          showToast({ title: res.error, variant: 'error' });
         }
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Ошибка при завершении заявки';
-        showToast({ title: message, variant: 'destructive' });
+        showToast({ title: message, variant: 'error' });
       } finally {
         setActionLoading(false);
       }
@@ -367,7 +367,7 @@ export default function RequestDetailScreen() {
         setSubForRate(null);
         refetch();
       } else {
-        showToast({ title: res.error, variant: 'destructive' });
+        showToast({ title: res.error, variant: 'error' });
       }
     },
     [subForRate, isGuest, request, setRequest, showToast, refetch]
@@ -382,7 +382,7 @@ export default function RequestDetailScreen() {
         setShowClientRatingModal(false);
         refetch();
       } else {
-        showToast({ title: res.error, variant: 'destructive' });
+        showToast({ title: res.error, variant: 'error' });
       }
     },
     [request, refetch, showToast]
@@ -447,7 +447,7 @@ export default function RequestDetailScreen() {
       // В демо-режиме просто закрываем экран, ничего не шлём на сервер
       if (isGuest && request.id < 0) {
         setShowDeleteModal(false);
-        showToast({ title: 'Демо', description: 'Заявка удалена локально', variant: 'default' });
+        showToast({ title: 'Демо', description: 'Заявка удалена локально', variant: 'success' });
         goBack();
         return;
       }
@@ -491,7 +491,7 @@ export default function RequestDetailScreen() {
                 showToast({ title: 'Заявка передана Клиенту на подтверждение', variant: 'success' });
                 refetch();
               } else {
-                showToast({ title: res.error, variant: 'destructive' });
+                showToast({ title: res.error, variant: 'error' });
               }
             } finally {
               setActionLoading(false);
@@ -517,7 +517,7 @@ export default function RequestDetailScreen() {
               showToast({ title: 'Заявка закрыта', description: 'Спасибо за подтверждение', variant: 'success' });
               refetch();
             } else {
-              showToast({ title: res.error, variant: 'destructive' });
+              showToast({ title: res.error, variant: 'error' });
             }
           } finally {
             setActionLoading(false);
@@ -616,7 +616,7 @@ export default function RequestDetailScreen() {
         });
         refetch();
       } else {
-        showToast({ title: res.error, variant: 'destructive' });
+        showToast({ title: res.error, variant: 'error' });
       }
     },
     [refetch, showToast]
@@ -653,7 +653,7 @@ export default function RequestDetailScreen() {
         showToast({ title: 'Заявка закреплена за вами', variant: 'success' });
         refetch();
       } else {
-        showToast({ title: res.error, variant: 'destructive' });
+        showToast({ title: res.error, variant: 'error' });
       }
     } finally {
       setActionLoading(false);
@@ -670,7 +670,7 @@ export default function RequestDetailScreen() {
           showToast({ title: 'Заявка взята в работу', variant: 'success' });
           refetch();
         } else {
-          showToast({ title: res.error, variant: 'destructive' });
+          showToast({ title: res.error, variant: 'error' });
         }
       } finally {
         setActionLoading(false);
@@ -685,7 +685,7 @@ export default function RequestDetailScreen() {
     const targets = (request.requests ?? []).filter(isStaffCompletableSubRequest);
 
     if (!targets.length) {
-      showToast({ title: 'Нет подзаявок для завершения', variant: 'destructive' });
+      showToast({ title: 'Нет подзаявок для завершения', variant: 'error' });
       return;
     }
 

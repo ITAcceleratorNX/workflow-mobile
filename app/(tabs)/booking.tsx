@@ -176,7 +176,7 @@ export default function BookingScreen() {
           showToast({
             title: 'Геолокация недоступна',
             description: 'Разрешите доступ к геолокации, чтобы рекомендовать офис.',
-            variant: 'destructive',
+            variant: 'error',
               duration: 4000,
           });
         }
@@ -197,7 +197,7 @@ export default function BookingScreen() {
       showToast({
         title: 'Ошибка геолокации',
         description: 'Не удалось определить ближайший офис.',
-        variant: 'destructive',
+        variant: 'error',
           duration: 4000,
       });
     }
@@ -288,7 +288,7 @@ export default function BookingScreen() {
         showToast({
           title: append ? 'Не удалось загрузить ещё' : 'Не удалось загрузить бронирования',
           description: res.error,
-          variant: 'destructive',
+          variant: 'error',
           duration: 4500,
         });
       }
@@ -345,7 +345,7 @@ export default function BookingScreen() {
       if (res.ok) {
         setMyBookings(res.data); setMyBookingsPage(res.page); setMyBookingsHasMore(res.hasMore);
       } else {
-        showToast({ title: 'Не удалось загрузить бронирования', description: res.error, variant: 'destructive', duration: 4500 });
+        showToast({ title: 'Не удалось загрузить бронирования', description: res.error, variant: 'error', duration: 4500 });
       }
     });
     return () => { cancelled = true; myBookingsLoadSeqRef.current += 1; };
@@ -441,7 +441,7 @@ export default function BookingScreen() {
                 showToast({
                   title: 'Демо',
                   description: 'Бронирование отменено локально',
-                  variant: 'default',
+                  variant: 'success',
                 });
                 loadMyBookings(myBookingsFilter, 1, false);
                 return;
@@ -453,14 +453,14 @@ export default function BookingScreen() {
                 showToast({
                   title: 'Бронирование отменено',
                   description: 'Бронирование успешно отменено',
-                  variant: 'default',
+                  variant: 'success',
                 });
                 loadMyBookings(myBookingsFilter, 1, false);
               } else {
                 showToast({
                   title: 'Ошибка',
                   description: res.error,
-                  variant: 'destructive',
+                  variant: 'error',
                   duration: 4000,
                 });
               }

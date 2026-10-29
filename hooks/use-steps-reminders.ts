@@ -98,7 +98,7 @@ export function useStepsReminders() {
         showToast({
           title: 'Шаги — 50% цели',
           description: `Вы прошли половину дневной цели: ${steps.toLocaleString()} из ${goal.toLocaleString()} шагов.`,
-          variant: 'default',
+          variant: 'info',
           duration: 5000,
         });
       }
@@ -123,7 +123,7 @@ export function useStepsReminders() {
           showToast({
             title: 'Шаги — нет активности',
             description: `За последние ${noActivityHours} ч шаги не изменились. Пора размяться?`,
-            variant: 'default',
+            variant: 'info',
             duration: 5000,
           });
         }

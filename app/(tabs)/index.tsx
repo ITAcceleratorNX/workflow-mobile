@@ -11,9 +11,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { useRouter, useFocusEffect, type Href } from 'expo-router';
-import * as Notifications from 'expo-notifications';
+import { useRouter, type Href } from 'expo-router';
 
+import { NotificationBellBadge } from '@/components/notifications/notification-bell-badge';
 import { PageLoader, PullToRefresh } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -200,7 +200,7 @@ const EXECUTOR_CABINET_CARDS: {
   },
 ];
 
-function AdminWorkerManagementScreen({ hasNotifications }: { hasNotifications: boolean }) {
+function AdminWorkerManagementScreen() {
   const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -261,9 +261,7 @@ function AdminWorkerManagementScreen({ hasNotifications }: { hasNotifications: b
             hitSlop={8}
           >
             <MaterialIcons name="notifications" size={24} color={text} />
-            {hasNotifications && (
-              <View style={[styles.notificationDot, { backgroundColor: primary }]} />
-            )}
+            <NotificationBellBadge />
           </Pressable>
         </View>
         <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
@@ -308,10 +306,8 @@ function AdminWorkerManagementScreen({ hasNotifications }: { hasNotifications: b
 /** Главная страница «Управление» для исполнителя (department-head, manager) — аналог management в workflow-web */
 function ExecutorManagementScreen({
   role: executorRole,
-  hasNotifications,
 }: {
   role: 'department-head' | 'manager';
-  hasNotifications: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
@@ -382,9 +378,7 @@ function ExecutorManagementScreen({
             hitSlop={8}
           >
             <MaterialIcons name="notifications" size={24} color={text} />
-            {hasNotifications && (
-              <View style={[styles.notificationDot, { backgroundColor: primary }]} />
-            )}
+            <NotificationBellBadge />
           </Pressable>
         </View>
         <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
@@ -427,7 +421,7 @@ function ExecutorManagementScreen({
 }
 
 /** Главная «Мой кабинет» для роли executor — аналог executor/management в workflow-web */
-function ExecutorCabinetScreen({ hasNotifications }: { hasNotifications: boolean }) {
+function ExecutorCabinetScreen() {
   const insets = useSafeAreaInsets();
   const text = useThemeColor({}, 'text');
   const textMuted = useThemeColor({}, 'textMuted');
@@ -461,9 +455,7 @@ function ExecutorCabinetScreen({ hasNotifications }: { hasNotifications: boolean
             hitSlop={8}
           >
             <MaterialIcons name="notifications" size={24} color={text} />
-            {hasNotifications && (
-              <View style={[styles.notificationDot, { backgroundColor: primary }]} />
-            )}
+            <NotificationBellBadge />
           </Pressable>
         </View>
         <ThemedText style={[styles.adminDescription, { color: textMuted }]}>
@@ -511,22 +503,6 @@ export default function ClientDashboardScreen() {
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.role);
 
-  const [hasNotifications, setHasNotifications] = useState(false);
-
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      Notifications.getBadgeCountAsync()
-        .then((count) => {
-          if (active) setHasNotifications(count > 0);
-        })
-        .catch(() => {});
-      return () => {
-        active = false;
-      };
-    }, []),
-  );
-
   // Определяем эффективную роль
   const effectiveRole = role || user?.role;
   const isClient = effectiveRole?.toLowerCase() === 'client';
@@ -551,30 +527,30 @@ export default function ClientDashboardScreen() {
   }, [effectiveRole, isClient, isAdminWorker, isDepartmentHead, isManager, isExecutor, router]);
 
   if (isAdminWorker) {
-    return <AdminWorkerManagementScreen hasNotifications={hasNotifications} />;
+    return <AdminWorkerManagementScreen />;
   }
 
   if (isExecutor) {
-    return <ExecutorCabinetScreen hasNotifications={hasNotifications} />;
+    return <ExecutorCabinetScreen />;
   }
 
   if (isDepartmentHead || isManager) {
     return (
       <ExecutorManagementScreen
         role={isDepartmentHead ? 'department-head' : 'manager'}
-        hasNotifications={hasNotifications}
+       
       />
     );
   }
 
-  return <ClientDashboardContent hasNotifications={hasNotifications} />;
+  return <ClientDashboardContent />;
 }
 
 const INSIGHT_CARD_WIDTH = width * 0.88;
 const INSIGHT_CARD_HEIGHT = 260;
 
 /** Контент главной только для роли client. Вынесен в отдельный компонент, чтобы не нарушать правила хуков (одинаковое количество хуков при любом рендере). */
-function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolean }) {
+function ClientDashboardContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -704,7 +680,7 @@ function ClientDashboardContent({ hasNotifications }: { hasNotifications: boolea
             <ThemedText style={[styles.insightsTitle, { color: headerText }]}>Обзор дня</ThemedText>
             <Pressable onPress={() => router.push('/notifications')} style={styles.notificationButton}>
               <MaterialIcons name="notifications" size={26} color={headerText} />
-              {hasNotifications && <View style={[styles.notificationDot, { backgroundColor: primary }]} />}
+              <NotificationBellBadge />
             </Pressable>
           </View>
           <Pressable
@@ -900,7 +876,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   notificationButton: { padding: 8, position: 'relative' },
-  notificationDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4 },
   insightsScroll: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
   insightColumn: {
     width: INSIGHT_CARD_WIDTH,

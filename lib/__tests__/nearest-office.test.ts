@@ -46,7 +46,7 @@ describe('the nearest office', () => {
     // Раньше возвращался первый офис списка, будто он ближайший.
     const result = findNearestOffice([venus, nurlyTau], north(0));
     assert.deepEqual(result, { kind: 'no_coordinates' });
-    assert.equal(nearestOfficeNotice(result).variant, 'default');
+    assert.equal(nearestOfficeNotice(result).variant, 'info');
   });
 
   it('names the office and the distance in the recommendation', () => {

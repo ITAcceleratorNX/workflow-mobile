@@ -76,8 +76,8 @@ describe('where a task push leads', () => {
     assert.equal(taskPushHref({ taskId: 4, commentId: '17', event: 'mention' }), '/client/tasks/details?taskId=4&commentId=17');
   });
 
-  it('leads to the notifications instead of a deleted task', () => {
-    assert.equal(taskPushHref({ taskId: 4, commentId: null, event: 'deleted' }), '/notifications');
+  it('leads to the task notifications instead of a deleted task', () => {
+    assert.equal(taskPushHref({ taskId: 4, commentId: null, event: 'deleted' }), '/notifications?category=tasks');
     assert.deepEqual(taskDetailsHref({ taskId: 4, commentId: null, event: 'deleted' }), {
       pathname: '/client/tasks/details',
       params: { taskId: '4' },

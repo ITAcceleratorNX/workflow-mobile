@@ -316,7 +316,7 @@ export default function ProfileScreen() {
       showToast({
         title: 'Демо режим',
         description: 'Смена пароля недоступна в демо-версии.',
-        variant: 'default',
+        variant: 'info',
       });
       return;
     }

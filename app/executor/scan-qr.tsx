@@ -185,7 +185,7 @@ export default function ExecutorScanQrScreen() {
         show({
           title: 'Ошибка',
           description: message,
-          variant: 'destructive',
+          variant: 'error',
           duration: 3000,
         });
       } finally {
