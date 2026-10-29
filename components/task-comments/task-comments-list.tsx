@@ -209,7 +209,7 @@ export function TaskCommentsList({ taskId, children, focusCommentId = null, styl
         showToast({
           title: 'Не удалось удалить комментарий',
           description: outcome.failure.message,
-          variant: 'destructive',
+          variant: 'error',
           duration: 4000,
         });
       });
@@ -235,6 +235,7 @@ export function TaskCommentsList({ taskId, children, focusCommentId = null, styl
           title: 'Поле ввода занято',
           description: 'Отправьте или сотрите набранный текст, чтобы исправить неотправленное сообщение.',
           duration: 4000,
+          variant: 'info',
         });
         return;
       }

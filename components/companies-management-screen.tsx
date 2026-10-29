@@ -104,7 +104,7 @@ export function CompaniesManagementScreen({
   const fetchData = useCallback(async () => {
     if (manageOfficeId == null) return [];
     const res = await getOfficeCompanies(manageOfficeId);
-    if (!res.ok) { showToast({ title: res.error, variant: 'destructive' }); return []; }
+    if (!res.ok) { showToast({ title: res.error, variant: 'error' }); return []; }
     return res.data;
   }, [manageOfficeId, showToast]);
   const allowed = role === variant;
@@ -192,7 +192,7 @@ export function CompaniesManagementScreen({
           onPress: async () => {
             const res = await deleteOfficeCompany(manageOfficeId, company.id);
             if (!res.ok) {
-              showToast({ title: res.error, variant: 'destructive' });
+              showToast({ title: res.error, variant: 'error' });
               return;
             }
             showToast({ title: 'Удалено', variant: 'success' });

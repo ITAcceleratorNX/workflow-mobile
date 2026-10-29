@@ -85,7 +85,7 @@ export function usePushNotifications(): void {
             title: 'Войдите в аккаунт',
             description:
               'Раздел запросов на доступ доступен после входа под учётной записью администратора.',
-            variant: 'destructive',
+            variant: 'error',
             duration: 4000,
           });
           return;
@@ -106,7 +106,7 @@ export function usePushNotifications(): void {
             title: 'Демо-режим',
             description:
               'Переход к заявке из уведомления доступен после входа в аккаунт. Откройте заявку в списке заявок.',
-            variant: 'default',
+            variant: 'info',
             duration: 4500,
           });
         } else if (defer) {
@@ -134,16 +134,16 @@ export function usePushNotifications(): void {
         showToast({
           title: 'Войдите в аккаунт',
           description: 'Действия с задачей доступны после входа.',
-          variant: 'destructive',
+          variant: 'error',
           duration: 4000,
         });
         return;
       }
       useDeepLinkStore.getState().setPendingPostAuthHref(taskPushHref(target));
       if (target.event === 'deleted') {
-        showToast({ title: 'Задача удалена', duration: 4000 });
+        showToast({ title: 'Задача удалена', variant: 'info', duration: 4000 });
       } else if (session === 'signed_out') {
-        showToast({ title: 'Войдите в аккаунт', description: 'Задача откроется после входа.', duration: 4000 });
+        showToast({ title: 'Войдите в аккаунт', description: 'Задача откроется после входа.', variant: 'info', duration: 4000 });
       }
       await clearBadge();
     },
@@ -158,7 +158,7 @@ export function usePushNotifications(): void {
         showToast({
           title: 'Войдите в аккаунт',
           description: 'Действия с напоминанием доступны после входа.',
-          variant: 'destructive',
+          variant: 'error',
           duration: 4000,
         });
         return;
@@ -170,7 +170,7 @@ export function usePushNotifications(): void {
           showToast({
             title: 'Не удалось отметить задачу',
             description: result.error,
-            variant: 'destructive',
+            variant: 'error',
             duration: 4000,
           });
         } else {
@@ -184,7 +184,7 @@ export function usePushNotifications(): void {
         showToast({
           title: 'Не удалось обновить напоминание',
           description: result.error,
-          variant: 'destructive',
+          variant: 'error',
           duration: 4000,
         });
       } else {

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { FullWindowOverlay } from 'react-native-screens';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ProductUi } from '@/constants/theme';
 
@@ -11,8 +12,11 @@ interface Toast {
   id: string;
   title: string;
   description?: string;
-  /** `error` — the dark product UI error with an optional action («Повторить»). */
-  variant?: 'default' | 'destructive' | 'success' | 'error';
+  /**
+   * Figma «Тост», the same on iOS and Android: `success` — solid green, `error` — dark red with an
+   * optional action («Повторить»), `info` — a neutral notice on the dark surface.
+   */
+  variant: 'success' | 'error' | 'info';
   duration?: number;
   /** Icon instead of the variant's own (e.g. `wifi-off` for a lost connection). */
   icon?: ToastIcon;
@@ -20,8 +24,20 @@ interface Toast {
   action?: { label: string; onPress: () => void };
 }
 
-/** Errors of the product UI are always dark: they sit over any screen. */
-const ERROR_TOAST = ProductUi.dark;
+/** Toasts of the product UI are always dark: they sit over any screen. */
+const TOAST = ProductUi.dark;
+
+const TOAST_COLORS: Record<Toast['variant'], string> = {
+  success: TOAST.success,
+  error: TOAST.dangerSoft,
+  info: TOAST.surface,
+};
+
+const TOAST_ICONS: Record<Toast['variant'], ToastIcon> = {
+  success: 'check-circle',
+  error: 'error',
+  info: 'info',
+};
 
 interface ToastContextType {
   show: (toast: Omit<Toast, 'id'>) => void;
@@ -35,6 +51,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const animations = useRef(new Map<string, Animated.Value>());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const nextId = useRef(0);
+  const insets = useSafeAreaInsets();
 
   const hide = useCallback((id: string) => {
     const timer = timers.current.get(id);
@@ -70,31 +87,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const getToastColor = (variant?: string) => {
-    switch (variant) {
-      case 'destructive':
-        return '#B8400E';
-      case 'success':
-        return ERROR_TOAST.success;
-      case 'error':
-        return ERROR_TOAST.dangerSoft;
-      default:
-        return '#114A65';
-    }
-  };
-
-  const getToastIcon = (variant?: string): ToastIcon => {
-    switch (variant) {
-      case 'destructive':
-      case 'error':
-        return 'error';
-      case 'success':
-        return 'check-circle';
-      default:
-        return 'info';
-    }
-  };
-
   return (
     <ToastContext.Provider value={{ show, hide }}>
       {children}
@@ -103,10 +95,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <View style={styles.modalRoot} pointerEvents="box-none">
             {toasts.map((toast) => {
               const anim = toast.animation;
-              const backgroundColor = getToastColor(toast.variant);
-              const icon = toast.icon ?? getToastIcon(toast.variant);
+              const backgroundColor = TOAST_COLORS[toast.variant];
+              const icon = toast.icon ?? TOAST_ICONS[toast.variant];
               const isError = toast.variant === 'error';
               const isSuccess = toast.variant === 'success';
+              const isInfo = toast.variant === 'info';
 
               return (
                 <Animated.View
@@ -117,7 +110,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     styles.toast,
                     isError && styles.errorToast,
                     isSuccess && styles.successToast,
+                    isInfo && styles.infoToast,
                     {
+                      // Below the status bar, the notch or the Dynamic Island on any phone.
+                      top: insets.top + 8,
                       backgroundColor,
                       opacity: anim ?? 1,
                       transform: [
@@ -136,14 +132,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   <View style={styles.toastContent}>
                     <MaterialIcons
                       name={icon}
-                      size={isError ? 22 : 24}
-                      color={isError ? ERROR_TOAST.danger : '#FFFFFF'}
+                      size={isSuccess ? 24 : 22}
+                      color={isError ? TOAST.danger : '#FFFFFF'}
                       style={styles.icon}
                     />
                     <View style={styles.textContainer}>
                       <Text style={[styles.title, isSuccess && styles.successTitle]}>{toast.title}</Text>
                       {toast.description && (
-                        <Text style={[styles.description, isError && styles.errorDescription]}>{toast.description}</Text>
+                        <Text style={[styles.description, !isSuccess && styles.mutedDescription]}>{toast.description}</Text>
                       )}
                     </View>
                   </View>
@@ -194,7 +190,6 @@ const styles = StyleSheet.create({
   },
   toast: {
     position: 'absolute',
-    top: 60,
     left: 16,
     right: 16,
     zIndex: 1,
@@ -247,13 +242,20 @@ const styles = StyleSheet.create({
   errorToast: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: `${ERROR_TOAST.danger}99`,
+    borderColor: `${TOAST.danger}99`,
     paddingVertical: 12,
     paddingHorizontal: 14,
   },
-  errorDescription: {
+  infoToast: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: `rgba(${TOAST.fgRgb}, 0.1)`,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  mutedDescription: {
     fontSize: 13,
-    color: `rgba(${ERROR_TOAST.fgRgb}, 0.75)`,
+    color: `rgba(${TOAST.fgRgb}, 0.75)`,
     opacity: 1,
   },
   actionButton: {
@@ -261,7 +263,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 7,
     paddingHorizontal: 12,
-    backgroundColor: `rgba(${ERROR_TOAST.fgRgb}, 0.12)`,
+    backgroundColor: `rgba(${TOAST.fgRgb}, 0.12)`,
   },
   actionLabel: {
     color: '#FFFFFF',

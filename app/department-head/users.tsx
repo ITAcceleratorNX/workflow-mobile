@@ -140,7 +140,7 @@ export default function DepartmentHeadUsersScreen() {
       getExecutors(), getServiceCategories(officeId), getOfficeCompanies(officeId),
     ]);
     const executors = new Map((execRes.ok ? execRes.data : []).map((executor) => [executor.user?.id, executor]));
-    if (!usersRes.ok) showToast({ title: usersRes.error, variant: 'destructive' });
+    if (!usersRes.ok) showToast({ title: usersRes.error, variant: 'error' });
     return {
       users: (usersRes.ok ? usersRes.data : []).filter((user) => OFFICE_STAFF_ROLES.includes(user.role as OfficeStaffRole)).map((user) => ({ ...user, executor: executors.get(user.id) })),
       categories: catRes.ok ? catRes.data : [], companies: companiesRes.ok ? companiesRes.data : [],
@@ -329,7 +329,7 @@ export default function DepartmentHeadUsersScreen() {
       phone !== formatPhone(editingUser.phone ?? '');
 
     if (!fullName.trim()) {
-      showToast({ title: 'Укажите ФИО', variant: 'destructive' });
+      showToast({ title: 'Укажите ФИО', variant: 'error' });
       return;
     }
 
@@ -337,7 +337,7 @@ export default function DepartmentHeadUsersScreen() {
       if (!specialty.trim() || selectedCategoryIds.length === 0) {
         showToast({
           title: 'Укажите специальность и хотя бы одну категорию',
-          variant: 'destructive',
+          variant: 'error',
         });
         return;
       }
@@ -369,7 +369,7 @@ export default function DepartmentHeadUsersScreen() {
         !demotingToClient &&
         basicProfileChanged;
       if (!executorOnlyProfileChange) {
-        showToast({ title: 'Нет изменений', variant: 'default' });
+        showToast({ title: 'Нет изменений', variant: 'info' });
         return;
       }
     }
@@ -392,7 +392,7 @@ export default function DepartmentHeadUsersScreen() {
       });
       if (!roleRes.ok) {
         setSaving(false);
-        showToast({ title: roleRes.error, variant: 'destructive' });
+        showToast({ title: roleRes.error, variant: 'error' });
         return;
       }
     }
@@ -413,7 +413,7 @@ export default function DepartmentHeadUsersScreen() {
       const profileRes = await updateUserProfile(editingUser.id, profileBody);
       if (!profileRes.ok) {
         setSaving(false);
-        showToast({ title: profileRes.error, variant: 'destructive' });
+        showToast({ title: profileRes.error, variant: 'error' });
         return;
       }
     }
@@ -435,7 +435,7 @@ export default function DepartmentHeadUsersScreen() {
         });
         if (!execRes.ok) {
           setSaving(false);
-          showToast({ title: execRes.error, variant: 'destructive' });
+          showToast({ title: execRes.error, variant: 'error' });
           return;
         }
       }
@@ -463,7 +463,7 @@ export default function DepartmentHeadUsersScreen() {
               showToast({ title: 'Исполнитель удалён', variant: 'success' });
               load();
             } else {
-              showToast({ title: res.error, variant: 'destructive' });
+              showToast({ title: res.error, variant: 'error' });
             }
           },
         },

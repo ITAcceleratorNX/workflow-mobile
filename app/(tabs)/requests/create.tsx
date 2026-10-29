@@ -295,7 +295,7 @@ export default function CreateRequestScreen() {
         setCategories(catRes.data);
       } else {
         setCategories([]);
-        showToast({ title: catRes.error, variant: 'destructive' });
+        showToast({ title: catRes.error, variant: 'error' });
       }
       setCategoriesLoading(false);
     })();
@@ -469,7 +469,7 @@ export default function CreateRequestScreen() {
           showToast({
             title: 'Геолокация недоступна',
             description: 'Разрешите доступ к геолокации, чтобы рекомендовать офис.',
-            variant: 'destructive',
+            variant: 'error',
             duration: 3000,
           });
         }
@@ -494,7 +494,7 @@ export default function CreateRequestScreen() {
       showToast({
         title: 'Ошибка геолокации',
         description: 'Не удалось определить ближайший офис.',
-        variant: 'destructive',
+        variant: 'error',
         duration: 3000,
       });
     } finally {
@@ -671,7 +671,7 @@ export default function CreateRequestScreen() {
       if (role === 'executor' && createMode === 'createAndComplete' && afterPhotos.length > 0 && res.data) {
         const { uploadRequestPhotos } = await import('@/lib/api');
         const uploadRes = await uploadRequestPhotos(res.data.id, afterPhotos.map((uri) => ({ uri })), 'after');
-        if (!uploadRes.ok) showToast({ title: 'Ошибка загрузки', description: uploadRes.error, variant: 'destructive', duration: 4000 });
+        if (!uploadRes.ok) showToast({ title: 'Ошибка загрузки', description: uploadRes.error, variant: 'error', duration: 4000 });
       }
       showToast({
         title: role === 'executor' && createMode === 'createAndComplete' ? 'Заявка создана и завершена' : 'Заявка создана',

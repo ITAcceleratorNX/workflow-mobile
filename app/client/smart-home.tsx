@@ -110,10 +110,10 @@ export default function ClientSmartHomeScreen() {
           setSubscriptions(subs);
           if (subs.length > 0) setSelectedRoomId((previous) => previous ?? subs[0].meeting_room_id);
         } else {
-          showToast({ title: 'Ошибка загрузки', description: result.error, variant: 'destructive', duration: 4000 });
+          showToast({ title: 'Ошибка загрузки', description: result.error, variant: 'error', duration: 4000 });
         }
       } catch {
-        showToast({ title: 'Ошибка', description: 'Не удалось загрузить комнаты', variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: 'Не удалось загрузить комнаты', variant: 'error', duration: 4000 });
       } finally {
         setLoading(false);
       }
@@ -132,9 +132,9 @@ export default function ClientSmartHomeScreen() {
         setIsLoadingDevices(true);
         const result = await getRoomDevicesForClient(selectedRoomId);
         if (result.ok) setDevices(result.data.devices || []);
-        else showToast({ title: 'Ошибка загрузки', description: result.error, variant: 'destructive', duration: 4000 });
+        else showToast({ title: 'Ошибка загрузки', description: result.error, variant: 'error', duration: 4000 });
       } catch {
-        showToast({ title: 'Ошибка', description: 'Не удалось загрузить устройства', variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: 'Не удалось загрузить устройства', variant: 'error', duration: 4000 });
       } finally {
         setIsLoadingDevices(false);
       }
@@ -153,7 +153,7 @@ export default function ClientSmartHomeScreen() {
             action_state: { instance: 'on', value },
           });
           if (!result.ok) {
-            showToast({ title: 'Ошибка', description: 'Не удалось управлять устройством', variant: 'destructive', duration: 4000 });
+            showToast({ title: 'Ошибка', description: 'Не удалось управлять устройством', variant: 'error', duration: 4000 });
             return;
           }
         }
@@ -172,7 +172,7 @@ export default function ClientSmartHomeScreen() {
           })
         );
       } catch {
-        showToast({ title: 'Ошибка', description: 'Не удалось управлять устройством', variant: 'destructive', duration: 4000 });
+        showToast({ title: 'Ошибка', description: 'Не удалось управлять устройством', variant: 'error', duration: 4000 });
       } finally {
         setIsControlling(null);
       }

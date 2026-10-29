@@ -110,7 +110,7 @@ export default function AdminWorkerNewsEditorScreen() {
   const pickImage = useCallback(async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      showToast({ title: 'Ошибка', description: 'Нет доступа к галерее', variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Ошибка', description: 'Нет доступа к галерее', variant: 'error', duration: 4000 });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -199,7 +199,7 @@ export default function AdminWorkerNewsEditorScreen() {
       router.back();
     } else {
       setFormError(res.error);
-      showToast({ title: 'Ошибка', description: res.error, variant: 'destructive', duration: 4000 });
+      showToast({ title: 'Ошибка', description: res.error, variant: 'error', duration: 4000 });
     }
   }, [
     form,
