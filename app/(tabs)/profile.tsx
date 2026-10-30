@@ -32,6 +32,7 @@ import {
 import { formatPhone } from '@/lib';
 import { POSITION_MAX_LENGTH, positionForSave } from '@/lib/employee-display';
 import { unregisterPushTokenFromBackend } from '@/lib/pushNotifications';
+import { signOut } from '@/lib/session';
 import { useAuthStore, type AuthState } from '@/stores/auth-store';
 
 /** Правки профиля до «Сохранить»: «Отмена» их просто отбрасывает. */
@@ -43,7 +44,6 @@ export default function ProfileScreen() {
   const user = useAuthStore((state: AuthState) => state.user);
   const role = useAuthStore((state: AuthState) => state.role);
   const updateUser = useAuthStore((state: AuthState) => state.updateUser);
-  const clearAuth = useAuthStore((state: AuthState) => state.clearAuth);
   const isGuest = useAuthStore((state: AuthState) => state.isGuest);
 
   const text = useThemeColor({}, 'text');
@@ -353,10 +353,11 @@ export default function ProfileScreen() {
         await unregisterPushTokenFromBackend();
       }
     } finally {
-      clearAuth();
+      // Сессию завершает и сервер: refresh-токен больше не продлит вход.
+      await signOut();
       router.replace('/login');
     }
-  }, [clearAuth, router, isGuest]);
+  }, [router, isGuest]);
 
   if (!user) {
     return null;
