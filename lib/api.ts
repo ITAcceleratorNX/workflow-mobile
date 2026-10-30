@@ -1,12 +1,10 @@
-import { router } from 'expo-router';
-
 import { failureFromResponse, networkFailure, type RequestFailure } from '@/lib/api-errors';
 import { formatExecutorSpecialty } from '@/constants/requests';
 import { config } from '@/lib/config';
 import { readExecutorOfficeAccess, type ExecutorOfficeAccess } from '@/lib/executor-office-access';
-import { useAuthStore } from '@/stores/auth-store';
 import { formDataFile } from '@/lib/form-data-file';
 import { isRequestStateMutation, notifyRequestStateChanged } from '@/lib/request-action-count';
+import { fetchWithSession, getAccessToken } from '@/lib/session';
 
 const { apiBaseUrl } = config;
 
@@ -28,8 +26,8 @@ export async function request<T>(
     ? `${apiBaseUrl}${path}?${new URLSearchParams(params).toString()}`
     : `${apiBaseUrl}${path}`;
 
-  // Получаем токен из auth store
-  const token = useAuthStore.getState().token;
+  // Токен из auth store; если он вот-вот истечёт — сначала продлеваем сессию
+  const token = await getAccessToken();
   const isGuestToken = token === 'guest-demo';
 
   // В демо-режиме (guest-demo) не ходим на /request-groups,
@@ -126,15 +124,15 @@ export async function request<T>(
     }
   }
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(init.headers as HeadersInit),
+    ...(init.headers as Record<string, string>),
   };
 
   try {
     console.log(`[API] ${init.method || 'GET'} ${path}`, { hasToken: !!token });
-    const res = await fetch(url, { ...init, headers });
+    // Access-токен истёк — fetchWithSession продлит сессию и повторит запрос.
+    const res = token ? await fetchWithSession(url, { ...init, headers }, token) : await fetch(url, { ...init, headers });
     // Заявка сдвинулась по маршруту — бейдж «Заявки» перечитывает число.
     if (res.ok && isRequestStateMutation(init.method, path)) notifyRequestStateChanged();
     if (res.status === 204) return { ok: true, data: undefined as T };
@@ -146,12 +144,6 @@ export async function request<T>(
         console.error(`[API Error] ${path}:`, res.status, data);
       }
       if (res.status === 401) {
-        // При logout токен уже очищен — не триггерим лишний clearAuth/redirect повторно.
-        // Демо-сессию не сбрасываем из‑за ответа API (guest-demo не валиден на бэкенде).
-        if (token && token !== 'guest-demo') {
-          useAuthStore.getState().clearAuth();
-          router.replace('/login');
-        }
         return { ok: false, error: 'Сессия истекла. Войдите снова.', status: 401 };
       }
       return failureFromResponse(res.status, data, res.headers.get('Retry-After'));
@@ -171,27 +163,15 @@ async function requestFormData<T>(
   method: 'POST' | 'PUT' = 'POST'
 ): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
   const url = `${apiBaseUrl}${path}`;
-  const token = useAuthStore.getState().token;
-
-  const headers: HeadersInit = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-
+  const token = await getAccessToken();
   try {
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: formData,
-    });
+    const res = token
+      ? await fetchWithSession(url, { method, body: formData }, token)
+      : await fetch(url, { method, body: formData });
     if (res.status === 204) return { ok: true, data: undefined as T };
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401) {
-        const t = useAuthStore.getState().token;
-        if (t && t !== 'guest-demo') {
-          useAuthStore.getState().clearAuth();
-          router.replace('/login');
-        }
         return { ok: false, error: 'Сессия истекла. Войдите снова.' };
       }
       const error =
@@ -1373,17 +1353,12 @@ export async function uploadRequestPhotos(
   });
   formData.append('type', photoType);
 
-  const token = useAuthStore.getState().token;
-  const headers: HeadersInit = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const token = await getAccessToken();
 
   try {
-    const res = await fetch(`${config.apiBaseUrl}/request-photos/${groupId}/photos`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
+    const url = `${config.apiBaseUrl}/request-photos/${groupId}/photos`;
+    const init: RequestInit = { method: 'POST', body: formData };
+    const res = token ? await fetchWithSession(url, init, token) : await fetch(url, init);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       const err =
@@ -1457,16 +1432,14 @@ export async function assignExecutorsToRequest(
   executors: { id: number; role: 'executor' | 'leader' }[]
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const url = `${apiBaseUrl}/request-executors/${subRequestId}/assign`;
-  const token = useAuthStore.getState().token;
+  const token = await getAccessToken();
   try {
-    const res = await fetch(url, {
+    const init: RequestInit = {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ executors }),
-    });
+    };
+    const res = token ? await fetchWithSession(url, init, token) : await fetch(url, init);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const details = (data as { details?: { field?: string; message?: string }[] })?.details;
@@ -1504,17 +1477,12 @@ export async function changeExecutorsToRequest(
 export async function createRequestGroup(
   formData: FormData
 ): Promise<{ ok: true; data: RequestGroup } | { ok: false; error: string }> {
-  const token = useAuthStore.getState().token;
-  const headers: HeadersInit = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  const token = await getAccessToken();
 
   try {
-    const res = await fetch(`${config.apiBaseUrl}/request-groups`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
+    const url = `${config.apiBaseUrl}/request-groups`;
+    const init: RequestInit = { method: 'POST', body: formData };
+    const res = token ? await fetchWithSession(url, init, token) : await fetch(url, init);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const err =

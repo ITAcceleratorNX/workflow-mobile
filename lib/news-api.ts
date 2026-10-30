@@ -18,7 +18,7 @@ import { networkFailure } from '@/lib/api-errors';
 import { config } from '@/lib/config';
 import type { NewsReactionKind } from '@/lib/news-reactions';
 import { normalizeReactionCounts } from '@/lib/news-reactions';
-import { useAuthStore } from '@/stores/auth-store';
+import { getAccessToken } from '@/lib/session';
 import { formDataFile } from '@/lib/form-data-file';
 
 const { apiBaseUrl } = config;
@@ -80,7 +80,7 @@ function toDisplayItem(item: ApiNewsItem): NewsDisplayItem {
 
 /** Публичный запрос без обязательной авторизации (не шлём guest-demo — иначе бэкенд может ответить 401). */
 async function publicRequest<T>(path: string): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
-  const rawToken = useAuthStore.getState().token;
+  const rawToken = await getAccessToken();
   const useBearer =
     typeof rawToken === 'string' && rawToken.length > 0 && rawToken !== 'guest-demo';
   const headers: HeadersInit = {
@@ -105,7 +105,7 @@ async function authRequest<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
-  const rawToken = useAuthStore.getState().token;
+  const rawToken = await getAccessToken();
   const token = rawToken && rawToken !== 'guest-demo' ? rawToken : null;
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -160,7 +160,7 @@ export async function getNewsById(
 export async function recordNewsView(
   id: number
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const raw = useAuthStore.getState().token;
+  const raw = await getAccessToken();
   const token = raw && raw !== 'guest-demo' ? raw : null;
   if (!token) return { ok: false, error: 'Нет авторизации' };
   try {
@@ -244,7 +244,7 @@ export async function createNews(params: {
     formData.append('image', formDataFile({ uri: img.uri, name: fileName, type: mimeType }));
   }
 
-  const raw = useAuthStore.getState().token;
+  const raw = await getAccessToken();
   const token = raw && raw !== 'guest-demo' ? raw : null;
   const headers: HeadersInit = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -333,7 +333,7 @@ export async function updateNews(
     formData.append('image', formDataFile({ uri: img.uri, name: fileName, type: mimeType }));
   }
 
-  const raw = useAuthStore.getState().token;
+  const raw = await getAccessToken();
   const token = raw && raw !== 'guest-demo' ? raw : null;
   const headers: HeadersInit = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),

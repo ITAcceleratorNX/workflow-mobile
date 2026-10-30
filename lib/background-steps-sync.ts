@@ -9,12 +9,9 @@ import * as TaskManager from 'expo-task-manager';
 
 import { config } from '@/lib/config';
 import { fetchStepsTodayFromPedometer, parsePersisted } from '@/lib/background-sync-utils';
+import { getAccessToken } from '@/lib/session';
 
 const BACKGROUND_STEPS_TASK = 'background-steps-sync';
-
-interface PersistedAuthState {
-  token?: string | null;
-}
 
 interface PersistedStepsState {
   stepsToday?: number;
@@ -56,9 +53,8 @@ async function syncStepsToServerBackground(payload: {
  */
 TaskManager.defineTask(BACKGROUND_STEPS_TASK, async () => {
   try {
-    const authRaw = await AsyncStorage.getItem('auth-storage');
-    const auth = parsePersisted<PersistedAuthState>(authRaw);
-    const token = auth?.token;
+    // Токен из стора (а не из AsyncStorage напрямую): если он истёк, стор продлит сессию и сохранит новый.
+    const token = await getAccessToken();
     if (!token || token === 'guest-demo') {
       return BackgroundTask.BackgroundTaskResult.Success;
     }

@@ -6,9 +6,12 @@ import { persistStorage } from '@/lib/storage';
 
 export interface AuthState {
   token: string | null;
+  /** Продлевает вход без пароля (lib/session.ts); null — вход до появления сессий. */
+  refreshToken: string | null;
   role: string | null;
   user: User | null;
-  setAuth: (token: string, role: string, user: User) => void;
+  setAuth: (token: string, role: string, user: User, refreshToken: string | null) => void;
+  setTokens: (token: string, refreshToken: string) => void;
   setGuestAuth: () => void;
   clearAuth: () => void;
   updateUser: (
@@ -21,19 +24,23 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       token: null,
+      refreshToken: null,
       role: null,
       user: null,
       isGuest: false,
-      setAuth: (token, role, user) =>
+      setAuth: (token, role, user, refreshToken) =>
         set({
           token,
+          refreshToken,
           role,
           user,
           isGuest: false,
         }),
+      setTokens: (token, refreshToken) => set({ token, refreshToken }),
       setGuestAuth: () =>
         set({
           token: 'guest-demo',
+          refreshToken: null,
           role: 'client',
           user: {
             id: 0,
@@ -54,6 +61,7 @@ export const useAuthStore = create<AuthState>()(
       clearAuth: () =>
         set({
           token: null,
+          refreshToken: null,
           role: null,
           user: null,
           isGuest: false,

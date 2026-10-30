@@ -68,7 +68,7 @@ export default function LoginScreen() {
       const user = await getCurrentUser(authData.token);
       const role = authData.role ?? 'client';
 
-      setAuth(authData.token, role, user);
+      setAuth(authData.token, role, user, authData.refresh_token ?? null);
       const next = consumePostAuthHref('/(tabs)');
       if (next === '/(tabs)') router.replace('/(tabs)');
       else openAppHref(router, String(next));

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { config } from '@/lib/config';
 import { toAppDateKey } from '@/lib/dateTimeUtils';
+import { getAccessToken } from '@/lib/session';
 import { useAuthStore } from '@/stores/auth-store';
 
 import {
@@ -159,8 +160,12 @@ async function refresh(session: WidgetSession): Promise<void> {
     return;
   }
 
+  // Access-токен мог истечь, пока приложение было закрыто: стор продлит сессию.
+  const token = await getAccessToken();
   const todayKey = toAppDateKey(now);
-  const result = await fetchTodayTasks(session.token as string, todayKey);
+  const result = token
+    ? await fetchTodayTasks(token, todayKey)
+    : ({ ok: false, status: 401 } as const);
   if (result.ok) {
     const entries = buildWidgetTimeline(result.tasks, now, session.userId, now.toISOString());
     await writeCache(entries[0]?.snapshot ?? null);

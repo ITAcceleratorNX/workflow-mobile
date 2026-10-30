@@ -15,6 +15,7 @@ import { config } from '@/lib/config';
 import { moodEnergyToApiLevel, moodStressToApiLevel } from '@/lib/healthy-sync-map';
 import { parseEnergyFromMoodFile, parseStressFromMoodFile } from '@/lib/mood-persist-parse';
 import { fetchStepsTodayFromPedometer, parsePersisted } from '@/lib/background-sync-utils';
+import { getAccessToken } from '@/lib/session';
 
 export const BACKGROUND_HEALTHY_TASK = 'background-healthy-sync';
 
@@ -22,17 +23,12 @@ const HEALTHY_API_VERSION = 'healthy.v1';
 
 // ===== AsyncStorage ключи =====
 
-const AUTH_KEY = 'auth-storage';
 const SLEEP_KEY = 'sleep-storage';
 const STEPS_KEY = 'steps-storage';
 const WATER_KEY = 'water-storage';
 const MOOD_KEY = 'mood-storage';
 
 // ===== Типы persist-состояний =====
-
-interface PersistedAuth {
-  token?: string | null;
-}
 
 interface PersistedSleep {
   settings?: {
@@ -176,13 +172,13 @@ async function sendHealthySync(args: {
 
 TaskManager.defineTask(BACKGROUND_HEALTHY_TASK, async () => {
   try {
-    const [authRaw, sleepRaw, stepsRaw, waterRaw, moodRaw] =
-      await AsyncStorage.multiGet([AUTH_KEY, SLEEP_KEY, STEPS_KEY, WATER_KEY, MOOD_KEY]).then(
+    const [sleepRaw, stepsRaw, waterRaw, moodRaw] =
+      await AsyncStorage.multiGet([SLEEP_KEY, STEPS_KEY, WATER_KEY, MOOD_KEY]).then(
         (pairs) => pairs.map(([, v]) => v)
       );
 
-    const auth = parsePersisted<PersistedAuth>(authRaw);
-    const token = auth?.token;
+    // Токен из стора (а не из AsyncStorage напрямую): если он истёк, стор продлит сессию и сохранит новый.
+    const token = await getAccessToken();
     if (!token || token === 'guest-demo') {
       return BackgroundTask.BackgroundTaskResult.Success;
     }
