@@ -5,16 +5,20 @@ import { BackHandler } from 'react-native';
 import { todayTaskDateKey } from '@/lib/dateTimeUtils';
 import {
   containsDay,
+  departmentKey,
   filterDepartments,
   monthPeriod,
   periodOfKind,
   shiftPeriod,
+  sortTeamMembers,
+  teamAsStats,
   type StatsDepartment,
   type StatsPeriod,
   type StatsPeriodKind,
   type TaskStats,
+  type TeamMemberStats,
 } from '@/lib/task-stats';
-import { fetchStatsEmployees, fetchTaskStats } from '@/lib/task-stats-api';
+import { fetchStatsEmployees, fetchTaskStats, fetchTeamStats } from '@/lib/task-stats-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 
@@ -25,12 +29,13 @@ type ScopeState = { status: 'loading' } | { status: 'ready'; departments: StatsD
 /** Loaded statistics carry the request they answer: the screen shows only those of its own filter. */
 type StatsState =
   | { key: string; status: 'loading' }
-  | { key: string; status: 'ready'; stats: TaskStats }
+  | { key: string; status: 'ready'; stats: TaskStats; members: TeamMemberStats[] | null }
   | { key: string; status: 'error'; reason: 'forbidden' | 'failed' };
 
 /**
  * «Статистика задач»: own statistics («Моя»), or, for the head of a company or a department,
- * an employee's («Сотрудники»). The employee opens over the list; the hardware «Назад» returns to it.
+ * the whole team or an employee («Сотрудники»). They open over the list; the hardware «Назад»
+ * returns to it.
  */
 export function useTaskStatsScreen() {
   const token = useAuthStore((s) => s.token);
@@ -40,7 +45,10 @@ export function useTaskStatsScreen() {
   const invalidation = useUserTasksInvalidateStore((s) => s.version);
 
   const [tab, setTabState] = useState<StatsTab>('my');
-  const [employeeId, setEmployeeId] = useState<number | null>(null);
+  /** The opened employee, or `team` for «Вся команда». */
+  const [employeeId, setEmployeeId] = useState<number | 'team' | null>(null);
+  /** With `team`: one department of it (departmentKey), null for the whole team. */
+  const [groupKey, setGroupKey] = useState<string | null>(null);
   const [period, setPeriod] = useState<StatsPeriod>(() => monthPeriod(todayKey));
   const [search, setSearch] = useState('');
   const [scope, setScope] = useState<ScopeState>({ status: 'loading' });
@@ -63,20 +71,33 @@ export function useTaskStatsScreen() {
   const employees = useMemo(() => (scope.status === 'ready' ? scope.departments.flatMap((d) => d.employees) : []), [scope]);
   // Only someone the server listed can be opened.
   const employee = activeTab === 'employees' ? employees.find((e) => e.id === employeeId) ?? null : null;
+  const team = activeTab === 'employees' && employeeId === 'team';
+  // One department of the team, only one the server listed and only while there are several.
+  const canPickDepartment = scope.status === 'ready' && scope.departments.length > 1;
+  const teamDepartment: StatsDepartment | null =
+    team && canPickDepartment && groupKey ? scope.departments.find((d) => departmentKey(d) === groupKey) ?? null : null;
   const employeeDepartment =
     employee && scope.status === 'ready' ? scope.departments.find((d) => d.employees.some((e) => e.id === employee.id)) ?? null : null;
 
-  const target: number | 'me' | null = !signedIn ? null : activeTab === 'my' ? 'me' : employee?.id ?? null;
-  const requestKey = target == null ? null : `${target}|${period.from}|${period.to}`;
+  const target: number | 'me' | 'team' | null = !signedIn ? null : activeTab === 'my' ? 'me' : team ? 'team' : employee?.id ?? null;
+  const requestKey = target == null ? null : `${target}|${teamDepartment ? departmentKey(teamDepartment) : ''}|${period.from}|${period.to}`;
 
   useEffect(() => {
     if (requestKey == null || target == null) return;
     const controller = new AbortController();
     // Until the answer comes, numbers of another filter are not shown (`view` below); the same filter
     // loaded again keeps its numbers.
-    void fetchTaskStats(period, target === 'me' ? null : target, controller.signal).then((result) => {
+    const load =
+      target === 'team'
+        ? fetchTeamStats(period, teamDepartment, controller.signal).then((result) =>
+            result.ok ? { ok: true as const, stats: teamAsStats(result.data), members: sortTeamMembers(result.data.employees) } : result,
+          )
+        : fetchTaskStats(period, target === 'me' ? null : target, controller.signal).then((result) =>
+            result.ok ? { ok: true as const, stats: result.data, members: null } : result,
+          );
+    void load.then((result) => {
       if (controller.signal.aborted) return;
-      if (result.ok) setState({ key: requestKey, status: 'ready', stats: result.data });
+      if (result.ok) setState({ key: requestKey, status: 'ready', stats: result.stats, members: result.members });
       else {
         const forbidden = result.status === 403 || result.status === 404;
         setState({ key: requestKey, status: 'error', reason: forbidden ? 'forbidden' : 'failed' });
@@ -84,7 +105,7 @@ export function useTaskStatsScreen() {
     });
     return () => controller.abort();
     // A task changed elsewhere (invalidation) or «Повторить» (reloadToken) loads the same filter again.
-  }, [requestKey, target, period, invalidation, reloadToken]);
+  }, [requestKey, target, teamDepartment, period, invalidation, reloadToken]);
 
   // Back on the screen after editing tasks: the numbers may have changed.
   const firstFocus = useRef(true);
@@ -104,6 +125,7 @@ export function useTaskStatsScreen() {
       if (employeeId == null) return;
       const sub = BackHandler.addEventListener('hardwareBackPress', () => {
         setEmployeeId(null);
+        setGroupKey(null);
         return true;
       });
       return () => sub.remove();
@@ -116,6 +138,18 @@ export function useTaskStatsScreen() {
   const setTab = useCallback((next: StatsTab) => {
     setTabState(next);
     setEmployeeId(null);
+    setGroupKey(null);
+  }, []);
+
+  const selectEmployee = useCallback((id: number | 'team' | null) => {
+    setEmployeeId(id);
+    setGroupKey(null);
+  }, []);
+
+  /** One department's numbers, in the place of «Вся команда»; they open over the list too. */
+  const selectDepartment = useCallback((department: StatsDepartment) => {
+    setEmployeeId('team');
+    setGroupKey(departmentKey(department));
   }, []);
 
   const setPeriodKind = useCallback(
@@ -139,7 +173,12 @@ export function useTaskStatsScreen() {
     setSearch,
     employee,
     employeeDepartment,
-    selectEmployee: setEmployeeId,
+    team,
+    teamDepartment,
+    canPickDepartment,
+    selectDepartment,
+    employeeCount: employees.length,
+    selectEmployee,
     period,
     setPeriod,
     setPeriodKind,
