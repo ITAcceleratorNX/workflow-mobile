@@ -130,6 +130,14 @@ describe('session renewal', () => {
     assert.deepEqual(t.state(), { token: renewed, refreshToken: 'r1' });
   });
 
+  it('does not ask again with every request while the server cannot renew', async () => {
+    const legacy = jwt({ id: 1, exp: (NOW + 60 * 60_000) / 1000 });
+    const t = setup({ token: legacy, refreshToken: null }, () => json(404, {}));
+    assert.equal(await t.session.accessToken(), legacy);
+    assert.equal(await t.session.accessToken(), legacy);
+    assert.equal(t.calls.length, 1);
+  });
+
   it('ends the session on the server at sign-out, and signs out even offline', async () => {
     const t = setup({ token: null, refreshToken: null }, () => json(200, {}));
     await t.session.signOutOnServer('r1');
