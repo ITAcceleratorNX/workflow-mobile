@@ -138,7 +138,7 @@ function RetryButton({ onPress }: { onPress: () => void }) {
   );
 }
 
-/** История категории: перевёрнутый список — открывается внизу, на самых новых; ранние подгружаются вверх. */
+/** История категории: открывается сверху, на самых новых; ранние подгружаются при прокрутке вниз. */
 function CategoryHistory({
   category,
   onOpen,
@@ -178,14 +178,13 @@ function CategoryHistory({
 
   return (
     <FlatList
-      inverted
       data={rows}
       keyExtractor={(row) => row.key}
       renderItem={({ item }) => <HistoryRowView row={item} onOpen={onOpen} />}
       onEndReached={loadOlder}
       onEndReachedThreshold={0.5}
       ListFooterComponent={history?.loading ? <ActivityIndicator style={styles.older} color={ui.fg(0.5)} /> : null}
-      contentContainerStyle={[styles.history, { paddingTop: insets.bottom + 24 }]}
+      contentContainerStyle={[styles.history, { paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
     />
   );
@@ -241,7 +240,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 8 },
   status: { marginTop: 48 },
   retry: { fontSize: 14, fontWeight: '500' },
-  history: { paddingHorizontal: 16, paddingBottom: 8 },
+  history: { paddingHorizontal: 16, paddingTop: 8 },
   older: { marginVertical: 12 },
   day: { fontSize: 13, fontWeight: '600', marginTop: 16, marginBottom: 8 },
   itemCard: { overflow: 'hidden' },

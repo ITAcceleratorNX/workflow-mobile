@@ -165,7 +165,7 @@ export interface LogsResponse {
 export const CATEGORY_HISTORY_PAGE_SIZE = 20;
 
 export interface CategoryHistoryPage {
-  /** Новые первыми, как отдаёт сервер; порядок для экрана — chronological(). */
+  /** Новые первыми, как отдаёт сервер; порядок для экрана — newestFirst(). */
   notifications: CategoryNotification[];
   totalPages?: number;
   total?: number;
