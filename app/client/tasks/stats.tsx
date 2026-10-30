@@ -8,6 +8,7 @@ import {
   Avatar,
   Card,
   DailyChart,
+  employeesLabel,
   endedNote,
   Meter,
   OpenSplitBar,
@@ -18,6 +19,7 @@ import {
   SolidTabs,
   StatsError,
   StatsLoading,
+  TeamAvatar,
 } from '@/components/tasks/stats/TaskStatsParts';
 import { TaskStatsRangeSheet } from '@/components/tasks/stats/TaskStatsRangeSheet';
 import { ChipTabs } from '@/components/ui/chip-tabs';
@@ -34,6 +36,7 @@ import {
   statsContent,
   type StatsPeriodKind,
   type TaskStats,
+  type TeamMemberStats,
 } from '@/lib/task-stats';
 
 const PERIOD_TABS = [
@@ -48,7 +51,8 @@ const VIEW_TABS = [
 
 /**
  * «Статистика задач» (Figma «Моя статистика», «Сотрудники отдела», «Статистика сотрудника» and the
- * states): own statistics, and for the head of a company or a department, an employee's.
+ * states): own statistics, and for the head of a company or a department, the whole team
+ * («Вся команда», in the blocks of one person) or an employee's.
  */
 export default function TaskStatsScreen() {
   const page = useTaskStatsScreen();
@@ -57,8 +61,11 @@ export default function TaskStatsScreen() {
   const insets = useSafeAreaInsets();
   const [picker, setPicker] = useState({ open: false, key: 0 });
   const { employee, tab, period } = page;
-  const showList = tab === 'employees' && !employee;
-  const who = employee?.full_name ?? 'Мои задачи';
+  // The team or an employee opens over the list; «Назад» returns to it.
+  const opened = employee != null || page.team;
+  const showList = tab === 'employees' && !opened;
+  const teamName = page.teamDepartment?.department_name ?? 'Вся команда';
+  const who = page.team ? teamName : employee?.full_name ?? 'Мои задачи';
   // A fresh picker on each opening starts from the period on screen.
   const openPicker = () => setPicker((p) => ({ open: true, key: p.key + 1 }));
   const closePicker = () => setPicker((p) => ({ ...p, open: false }));
@@ -71,16 +78,30 @@ export default function TaskStatsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Pressable
-          onPress={() => (employee ? page.selectEmployee(null) : router.back())}
+          onPress={() => (opened ? page.selectEmployee(null) : router.back())}
           hitSlop={10}
           accessibilityRole="button"
           style={styles.back}
         >
           <MaterialIcons name="chevron-left" size={28} color={ui.accent} />
-          <Text style={[styles.backLabel, { color: ui.accent }]}>{employee ? 'Сотрудники' : 'Назад'}</Text>
+          <Text style={[styles.backLabel, { color: ui.accent }]}>{opened ? 'Сотрудники' : 'Назад'}</Text>
         </Pressable>
 
-        {employee ? (
+        {page.team ? (
+          <View style={styles.person}>
+            <TeamAvatar size={48} />
+            <View style={styles.personText}>
+              <Text style={[styles.personName, { color: ui.fg() }]} numberOfLines={1} accessibilityRole="header">
+                {teamName}
+              </Text>
+              <Text style={[styles.personRole, { color: ui.fg(0.55) }]} numberOfLines={1}>
+                {page.teamDepartment
+                  ? `Показатели отдела · ${employeesLabel(page.teamDepartment.employees.length)}`
+                  : `Общие показатели · ${employeesLabel(page.employeeCount)}`}
+              </Text>
+            </View>
+          </View>
+        ) : employee ? (
           <View style={styles.person}>
             <Avatar name={employee.full_name} size={48} />
             <View style={styles.personText}>
@@ -102,7 +123,7 @@ export default function TaskStatsScreen() {
           <EmptyState style={styles.message} icon="lock-outline" title="Войдите в аккаунт" description="Статистика доступна после входа" />
         ) : (
           <>
-            {page.canViewEmployees && !employee ? (
+            {page.canViewEmployees && !opened ? (
               <SolidTabs<StatsTab> accessibilityLabel="Чья статистика" value={tab} options={VIEW_TABS} onSelect={page.setTab} />
             ) : null}
 
@@ -123,6 +144,7 @@ export default function TaskStatsScreen() {
                   onPress={period.kind === 'custom' ? openPicker : undefined}
                 />
                 <StatsBody page={page} />
+                {page.team ? <TeamSection page={page} /> : null}
               </>
             )}
           </>
@@ -161,12 +183,46 @@ function EmployeeList({ page }: { page: UseTaskStatsScreenResult }) {
           style={[styles.searchInput, { color: ui.fg() }]}
         />
       </View>
+      {page.search.trim() === '' ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Вся команда, общие показатели, ${employeesLabel(page.employeeCount)}`}
+          onPress={() => page.selectEmployee('team')}
+          style={({ pressed }) => [styles.row, styles.rows, { backgroundColor: pressed ? ui.fg(0.08) : ui.surface }]}
+        >
+          <TeamAvatar size={40} />
+          <View style={styles.personText}>
+            <Text style={[styles.rowName, { color: ui.fg() }]} numberOfLines={1}>Вся команда</Text>
+            <Text style={[styles.rowRole, { color: ui.fg(0.55) }]} numberOfLines={1}>
+              {employeesLabel(page.employeeCount)}
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color={ui.fg(0.35)} />
+        </Pressable>
+      ) : null}
       {page.departments.length === 0 ? (
         <Text style={[styles.nothing, { color: ui.fg(0.55) }]}>Никого не нашли</Text>
       ) : (
         page.departments.map((department) => (
           <View key={`${department.company_id}:${department.department_id ?? ''}`} style={styles.department}>
-            <SectionLabel>{`${department.department_name} · ${department.employees.length}`}</SectionLabel>
+            {page.canPickDepartment ? (
+              // The head of a company: «Показатели» of the department open over the list.
+              <View style={styles.departmentHead}>
+                <SectionLabel>{`${department.department_name} · ${department.employees.length}`}</SectionLabel>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Показатели отдела ${department.department_name}`}
+                  onPress={() => page.selectDepartment(department)}
+                  hitSlop={10}
+                  style={styles.departmentLink}
+                >
+                  <Text style={[styles.departmentLinkText, { color: ui.accent }]}>Показатели</Text>
+                  <MaterialIcons name="chevron-right" size={18} color={ui.accent} />
+                </Pressable>
+              </View>
+            ) : (
+              <SectionLabel>{`${department.department_name} · ${department.employees.length}`}</SectionLabel>
+            )}
             <View style={[styles.rows, { backgroundColor: ui.surface }]}>
               {department.employees.map((employee, index) => (
                 <Pressable
@@ -248,7 +304,7 @@ function StatsSections({ stats, page, noDue }: { stats: TaskStats; page: UseTask
             </View>
             <Meter value={share(stats.completed, stats.total)} style={styles.gapTop} />
             <Text style={[styles.note, muted]}>
-              {sample ?? `${stats.total} — все задачи${page.employee ? ' сотрудника' : ''} со сроком ${phrase}: и выполненные, и нет`}
+              {sample ?? `${stats.total} — все задачи${page.team ? ' команды' : page.employee ? ' сотрудника' : ''} со сроком ${phrase}: и выполненные, и нет`}
             </Text>
 
             <View style={[styles.metricRow, divider]}>
@@ -314,6 +370,52 @@ function StatsSections({ stats, page, noDue }: { stats: TaskStats; page: UseTask
   );
 }
 
+/** The employees under the team numbers, the lowest percentage first; a row opens the employee. */
+function TeamSection({ page }: { page: UseTaskStatsScreenResult }) {
+  const ui = useProductUi();
+  const { view } = page;
+  if (view?.status !== 'ready' || !view.members || view.members.length === 0) return null;
+  return (
+    <View style={styles.department}>
+      <SectionLabel>Сотрудники</SectionLabel>
+      <View style={[styles.rows, { backgroundColor: ui.surface }]}>
+        {view.members.map((member, index) => (
+          <TeamMemberRow key={member.id} member={member} divided={index > 0} onPress={() => page.selectEmployee(member.id)} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** The numbers under the name, the percentage alone on the right. */
+function TeamMemberRow({ member, divided, onPress }: { member: TeamMemberStats; divided: boolean; onPress: () => void }) {
+  const ui = useProductUi();
+  const percent = member.completion_percent == null ? '—' : `${member.completion_percent}%`;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${member.full_name}, выполнение ${percent}, просрочено ${member.overdue}`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.row,
+        divided && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: ui.fg(0.12) },
+        pressed && { backgroundColor: ui.fg(0.05) },
+      ]}
+    >
+      <Avatar name={member.full_name} size={40} />
+      <View style={styles.personText}>
+        <Text style={[styles.rowName, { color: ui.fg() }]} numberOfLines={1}>{member.full_name}</Text>
+        <Text style={[styles.rowRole, { color: ui.fg(0.55) }]} numberOfLines={1}>
+          {member.total > 0 ? `${member.completed} из ${member.total}` : 'Нет задач со сроком'}
+          {member.overdue > 0 ? <Text style={{ color: ui.danger }}>{` · ${member.overdue} просрочено`}</Text> : null}
+        </Text>
+      </View>
+      <Text style={[styles.memberPercent, { color: member.completion_percent == null ? ui.fg(0.4) : ui.fg() }]}>{percent}</Text>
+      <MaterialIcons name="chevron-right" size={22} color={ui.fg(0.35)} />
+    </Pressable>
+  );
+}
+
 function SeparateRow({ title, hint, value, divided = false }: { title: string; hint: string; value: number; divided?: boolean }) {
   const ui = useProductUi();
   return (
@@ -343,10 +445,14 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 17, paddingVertical: 10 },
   nothing: { textAlign: 'center', paddingVertical: 32, fontSize: 14 },
   department: { gap: 10 },
+  departmentHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  departmentLink: { flexDirection: 'row', alignItems: 'center' },
+  departmentLinkText: { fontSize: 14, fontWeight: '500' },
   rows: { borderRadius: 18, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10 },
   rowName: { fontSize: 17, fontWeight: '600' },
   rowRole: { fontSize: 14, marginTop: 1 },
+  memberPercent: { fontSize: 17, fontWeight: '700' },
   sections: { gap: 16 },
   cardCaption: { fontSize: 15 },
   notComputed: { fontSize: 26, fontWeight: '700', marginTop: 8 },

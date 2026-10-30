@@ -1,12 +1,12 @@
 /**
  * Логика сценария брони переговорной (web), без React: даты недели, время по маске ЧЧ:ММ,
  * проверки длительности / часов офиса / занятости и подсказки свободных окон.
- * Правила — как на бэкенде: 15–120 минут с шагом 15, будни, часы офиса, время Алматы (+05:00).
+ * Правила — как на бэкенде: от 15 минут с шагом 15 и до конца часов офиса (хоть весь день), будни,
+ * время Алматы (+05:00).
  */
 
 export const BOOKING_STEP_MINUTES = 15;
 export const BOOKING_MIN_MINUTES = 15;
-export const BOOKING_MAX_MINUTES = 120;
 export const BOOKING_COMMENT_MAX = 300;
 export const BOOKING_UTC_OFFSET = "+05:00";
 const OFFSET_MS = 5 * 60 * 60 * 1000;
@@ -136,7 +136,7 @@ export function busyIntervals(day: string, bookings: { start_time: string | Date
 
 export type TimeCheck =
   | { ok: true; duration: number }
-  | { ok: false; reason: "incomplete" | "format" | "step" | "order" | "min" | "max" | "hours" | "past"; message: string }
+  | { ok: false; reason: "incomplete" | "format" | "step" | "order" | "min" | "hours" | "past"; message: string }
   | { ok: false; reason: "busy"; message: string; conflicts: Interval[] };
 
 /**
@@ -163,7 +163,6 @@ export function checkBookingTime(params: {
   if (end <= start) return { ok: false, reason: "order", message: "Окончание должно быть позже начала" };
   const duration = end - start;
   if (duration < BOOKING_MIN_MINUTES) return { ok: false, reason: "min", message: "Минимум 15 минут" };
-  if (duration > BOOKING_MAX_MINUTES) return { ok: false, reason: "max", message: "Максимум 2 часа" };
   if (start < hours.start || end > hours.end) {
     return { ok: false, reason: "hours", message: `Офис работает ${formatTime(hours.start)}–${formatTime(hours.end)}` };
   }
@@ -200,7 +199,7 @@ export function freeSegments(hours: Interval, busy: Interval[], nowMinutes?: num
 }
 
 /**
- * «Свободно рядом» (до двух окон, не длиннее запрошенной длительности и 2 часов):
+ * «Свободно рядом» (до двух окон, не длиннее запрошенной длительности):
  * 1) если начало свободно — от начала до ближайшей занятости, иначе конец предыдущего свободного отрезка;
  * 2) первый свободный отрезок после начала.
  */
@@ -212,7 +211,7 @@ export function suggestFreeSlots(params: {
   nowMinutes?: number | null;
 }): Interval[] {
   const { start, end, hours, busy, nowMinutes } = params;
-  const wanted = Math.min(Math.max(end - start, BOOKING_MIN_MINUTES), BOOKING_MAX_MINUTES);
+  const wanted = Math.max(end - start, BOOKING_MIN_MINUTES);
   const segments = freeSegments(hours, busy, nowMinutes);
   const result: Interval[] = [];
   const containing = segments.find((s) => s.start <= start && start < s.end);
