@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 
 import { NotificationBellBadge } from '@/components/notifications/notification-bell-badge';
 import { PageLoader, PullToRefresh } from '@/components/ui';
@@ -28,6 +28,10 @@ import type { NewsDisplayItem } from '@/lib/news-api';
 import { emptyReactionCounts } from '@/lib/news-reactions';
 import type { NewsReactionCounts, NewsReactionKind } from '@/lib/news-reactions';
 import { NewsReactionsRow } from '@/components/news/news-reactions-row';
+import { NewSurveyHomeCard } from '@/components/surveys/new-survey-home-card';
+import { surveysApi } from '@/lib/surveys-api';
+import { latestAvailableSurvey } from '@/lib/surveys/list';
+import type { ClientSurvey } from '@/lib/surveys/types';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 48) / 2;
@@ -564,6 +568,7 @@ function ClientDashboardContent() {
   const cardBg = useThemeColor({}, 'cardBackground');
   const border = useThemeColor({}, 'border');
   const [insightItems, setInsightItems] = useState<NewsDisplayItem[]>([]);
+  const [newSurvey, setNewSurvey] = useState<ClientSurvey | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
   const insightToken = useAuthStore((s) => s.token);
@@ -575,6 +580,21 @@ function ClientDashboardContent() {
       setInsightItems((l) => l.map((it) => (it.id === newsId ? { ...it, ...patch } : it)));
     },
     []
+  );
+
+  const loadNewSurvey = useCallback(async () => {
+    const result = await surveysApi.listSurveys();
+    if (result.ok) setNewSurvey(latestAvailableSurvey(result.data));
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      surveysApi.listSurveys().then((result) => {
+        if (active && result.ok) setNewSurvey(latestAvailableSurvey(result.data));
+      });
+      return () => { active = false; };
+    }, [])
   );
 
   useEffect(() => {
@@ -613,10 +633,11 @@ function ClientDashboardContent() {
         my_reaction: null,
       })));
     });
+    const surveyPromise = loadNewSurvey();
     bumpTasks();
-    await newsPromise;
+    await Promise.all([newsPromise, surveyPromise]);
     setRefreshing(false);
-  }, [bumpTasks]);
+  }, [bumpTasks, loadNewSurvey]);
 
   const handleSmartHome = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -694,6 +715,12 @@ function ClientDashboardContent() {
             <MaterialIcons name="arrow-forward" size={18} color={primary} />
           </Pressable>
         </View>
+        {newSurvey ? (
+          <NewSurveyHomeCard
+            survey={newSurvey}
+            onPress={() => router.push(`/client/surveys/${newSurvey.id}` as Href)}
+          />
+        ) : null}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}

@@ -5,11 +5,21 @@ import type { ClientSurvey, SurveyQuestion } from "./types";
  * вёрстку. Модуль чистый, без импортов значений — тесты подключают его напрямую.
  */
 
-const PLURAL = new Intl.PluralRules("ru-RU");
+const PLURAL = typeof Intl.PluralRules === "function" ? new Intl.PluralRules("ru-RU") : null;
+
+function russianPluralCategory(count: number): Intl.LDMLPluralRule {
+  const absolute = Math.abs(count);
+  if (!Number.isInteger(absolute)) return "other";
+  const lastTwo = absolute % 100;
+  const last = absolute % 10;
+  if (last === 1 && lastTwo !== 11) return "one";
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return "few";
+  return "many";
+}
 
 /** 1 вопрос, 2 вопроса, 5 вопросов: формы [один, несколько, много]. */
 export function pluralRu(count: number, [one, few, many]: readonly [string, string, string]): string {
-  const category = PLURAL.select(count);
+  const category = PLURAL?.select(count) ?? russianPluralCategory(count);
   if (category === "one") return one;
   return category === "few" ? few : many;
 }
