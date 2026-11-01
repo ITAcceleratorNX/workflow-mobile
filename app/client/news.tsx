@@ -10,7 +10,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -105,6 +105,7 @@ function NewsSurveyTabs({
 export default function NewsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const token = useAuthStore((s) => s.token);
   const canReact = typeof token === 'string' && token.length > 0 && token !== 'guest-demo';
   const background = useThemeColor({}, 'background');
@@ -118,11 +119,17 @@ export default function NewsScreen() {
   const [filterDate, setFilterDate] = useState('all');
   const [newsList, setNewsList] = useState<NewsDisplayItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<NewsTab>('news');
+  const [activeTabState, setActiveTabState] = useState<NewsTab>(() => tab === 'surveys' ? 'surveys' : 'news');
+  const activeTab: NewsTab = tab === 'surveys' ? 'surveys' : activeTabState;
   const [surveys, setSurveys] = useState<ClientSurvey[] | null>(null);
   const [surveysLoading, setSurveysLoading] = useState(true);
   const [surveysError, setSurveysError] = useState<string | null>(null);
   const surveyRequestId = useRef(0);
+
+  const changeTab = useCallback((nextTab: NewsTab) => {
+    setActiveTabState(nextTab);
+    if (tab) router.setParams({ tab: undefined });
+  }, [router, tab]);
 
   const loadSurveys = useCallback(async () => {
     const requestId = ++surveyRequestId.current;
@@ -253,7 +260,7 @@ export default function NewsScreen() {
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: background }]}>
       <ScreenHeader title="Все новости" />
-      <NewsSurveyTabs value={activeTab} onChange={setActiveTab} showSurveyDot={hasNewSurveys} />
+      <NewsSurveyTabs value={activeTab} onChange={changeTab} showSurveyDot={hasNewSurveys} />
       {activeTab === 'news' ? (
         <>
           <View style={[styles.searchRow, { backgroundColor: cardBg, borderColor: border }]}>
