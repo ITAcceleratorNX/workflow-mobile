@@ -12,6 +12,11 @@ export { PullToRefresh } from './pull-to-refresh';
 export { ScreenHeader } from './screen-header';
 export { Select } from './select';
 export { Sheet, type SheetProps } from './sheet';
+export { SurveyBadge, type SurveyBadgeKind, type SurveyBadgeProps } from './survey-badge';
+export { SurveyOption, type SurveyOptionProps } from './survey-option';
+export { SurveyProgress, type SurveyProgressProps } from './survey-progress';
+export { SurveyRatingScale, type SurveyRatingScaleProps } from './survey-rating-scale';
+export { SurveyResultBar, type SurveyResultBarProps } from './survey-result-bar';
 export {
   FormBottomSheet,
   FormBottomSheetFieldLabel,
