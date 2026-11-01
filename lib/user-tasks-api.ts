@@ -2,7 +2,7 @@ import type { TaskSortField, TaskSortDirection } from "@/lib/task-list-sort";
 import { request } from './api';
 
 import { config } from '@/lib/config';
-import { useAuthStore } from '@/stores/auth-store';
+import { getAccessToken } from '@/lib/session';
 import type { TaskAssignmentInput, TaskTransferInput } from '@/lib/task-recipients-api';
 import {
   normalizeRecurrenceFromApi,
@@ -396,7 +396,7 @@ export async function uploadUserTaskAttachments(
     );
   });
 
-  const token = useAuthStore.getState().token;
+  const token = await getAccessToken();
   const headers: HeadersInit = {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };

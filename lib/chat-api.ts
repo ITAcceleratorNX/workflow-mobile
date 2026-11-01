@@ -1,8 +1,6 @@
-import { router } from 'expo-router';
-
 import { networkFailure } from '@/lib/api-errors';
 import { config } from '@/lib/config';
-import { useAuthStore } from '@/stores/auth-store';
+import { fetchWithSession, getAccessToken } from '@/lib/session';
 
 const { apiBaseUrl } = config;
 
@@ -14,7 +12,7 @@ async function authRequest<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<ChatApiResult<T>> {
-  const token = useAuthStore.getState().token;
+  const token = await getAccessToken();
   if (!token) {
     return { ok: false, error: 'Не авторизован', unauthorized: true };
   }
@@ -28,21 +26,17 @@ async function authRequest<T>(
   }
 
   const url = `${apiBaseUrl}${path}`;
-  const headers: HeadersInit = {
+  const headers = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-    ...(options.headers as HeadersInit),
+    ...(options.headers as Record<string, string>),
   };
 
   try {
-    const res = await fetch(url, { ...options, headers });
+    // На 401 fetchWithSession продлевает сессию; 401 после него — сессия завершена, выход уже произошёл.
+    const res = await fetchWithSession(url, { ...options, headers }, token);
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 401) {
-      if (token !== 'guest-demo') {
-        useAuthStore.getState().clearAuth();
-        router.replace('/login');
-      }
       return {
         ok: false,
         error: 'Сессия истекла. Войдите снова.',

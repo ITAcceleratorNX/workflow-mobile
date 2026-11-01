@@ -36,6 +36,61 @@ export type StatsDepartment = {
 };
 export type StatsEmployeesScope = { can_view_employees: boolean; departments: StatsDepartment[] };
 
+/** One employee's row of «Вся команда»: the same numbers as their own statistics. */
+export type TeamMemberStats = StatsEmployee & {
+  company_id: number;
+  department_id: number | null;
+  department_name: string;
+  total: number;
+  completed: number;
+  not_completed: number;
+  completion_percent: number | null;
+  completed_on_time: number;
+  overdue: number;
+  completed_in_period: number;
+  without_due: number;
+};
+
+/** GET /user-tasks/stats/team: the employees of the viewer's departments summed, and each one's row. */
+export type TeamStatsResponse = {
+  period: TaskStats['period'];
+  team: Omit<TaskStats, 'employee' | 'period'> & { employees_count: number };
+  employees: TeamMemberStats[];
+};
+
+/** A department of the scope as one key: `3:7`, or `3:none` for the employees of company 3 without one. */
+export function departmentKey(department: Pick<StatsDepartment, 'company_id' | 'department_id'>): string {
+  return `${department.company_id}:${department.department_id ?? 'none'}`;
+}
+
+/** The query of one department for GET /user-tasks/stats/team; none for the whole team. */
+export function teamFilter(department: Pick<StatsDepartment, 'company_id' | 'department_id'> | null): Record<string, string> {
+  if (!department) return {};
+  return { company_id: String(department.company_id), department_id: department.department_id == null ? 'none' : String(department.department_id) };
+}
+
+/** The team numbers in the shape of one person's statistics, so the same blocks show them. */
+export function teamAsStats(response: TeamStatsResponse): TaskStats {
+  const { employees_count: _count, ...numbers } = response.team;
+  return { employee: null, period: response.period, ...numbers };
+}
+
+/**
+ * Rows of «Сотрудники» under the team numbers: the lowest percentage first (who needs attention),
+ * those with nothing due last, then by name.
+ */
+export function sortTeamMembers(members: TeamMemberStats[]): TeamMemberStats[] {
+  return [...members].sort((a, b) => {
+    if (a.completion_percent == null || b.completion_percent == null) {
+      if (a.completion_percent != null) return -1;
+      if (b.completion_percent != null) return 1;
+    } else if (a.completion_percent !== b.completion_percent) {
+      return a.completion_percent - b.completion_percent;
+    }
+    return a.full_name.localeCompare(b.full_name, 'ru');
+  });
+}
+
 /** Fewer tasks than this make every task swing the percentage (Figma «Мало данных»). */
 export const SMALL_SAMPLE = 5;
 

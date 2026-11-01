@@ -143,7 +143,14 @@ export default function AdminWorkerUsersScreen() {
       setActionRequestId(requestId);
       const result = await approveRegistrationRequest(requestId, officeAccess);
       if (result.ok) {
-        showToast({ title: 'Успешно', description: 'Запрос одобрен, пользователь создан', variant: 'success' });
+        showToast({
+          title: 'Успешно',
+          description:
+            req.phone_verified === false
+              ? 'Регистрация подтверждена без SMS, пользователь создан'
+              : 'Запрос одобрен, пользователь создан',
+          variant: 'success',
+        });
         loadRequests();
       } else {
         showToast({ title: 'Ошибка', description: result.error, variant: 'error', duration: 4000 });
@@ -418,6 +425,11 @@ export default function AdminWorkerUsersScreen() {
                       </ThemedText>
                     </View>
                   </View>
+                  {req.phone_verified === false ? (
+                    <View style={[styles.smsBadge, { backgroundColor: accentSoft }]}>
+                      <ThemedText style={[styles.smsBadgeText, { color: primary }]}>Без SMS-подтверждения</ThemedText>
+                    </View>
+                  ) : null}
                   <ThemedText style={[styles.requestMeta, { color: textMuted }]}>Телефон: {req.phone}</ThemedText>
                   <ThemedText style={[styles.requestMeta, { color: textMuted }]}>
                     Офис: {req.office?.name ?? '—'}
@@ -507,7 +519,9 @@ export default function AdminWorkerUsersScreen() {
                           {actionRequestId === req.id ? (
                             <ActivityIndicator size="small" color={success} />
                           ) : (
-                            <ThemedText style={[styles.registrationActionBtnLabel, { color: success }]}>Одобрить</ThemedText>
+                            <ThemedText style={[styles.registrationActionBtnLabel, { color: success }]}>
+                              {req.phone_verified === false ? 'Подтвердить без SMS' : 'Одобрить'}
+                            </ThemedText>
                           )}
                         </Pressable>
                         <Pressable
@@ -731,6 +745,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   registrationStatusPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  smsBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  smsBadgeText: {
     fontSize: 12,
     fontWeight: '600',
   },

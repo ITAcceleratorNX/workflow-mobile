@@ -84,11 +84,11 @@ export function orderCategoriesByActivity(items: CategorySummaryItem[]): Categor
   return [...withLast, ...empty];
 }
 
-/** История идёт от старых к новым: новые внизу, как на экранах Figma. */
-export function chronological(items: CategoryNotification[]): CategoryNotification[] {
+/** История идёт от новых к старым: новые сверху. */
+export function newestFirst(items: CategoryNotification[]): CategoryNotification[] {
   const unique = new Map<number, CategoryNotification>();
   for (const item of items) unique.set(item.id, item);
-  return Array.from(unique.values()).sort((a, b) => time(a.created_at) - time(b.created_at) || a.id - b.id);
+  return Array.from(unique.values()).sort((a, b) => time(b.created_at) - time(a.created_at) || b.id - a.id);
 }
 
 function yesterdayKey(now: Date): string {
@@ -115,7 +115,7 @@ export interface NotificationDayGroup {
 
 export function groupNotificationsByDay(items: CategoryNotification[], now: Date = new Date()): NotificationDayGroup[] {
   const groups: NotificationDayGroup[] = [];
-  for (const item of chronological(items)) {
+  for (const item of newestFirst(items)) {
     const key = toAppDateKey(item.created_at);
     const last = groups[groups.length - 1];
     if (last?.key === key) last.items.push(item);
@@ -124,15 +124,12 @@ export function groupNotificationsByDay(items: CategoryNotification[], now: Date
   return groups;
 }
 
-/** Строка перевёрнутого списка истории: заголовок дня или уведомление в карточке своего дня. */
+/** Строка списка истории: заголовок дня или уведомление в карточке своего дня. */
 export type HistoryRow =
   | { type: 'day'; key: string; label: string }
   | { type: 'item'; key: string; notification: CategoryNotification; first: boolean; last: boolean };
 
-/**
- * Строки для перевёрнутого FlatList: первым идёт самое новое уведомление (оно внизу экрана),
- * заголовок дня — после самого раннего уведомления дня (над ним на экране).
- */
+/** Строки для FlatList: сверху самое новое уведомление, заголовок дня — над уведомлениями этого дня. */
 export function historyRows(items: CategoryNotification[], now: Date = new Date()): HistoryRow[] {
   const rows: HistoryRow[] = [];
   for (const group of groupNotificationsByDay(items, now)) {
@@ -147,7 +144,7 @@ export function historyRows(items: CategoryNotification[], now: Date = new Date(
       })
     );
   }
-  return rows.reverse();
+  return rows;
 }
 
 /** Время в списке категорий: сегодня — «13:20», вчера — «Вчера», раньше — «21 окт.». */

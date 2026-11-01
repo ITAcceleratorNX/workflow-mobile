@@ -11,8 +11,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { config } from '@/lib/config';
+import { getAccessToken } from '@/lib/session';
 import { useToast } from '@/context/toast-context';
-import { useAuthStore } from '@/stores/auth-store';
 import {
   getManagerStats,
   getManagerSLAStats,
@@ -72,7 +72,6 @@ function aggregateManagerStats(raw: ManagerStatsRaw) {
 export default function ManagerStatisticsScreen() {
   const insets = useSafeAreaInsets();
 
-  const token = useAuthStore((s) => s.token);
   const { show: showToast } = useToast();
   const styles = useManagerStatsStyles();
   const [activeTab, setActiveTab] = useState<StatsTab>('stats');
@@ -104,7 +103,9 @@ export default function ManagerStatisticsScreen() {
   const handleExport = useCallback(
     async (format: 'xlsx' | 'pbix') => {
       try {
-        if (!token) {
+        // Токен из стора мог истечь: берём продлённый.
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
           showToast({ title: 'Ошибка', description: 'Не найден токен авторизации. Войдите в систему ещё раз.', variant: 'error' });
           return;
         }
@@ -114,7 +115,7 @@ export default function ManagerStatisticsScreen() {
 
         const result = await FileSystem.downloadAsync(url, fileUri, {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${accessToken}`,
           },
         });
 
@@ -148,7 +149,7 @@ export default function ManagerStatisticsScreen() {
         showToast({ title: 'Ошибка', description: 'Не удалось экспортировать файл. Попробуйте ещё раз.', variant: 'error' });
       }
     },
-    [token, showToast]
+    [showToast]
   );
 
   const stats = useMemo(

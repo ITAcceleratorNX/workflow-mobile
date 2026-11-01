@@ -5,13 +5,18 @@ import {
   asOfLabel,
   chartTicks,
   customPeriod,
+  departmentKey,
   monthPeriod,
   periodPhrase,
   periodTitle,
   shiftPeriod,
+  sortTeamMembers,
   statsContent,
+  teamAsStats,
+  teamFilter,
   weekPeriod,
   type TaskStats,
+  type TeamMemberStats,
 } from '../task-stats';
 
 const TODAY = '2026-10-28';
@@ -41,5 +46,31 @@ describe('task stats periods', () => {
     assert.equal(statsContent(sample({})), 'empty');
     assert.equal(statsContent(sample({ without_due: 2 })), 'noDue');
     assert.equal(statsContent(sample({ total: 5, not_completed: 5, completion_percent: 0 })), 'data');
+  });
+});
+
+describe('«Вся команда»', () => {
+  it('shows the summed numbers in the blocks of one person', () => {
+    const { employee: _employee, period, ...numbers } = sample({ total: 10, completed: 4, completion_percent: 40 });
+    const shown = teamAsStats({ period, team: { employees_count: 3, ...numbers }, employees: [] });
+    assert.equal(shown.employee, null);
+    assert.equal(shown.completion_percent, 40);
+    assert.equal('employees_count' in shown, false);
+    assert.equal(statsContent(shown), 'data');
+  });
+
+  it('lists the lowest percentage first, nothing due last, then by name', () => {
+    const row = (full_name: string, completion_percent: number | null) =>
+      ({ id: full_name.length, full_name, completion_percent }) as TeamMemberStats;
+    const sorted = sortTeamMembers([row('Тимур', null), row('Дана', 70), row('Алия', 70), row('Ерлан', 0), row('Айгерим', null)]);
+    assert.deepEqual(sorted.map((r) => r.full_name), ['Ерлан', 'Алия', 'Дана', 'Айгерим', 'Тимур']);
+  });
+
+  it('names a department by one key and asks the server for it alone', () => {
+    assert.equal(departmentKey({ company_id: 3, department_id: 7 }), '3:7');
+    assert.equal(departmentKey({ company_id: 3, department_id: null }), '3:none');
+    assert.deepEqual(teamFilter({ company_id: 3, department_id: 7 }), { company_id: '3', department_id: '7' });
+    assert.deepEqual(teamFilter({ company_id: 3, department_id: null }), { company_id: '3', department_id: 'none' });
+    assert.deepEqual(teamFilter(null), {});
   });
 });

@@ -11,6 +11,8 @@ export interface VerificationResult {
 
 export interface LoginResponse {
   token: string;
+  /** Продление входа без пароля (lib/session.ts). */
+  refresh_token?: string;
   role?: string;
 }
 
@@ -43,7 +45,8 @@ export async function loginWithPhone(
   const res = await fetch(`${apiBaseUrl}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, password }),
+    // Сессия с автопродлением: пользователь входит один раз, дальше токен продлевается сам.
+    body: JSON.stringify({ phone, password, with_refresh_token: true }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

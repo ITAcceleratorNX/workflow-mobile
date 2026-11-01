@@ -19,7 +19,6 @@ export {
   type FormBottomSheetProps,
 } from './form-bottom-sheet';
 export { StatRow } from './stat-row';
-export { SuccessModal } from './success-modal';
 export { TextInput, type TextInputProps } from './text-input';
 export {
   KeyboardDoneAccessory,

@@ -31,3 +31,15 @@ export function getBookingStatusText(status?: string): string {
       return 'Активно';
   }
 }
+
+/**
+ * Сообщение карточки брони, которую не удалось открыть. Чужая и несуществующая бронь отвечают
+ * одинаково (403), поэтому текст не говорит, есть ли она.
+ */
+export function bookingCardErrorMessage(status: number | undefined, error: string): string {
+  if (status === 403 || status === 404) {
+    return 'Бронирование недоступно. Возможно, у вас нет к нему доступа или ваши права изменились.';
+  }
+  if (status === 401) return 'Войдите в аккаунт, чтобы открыть бронирование.';
+  return error || 'Не удалось загрузить бронирование';
+}

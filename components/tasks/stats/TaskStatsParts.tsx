@@ -108,6 +108,21 @@ export function Avatar({ name, size }: { name: string; size: number }) {
   );
 }
 
+/** «Вся команда» in the place of an employee's avatar. */
+export function TeamAvatar({ size }: { size: number }) {
+  const ui = useProductUi();
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: ui.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+      <MaterialIcons name="groups" size={size * 0.5} color={ui.accentOnSoft} />
+    </View>
+  );
+}
+
+/** «5 сотрудников». */
+export function employeesLabel(count: number): string {
+  return `${count} ${plural(count, 'сотрудник', 'сотрудника', 'сотрудников')}`;
+}
+
 export function SectionLabel({ children }: { children: string }) {
   const ui = useProductUi();
   return (

@@ -7,9 +7,11 @@ import { Platform } from 'react-native';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDeepLinkStore } from '@/stores/deep-link-store';
 import {
+  bookingPushHref,
   fcmPayloadToRecord,
   hasNonTaskPushNavigationIntent,
   nonTaskPushNavigationDedupKey,
+  parseBookingPush,
   parseTaskPush,
   pushPayloadType,
   ROUTE_ADMIN_REGISTRATION_REQUESTS,
@@ -60,7 +62,8 @@ function clearLastResponse(): void {
 
 /**
  * Регистрирует push-уведомления и отправляет токен на бэкенд при авторизации.
- * Обрабатывает переход по нажатию на уведомление: задачник (`parseTaskPush`), заявки
+ * Обрабатывает переход по нажатию на уведомление: задачник (`parseTaskPush`), брони
+ * переговорных для персонала (`parseBookingPush`), заявки
  * (data.requestId, data.requestGroupId) и запросы на регистрацию.
  */
 export function usePushNotifications(): void {
@@ -150,6 +153,34 @@ export function usePushNotifications(): void {
     [showToast]
   );
 
+  /**
+   * Push персонала о брони — так же через `pendingPostAuthHref`: без входа карточка откроется после
+   * него. Права по роли и офису проверяет сервер, когда карточка загружается.
+   */
+  const openBookingPush = useCallback(
+    async (bookingId: number) => {
+      if (shouldSkipDuplicatePushOpen(`booking:${bookingId}`)) return;
+      await waitForAuthHydrated();
+
+      const session = pushSession();
+      if (session === 'guest') {
+        showToast({
+          title: 'Войдите в аккаунт',
+          description: 'Бронирование из уведомления доступно после входа.',
+          variant: 'error',
+          duration: 4000,
+        });
+        return;
+      }
+      useDeepLinkStore.getState().setPendingPostAuthHref(bookingPushHref(bookingId));
+      if (session === 'signed_out') {
+        showToast({ title: 'Войдите в аккаунт', description: 'Бронирование откроется после входа.', variant: 'info', duration: 4000 });
+      }
+      await clearBadge();
+    },
+    [showToast]
+  );
+
   const runReminderAction = useCallback(
     async (taskId: number, action: ReminderAction) => {
       await waitForAuthHydrated();
@@ -201,7 +232,11 @@ export function usePushNotifications(): void {
       const target = parseTaskPush(data);
 
       if (!target) {
-        if (hasNonTaskPushNavigationIntent(data)) {
+        const bookingId = parseBookingPush(data);
+        if (bookingId !== null) {
+          await openBookingPush(bookingId);
+          clearLastResponse();
+        } else if (hasNonTaskPushNavigationIntent(data)) {
           await navigateFromPushDataNonTask(data, { deferUntilSplash: coldStart });
         } else if (!coldStart) {
           await clearBadge();
@@ -226,7 +261,7 @@ export function usePushNotifications(): void {
         clearLastResponse();
       }
     },
-    [navigateFromPushDataNonTask, openTaskPush, runReminderAction]
+    [navigateFromPushDataNonTask, openBookingPush, openTaskPush, runReminderAction]
   );
 
   /** Нажатие на push, которое отдал RN Firebase: кнопок здесь нет, только открытие. */
@@ -237,9 +272,14 @@ export function usePushNotifications(): void {
         await openTaskPush(target);
         return;
       }
+      const bookingId = parseBookingPush(data);
+      if (bookingId !== null) {
+        await openBookingPush(bookingId);
+        return;
+      }
       await navigateFromPushDataNonTask(data, { deferUntilSplash: openedFromQuitState });
     },
-    [navigateFromPushDataNonTask, openTaskPush]
+    [navigateFromPushDataNonTask, openBookingPush, openTaskPush]
   );
 
   useEffect(() => {

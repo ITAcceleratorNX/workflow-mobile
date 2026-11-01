@@ -46,7 +46,7 @@ describe('notification categories', () => {
     assert.deepEqual(ordered.map((c) => c.category), ['meeting_rooms', 'service_requests', 'tasks', 'registrations']);
   });
 
-  it('groups the history by Almaty days, oldest first', () => {
+  it('groups the history by Almaty days, newest first', () => {
     const groups = groupNotificationsByDay(
       [
         notification(5, '2026-10-22T06:53:00Z'),
@@ -59,23 +59,23 @@ describe('notification categories', () => {
       NOW
     );
     assert.deepEqual(groups.map((g) => [g.label, g.items.map((n) => n.id)]), [
-      ['20 октября', [1, 2]],
+      ['Сегодня', [5, 4]],
       ['Вчера', [3]],
-      ['Сегодня', [4, 5]],
+      ['20 октября', [2, 1]],
     ]);
     // 20:30 UTC on the 21st is already the 22nd in Almaty.
     assert.equal(formatDayLabel('2026-10-21T20:30:00Z', NOW), 'Сегодня');
     assert.equal(formatDayLabel('2025-10-20T08:00:00Z', NOW), '20 октября 2025 г.');
   });
 
-  it('puts the newest notification first in the inverted list and each day header above its day', () => {
+  it('puts the newest notification first and each day header above its day', () => {
     const rows = historyRows(
       [notification(3, '2026-10-22T06:53:00Z'), notification(2, '2026-10-22T05:12:00Z'), notification(1, '2026-10-21T11:40:00Z')],
       NOW
     );
     assert.deepEqual(
       rows.map((r) => (r.type === 'day' ? r.label : `${r.notification.id}${r.first ? 'F' : ''}${r.last ? 'L' : ''}`)),
-      ['3L', '2F', 'Сегодня', '1FL', 'Вчера']
+      ['Сегодня', '3F', '2L', 'Вчера', '1FL']
     );
   });
 

@@ -20,12 +20,12 @@ import {
   Button,
   OtpInput,
   Select,
-  SuccessModal,
   TextInput,
 } from '@/components/ui';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -45,6 +45,8 @@ export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
   const errorColor = useThemeColor({}, 'error');
   const textMuted = useThemeColor({}, 'textMuted');
+  const accent = useThemeColor({}, 'accent');
+  const accentSoft = useThemeColor({}, 'accentSoft');
 
   const [formData, setFormData] = useState(INITIAL_REGISTRATION_FORM);
   const [offices, setOffices] = useState<Office[]>([]);
@@ -55,7 +57,13 @@ export default function RegisterScreen() {
   const [verificationCode, setVerificationCode] = useState('');
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const [successVisible, setSuccessVisible] = useState(false);
+  /** Запрос отправлен — показывается финальный экран; withoutSms — без SMS-подтверждения. */
+  const [submitted, setSubmitted] = useState<{ withoutSms: boolean } | null>(null);
+  /** SMS не удалось отправить — можно продолжить без него. */
+  const [smsSendFailed, setSmsSendFailed] = useState(false);
+  /** Шаг, с которого пользователь продолжил без SMS (запрос подтвердит Администратор). */
+  const [smsSkippedFrom, setSmsSkippedFrom] = useState<1 | 2 | null>(null);
+  const smsSkipped = smsSkippedFrom != null;
 
   useEffect(() => {
     getOffices().then(setOffices);
@@ -80,6 +88,8 @@ export default function RegisterScreen() {
     setFormData((prev) => ({ ...prev, phone: formatted }));
     setFormErrors(null);
     setVerificationCode('');
+    setSmsSendFailed(false);
+    setSmsSkippedFrom(null);
   }, []);
 
   const goToStep2AndSendCode = useCallback(async () => {
@@ -96,12 +106,25 @@ export default function RegisterScreen() {
     const result = await sendVerificationCode(formData.phone, 'registration');
     setIsSendingCode(false);
     if (result.success) {
+      setSmsSendFailed(false);
       setCountdown(60);
       setStep(2);
     } else {
+      setSmsSendFailed(true);
       setFormErrors(result.message ?? 'Ошибка при отправке SMS. Попробуйте позже.');
     }
   }, [formData.phone]);
+
+  /**
+   * SMS не приходит: шаг кода пропускается, запрос уходит Администратору,
+   * он подтверждает регистрацию вручную («Подтвердить без SMS»).
+   */
+  const handleSkipSms = useCallback((fromStep: 1 | 2) => {
+    setSmsSkippedFrom(fromStep);
+    setVerificationCode('');
+    setFormErrors(null);
+    setStep(3);
+  }, []);
 
   const handleVerifyCode = useCallback(async () => {
     if (verificationCode.length !== 6) {
@@ -120,8 +143,13 @@ export default function RegisterScreen() {
     setIsSendingCode(true);
     const result = await sendVerificationCode(formData.phone, 'registration');
     setIsSendingCode(false);
-    if (result.success) setCountdown(60);
-    else setFormErrors(result.message ?? 'Ошибка при отправке SMS.');
+    if (result.success) {
+      setSmsSendFailed(false);
+      setCountdown(60);
+    } else {
+      setSmsSendFailed(true);
+      setFormErrors(result.message ?? 'Ошибка при отправке SMS.');
+    }
   }, [formData.phone, isSendingCode, countdown]);
 
   const handleSubmit = useCallback(async () => {
@@ -168,17 +196,14 @@ export default function RegisterScreen() {
       setFormData(INITIAL_REGISTRATION_FORM);
       setStep(1);
       setVerificationCode('');
-        setCountdown(0);
-      setSuccessVisible(true);
+      setCountdown(0);
+      setSmsSendFailed(false);
+      setSmsSkippedFrom(null);
+      setSubmitted({ withoutSms: smsSkipped });
     } else {
       setFormErrors(result.error);
     }
-  }, [formData]);
-
-  const handleSuccessClose = useCallback(() => {
-    setSuccessVisible(false);
-    router.replace('/login');
-  }, [router]);
+  }, [formData, smsSkipped]);
 
   const step1Valid =
     formData.phone &&
@@ -215,6 +240,28 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {submitted ? (
+            <View style={styles.success} accessibilityRole="summary">
+              <View style={[styles.successIcon, { backgroundColor: accentSoft }]}>
+                <MaterialIcons name="check" size={32} color={accent} />
+              </View>
+              <ThemedText type="title" style={[styles.title, styles.successText]}>
+                Запрос отправлен
+              </ThemedText>
+              <ThemedText style={[styles.successMessage, { color: textMuted }]}>
+                {submitted.withoutSms
+                  ? 'Номер не подтверждён по SMS — администратор проверит данные и подтвердит регистрацию вручную.'
+                  : 'Администратор проверит данные и откроет доступ.'}
+              </ThemedText>
+              <ThemedText style={[styles.successMessage, { color: textMuted }]}>
+                После одобрения войдите по номеру телефона и паролю.
+              </ThemedText>
+              <View style={styles.successAction}>
+                <Button title="Перейти ко входу" onPress={() => router.replace('/login')} />
+              </View>
+            </View>
+          ) : (
+            <>
           <View style={styles.header}>
             <ThemedText type="title" style={styles.title}>
               {stepTitles[step - 1]}
@@ -344,6 +391,14 @@ export default function RegisterScreen() {
                 onPress={goToStep2AndSendCode}
                 disabled={!step1Valid || isSendingCode}
               />
+              {smsSendFailed ? (
+                <Button
+                  title="Продолжить без SMS"
+                  onPress={() => handleSkipSms(1)}
+                  variant="ghost"
+                  disabled={!step1Valid}
+                />
+              ) : null}
             </View>
           )}
 
@@ -386,6 +441,13 @@ export default function RegisterScreen() {
                 variant="secondary"
                 disabled={isSendingCode || countdown > 0}
               />
+              {!isSendingCode && countdown === 0 ? (
+                <Button
+                  title="Не приходит SMS? Отправить без SMS"
+                  onPress={() => handleSkipSms(2)}
+                  variant="ghost"
+                />
+              ) : null}
               <Button
                 title="Назад"
                 onPress={() => {
@@ -400,6 +462,11 @@ export default function RegisterScreen() {
 
           {step === 3 && (
             <View style={styles.form}>
+              {smsSkipped ? (
+                <ThemedText style={[styles.smsHint, { color: textMuted }]}>
+                  Запрос будет отправлен без SMS-подтверждения. Его подтвердит администратор.
+                </ThemedText>
+              ) : null}
               <TextInput
                 label="Пароль"
                 placeholder="Не менее 6 символов"
@@ -435,8 +502,10 @@ export default function RegisterScreen() {
               <Button
                 title="Назад"
                 onPress={() => {
-                  setStep(2);
                   setFormErrors(null);
+                  // Назад туда, где SMS пропустили: к коду или к форме, если SMS не ушло.
+                  setStep(smsSkippedFrom ?? 2);
+                  setSmsSkippedFrom(null);
                 }}
                 variant="ghost"
               />
@@ -450,15 +519,11 @@ export default function RegisterScreen() {
               variant="secondary"
             />
           </View>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <SuccessModal
-        visible={successVisible}
-        onClose={handleSuccessClose}
-        title="Успешно"
-        message="Запрос на регистрацию отправлен. Ожидайте одобрения администратора."
-      />
     </ThemedView>
   );
 }
@@ -511,5 +576,29 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: Spacing.sm,
+  },
+  success: {
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  successIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  successText: {
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: FontSizes.body + 1,
+    lineHeight: LineHeights.body + 4,
+    textAlign: 'center',
+  },
+  successAction: {
+    alignSelf: 'stretch',
+    marginTop: Spacing.xl,
   },
 });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  bookingCardErrorMessage,
   canSeeOfficeBookings,
   getBookingStatusText,
   isOfficeScopedBookings,
@@ -30,5 +31,18 @@ describe('office bookings', () => {
     assert.equal(getBookingStatusText('completed'), 'Завершено');
     assert.equal(getBookingStatusText('cancelled'), 'Отменено');
     assert.equal(getBookingStatusText('auto_cancelled'), 'Отменено');
+  });
+});
+
+describe('booking card errors', () => {
+  it('says the same for a foreign and a missing booking, without telling which', () => {
+    assert.equal(bookingCardErrorMessage(403, 'No access to this booking'), bookingCardErrorMessage(404, 'not found'));
+    assert.match(bookingCardErrorMessage(403, ''), /недоступно/);
+  });
+
+  it('asks to sign in on 401 and keeps the error of a failed request otherwise', () => {
+    assert.match(bookingCardErrorMessage(401, ''), /Войдите/);
+    assert.equal(bookingCardErrorMessage(undefined, 'Нет сети'), 'Нет сети');
+    assert.equal(bookingCardErrorMessage(500, ''), 'Не удалось загрузить бронирование');
   });
 });

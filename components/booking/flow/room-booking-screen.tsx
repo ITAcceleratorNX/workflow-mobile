@@ -236,7 +236,7 @@ function TimeStep({ state }: { state: RoomBookingState }) {
         </View>
         <View style={{ marginTop: 10, minHeight: 22 }}>{status}</View>
         <Text style={[styles.small, { marginTop: 4 }]}>
-          От 15 мин до 2 ч · офис работает {formatTime(hours.start)}–{formatTime(hours.end)}
+          От 15 мин до конца рабочего дня · офис работает {formatTime(hours.start)}–{formatTime(hours.end)}
         </Text>
       </View>
 

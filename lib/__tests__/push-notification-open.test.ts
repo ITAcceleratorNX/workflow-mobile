@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  bookingPushHref,
+  parseBookingPush,
   parseTaskPush,
   taskDetailsHref,
   taskNotificationTarget,
@@ -103,5 +105,27 @@ describe('a task entry of the notification history', () => {
     assert.equal(taskNotificationTarget({ category: null, task_id: 12 }), null);
     assert.equal(taskNotificationTarget({ task_id: 12 }), null);
     assert.equal(taskNotificationTarget({ category: 'tasks', task_id: null }), null);
+  });
+});
+
+describe('booking push data', () => {
+  it('opens the booking of a staff push about a new booking', () => {
+    const data = { type: 'meeting_room_booking_created_staff', bookingId: '57', office_id: '3', timestamp: '2026-10-29T10:00:00.000Z' };
+    assert.equal(parseBookingPush(data), 57);
+    assert.equal(bookingPushHref(57), '/booking/details/57');
+  });
+
+  it('opens it from the staff pushes about a reschedule and a cancellation too', () => {
+    assert.equal(parseBookingPush({ type: 'meeting_room_booking_rescheduled_staff', bookingId: '8' }), 8);
+    assert.equal(parseBookingPush({ type: 'meeting_room_booking_cancelled_staff', booking_id: 9 }), 9);
+  });
+
+  it('ignores other pushes and a push without a valid booking', () => {
+    assert.equal(parseBookingPush({ type: 'meeting_room_booking_created', bookingId: '57' }), null);
+    assert.equal(parseBookingPush({ type: 'user_task_event', task_id: '57' }), null);
+    assert.equal(parseBookingPush({ type: 'meeting_room_booking_created_staff', bookingId: '' }), null);
+    assert.equal(parseBookingPush({ type: 'meeting_room_booking_created_staff', bookingId: '-1' }), null);
+    assert.equal(parseBookingPush({ type: 'meeting_room_booking_created_staff', bookingId: '1; DROP' }), null);
+    assert.equal(parseBookingPush(null), null);
   });
 });

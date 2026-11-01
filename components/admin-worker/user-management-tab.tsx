@@ -9,6 +9,8 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type StyleProp,
+  type TextStyle,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -92,6 +94,48 @@ type Props = {
 };
 
 /** Категории Исполнителя для формы: «Администрацию» Исполнителю больше не назначают. */
+/** Поле нового пароля с «глазом»: показывает только вводимое значение. */
+function RevealablePasswordInput({
+  value,
+  onChangeText,
+  placeholder,
+  iconColor,
+  inputStyle,
+}: {
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  iconColor: string;
+  inputStyle: StyleProp<TextStyle>;
+}) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <View>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={iconColor}
+        secureTextEntry={!visible}
+        autoCapitalize="none"
+        autoCorrect={false}
+        textContentType="newPassword"
+        style={[inputStyle, styles.passwordInput]}
+        {...keyboardDismissInputProps()}
+      />
+      <Pressable
+        onPress={() => setVisible((v) => !v)}
+        style={styles.passwordEye}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={visible ? 'Скрыть пароль' : 'Показать пароль'}
+      >
+        <MaterialIcons name={visible ? 'visibility-off' : 'visibility'} size={22} color={iconColor} />
+      </Pressable>
+    </View>
+  );
+}
+
 function executorCategoryIds(executor: ExecutorInCategory): number[] {
   return (executor.serviceCategories ?? [])
     .filter((c) => isExecutorServiceCategory(c.name))
@@ -922,23 +966,21 @@ export function AdminUserManagementTab({ offices, categories, isActive }: Props)
               </ThemedText>
 
               <ThemedText style={[styles.fieldLabel, { color: textMuted }]}>Новый пароль</ThemedText>
-              <TextInput
+              <RevealablePasswordInput
+                key={`new-password-${editUser.id}`}
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="Оставьте пустым, если не меняете"
-                placeholderTextColor={textMuted}
-                secureTextEntry
-                style={[styles.input, { color: text, borderColor: border, backgroundColor: screenBg }]}
-                {...keyboardDismissInputProps()}
+                iconColor={textMuted}
+                inputStyle={[styles.input, { color: text, borderColor: border, backgroundColor: screenBg }]}
               />
-              <TextInput
+              <RevealablePasswordInput
+                key={`confirm-password-${editUser.id}`}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Подтверждение пароля"
-                placeholderTextColor={textMuted}
-                secureTextEntry
-                style={[styles.input, { color: text, borderColor: border, backgroundColor: screenBg }]}
-                {...keyboardDismissInputProps()}
+                iconColor={textMuted}
+                inputStyle={[styles.input, { color: text, borderColor: border, backgroundColor: screenBg }]}
               />
               {passwordError ? (
                 <ThemedText style={{ color: danger, fontSize: 13 }}>{passwordError}</ThemedText>
@@ -1309,6 +1351,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 8,
   },
+  passwordInput: { paddingRight: 44 },
+  // Иконка по центру поля: у поля marginBottom 8, поэтому снизу отступ тот же.
+  passwordEye: { position: 'absolute', right: 0, top: 0, bottom: 8, width: 44, alignItems: 'center', justifyContent: 'center' },
   modalPillsScroll: { marginHorizontal: -4, flexGrow: 0, marginBottom: 8 },
   categoryChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   modalActions: { flexDirection: 'row', gap: 12, marginTop: 16 },
