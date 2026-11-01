@@ -431,7 +431,6 @@ export default function CreateRequestScreen() {
     canProceedStep2 &&
     canProceedStep3 &&
     canProceedStep4 &&
-    (role !== 'admin-worker' && role !== 'department-head' ? true : complexity && sla) &&
     (role !== 'department-head' || selectedExecutors.length === 0 || selectedExecutors.some((e) => e.role === 'leader')) &&
     (role !== 'executor' || createMode !== 'createAndComplete' || completionComment.trim());
 
