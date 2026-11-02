@@ -163,6 +163,16 @@ export default function AdminWorkerSurveysScreen() {
                     <Text style={[styles.actionLabel, { color: ui.accent }]}>Завершить</Text>
                   </Pressable>
                 ) : null}
+                {survey.status !== 'draft' ? (
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/admin-worker/survey-results', params: { id: String(survey.id) } })}
+                    accessibilityRole="button"
+                    style={styles.action}
+                  >
+                    <MaterialIcons name="bar-chart" size={18} color={ui.accent} />
+                    <Text style={[styles.actionLabel, { color: ui.accent }]}>Результаты</Text>
+                  </Pressable>
+                ) : null}
               </View>
             </Card>
           ))}
