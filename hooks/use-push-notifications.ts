@@ -12,11 +12,13 @@ import {
   hasNonTaskPushNavigationIntent,
   nonTaskPushNavigationDedupKey,
   parseBookingPush,
+  parseSurveyPush,
   parseTaskPush,
   pushPayloadType,
   ROUTE_ADMIN_REGISTRATION_REQUESTS,
   shouldSkipDuplicatePushOpen,
   taskPushHref,
+  surveyPushHref,
   workflowRequestNavigateIdFromPayload,
   type TaskPushTarget,
 } from '@/lib/push-notification-open';
@@ -97,6 +99,29 @@ export function usePushNotifications(): void {
           useDeepLinkStore.getState().setPendingPostAuthHref(ROUTE_ADMIN_REGISTRATION_REQUESTS);
         } else {
           router.push(ROUTE_ADMIN_REGISTRATION_REQUESTS);
+        }
+        await clearBadge();
+        return;
+      }
+
+      const surveyTarget = parseSurveyPush(data);
+      if (surveyTarget) {
+        const session = pushSession();
+        const href = surveyPushHref(surveyTarget.surveyId);
+        if (session === 'guest') {
+          showToast({
+            title: 'Войдите в аккаунт',
+            description: 'Опрос откроется после входа.',
+            variant: 'info',
+            duration: 4500,
+          });
+        } else if (defer || session === 'signed_out') {
+          useDeepLinkStore.getState().setPendingPostAuthHref(href);
+          if (session === 'signed_out') {
+            showToast({ title: 'Войдите в аккаунт', description: 'Опрос откроется после входа.', variant: 'info', duration: 4500 });
+          }
+        } else {
+          router.push({ pathname: '/client/surveys/[id]', params: { id: String(surveyTarget.surveyId) } });
         }
         await clearBadge();
         return;

@@ -3,13 +3,39 @@ import { describe, it } from 'node:test';
 
 import {
   bookingPushHref,
+  hasNonTaskPushNavigationIntent,
+  nonTaskPushNavigationDedupKey,
   parseBookingPush,
+  parseSurveyPush,
   parseTaskPush,
+  surveyPushHref,
   taskDetailsHref,
   taskNotificationTarget,
   taskPushHref,
   TASK_PUSH_EVENTS,
 } from '../push-notification-open';
+
+describe('survey push data', () => {
+  it('reads the published survey ID from backend and FCM payloads', () => {
+    assert.deepEqual(parseSurveyPush({ type: 'survey_published', survey_id: '42', url: '/client/surveys/42' }), { surveyId: 42 });
+    assert.deepEqual(parseSurveyPush({ type: 'survey_published', surveyId: 7 }), { surveyId: 7 });
+    assert.equal(surveyPushHref(42), '/client/surveys/42');
+  });
+
+  it('rejects a different push or an invalid survey ID', () => {
+    assert.equal(parseSurveyPush({ type: 'user_task_event', survey_id: '42' }), null);
+    assert.equal(parseSurveyPush({ type: 'survey_published', survey_id: '0' }), null);
+    assert.equal(parseSurveyPush({ type: 'survey_published', survey_id: '42junk' }), null);
+    assert.equal(parseSurveyPush(null), null);
+  });
+
+  it('recognizes surveys as navigation pushes and keeps different surveys out of the same dedup bucket', () => {
+    const first = { type: 'survey_published', survey_id: '42' };
+    const second = { type: 'survey_published', survey_id: '43' };
+    assert.equal(hasNonTaskPushNavigationIntent(first), true);
+    assert.notEqual(nonTaskPushNavigationDedupKey(first), nonTaskPushNavigationDedupKey(second));
+  });
+});
 
 describe('task push data', () => {
   it('opens the task of every kind of task push, with its event', () => {
