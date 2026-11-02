@@ -29,6 +29,7 @@ import {
 } from '@/lib/news-api';
 import { formatNewsScheduleDateTime } from '@/lib/dateTimeUtils';
 import { NEWS_REACTION_OPTIONS, emptyReactionCounts } from '@/lib/news-reactions';
+import { AdminSurveyTabs } from '@/components/surveys/admin-survey-tabs';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
@@ -75,6 +76,10 @@ export default function AdminWorkerNewsScreen() {
 
   const openCreate = useCallback(() => {
     router.push({ pathname: '/admin-worker/news-editor', params: { mode: 'create' } });
+  }, [router]);
+
+  const changeSection = useCallback((section: 'news' | 'surveys') => {
+    if (section === 'surveys') router.push('/admin-worker/surveys');
   }, [router]);
 
   const openEdit = useCallback(
@@ -291,6 +296,7 @@ export default function AdminWorkerNewsScreen() {
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
       <ScreenHeader title="Управление новостями" />
+      <AdminSurveyTabs value="news" onChange={changeSection} />
 
       <View style={[styles.filters, { borderColor: border }]}>
         <ThemedText style={[styles.filterLabel, { color: textMuted }]}>Статус</ThemedText>
