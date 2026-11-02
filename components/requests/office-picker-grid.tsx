@@ -17,7 +17,7 @@ const PALETTE = {
     muted: 'rgba(255,255,255,0.55)',
     heading: 'rgba(255,255,255,0.7)',
     card: 'rgba(255,255,255,0.10)',
-    border: 'rgba(255,255,255,0.2)',
+    border: 'rgba(255,255,255,0.28)',
     selected: 'rgba(227,91,33,0.18)',
     photo: '#222222',
     icon: 'rgba(255,255,255,0.35)',
@@ -110,15 +110,18 @@ function OfficeCard({ office, selected, onPress }: { office: Office; selected: b
         <Text style={[styles.name, { color: c.text }]} numberOfLines={2}>
           {office.name}
         </Text>
-        {office.address ? (
-          <View style={styles.addressRow}>
-            <MaterialIcons name="place" size={12} color={c.heading} />
-            <Text style={[styles.address, { color: c.address }]} numberOfLines={1}>
-              {office.address}
-            </Text>
-          </View>
-        ) : null}
-        {place ? <Text style={[styles.place, { color: c.muted }]}>{place}</Text> : null}
+        {/* Адрес и этаж внизу карточки: в ряду они на одной линии, даже если название в две строки. */}
+        <View style={styles.details}>
+          {office.address ? (
+            <View style={styles.addressRow}>
+              <MaterialIcons name="place" size={12} color={c.heading} />
+              <Text style={[styles.address, { color: c.address }]} numberOfLines={1}>
+                {office.address}
+              </Text>
+            </View>
+          ) : null}
+          {place ? <Text style={[styles.place, { color: c.muted }]}>{place}</Text> : null}
+        </View>
       </View>
     </Pressable>
   );
@@ -193,7 +196,8 @@ const styles = StyleSheet.create({
   },
   photo: { width: '100%', height: 112 },
   placeholder: { alignItems: 'center', justifyContent: 'center' },
-  info: { paddingTop: 11, paddingHorizontal: 11, paddingBottom: 13, gap: 5 },
+  info: { flex: 1, paddingTop: 11, paddingHorizontal: 11, paddingBottom: 13, gap: 5 },
+  details: { marginTop: 'auto', gap: 5 },
   name: { fontSize: 15, fontWeight: '600', lineHeight: 19 },
   addressRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   address: { flex: 1, fontSize: 12 },
