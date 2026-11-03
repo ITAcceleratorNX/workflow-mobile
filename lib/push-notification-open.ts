@@ -55,7 +55,7 @@ export function pushPayloadType(data: Record<string, unknown>): string | undefin
 
 export function nonTaskPushNavigationDedupKey(data: Record<string, unknown>): string {
   const type = pushPayloadType(data) ?? '';
-  return `nav:${type}:${String(data.registration_request_id ?? '')}:${String(data.request_group_id ?? data.requestGroupId ?? '')}:${String(data.request_id ?? data.requestId ?? '')}`;
+  return `nav:${type}:${String(data.registration_request_id ?? '')}:${String(data.request_group_id ?? data.requestGroupId ?? '')}:${String(data.request_id ?? data.requestId ?? '')}:${String(data.survey_id ?? data.surveyId ?? '')}`;
 }
 
 /** Есть ли не-task сценарий, для которого нужен общий обработчик (cold start / tap). */
@@ -161,6 +161,26 @@ export function taskPushHref(target: TaskPushTarget): string {
   const query = new URLSearchParams({ taskId: String(target.taskId) });
   if (target.commentId) query.set('commentId', target.commentId);
   return `/client/tasks/details?${query}`;
+}
+
+// ---------- Опросы ----------
+
+export const SURVEY_PUBLISHED_PUSH_TYPE = 'survey_published';
+
+export interface SurveyPushTarget {
+  surveyId: number;
+}
+
+/** Published survey pushes from workflow-service use snake_case and string IDs in FCM data. */
+export function parseSurveyPush(data: Record<string, unknown> | null | undefined): SurveyPushTarget | null {
+  if (!data || pushPayloadType(data) !== SURVEY_PUBLISHED_PUSH_TYPE) return null;
+  const surveyId = positiveId(data.survey_id ?? data.surveyId);
+  return surveyId === null ? null : { surveyId };
+}
+
+/** Local Mobile route for the survey in the notification; `url` in the payload is the Web route. */
+export function surveyPushHref(surveyId: number): string {
+  return `/client/surveys/${surveyId}`;
 }
 
 // ---------- Бронирования переговорных ----------
