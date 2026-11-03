@@ -16,8 +16,11 @@ import * as Haptics from 'expo-haptics';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ScreenHeader } from '@/components/ui/screen-header';
+import { ChipTabs } from '@/components/ui/chip-tabs';
+import { Button } from '@/components/ui/button';
 import { NewsListItem } from '@/components/news/news-list-item';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useProductUi } from '@/hooks/use-product-ui';
 import { useToast } from '@/context/toast-context';
 import {
   getNewsAdminList,
@@ -29,7 +32,8 @@ import {
 } from '@/lib/news-api';
 import { formatNewsScheduleDateTime } from '@/lib/dateTimeUtils';
 import { NEWS_REACTION_OPTIONS, emptyReactionCounts } from '@/lib/news-reactions';
-import { AdminSurveyTabs } from '@/components/surveys/admin-survey-tabs';
+import { AdminSurveyTabs, type AdminSurveySection } from '@/components/surveys/admin-survey-tabs';
+import AdminWorkerSurveysScreen from './surveys';
 
 const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
@@ -45,22 +49,23 @@ const STATUS_OPTIONS = [
   { value: 'hidden', label: 'Скрытые' },
   { value: 'archived', label: 'Архив' },
 ] as const;
+type NewsStatusFilter = (typeof STATUS_OPTIONS)[number]['value'];
 
 export default function AdminWorkerNewsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { show: showToast } = useToast();
+  const ui = useProductUi();
   const textMuted = useThemeColor({}, 'textMuted');
-  const textSecondary = useThemeColor({}, 'textSecondary');
   const primary = useThemeColor({}, 'primary');
   const onPrimary = useThemeColor({}, 'onPrimary');
-  const surfaceMuted = useThemeColor({}, 'surfaceMuted');
   const screenBg = useThemeColor({}, 'background');
   const border = useThemeColor({}, 'border');
   const cardBg = useThemeColor({}, 'cardBackground');
 
-  const [statusFilter, setStatusFilter] = useState<'active' | 'hidden' | 'archived' | 'scheduled' | ''>('');
+  const [statusFilter, setStatusFilter] = useState<NewsStatusFilter>('');
   const [actionId, setActionId] = useState<string | null>(null);
+  const [section, setSection] = useState<AdminSurveySection>('news');
 
   const fetchNews = useCallback(async () => {
     const res = await getNewsAdminList(statusFilter || undefined);
@@ -76,10 +81,6 @@ export default function AdminWorkerNewsScreen() {
 
   const openCreate = useCallback(() => {
     router.push({ pathname: '/admin-worker/news-editor', params: { mode: 'create' } });
-  }, [router]);
-
-  const changeSection = useCallback((section: 'news' | 'surveys') => {
-    if (section === 'surveys') router.push('/admin-worker/surveys');
   }, [router]);
 
   const openEdit = useCallback(
@@ -296,34 +297,24 @@ export default function AdminWorkerNewsScreen() {
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8, backgroundColor: screenBg }]}>
       <ScreenHeader title="Управление новостями" />
-      <AdminSurveyTabs value="news" onChange={changeSection} />
+      <AdminSurveyTabs value={section} onChange={setSection} />
 
-      <View style={[styles.filters, { borderColor: border }]}>
-        <ThemedText style={[styles.filterLabel, { color: textMuted }]}>Статус</ThemedText>
-        <View style={styles.filterChips}>
-          {STATUS_OPTIONS.map((opt) => (
-            <Pressable
-              key={opt.value || 'all'}
-              style={[styles.chip, { backgroundColor: statusFilter === opt.value ? primary : surfaceMuted }]}
-              onPress={() => setStatusFilter(opt.value as typeof statusFilter)}
-            >
-              <ThemedText
-                style={[
-                  styles.chipText,
-                  { color: statusFilter === opt.value ? onPrimary : textSecondary },
-                ]}
-              >
-                {opt.label}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+      {section === 'surveys' ? <AdminWorkerSurveysScreen embedded /> : <>
+      <ChipTabs
+        value={statusFilter}
+        onChange={setStatusFilter}
+        accessibilityLabel="Фильтр статуса новостей"
+        tabs={STATUS_OPTIONS}
+      />
 
-      <Pressable style={[styles.addBtn, { backgroundColor: primary }]} onPress={openCreate}>
-        <MaterialIcons name="add" size={24} color={onPrimary} />
-        <ThemedText style={[styles.addBtnText, { color: onPrimary }]}>Добавить новость</ThemedText>
-      </Pressable>
+      <Button
+        title="Добавить новость"
+        onPress={openCreate}
+        variant="accent"
+        size="block"
+        leftIcon={<MaterialIcons name="add" size={20} color={ui.onAccent} />}
+        style={styles.addButton}
+      />
 
       {loading ? (
         <View style={styles.loadingBox}>
@@ -345,7 +336,7 @@ export default function AdminWorkerNewsScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-
+      </>}
     </ThemedView>
   );
 }
@@ -366,32 +357,7 @@ const styles = StyleSheet.create({
   adminReactionIcons: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
   adminReactionChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   adminReactionCount: { fontSize: 13, fontWeight: '600' },
-  filters: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  filterLabel: { fontSize: 14, marginBottom: 8 },
-  filterChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  chipText: { fontSize: 14 },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  addBtnText: { fontSize: 16, fontWeight: '600' },
+  addButton: { marginHorizontal: 16, marginTop: 14, marginBottom: 12 },
   loadingBox: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   loadingText: { fontSize: 16 },
   listContent: { paddingHorizontal: 16, gap: 12 },

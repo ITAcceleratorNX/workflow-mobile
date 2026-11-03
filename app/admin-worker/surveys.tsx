@@ -42,7 +42,7 @@ function statusLabel(status: SurveyStatus) {
   }
 }
 
-export default function AdminWorkerSurveysScreen() {
+export default function AdminWorkerSurveysScreen({ embedded = false }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const ui = useProductUi();
@@ -86,9 +86,9 @@ export default function AdminWorkerSurveysScreen() {
   }, [closingSurvey, refresh, showToast]);
 
   return (
-    <ThemedView style={[styles.screen, { backgroundColor: ui.canvas, paddingTop: insets.top + 8 }]}>
-      <ScreenHeader title="Управление опросами" />
-      <AdminSurveyTabs value="surveys" onChange={changeSection} />
+    <ThemedView style={[styles.screen, { backgroundColor: ui.canvas, paddingTop: embedded ? 0 : insets.top + 8 }]}>
+      {!embedded ? <ScreenHeader title="Управление опросами" /> : null}
+      {!embedded ? <AdminSurveyTabs value="surveys" onChange={changeSection} /> : null}
       <ChipTabs
         value={filter}
         onChange={setFilter}

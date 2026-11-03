@@ -128,7 +128,7 @@ export default function NewsScreen() {
 
   const changeTab = useCallback((nextTab: NewsTab) => {
     setActiveTabState(nextTab);
-    if (tab) router.setParams({ tab: undefined });
+    if (tab) router.replace('/client/news');
   }, [router, tab]);
 
   const loadSurveys = useCallback(async () => {
