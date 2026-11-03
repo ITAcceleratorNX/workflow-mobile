@@ -41,6 +41,10 @@ import { useGuestDemoStore } from '@/stores/guest-demo-store';
 // Карточка заявки по макету: квадратное превью 84 pt, текст справа.
 const CARD_PHOTO_SIZE = 84;
 const CARD_GAP = 14;
+/** Цвета строки по макету «Заявки — список» (тёмная тема); в светлой — прежние оттенки. */
+const CARD_META_COLOR = { dark: '#8E8E8E' };
+const CARD_DATE_COLOR = { light: '#9A9A9A', dark: '#636363' };
+const CARD_CHEVRON_COLOR = { dark: '#818181' };
 const PAGE_SIZE = 20;
 
 const TYPE_OPTIONS = [
@@ -258,6 +262,9 @@ function RequestCard({
   const successSoft = useThemeColor({}, 'successSoft');
   const success = useThemeColor({}, 'success');
   const textSecondary = useThemeColor({}, 'textSecondary');
+  const metaColor = useThemeColor(CARD_META_COLOR, 'textMuted');
+  const dateColor = useThemeColor(CARD_DATE_COLOR, 'textMuted');
+  const chevronColor = useThemeColor(CARD_CHEVRON_COLOR, 'text');
 
   const isExecutor = usesExecutorRequestCard(role);
   const isLongTerm = isLongTermRequestGroup(request);
@@ -321,7 +328,7 @@ function RequestCard({
               ) : null}
               {isLongTerm ? <LongTermBadge /> : null}
               <ThemedText
-                style={[styles.cardCompactStatus, { color: textMuted }]}
+                style={[styles.cardCompactStatus, { color: metaColor }]}
                 numberOfLines={1}
                 ellipsizeMode="tail"
               >
@@ -329,14 +336,14 @@ function RequestCard({
               </ThemedText>
             </View>
             <ThemedText
-              style={[styles.cardCompactLine2, { color: textMuted }]}
+              style={[styles.cardCompactLine2, { color: metaColor }]}
               numberOfLines={1}
               ellipsizeMode="tail"
             >
               {serviceAndOffice}
             </ThemedText>
             <ThemedText
-              style={[styles.cardCompactLine3, { color: textMuted, opacity: 0.7 }]}
+              style={[styles.cardCompactLine3, { color: dateColor }]}
               numberOfLines={1}
             >
               {dateShort}
@@ -348,7 +355,7 @@ function RequestCard({
       <MaterialIcons
         name="chevron-right"
         size={20}
-        color={text}
+        color={chevronColor}
         style={styles.chevron}
       />
     </Pressable>
