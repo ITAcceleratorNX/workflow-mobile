@@ -56,12 +56,17 @@ export function officePlaceLine(office: Pick<Office, 'block' | 'floor'>): string
 
 /** Офисы по городам в исходном порядке; без города — «Другие». */
 export function groupOfficesByCity(offices: Office[]): { city: string; offices: Office[] }[] {
-  const groups = new Map<string, Office[]>();
+  const groups = new Map<string, { city: string; offices: Office[] }>();
   for (const office of offices) {
-    const city = office.city?.trim() || 'Другие';
-    groups.set(city, [...(groups.get(city) ?? []), office]);
+    const cityInput = office.city?.trim().split(',')[0]?.trim() || 'Другие';
+    const cityKey = cityInput.toLocaleLowerCase('ru');
+    const city = cityKey === 'almaty' || cityKey === 'алматы' ? 'Алматы' : cityInput;
+    const key = city.toLocaleLowerCase('ru');
+    const group = groups.get(key) ?? { city, offices: [] };
+    group.offices.push(office);
+    groups.set(key, group);
   }
-  return [...groups].map(([city, list]) => ({ city, offices: list }));
+  return [...groups.values()];
 }
 
 /** Фото офиса; без фото или при ошибке загрузки — заглушка с иконкой здания. */
