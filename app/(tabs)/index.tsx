@@ -6,8 +6,6 @@ import {
   Pressable,
   Dimensions,
 } from 'react-native';
-import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -19,15 +17,17 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { TasksSection } from '@/components/tasks/TasksSection';
+import { HomeTasksSection } from '@/components/tasks/HomeTasksSection';
+import { HomeNewsCard } from '@/components/news/HomeNewsCard';
+import { useCurrentTaskDay } from '@/hooks/use-current-task-day';
+import { useAsyncResource } from '@/hooks/use-async-resource';
+import { formatDayTitle } from '@/lib/task-due';
 import { useAuthStore } from '@/stores/auth-store';
 import { useUserTasksInvalidateStore } from '@/stores/user-tasks-invalidate-store';
 
-import { NEWS_ITEMS } from '@/constants/news';
 import { getNewsMain } from '@/lib/news-api';
 import type { NewsDisplayItem } from '@/lib/news-api';
-import { emptyReactionCounts } from '@/lib/news-reactions';
 import type { NewsReactionCounts, NewsReactionKind } from '@/lib/news-reactions';
-import { NewsReactionsRow } from '@/components/news/news-reactions-row';
 import { NewSurveyHomeCard } from '@/components/surveys/new-survey-home-card';
 import { surveysApi } from '@/lib/surveys-api';
 import { latestAvailableSurvey } from '@/lib/surveys/list';
@@ -550,14 +550,12 @@ export default function ClientDashboardScreen() {
   return <ClientDashboardContent />;
 }
 
-const INSIGHT_CARD_WIDTH = width * 0.88;
-const INSIGHT_CARD_HEIGHT = 260;
-
 /** Контент главной только для роли client. Вынесен в отдельный компонент, чтобы не нарушать правила хуков (одинаковое количество хуков при любом рендере). */
 function ClientDashboardContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const todayKey = useCurrentTaskDay();
   const role = useAuthStore((state) => state.role);
   const effectiveRole = role || user?.role;
   const isClient = effectiveRole?.toLowerCase() === 'client';
@@ -565,13 +563,25 @@ function ClientDashboardContent() {
   const headerText = useThemeColor({}, 'text');
   const headerSubtitle = useThemeColor({}, 'textMuted');
   const primary = useThemeColor({}, 'primary');
+  const healthBlue = useThemeColor({}, 'info');
   const cardBg = useThemeColor({}, 'cardBackground');
   const border = useThemeColor({}, 'border');
-  const [insightItems, setInsightItems] = useState<NewsDisplayItem[]>([]);
   const [newSurvey, setNewSurvey] = useState<ClientSurvey | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const bumpTasks = useUserTasksInvalidateStore((s) => s.bump);
   const insightToken = useAuthStore((s) => s.token);
+  const loadNews = useCallback(async () => {
+    const result = await getNewsMain();
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
+  }, []);
+  const {
+    data: insightItems,
+    setData: setInsightItems,
+    loading: newsLoading,
+    error: newsError,
+    refresh: refreshNews,
+  } = useAsyncResource<NewsDisplayItem[]>(loadNews, [], true, insightToken);
   const canReactInsights =
     typeof insightToken === 'string' && insightToken.length > 0 && insightToken !== 'guest-demo';
 
@@ -579,7 +589,7 @@ function ClientDashboardContent() {
     (newsId: string, patch: { reaction_counts: NewsReactionCounts; my_reaction: NewsReactionKind | null }) => {
       setInsightItems((l) => l.map((it) => (it.id === newsId ? { ...it, ...patch } : it)));
     },
-    []
+    [setInsightItems]
   );
 
   const loadNewSurvey = useCallback(async () => {
@@ -597,47 +607,15 @@ function ClientDashboardContent() {
     }, [])
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    getNewsMain().then((res) => {
-      if (cancelled) return;
-      if (res.ok) setInsightItems(res.data);
-      else setInsightItems(NEWS_ITEMS.map((i) => ({
-        id: i.id,
-        tag: i.tag || 'Новость',
-        title: i.title,
-        desc: i.desc,
-        image: i.image,
-        date: i.date,
-        view_count: 0,
-        reaction_counts: emptyReactionCounts(),
-        my_reaction: null,
-      })));
-    });
-    return () => { cancelled = true; };
-  }, []);
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    const newsPromise = getNewsMain().then((res) => {
-      if (res.ok) setInsightItems(res.data);
-      else setInsightItems(NEWS_ITEMS.map((i) => ({
-        id: i.id,
-        tag: i.tag || 'Новость',
-        title: i.title,
-        desc: i.desc,
-        image: i.image,
-        date: i.date,
-        view_count: 0,
-        reaction_counts: emptyReactionCounts(),
-        my_reaction: null,
-      })));
-    });
-    const surveyPromise = loadNewSurvey();
     bumpTasks();
-    await Promise.all([newsPromise, surveyPromise]);
-    setRefreshing(false);
-  }, [bumpTasks, loadNewSurvey]);
+    try {
+      await Promise.all([refreshNews(), loadNewSurvey()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [bumpTasks, refreshNews, loadNewSurvey]);
 
   const handleSmartHome = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -695,106 +673,95 @@ function ClientDashboardContent() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
         >
-        {/* Daily Insights — заголовок + уведомления, кнопка Все новости под заголовком */}
+        {/* Обзор дня */}
         <View style={styles.insightsHeader}>
           <View style={styles.insightsHeaderRow}>
-            <ThemedText style={[styles.insightsTitle, { color: headerText }]}>Обзор дня</ThemedText>
+            <View style={styles.insightsHeadingCopy}>
+              <ThemedText style={[styles.insightsTitle, { color: headerText }]}>Обзор дня</ThemedText>
+              <ThemedText style={[styles.insightsDate, { color: headerSubtitle }]}>{formatDayTitle(todayKey)}</ThemedText>
+            </View>
             <Pressable onPress={() => router.push('/notifications')} style={styles.notificationButton}>
-              <MaterialIcons name="notifications" size={26} color={headerText} />
+              <MaterialIcons name="notifications" size={28} color={headerText} />
               <NotificationBellBadge />
             </Pressable>
           </View>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/client/news');
-            }}
-            style={styles.insightsViewAllLink}
-          >
-            <ThemedText style={[styles.viewAllText, { color: primary }]}>Все новости</ThemedText>
-            <MaterialIcons name="arrow-forward" size={18} color={primary} />
-          </Pressable>
         </View>
-        {newSurvey ? (
-          <NewSurveyHomeCard
-            survey={newSurvey}
-            onPress={() => router.push(`/client/surveys/${newSurvey.id}` as Href)}
-          />
-        ) : null}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.insightsScroll}
-        >
-          {insightItems.slice(0, 5).map((item) => (
-            <View
-              key={item.id}
-              style={[
-                styles.insightColumn,
-                { backgroundColor: cardBg, borderColor: border },
-              ]}
-            >
-              <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push(`/client/news/${item.id}`);
-                }}
-                style={styles.insightCardPressable}
-              >
-                <Image
-                  source={{ uri: item.image || 'https://via.placeholder.com/400' }}
-                  style={styles.insightCardImage}
-                  contentFit="cover"
-                />
-                <View style={styles.insightTagTop}>
-                  <View style={styles.insightTag}>
-                    <ThemedText style={styles.insightTagText}>{item.tag}</ThemedText>
-                  </View>
-                </View>
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.7)']}
-                  style={styles.insightCardOverlay}
-                >
-                  <ThemedText style={styles.insightTitle}>{item.title}</ThemedText>
-                  <ThemedText style={styles.insightDesc} numberOfLines={3}>{item.desc}</ThemedText>
-                </LinearGradient>
-              </Pressable>
-              <View style={[styles.insightReactionsBar, { borderTopColor: border }]}>
-                <NewsReactionsRow
-                  newsId={Number(item.id)}
-                  reactionCounts={item.reaction_counts ?? emptyReactionCounts()}
-                  myReaction={item.my_reaction ?? null}
-                  canInteract={canReactInsights}
-                  compact
-                  centered
-                  onUpdated={(p) => patchInsightEngagement(item.id, p)}
-                />
-              </View>
-            </View>
-          ))}
-        </ScrollView>
 
-        {/* Smart Control — две кнопки */}
+        <HomeTasksSection />
+
+        {/* Smart Control */}
         <View style={[styles.section, { backgroundColor: background }]}>
           <ThemedText style={[styles.sectionTitle, { color: headerText }]}>Smart Control</ThemedText>
           <View style={styles.smartControlGrid}>
-            <Pressable onPress={handleSmartHome} style={[styles.smartControlButton, { backgroundColor: cardBg }]}>
-              <View style={[styles.smartControlIconWrap, { backgroundColor: `${primary}80` }]}>
-                <MaterialIcons name="home" size={28} color={primary} />
+            <Pressable onPress={handleSmartHome} style={({ pressed }) => [styles.smartControlButton, { backgroundColor: cardBg, borderColor: border }, pressed && styles.smartControlPressed]}>
+              <View style={styles.smartControlTopRow}>
+                <View style={[styles.smartControlIconWrap, { backgroundColor: `${primary}33` }]}>
+                  <MaterialIcons name="home" size={28} color={primary} />
+                </View>
+                <MaterialIcons name="chevron-right" size={26} color={headerSubtitle} />
               </View>
-              <ThemedText style={[styles.smartControlLabel, { color: headerText }]}>Управление умным офисом</ThemedText>
+              <ThemedText style={[styles.smartControlLabel, { color: headerText }]}>Умный офис</ThemedText>
+              <ThemedText style={[styles.smartControlSubtitle, { color: headerSubtitle }]}>Ваш кабинет</ThemedText>
             </Pressable>
-            <Pressable onPress={handleHealthStats} style={[styles.smartControlButton, { backgroundColor: cardBg }]}>
-              <View style={[styles.smartControlIconWrap, { backgroundColor: '#60A5FA80' }]}>
-                <MaterialIcons name="favorite" size={28} color="#60A5FA" />
+            <Pressable onPress={handleHealthStats} style={({ pressed }) => [styles.smartControlButton, { backgroundColor: cardBg, borderColor: border }, pressed && styles.smartControlPressed]}>
+              <View style={styles.smartControlTopRow}>
+                <View style={[styles.smartControlIconWrap, { backgroundColor: `${healthBlue}33` }]}>
+                  <MaterialIcons name="favorite" size={28} color={healthBlue} />
+                </View>
+                <MaterialIcons name="chevron-right" size={26} color={headerSubtitle} />
               </View>
               <ThemedText style={[styles.smartControlLabel, { color: headerText }]}>Health трекер</ThemedText>
+              <ThemedText style={[styles.smartControlSubtitle, { color: headerSubtitle }]}>Шаги, сон, вода</ThemedText>
             </Pressable>
           </View>
         </View>
 
-        {/* Tasks: только прогресс, переход в экран задач */}
-        <TasksSection />
+        <View style={styles.newsSection}>
+          <View style={styles.newsHeader}>
+            <ThemedText style={[styles.sectionTitle, { color: headerText }]}>Новости</ThemedText>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/client/news'); }}
+              style={styles.newsViewAll}
+            >
+              <ThemedText style={[styles.newsViewAllText, { color: primary }]}>Все</ThemedText>
+              <MaterialIcons name="chevron-right" size={22} color={primary} />
+            </Pressable>
+          </View>
+          {newSurvey ? (
+            <NewSurveyHomeCard
+              survey={newSurvey}
+              onPress={() => router.push(`/client/surveys/${newSurvey.id}` as Href)}
+              style={{ marginTop: 0, marginBottom: 12 }}
+            />
+          ) : null}
+          {newsLoading ? (
+            <View style={styles.newsLoadingRow} accessibilityLabel="Загрузка новостей">
+              {[0, 1].map((item) => <View key={item} style={[styles.newsSkeleton, { backgroundColor: cardBg, borderColor: border }]} />)}
+            </View>
+          ) : newsError ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Повторить загрузку новостей"
+              onPress={() => void refreshNews()}
+              style={styles.newsRetry}
+            >
+              <MaterialIcons name="refresh" size={22} color={primary} />
+            </Pressable>
+          ) : insightItems.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.insightsScroll}>
+              {insightItems.slice(0, 5).map((item) => (
+                <HomeNewsCard
+                  key={item.id}
+                  item={item}
+                  canInteract={canReactInsights}
+                  onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push(`/client/news/${item.id}`); }}
+                  onUpdated={(patch) => patchInsightEngagement(item.id, patch)}
+                />
+              ))}
+            </ScrollView>
+          ) : null}
+        </View>
       </ScrollView>
       </PullToRefresh>
     </ThemedView>
@@ -884,73 +851,35 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   // Client Dashboard — Daily Insights
-  insightsHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 12,
-  },
+  insightsHeader: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 12 },
   insightsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  insightsTitle: { fontSize: 24, fontWeight: 'bold' },
-  insightsViewAllLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
+  insightsHeadingCopy: { flex: 1, gap: 2 },
+  insightsTitle: { fontSize: 32, lineHeight: 38, fontWeight: '700' },
+  insightsDate: { fontSize: 16, lineHeight: 21 },
   notificationButton: { padding: 8, position: 'relative' },
-  insightsScroll: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
-  insightColumn: {
-    width: INSIGHT_CARD_WIDTH,
-    marginRight: 12,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  insightCardPressable: {
-    width: '100%',
-    height: INSIGHT_CARD_HEIGHT,
-    overflow: 'hidden',
-  },
-  insightReactionsBar: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  insightCardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  insightTagTop: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-  },
-  insightCardOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 18,
-    paddingTop: 60,
-    justifyContent: 'flex-end',
-  },
-  insightTag: { alignSelf: 'flex-start', backgroundColor: CARD_ORANGE, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  insightTagText: { fontSize: 11, fontWeight: '600', color: '#FFFFFF' },
-  insightTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 6 },
-  insightDesc: { fontSize: 15, color: 'rgba(255,255,255,0.9)', lineHeight: 22 },
+  insightsScroll: { paddingHorizontal: 16, paddingBottom: 8, gap: 12 },
   // Smart Control
-  section: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 24, marginTop: 8 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
+  section: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 12, marginTop: 8 },
+  sectionTitle: { fontSize: 24, lineHeight: 30, fontWeight: '700', marginBottom: 14 },
   smartControlGrid: { flexDirection: 'row', gap: 12 },
-  smartControlButton: { flex: 1, borderRadius: 16, padding: 16, alignItems: 'center' },
-  smartControlIconWrap: { width: 56, height: 56, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  smartControlLabel: { fontSize: 14, fontWeight: '500', textAlign: 'center' },
+  smartControlButton: { flex: 1, minHeight: 128, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, padding: 14 },
+  smartControlPressed: { opacity: 0.78 },
+  smartControlTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 },
+  smartControlIconWrap: { width: 56, height: 56, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  smartControlLabel: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
+  smartControlSubtitle: { fontSize: 14, lineHeight: 19, marginTop: 2 },
+  // Compact horizontal news cards
+  newsSection: { paddingTop: 12, paddingBottom: 20 },
+  newsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 10 },
+  newsViewAll: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 1 },
+  newsViewAllText: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
+  newsLoadingRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16 },
+  newsSkeleton: { width: Math.max(252, width - 88), height: 104, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
+  newsRetry: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center', marginHorizontal: 16 },
   // Tasks
   tasksHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   viewAllLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
