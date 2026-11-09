@@ -66,8 +66,8 @@ export function ChipTabs<T extends string>({ value, onChange, tabs, accessibilit
 }
 
 const styles = StyleSheet.create({
-  scroll: { marginHorizontal: -16, flexGrow: 0 },
-  row: { flexDirection: 'row', gap: 6, paddingHorizontal: 16 },
+  scroll: { minHeight: 48, marginHorizontal: -16, flexGrow: 0, flexShrink: 0 },
+  row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16 },
   chip: {
     minHeight: 40,
     paddingHorizontal: 13,
