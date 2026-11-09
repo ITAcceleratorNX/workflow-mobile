@@ -120,7 +120,7 @@ function OfficeCard({ office, selected, onPress }: { office: Office; selected: b
           {office.address ? (
             <View style={styles.addressRow}>
               <MaterialIcons name="place" size={12} color={c.heading} />
-              <Text style={[styles.address, { color: c.address }]} numberOfLines={1}>
+              <Text style={[styles.address, { color: c.address }]}>
                 {office.address}
               </Text>
             </View>
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   info: { flex: 1, paddingTop: 11, paddingHorizontal: 11, paddingBottom: 13, gap: 5 },
   details: { marginTop: 'auto', gap: 5 },
   name: { fontSize: 15, fontWeight: '600', lineHeight: 19 },
-  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  address: { flex: 1, fontSize: 12 },
+  addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 5 },
+  address: { flex: 1, flexShrink: 1, fontSize: 13, lineHeight: 18 },
   place: { fontSize: 11, fontWeight: '500' },
 });
