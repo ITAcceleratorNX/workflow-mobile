@@ -1,22 +1,29 @@
 import { useEffect, useState } from 'react';
 import { AppState, Platform, type AppStateStatus } from 'react-native';
-import Constants from 'expo-constants';
+import * as Application from 'expo-application';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-import { appVersionFor, fetchMinAppVersion, isUpdateRequired } from '@/lib/app-version';
+import { fetchMinAppVersion, installedAppVersion, isUpdateRequired } from '@/lib/app-version';
 
 /**
- * Обязательно ли обновить приложение из стора: версия приложения старше
- * минимальной с бэкенда (MIN_APP_VERSION). Проверяется при запуске и при
- * возврате приложения на передний план. При любой ошибке — не блокирует.
+ * Обязательно ли обновить приложение из стора: версия установленного билда старше
+ * минимума этой платформы с бэкенда. Проверяется при запуске и при возврате
+ * приложения на передний план. При любой ошибке — не блокирует.
  */
 export function useRequiredUpdate() {
   const [required, setRequired] = useState(false);
 
   useEffect(() => {
     let active = true;
+    const current = installedAppVersion(
+      Platform.OS,
+      Constants.expoConfig,
+      Application.nativeApplicationVersion,
+      Constants.executionEnvironment === ExecutionEnvironment.StoreClient,
+    );
     const check = () =>
-      fetchMinAppVersion().then((min) => {
-        if (active) setRequired(isUpdateRequired(appVersionFor(Platform.OS, Constants.expoConfig), min));
+      fetchMinAppVersion(fetch, Platform.OS).then((min) => {
+        if (active) setRequired(isUpdateRequired(current, min));
       });
 
     check();

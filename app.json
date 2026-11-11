@@ -2,7 +2,7 @@
   "expo": {
     "name": "Workflow",
     "slug": "workflow-mobile",
-    "version": "1.0.9",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "workflowmobile",
@@ -11,8 +11,8 @@
       "policy": "appVersion"
     },
     "ios": {
-      "version": "1.0.9",
-      "buildNumber": "25",
+      "version": "1.1.2",
+      "buildNumber": "26",
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -66,7 +66,7 @@
       "blockedPermissions": [
         "android.permission.READ_MEDIA_VIDEO"
       ],
-      "versionCode": 17,
+      "versionCode": 19,
       "package": "com.workflow.kz"
     },
     "web": {
@@ -127,6 +127,7 @@
       "./plugins/withFirebaseAppDelegate",
       "./plugins/withFirebaseMetaFix",
       "./plugins/withAsyncStorageAndroidMavenRepo",
+      "./plugins/withAndroidPlayStoreQueries",
       [
         "expo-splash-screen",
         {

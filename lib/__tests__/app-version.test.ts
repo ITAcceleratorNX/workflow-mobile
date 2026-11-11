@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { appVersionFor, fetchMinAppVersion, isUpdateRequired, storeUrl, storeWebUrl } from '../app-version';
+import {
+  appVersionFor,
+  blockingMinVersion,
+  fetchMinAppVersion,
+  installedAppVersion,
+  isUpdateRequired,
+  openAppStore,
+  playStoreIntentUrl,
+  storeUrl,
+  storeWebUrl,
+} from '../app-version';
 
 describe('forced app update', () => {
   it('compares the version the store sees, not a stale common one', () => {
@@ -35,11 +45,42 @@ describe('forced app update', () => {
     }
   });
 
-  it('opens the store of the platform', () => {
+  it('compares the installed binary, not a stale config or Expo Go', () => {
+    assert.equal(installedAppVersion('android', { version: '1.0.0' }, '1.0.8', false), '1.0.8');
+    assert.equal(installedAppVersion('android', { version: '1.0.8' }, '  ', false), '1.0.8');
+    assert.equal(installedAppVersion('android', { version: '1.0.8' }, '2.32.10', true), '1.0.8', 'Expo Go version is ignored');
+    assert.equal(installedAppVersion('ios', { version: '1.0.0', ios: { version: '1.1.1' } }, null, false), '1.1.1');
+  });
+
+  it('does not require a version the platform store has not published', () => {
+    const androidBehind = { minVersion: '1.1.1', storeVersion: '1.0.8' };
+    assert.equal(blockingMinVersion(androidBehind), '1.0.8');
+    assert.equal(isUpdateRequired('1.0.8', blockingMinVersion(androidBehind)), false, 'Reinstalling Play 1.0.8 must not stay blocked');
+    assert.equal(isUpdateRequired('1.0.7', blockingMinVersion(androidBehind)), true, 'Older than Play still goes to the store');
+    assert.equal(blockingMinVersion({ minVersion: '1.1.1', storeVersion: '1.1.1' }), '1.1.1');
+    assert.equal(blockingMinVersion({ minVersion: '1.1.1', storeVersion: null }), '1.1.1');
+    assert.equal(blockingMinVersion({ minVersion: null, storeVersion: '1.0.8' }), null);
+  });
+
+  it('opens Google Play itself, then the web page if the Play app does not open', async () => {
     assert.equal(storeUrl('ios'), 'itms-apps://apps.apple.com/app/id6759451937');
-    assert.equal(storeUrl('android'), 'market://details?id=com.workflow.kz');
+    assert.equal(storeUrl('android'), 'https://play.google.com/store/apps/details?id=com.workflow.kz');
     assert.equal(storeWebUrl('ios'), 'https://apps.apple.com/app/id6759451937');
     assert.equal(storeWebUrl('android'), 'https://play.google.com/store/apps/details?id=com.workflow.kz');
+    assert.match(playStoreIntentUrl(), /package=com\.android\.vending/);
+
+    const opened: string[] = [];
+    await openAppStore('android', async (url) => {
+      opened.push(url);
+      if (url.startsWith('intent:')) throw new Error('Play app missing');
+    });
+    assert.deepEqual(opened, [playStoreIntentUrl(), storeWebUrl('android')]);
+
+    const ios: string[] = [];
+    await openAppStore('ios', async (url) => {
+      ios.push(url);
+    });
+    assert.deepEqual(ios, [storeUrl('ios')]);
   });
 
   it('reads the minimal version from the backend, and lets the user in on any failure', async () => {
@@ -48,6 +89,22 @@ describe('forced app update', () => {
 
     assert.equal(await fetchMinAppVersion(reply(200, { min_version: '1.0.7' })), '1.0.7');
     assert.equal(await fetchMinAppVersion(reply(200, { min_version: null })), null);
+    assert.equal(
+      await fetchMinAppVersion(reply(200, {
+        min_version: '1.0.8',
+        android: { min_version: '1.1.1', store_version: '1.0.8' },
+        ios: { min_version: '1.1.1', store_version: '1.1.1' },
+      }), 'android'),
+      '1.0.8',
+      'Android is not asked for a build Play does not have',
+    );
+    assert.equal(
+      await fetchMinAppVersion(reply(200, {
+        min_version: '1.0.8',
+        ios: { min_version: '1.1.1', store_version: '1.1.1' },
+      }), 'ios'),
+      '1.1.1',
+    );
     assert.equal(await fetchMinAppVersion(reply(404, { error: 'Not found' })), null, 'Backend without the endpoint');
     assert.equal(await fetchMinAppVersion(reply(500, {})), null);
     const offline = (async () => {

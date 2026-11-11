@@ -5,7 +5,7 @@ import { Linking, Modal, Platform, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
-import { storeUrl, storeWebUrl } from '@/lib/app-version';
+import { openAppStore } from '@/lib/app-version';
 import { useRequiredUpdate } from '@/hooks/use-required-update';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
@@ -19,12 +19,8 @@ export function ForceUpdateGate() {
   const iconBackground = useThemeColor({}, 'surfaceMuted');
   const primary = useThemeColor({}, 'primary');
 
-  const openStore = useCallback(async () => {
-    try {
-      await Linking.openURL(storeUrl(Platform.OS));
-    } catch {
-      await Linking.openURL(storeWebUrl(Platform.OS)).catch(() => {});
-    }
+  const openStore = useCallback(() => {
+    openAppStore(Platform.OS, Linking.openURL).catch(() => {});
   }, []);
 
   return (
