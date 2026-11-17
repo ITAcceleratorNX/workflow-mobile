@@ -7,6 +7,11 @@ export type VerificationPurpose = 'registration' | 'password_reset';
 export interface VerificationResult {
   success: boolean;
   message?: string;
+  /**
+   * 409 при отправке кода: номер нельзя зарегистрировать — уже есть пользователь с ним или
+   * запрос, ожидающий решения. Дело не в доставке SMS, «без SMS» запрос тоже не пройдёт.
+   */
+  phoneConflict?: boolean;
 }
 
 export interface LoginResponse {
@@ -94,7 +99,7 @@ export async function sendVerificationCode(
       (data as { details?: { message?: string }[] })?.details?.[0]?.message ||
       (data as { message?: string })?.message ||
       'Ошибка при отправке SMS';
-    return { success: false, message };
+    return { success: false, message, phoneConflict: res.status === 409 };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Ошибка при отправке SMS';
     return { success: false, message };

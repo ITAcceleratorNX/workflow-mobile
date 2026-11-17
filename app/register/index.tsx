@@ -110,7 +110,8 @@ export default function RegisterScreen() {
       setCountdown(60);
       setStep(2);
     } else {
-      setSmsSendFailed(true);
+      // Номер занят (пользователь или запрос в ожидании) — без SMS запрос тоже не пройдёт.
+      setSmsSendFailed(!result.phoneConflict);
       setFormErrors(result.message ?? 'Ошибка при отправке SMS. Попробуйте позже.');
     }
   }, [formData.phone]);
@@ -147,7 +148,7 @@ export default function RegisterScreen() {
       setSmsSendFailed(false);
       setCountdown(60);
     } else {
-      setSmsSendFailed(true);
+      setSmsSendFailed(!result.phoneConflict);
       setFormErrors(result.message ?? 'Ошибка при отправке SMS.');
     }
   }, [formData.phone, isSendingCode, countdown]);
